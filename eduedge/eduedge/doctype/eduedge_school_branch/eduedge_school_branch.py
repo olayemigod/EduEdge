@@ -8,6 +8,9 @@ from frappe.model.document import Document
 
 
 class EduEdgeSchoolBranch(Document):
+	def before_naming(self) -> None:
+		self.branch_code = _normalize_branch_code(self.branch_code)
+
 	def before_validate(self) -> None:
 		self.branch_code = _normalize_branch_code(self.branch_code)
 
@@ -31,7 +34,7 @@ class EduEdgeSchoolBranch(Document):
 			)
 
 	def _validate_company(self) -> None:
-		if not frappe.db.get_value("Company", self.company, "is_group") in (0, False, None):
+		if frappe.db.get_value("Company", self.company, "is_group") == 1:
 			frappe.throw(_("A group Company cannot be used as a school branch company."))
 
 	def _validate_cost_center(self) -> None:
