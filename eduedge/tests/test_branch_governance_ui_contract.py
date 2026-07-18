@@ -49,6 +49,7 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 			"set_branch_enforcement",
 			"missing_accounting_labels",
 			"company: dialog.get_value(\"company\")",
+			"Assignment details restricted",
 		):
 			self.assertIn(token, vue)
 
@@ -58,8 +59,11 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 		self.assertIn("Every enabled campus is covered", service)
 		self.assertIn("blocking_failures", service)
 		self.assertIn("enable_user_branch_access_enforcement", service)
+		self.assertIn("get_allowed_school_branches", service)
+		self.assertIn("include_assignment_details", service)
 		self.assertIn("MANAGE_ROLES", api)
 		self.assertIn("_require_roles(MANAGE_ROLES)", api)
+		self.assertIn("can_view_access_details", api)
 		for forbidden in (
 			"ignore_permissions=True",
 			'frappe.new_doc("Sales Invoice")',
