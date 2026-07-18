@@ -14,9 +14,9 @@
 				<EdgePageHeader
 					eyebrow="Education Management"
 					title="School Operations"
-					subtitle="Admissions, students, programmes, and branch context in one place."
-					action-label="Open Setup Center"
-					@action="openRoute('/app/eduedge-setup-center')"
+					subtitle="Admissions, students, classes, schedules, and branch context in one place."
+					action-label="Open Academic Operations"
+					@action="openRoute('/app/eduedge-academic-operations')"
 				/>
 			</template>
 
@@ -51,12 +51,14 @@
 
 				<section v-if="context.requires_branch_selection" class="eduedge-attention">
 					<strong>Select a branch or campus to load operational figures.</strong>
-					<span>EduEdge keeps student and admission activity inside the permitted branch context.</span>
+					<span>EduEdge keeps student, admission, schedule, and attendance activity inside the permitted branch context.</span>
 				</section>
 
-				<EdgeDashboardLayout min-column-width="13rem">
+				<EdgeDashboardLayout min-column-width="12rem">
 					<EdgeStatCard label="Students" :value="context.counts.students" helper="Enabled students in this branch" />
 					<EdgeStatCard label="Active Applicants" :value="context.counts.applicants" helper="Applied or approved" />
+					<EdgeStatCard label="Classes" :value="context.counts.student_groups" helper="Active Student Groups" />
+					<EdgeStatCard label="Today's Schedules" :value="context.counts.today_schedules" helper="Classes scheduled today" />
 					<EdgeStatCard label="Published Admissions" :value="context.counts.admissions" helper="Current branch admission windows" />
 					<EdgeStatCard label="Programme Offerings" :value="context.counts.program_offerings" helper="Enabled branch offerings" />
 				</EdgeDashboardLayout>
@@ -114,10 +116,24 @@ export default {
 				allowed_branches: [],
 				requires_branch_selection: false,
 				readiness: { ready: false, blocker_count: 0, warning_count: 0 },
-				counts: { students: 0, applicants: 0, admissions: 0, program_offerings: 0 },
+				counts: {
+					students: 0,
+					applicants: 0,
+					admissions: 0,
+					program_offerings: 0,
+					student_groups: 0,
+					today_schedules: 0,
+				},
 			},
 			menuItems: EDUEDGE_MENU_ITEMS,
 			modules: [
+				{
+					eyebrow: "Daily operations",
+					title: "Run classes and attendance",
+					description: "View schedules and mark a branch-safe class register without leaving the EduEdge shell.",
+					action: "Open academic operations",
+					route: "/app/eduedge-academic-operations",
+				},
 				{
 					eyebrow: "Admission",
 					title: "Manage admissions",
@@ -131,13 +147,6 @@ export default {
 					description: "Approve, reject, or enroll applicants within the selected campus.",
 					action: "Open applicants",
 					route: "/app/student-applicant",
-				},
-				{
-					eyebrow: "Students",
-					title: "Manage student records",
-					description: "Work with student profiles while preserving branch and guardian context.",
-					action: "Open students",
-					route: "/app/student",
 				},
 				{
 					eyebrow: "Academic setup",
