@@ -35,6 +35,7 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_result_publication/eduedge_result_publication.js
           node --check eduedge/eduedge/doctype/eduedge_report_card_review/eduedge_report_card_review.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
+          node --check eduedge/public/js/eduedge_product_menu.bundle.js
           node --check eduedge/public/js/eduedge_home.bundle.js
           node --check eduedge/public/js/eduedge_academic_operations.bundle.js
           node --check eduedge/public/js/eduedge_assessment_operations.bundle.js
