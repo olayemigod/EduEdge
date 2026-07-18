@@ -4,15 +4,43 @@ import frappe
 from frappe import _
 
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.services.branch_context import (
-	get_allowed_school_branches,
-	get_current_school_branch,
+from eduedge.education.offerings import (
+	get_context_branch,
+	validate_program_enrollment,
+	validate_student_admission,
+	validate_student_applicant,
 )
+from eduedge.services.branch_context import get_allowed_school_branches
+
+
+def before_naming_student_admission(doc, method=None) -> None:
+	_assign_branch(doc)
+	_validate_branch(doc)
+	if not doc.title and doc.academic_year and doc.get(BRANCH_FIELD):
+		branch_label = frappe.db.get_value(
+			"EduEdge School Branch", doc.get(BRANCH_FIELD), "branch_name"
+		) or doc.get(BRANCH_FIELD)
+		doc.title = _("Admissions for {0} - {1}").format(doc.academic_year, branch_label)
+
+
+def before_validate_student_admission(doc, method=None) -> None:
+	_assign_branch(doc)
+	_validate_branch(doc)
+	validate_student_admission(doc)
 
 
 def before_validate_student_applicant(doc, method=None) -> None:
-	_assign_branch(doc)
+	admission_branch = _linked_value(
+		"Student Admission", getattr(doc, "student_admission", None), BRANCH_FIELD
+	)
+	_assign_branch(doc, preferred_branch=admission_branch)
 	_validate_branch(doc)
+	if admission_branch and doc.get(BRANCH_FIELD) != admission_branch:
+		frappe.throw(
+			_("Student Applicant Branch must match the selected Student Admission Branch."),
+			frappe.ValidationError,
+		)
+	validate_student_applicant(doc)
 
 
 def before_validate_student(doc, method=None) -> None:
@@ -38,6 +66,7 @@ def before_validate_program_enrollment(doc, method=None) -> None:
 			_("Program Enrollment Branch must match the selected Student Branch."),
 			frappe.ValidationError,
 		)
+	validate_program_enrollment(doc)
 
 
 def _assign_branch(doc, preferred_branch: str | None = None) -> None:
@@ -45,32 +74,9 @@ def _assign_branch(doc, preferred_branch: str | None = None) -> None:
 		return
 	if doc.get(BRANCH_FIELD):
 		return
-	branch = preferred_branch or _get_context_branch()
+	branch = preferred_branch or get_context_branch()
 	if branch:
 		doc.set(BRANCH_FIELD, branch)
-
-
-def _get_context_branch() -> str | None:
-	if frappe.session.user != "Guest":
-		try:
-			current = get_current_school_branch()
-			if current:
-				return current.get("name")
-		except (frappe.PermissionError, frappe.DoesNotExistError):
-			pass
-	return _get_public_default_branch()
-
-
-def _get_public_default_branch() -> str | None:
-	settings_branch = frappe.db.get_single_value("EduEdge Settings", "default_school_branch")
-	if settings_branch and frappe.db.get_value(
-		"EduEdge School Branch", settings_branch, "enabled"
-	):
-		return settings_branch
-	branches = frappe.get_all(
-		"EduEdge School Branch", filters={"enabled": 1}, pluck="name", limit=2
-	)
-	return branches[0] if len(branches) == 1 else None
 
 
 def _validate_branch(doc) -> None:

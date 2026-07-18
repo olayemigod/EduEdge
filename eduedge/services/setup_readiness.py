@@ -26,6 +26,11 @@ def get_setup_readiness() -> dict:
 	default_company = frappe.db.get_single_value("EduEdge Settings", "default_company")
 	default_branch = frappe.db.get_single_value("EduEdge Settings", "default_school_branch")
 	branch_count = frappe.db.count("EduEdge School Branch", {"enabled": 1})
+	program_offering_count = (
+		frappe.db.count("EduEdge Program Offering", {"is_active": 1})
+		if frappe.db.exists("DocType", "EduEdge Program Offering")
+		else 0
+	)
 
 	if "education" not in installed_apps:
 		blockers.append("Frappe Education is not installed.")
@@ -44,6 +49,10 @@ def get_setup_readiness() -> dict:
 		warnings.append("No current Academic Year is configured.")
 	if not current_academic_term:
 		warnings.append("No current Academic Term is configured.")
+	if branch_count and current_academic_year and not program_offering_count:
+		warnings.append(
+			"No active Program Offering has been configured for branch-aware admissions and enrollment."
+		)
 
 	settings = frappe.get_single("EduEdge Settings")
 	return {
@@ -62,6 +71,7 @@ def get_setup_readiness() -> dict:
 			"default_company": default_company,
 			"default_school_branch": default_branch,
 			"enabled_branch_count": branch_count,
+			"active_program_offering_count": program_offering_count,
 			"current_academic_year": current_academic_year,
 			"current_academic_term": current_academic_term,
 		},
@@ -79,6 +89,7 @@ def get_setup_readiness() -> dict:
 			branch_count=branch_count,
 			default_branch=default_branch,
 			current_academic_year=current_academic_year,
+			program_offering_count=program_offering_count,
 		),
 	}
 
@@ -93,4 +104,15 @@ def _recommended_actions(**state) -> list[dict]:
 		actions.append({"label": "Select Default School Branch", "route": "/app/eduedge-settings"})
 	if not state["current_academic_year"]:
 		actions.append({"label": "Configure Education Settings", "route": "/app/education-settings"})
+	if (
+		state["branch_count"]
+		and state["current_academic_year"]
+		and not state["program_offering_count"]
+	):
+		actions.append(
+			{
+				"label": "Create Program Offering",
+				"route": "/app/eduedge-program-offering/new",
+			}
+		)
 	return actions

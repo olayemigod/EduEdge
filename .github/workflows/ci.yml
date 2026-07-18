@@ -15,5 +15,13 @@ jobs:
           python-version: "3.14"
       - name: Compile Python
         run: python -m compileall eduedge
+      - name: Validate JSON
+        run: python -c "import json, pathlib; [json.loads(p.read_text()) for p in pathlib.Path('.').rglob('*.json')]"
+      - name: Validate frontend entry scripts
+        run: |
+          node --check eduedge/public/js/education/student_admission.js
+          node --check eduedge/public/js/education/student_applicant.js
+          node --check eduedge/public/js/education/program_enrollment.js
+          node --check eduedge/eduedge/doctype/eduedge_program_offering/eduedge_program_offering.js
       - name: Run pure contract tests
-        run: python -m unittest eduedge.tests.test_platform_config eduedge.tests.test_repository_contract
+        run: python -m unittest discover -s eduedge/tests -p "test_*.py"

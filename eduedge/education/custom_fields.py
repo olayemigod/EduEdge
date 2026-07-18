@@ -6,6 +6,18 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 BRANCH_FIELD = "eduedge_school_branch"
 
 EDUCATION_CUSTOM_FIELDS = {
+	"Student Admission": [
+		{
+			"fieldname": BRANCH_FIELD,
+			"fieldtype": "Link",
+			"label": "School Branch / Campus",
+			"options": "EduEdge School Branch",
+			"insert_after": "academic_year",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"description": "Branch or campus publishing this admission.",
+		},
+	],
 	"Student Applicant": [
 		{
 			"fieldname": BRANCH_FIELD,
@@ -57,6 +69,27 @@ def backfill_education_branch_context() -> None:
 		return
 
 	default_branch = _get_deterministic_default_branch()
+	if default_branch:
+		frappe.db.sql(
+			f"""
+			update `tabStudent Admission`
+			set `{BRANCH_FIELD}` = %s
+			where coalesce(`{BRANCH_FIELD}`, '') = ''
+			""",
+			(default_branch,),
+		)
+
+	frappe.db.sql(
+		f"""
+		update `tabStudent Applicant` applicant
+		inner join `tabStudent Admission` admission
+			on admission.name = applicant.student_admission
+		set applicant.`{BRANCH_FIELD}` = admission.`{BRANCH_FIELD}`
+		where coalesce(applicant.`{BRANCH_FIELD}`, '') = ''
+			and coalesce(admission.`{BRANCH_FIELD}`, '') != ''
+		"""
+	)
+
 	if default_branch:
 		frappe.db.sql(
 			f"""

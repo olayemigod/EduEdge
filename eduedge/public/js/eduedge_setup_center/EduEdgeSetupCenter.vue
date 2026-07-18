@@ -14,7 +14,10 @@
 						:value="readiness.ready ? 'Ready' : 'Action Required'"
 					/>
 					<EdgeStatCard label="Enabled Branches" :value="readiness.school.enabled_branch_count" />
-					<EdgeStatCard label="Platform Mode" :value="readiness.platform.mode" />
+					<EdgeStatCard
+						label="Program Offerings"
+						:value="readiness.school.active_program_offering_count || 0"
+					/>
 					<EdgeStatCard
 						label="Current Academic Year"
 						:value="readiness.school.current_academic_year || 'Not configured'"

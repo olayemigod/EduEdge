@@ -20,12 +20,17 @@ add_to_apps_screen = [
 ]
 
 doctype_js = {
+	"Student Admission": "public/js/education/student_admission.js",
 	"Student Applicant": "public/js/education/student_applicant.js",
 	"Student": "public/js/education/student.js",
 	"Program Enrollment": "public/js/education/program_enrollment.js",
 }
 
 doc_events = {
+	"Student Admission": {
+		"before_naming": "eduedge.education.branching.before_naming_student_admission",
+		"before_validate": "eduedge.education.branching.before_validate_student_admission",
+	},
 	"Student Applicant": {
 		"before_validate": "eduedge.education.branching.before_validate_student_applicant",
 	},
@@ -38,17 +43,21 @@ doc_events = {
 }
 
 permission_query_conditions = {
+	"Student Admission": "eduedge.education.permissions.student_admission_query",
 	"Student Applicant": "eduedge.education.permissions.student_applicant_query",
 	"Student": "eduedge.education.permissions.student_query",
 	"Program Enrollment": "eduedge.education.permissions.program_enrollment_query",
 	"Guardian": "eduedge.education.permissions.guardian_query",
+	"EduEdge Program Offering": "eduedge.education.permissions.program_offering_query",
 }
 
 has_permission = {
+	"Student Admission": "eduedge.education.permissions.has_education_branch_permission",
 	"Student Applicant": "eduedge.education.permissions.has_education_branch_permission",
 	"Student": "eduedge.education.permissions.has_education_branch_permission",
 	"Program Enrollment": "eduedge.education.permissions.has_education_branch_permission",
 	"Guardian": "eduedge.education.permissions.has_education_branch_permission",
+	"EduEdge Program Offering": "eduedge.education.permissions.has_program_offering_permission",
 }
 
 fixtures = [

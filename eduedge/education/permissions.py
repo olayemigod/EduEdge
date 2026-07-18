@@ -18,6 +18,10 @@ OPERATIONAL_ROLES = {
 }
 
 
+def student_admission_query(user: str | None = None) -> str:
+	return _branch_condition("Student Admission", user)
+
+
 def student_applicant_query(user: str | None = None) -> str:
 	return _branch_condition("Student Applicant", user)
 
@@ -28,6 +32,10 @@ def student_query(user: str | None = None) -> str:
 
 def program_enrollment_query(user: str | None = None) -> str:
 	return _branch_condition("Program Enrollment", user)
+
+
+def program_offering_query(user: str | None = None) -> str:
+	return _branch_condition("EduEdge Program Offering", user, fieldname="school_branch")
 
 
 def guardian_query(user: str | None = None) -> str:
@@ -81,9 +89,26 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 	return None if branch in allowed else False
 
 
-def _branch_condition(doctype: str, user: str | None) -> str:
+def has_program_offering_permission(doc, user=None, permission_type=None) -> bool | None:
 	resolved_user = user or frappe.session.user
-	if not _should_apply_branch_scope(resolved_user) or not _branch_field_exists(doctype):
+	if not _should_apply_branch_scope(resolved_user):
+		return None
+	allowed = _allowed_branch_names(resolved_user)
+	if allowed is None:
+		return None
+	return None if doc.get("school_branch") in allowed else False
+
+
+def _branch_condition(
+	doctype: str,
+	user: str | None,
+	*,
+	fieldname: str = BRANCH_FIELD,
+) -> str:
+	resolved_user = user or frappe.session.user
+	if not _should_apply_branch_scope(resolved_user) or not _branch_field_exists(
+		doctype, fieldname
+	):
 		return ""
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
@@ -91,7 +116,7 @@ def _branch_condition(doctype: str, user: str | None) -> str:
 	if not allowed:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
-	return f"`tab{doctype}`.`{BRANCH_FIELD}` in ({values})"
+	return f"`tab{doctype}`.`{fieldname}` in ({values})"
 
 
 def _allowed_branch_names(user: str) -> set[str] | None:
@@ -109,8 +134,8 @@ def _should_apply_branch_scope(user: str) -> bool:
 	return bool(roles.intersection(OPERATIONAL_ROLES))
 
 
-def _branch_field_exists(doctype: str) -> bool:
+def _branch_field_exists(doctype: str, fieldname: str = BRANCH_FIELD) -> bool:
 	try:
-		return bool(frappe.get_meta(doctype).has_field(BRANCH_FIELD))
+		return bool(frappe.get_meta(doctype).has_field(fieldname))
 	except frappe.DoesNotExistError:
 		return False
