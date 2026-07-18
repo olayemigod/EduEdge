@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">EduEdge</span>\",\"col\":12}},{\"id\":\"home\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"EduEdge Home\",\"col\":3}},{\"id\":\"setup\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"EduEdge Setup Center\",\"col\":3}},{\"id\":\"branches\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"School Branches\",\"col\":3}},{\"id\":\"offerings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Program Offerings\",\"col\":3}}]",
+ "content": "[{\"id\":\"header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">EduEdge</span>\",\"col\":12}},{\"id\":\"home\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"EduEdge Home\",\"col\":3}},{\"id\":\"academics\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Academic Operations\",\"col\":3}},{\"id\":\"setup\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"EduEdge Setup Center\",\"col\":3}},{\"id\":\"branches\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"School Branches\",\"col\":3}}]",
  "creation": "2026-07-18 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -34,15 +34,18 @@
  "sequence_id": 1,
  "shortcuts": [
   {"color": "Blue", "doc_view": "", "label": "EduEdge Home", "link_to": "eduedge-home", "type": "Page"},
+  {"color": "Cyan", "doc_view": "", "label": "Academic Operations", "link_to": "eduedge-academic-operations", "type": "Page"},
   {"color": "Blue", "doc_view": "", "label": "EduEdge Setup Center", "link_to": "eduedge-setup-center", "type": "Page"},
   {"color": "Green", "doc_view": "List", "label": "School Branches", "link_to": "EduEdge School Branch", "type": "DocType"},
   {"color": "Purple", "doc_view": "List", "label": "Program Offerings", "link_to": "EduEdge Program Offering", "type": "DocType"},
+  {"color": "Orange", "doc_view": "List", "label": "Instructor Branch Assignments", "link_to": "EduEdge Instructor Branch Assignment", "type": "DocType"},
   {"color": "Grey", "doc_view": "", "label": "EduEdge Settings", "link_to": "EduEdge Settings", "type": "DocType"},
+  {"color": "Orange", "doc_view": "List", "label": "Student Groups / Classes", "link_to": "Student Group", "type": "DocType"},
+  {"color": "Yellow", "doc_view": "List", "label": "Course Schedules", "link_to": "Course Schedule", "type": "DocType"},
+  {"color": "Green", "doc_view": "List", "label": "Student Attendance", "link_to": "Student Attendance", "type": "DocType"},
   {"color": "Orange", "doc_view": "List", "label": "Student Admissions", "link_to": "Student Admission", "type": "DocType"},
   {"color": "Yellow", "doc_view": "List", "label": "Student Applicants", "link_to": "Student Applicant", "type": "DocType"},
-  {"color": "Orange", "doc_view": "List", "label": "Students", "link_to": "Student", "type": "DocType"},
-  {"color": "Purple", "doc_view": "List", "label": "Programs", "link_to": "Program", "type": "DocType"},
-  {"color": "Cyan", "doc_view": "List", "label": "Courses", "link_to": "Course", "type": "DocType"}
+  {"color": "Orange", "doc_view": "List", "label": "Students", "link_to": "Student", "type": "DocType"}
  ],
  "title": "EduEdge"
 }
