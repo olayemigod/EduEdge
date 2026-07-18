@@ -14,7 +14,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 			"sectionIcon:",
 			"description:",
 			'icon: "home"',
-			'icon: "graduation"',
+			'sectionIcon: "graduation"',
 			'icon: "assessment"',
 			'icon: "report"',
 			'icon: "shield"',
