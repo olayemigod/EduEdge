@@ -159,11 +159,11 @@ def _recommended_actions(**state) -> list[dict]:
 	elif not state["default_branch"]:
 		actions.append({"label": "Select Default School Branch", "route": "/app/eduedge-settings"})
 	if not state["branch_access_count"]:
-		actions.append({"label": "Configure User Branch Access", "route": "/app/eduedge-user-branch-access"})
+		actions.append({"label": "Configure User Branch Access", "route": "/app/eduedge-branch-governance"})
 	elif not state["enforcement_enabled"]:
-		actions.append({"label": "Review and Enable Branch Enforcement", "route": "/app/eduedge-settings"})
+		actions.append({"label": "Review and Enable Branch Enforcement", "route": "/app/eduedge-branch-governance"})
 	if state["branch_count"] and state["accounting_ready_count"] < state["branch_count"]:
-		actions.append({"label": "Complete Branch Accounting Defaults", "route": "/app/eduedge-school-branch"})
+		actions.append({"label": "Complete Branch Accounting Defaults", "route": "/app/eduedge-branch-governance"})
 	if not state["current_academic_year"]:
 		actions.append({"label": "Configure Education Settings", "route": "/app/education-settings"})
 	if (
