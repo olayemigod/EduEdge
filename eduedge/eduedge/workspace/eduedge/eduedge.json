@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">EduEdge</span>\",\"col\":12}},{\"id\":\"home\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"EduEdge Home\",\"col\":3}},{\"id\":\"academic\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Academic Operations\",\"col\":3}},{\"id\":\"assessment\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Assessment Operations\",\"col\":3}},{\"id\":\"report_cards\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Report Cards\",\"col\":3}}]",
+ "content": "[{\"id\":\"header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">EduEdge</span>\",\"col\":12}},{\"id\":\"home\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"EduEdge Home\",\"col\":3}},{\"id\":\"academic\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Academic Operations\",\"col\":3}},{\"id\":\"assessment\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Assessment Operations\",\"col\":3}},{\"id\":\"report_cards\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Report Cards\",\"col\":3}},{\"id\":\"branch_governance\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Governance\",\"col\":3}}]",
  "creation": "2026-07-18 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -31,6 +31,7 @@
   {"color":"Cyan","doc_view":"","label":"Academic Operations","link_to":"eduedge-academic-operations","type":"Page"},
   {"color":"Purple","doc_view":"","label":"Assessment Operations","link_to":"eduedge-assessment-operations","type":"Page"},
   {"color":"Green","doc_view":"","label":"Report Cards","link_to":"eduedge-report-cards","type":"Page"},
+  {"color":"Orange","doc_view":"","label":"Branch Governance","link_to":"eduedge-branch-governance","type":"Page"},
   {"color":"Blue","doc_view":"","label":"EduEdge Setup Center","link_to":"eduedge-setup-center","type":"Page"},
   {"color":"Green","doc_view":"List","label":"School Branches","link_to":"EduEdge School Branch","type":"DocType"},
   {"color":"Red","doc_view":"List","label":"User Branch Access","link_to":"EduEdge User Branch Access","type":"DocType"},
