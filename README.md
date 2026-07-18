@@ -13,9 +13,9 @@ CoreEdge is a central platform service and is **not** installed as a dependency 
 
 ## UI foundation
 
-EdgeSuite UI is the foundation for every product-owned EduEdge page, dashboard, wizard, operational dialog, and workflow screen.
+EdgeSuite UI is the default foundation for EduEdge-owned homes, dashboards, wizards, dialogs, and operational workflow pages.
 
-The EduEdge launcher opens the EdgeSuite UI-powered EduEdge Home page. The native Frappe Workspace remains available only as an administrative fallback. Standard Frappe Education DocType forms remain upgrade-safe native forms until a workflow needs a dedicated EdgeSuite UI operational experience.
+Native Frappe forms remain available for upgrade-safe master-data and administrative work, while daily operational experiences are implemented inside the EduEdge product shell.
 
 ## Implemented foundation
 
@@ -38,20 +38,20 @@ The EduEdge launcher opens the EdgeSuite UI-powered EduEdge Home page. The nativ
 
 ### V0.3
 
-- EduEdge Program Offering master by branch, programme, academic year, and optional term
+- EduEdge Program Offering by branch, programme, academic year, and optional term
 - branch-aware Student Admission
 - programme filtering for admissions and enrollment
 - backend enforcement of branch/programme/year/term combinations
 - Setup Center programme-offering readiness
 
-### UI foundation correction
+### V0.4
 
-- EdgeSuite UI-powered EduEdge Home and navigation shell
-- visible company, branch, and user context
-- branch switching from the product shell
-- operational summary cards and workflow entry points
-- launcher routing to EduEdge Home instead of the native Workspace
-- repository tests enforcing EdgeSuite UI loading and root-shell usage
+- EdgeSuite UI Academic Operations page
+- branch-aware Student Groups, Rooms, Course Schedules, and Student Attendance
+- many-to-many Instructor Branch Assignments
+- schedule and instructor/room filtering
+- safe attendance draft and submission workflow
+- immutable submitted-attendance protection
 
 ## Development installation
 
@@ -70,6 +70,4 @@ bench build --app edgesuite_ui --app eduedge
 bench --site eduedge.local migrate
 ```
 
-See `docs/architecture.md`, `docs/eduedge_ui_foundation.md`,
-`docs/eduedge_v0_2_branch_context.md`, `docs/eduedge_v0_3_program_offerings.md`,
-and `docs/manual_qa_v0_1.md`.
+See the architecture and versioned implementation notes in `docs/`.
