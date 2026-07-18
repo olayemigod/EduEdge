@@ -57,8 +57,8 @@
 							:status="context.branch_access_enforced ? 'enforced' : 'legacy'"
 							:tone="context.branch_access_enforced ? 'success' : 'warning'"
 						/>
-						<button v-if="context.can_manage_branch_access" type="button" class="edge-button" @click="openRoute('/app/eduedge-user-branch-access')">
-							Manage branch access
+						<button v-if="context.can_manage_branch_access" type="button" class="edge-button" @click="openRoute('/app/eduedge-branch-governance')">
+							Open branch governance
 						</button>
 					</div>
 				</section>
@@ -117,6 +117,7 @@ export default {
 				{ eyebrow: "Daily operations", title: "Run classes and attendance", description: "View schedules and mark a branch-safe class register without leaving the EduEdge shell.", action: "Open academic operations", route: "/app/eduedge-academic-operations" },
 				{ eyebrow: "Assessments and results", title: "Control assessment publication", description: "Review plans, confirm result completeness, approve results, and unlock report cards safely.", action: "Open assessments", route: "/app/eduedge-assessment-operations" },
 				{ eyebrow: "Report cards", title: "Review comments and progression", description: "Prepare published report cards, record teacher and principal comments, and review promotion recommendations.", action: "Open report cards", route: "/app/eduedge-report-cards" },
+				{ eyebrow: "Branch foundation", title: "Govern access and accounting", description: "Assign campus access, verify coverage, complete branch accounting defaults, and activate enforcement safely.", action: "Open branch governance", route: "/app/eduedge-branch-governance" },
 				{ eyebrow: "Admission", title: "Manage admissions", description: "Publish branch admission windows and control valid programme choices.", action: "Open admissions", route: "/app/student-admission" },
 				{ eyebrow: "Applicants", title: "Review applications", description: "Approve, reject, or enroll applicants within the selected campus.", action: "Open applicants", route: "/app/student-applicant" },
 				{ eyebrow: "Academic setup", title: "Configure programme offerings", description: "Define which programmes each branch offers by academic year and term.", action: "Open offerings", route: "/app/eduedge-program-offering" },
