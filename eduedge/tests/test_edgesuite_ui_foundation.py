@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -16,16 +17,15 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 		for path in page_root.glob("*/*.js"):
 			with self.subTest(path=path):
 				source = path.read_text()
-				bundle_names = [
-					name for name in ("eduedge_home.bundle.js", "eduedge_setup_center.bundle.js")
-					if name in source
-				]
-				if not bundle_names:
+				bundle_match = re.search(r'frappe\.require\("(eduedge_[^"]+\.bundle\.js)"', source)
+				if not bundle_match:
 					continue
+				bundle_name = bundle_match.group(1)
 				self.assertIn("edgeui.bundle.js", source)
-				self.assertLess(source.index("edgeui.bundle.js"), source.index(bundle_names[0]))
+				self.assertLess(source.index("edgeui.bundle.js"), source.index(bundle_name))
 				self.assertIn("window.EdgeSuiteUI", source)
 				self.assertIn("createEdgeApp", source)
+				self.assertIn("EdgeAppShell", source)
 
 	def test_root_product_pages_use_edge_app_shell(self):
 		vue_root = APP / "public" / "js"
@@ -33,7 +33,7 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 			with self.subTest(path=path):
 				source = path.read_text()
 				self.assertIn("<EdgeAppShell", source)
-				self.assertNotIn("from \"edgesuite_ui", source)
+				self.assertNotIn('from "edgesuite_ui', source)
 				self.assertNotIn("from 'edgesuite_ui", source)
 
 	def test_home_exposes_branch_context_and_product_navigation(self):
