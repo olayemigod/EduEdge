@@ -29,10 +29,15 @@ def _require_roles(allowed_roles: set[str]) -> None:
 @frappe.whitelist()
 def get_governance_context(company: str | None = None) -> dict:
 	_require_roles(VIEW_ROLES)
-	context = _get_branch_governance_context(company=company)
 	roles = set(frappe.get_roles(frappe.session.user))
+	can_manage_access = bool(MANAGE_ROLES.intersection(roles))
+	context = _get_branch_governance_context(
+		company=company,
+		include_assignment_details=can_manage_access,
+	)
 	context["permissions"] = {
-		"can_manage_access": bool(MANAGE_ROLES.intersection(roles)),
+		"can_manage_access": can_manage_access,
+		"can_view_access_details": can_manage_access,
 		"can_manage_accounting": bool(
 			{"System Manager", "EduEdge Administrator", "School Administrator"}.intersection(roles)
 		),
