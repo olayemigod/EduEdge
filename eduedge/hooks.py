@@ -24,6 +24,10 @@ doctype_js = {
 	"Student Applicant": "public/js/education/student_applicant.js",
 	"Student": "public/js/education/student.js",
 	"Program Enrollment": "public/js/education/program_enrollment.js",
+	"Student Group": "public/js/education/student_group.js",
+	"Room": "public/js/education/room.js",
+	"Course Schedule": "public/js/education/course_schedule.js",
+	"Student Attendance": "public/js/education/student_attendance.js",
 }
 
 doc_events = {
@@ -40,6 +44,18 @@ doc_events = {
 	"Program Enrollment": {
 		"before_validate": "eduedge.education.branching.before_validate_program_enrollment",
 	},
+	"Student Group": {
+		"before_validate": "eduedge.education.branching.before_validate_student_group",
+	},
+	"Room": {
+		"before_validate": "eduedge.education.branching.before_validate_room",
+	},
+	"Course Schedule": {
+		"before_validate": "eduedge.education.branching.before_validate_course_schedule",
+	},
+	"Student Attendance": {
+		"before_validate": "eduedge.education.branching.before_validate_student_attendance",
+	},
 }
 
 permission_query_conditions = {
@@ -47,8 +63,13 @@ permission_query_conditions = {
 	"Student Applicant": "eduedge.education.permissions.student_applicant_query",
 	"Student": "eduedge.education.permissions.student_query",
 	"Program Enrollment": "eduedge.education.permissions.program_enrollment_query",
+	"Student Group": "eduedge.education.permissions.student_group_query",
+	"Room": "eduedge.education.permissions.room_query",
+	"Course Schedule": "eduedge.education.permissions.course_schedule_query",
+	"Student Attendance": "eduedge.education.permissions.student_attendance_query",
 	"Guardian": "eduedge.education.permissions.guardian_query",
 	"EduEdge Program Offering": "eduedge.education.permissions.program_offering_query",
+	"EduEdge Instructor Branch Assignment": "eduedge.education.permissions.instructor_assignment_query",
 }
 
 has_permission = {
@@ -56,8 +77,13 @@ has_permission = {
 	"Student Applicant": "eduedge.education.permissions.has_education_branch_permission",
 	"Student": "eduedge.education.permissions.has_education_branch_permission",
 	"Program Enrollment": "eduedge.education.permissions.has_education_branch_permission",
+	"Student Group": "eduedge.education.permissions.has_education_branch_permission",
+	"Room": "eduedge.education.permissions.has_education_branch_permission",
+	"Course Schedule": "eduedge.education.permissions.has_education_branch_permission",
+	"Student Attendance": "eduedge.education.permissions.has_education_branch_permission",
 	"Guardian": "eduedge.education.permissions.has_education_branch_permission",
-	"EduEdge Program Offering": "eduedge.education.permissions.has_program_offering_permission",
+	"EduEdge Program Offering": "eduedge.education.permissions.has_school_branch_permission",
+	"EduEdge Instructor Branch Assignment": "eduedge.education.permissions.has_school_branch_permission",
 }
 
 fixtures = [
