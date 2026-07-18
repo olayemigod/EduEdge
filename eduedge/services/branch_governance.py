@@ -8,6 +8,7 @@ from frappe.utils import cint, getdate, nowdate
 
 from eduedge.services.branch_accounting import ACCOUNTING_FIELDS, get_missing_core_defaults
 from eduedge.services.branch_context import (
+	get_allowed_school_branches,
 	invalidate_user_branch_context,
 	is_branch_access_enforced,
 	is_hq_all_branch_view_enabled,
@@ -34,9 +35,24 @@ MISSING_ACCOUNTING_LABELS = {
 }
 
 
-def get_branch_governance_context(*, company: str | None = None) -> dict:
-	branches = _get_branch_rows(company=company)
-	assignments = _get_access_rows(company=company)
+def get_branch_governance_context(
+	*,
+	company: str | None = None,
+	include_assignment_details: bool = False,
+) -> dict:
+	roles = set(frappe.get_roles(frappe.session.user))
+	privileged = bool({"System Manager", "EduEdge Administrator"}.intersection(roles))
+	allowed_branch_names = None
+	if not privileged:
+		allowed_branch_names = {row["name"] for row in get_allowed_school_branches()}
+
+	branches = _get_branch_rows(company=company, allowed_branch_names=allowed_branch_names)
+	allowed_companies = {row["company"] for row in branches if row.get("company")}
+	assignments = _get_access_rows(
+		company=company,
+		allowed_branch_names=allowed_branch_names,
+		allowed_companies=allowed_companies,
+	)
 	active_assignments = [row for row in assignments if row["status"] == "Active"]
 
 	hq_companies = {
@@ -106,10 +122,10 @@ def get_branch_governance_context(*, company: str | None = None) -> dict:
 			"full_name": frappe.db.get_value("User", frappe.session.user, "full_name")
 			or frappe.session.user,
 		},
-		"companies": _get_companies(),
+		"companies": _get_companies(branches=branches, privileged=privileged),
 		"selected_company": company,
 		"branches": branches,
-		"assignments": assignments,
+		"assignments": assignments if include_assignment_details else [],
 		"settings": {
 			"enforcement_enabled": is_branch_access_enforced(),
 			"hq_all_branch_view_enabled": is_hq_all_branch_view_enabled(),
@@ -183,16 +199,30 @@ def set_branch_enforcement(enabled: int | str, *, confirmed: int | str = 0) -> d
 	return get_branch_governance_context()
 
 
-def _get_companies() -> list[dict]:
+def _get_companies(*, branches: list[dict], privileged: bool) -> list[dict]:
+	if privileged:
+		return frappe.get_all(
+			"Company",
+			filters={"is_group": 0},
+			fields=["name", "company_name"],
+			order_by="company_name asc",
+		)
+	company_names = sorted({row["company"] for row in branches if row.get("company")})
+	if not company_names:
+		return []
 	return frappe.get_all(
 		"Company",
-		filters={"is_group": 0},
+		filters={"name": ["in", company_names]},
 		fields=["name", "company_name"],
 		order_by="company_name asc",
 	)
 
 
-def _get_branch_rows(*, company: str | None = None) -> list[dict]:
+def _get_branch_rows(
+	*,
+	company: str | None = None,
+	allowed_branch_names: set[str] | None = None,
+) -> list[dict]:
 	meta = frappe.get_meta("EduEdge School Branch")
 	fields = [
 		"name",
@@ -208,6 +238,10 @@ def _get_branch_rows(*, company: str | None = None) -> list[dict]:
 	filters: dict = {"enabled": 1}
 	if company:
 		filters["company"] = company
+	if allowed_branch_names is not None:
+		if not allowed_branch_names:
+			return []
+		filters["name"] = ["in", sorted(allowed_branch_names)]
 	return [
 		dict(row)
 		for row in frappe.get_all(
@@ -219,10 +253,15 @@ def _get_branch_rows(*, company: str | None = None) -> list[dict]:
 	]
 
 
-def _get_access_rows(*, company: str | None = None) -> list[dict]:
+def _get_access_rows(
+	*,
+	company: str | None = None,
+	allowed_branch_names: set[str] | None = None,
+	allowed_companies: set[str] | None = None,
+) -> list[dict]:
 	if not frappe.db.exists("DocType", "EduEdge User Branch Access"):
 		return []
-	filters = {"company": company} if company else None
+	filters = {"company": company} if company else {}
 	rows = frappe.get_all(
 		"EduEdge User Branch Access",
 		filters=filters,
@@ -259,6 +298,13 @@ def _get_access_rows(*, company: str | None = None) -> list[dict]:
 			pluck="name",
 		)
 	)
+	if allowed_branch_names is not None:
+		rows = [
+			row
+			for row in rows
+			if (row.school_branch and row.school_branch in allowed_branch_names)
+			or (row.hq_all_branch_access and row.company in (allowed_companies or set()))
+		]
 	today = getdate(nowdate())
 	return [
 		{
