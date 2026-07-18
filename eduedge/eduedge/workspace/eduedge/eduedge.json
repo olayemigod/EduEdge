@@ -33,6 +33,7 @@
   {"color":"Green","doc_view":"","label":"Report Cards","link_to":"eduedge-report-cards","type":"Page"},
   {"color":"Blue","doc_view":"","label":"EduEdge Setup Center","link_to":"eduedge-setup-center","type":"Page"},
   {"color":"Green","doc_view":"List","label":"School Branches","link_to":"EduEdge School Branch","type":"DocType"},
+  {"color":"Red","doc_view":"List","label":"User Branch Access","link_to":"EduEdge User Branch Access","type":"DocType"},
   {"color":"Purple","doc_view":"List","label":"Program Offerings","link_to":"EduEdge Program Offering","type":"DocType"},
   {"color":"Orange","doc_view":"List","label":"Instructor Branch Assignments","link_to":"EduEdge Instructor Branch Assignment","type":"DocType"},
   {"color":"Grey","doc_view":"","label":"EduEdge Settings","link_to":"EduEdge Settings","type":"DocType"},

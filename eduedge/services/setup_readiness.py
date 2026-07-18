@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import frappe
+from frappe.utils import getdate, nowdate
 
 from eduedge import __version__
 from eduedge.platform.config import get_platform_config
 from eduedge.product_identity import resolve_product_identity
+from eduedge.services.branch_accounting import ACCOUNTING_FIELDS, get_missing_core_defaults
+from eduedge.services.branch_context import is_branch_access_enforced
 
 
 def _single_value(doctype: str, fieldname: str):
@@ -31,6 +34,9 @@ def get_setup_readiness() -> dict:
 		if frappe.db.exists("DocType", "EduEdge Program Offering")
 		else 0
 	)
+	branch_access_count = _active_branch_access_count()
+	enforcement_enabled = is_branch_access_enforced()
+	accounting_ready_count = _accounting_ready_count()
 
 	if "education" not in installed_apps:
 		blockers.append("Frappe Education is not installed.")
@@ -42,6 +48,17 @@ def get_setup_readiness() -> dict:
 		blockers.append("No enabled School Branch has been configured.")
 	elif not default_branch:
 		warnings.append("No default School Branch has been selected.")
+
+	if enforcement_enabled and not branch_access_count:
+		blockers.append("User Branch Access enforcement is enabled but no active assignments exist.")
+	elif not enforcement_enabled:
+		warnings.append(
+			"User Branch Access enforcement is disabled. Configure and review assignments before activation."
+		)
+	if branch_count and accounting_ready_count < branch_count:
+		warnings.append(
+			f"{branch_count - accounting_ready_count} enabled School Branch record(s) are missing core accounting defaults."
+		)
 
 	current_academic_year = _single_value("Education Settings", "current_academic_year")
 	current_academic_term = _single_value("Education Settings", "current_academic_term")
@@ -72,6 +89,9 @@ def get_setup_readiness() -> dict:
 			"default_school_branch": default_branch,
 			"enabled_branch_count": branch_count,
 			"active_program_offering_count": program_offering_count,
+			"active_branch_access_count": branch_access_count,
+			"branch_access_enforcement_enabled": enforcement_enabled,
+			"accounting_ready_branch_count": accounting_ready_count,
 			"current_academic_year": current_academic_year,
 			"current_academic_term": current_academic_term,
 		},
@@ -88,10 +108,46 @@ def get_setup_readiness() -> dict:
 			default_company=default_company,
 			branch_count=branch_count,
 			default_branch=default_branch,
+			branch_access_count=branch_access_count,
+			enforcement_enabled=enforcement_enabled,
+			accounting_ready_count=accounting_ready_count,
 			current_academic_year=current_academic_year,
 			program_offering_count=program_offering_count,
 		),
 	}
+
+
+def _active_branch_access_count() -> int:
+	if not frappe.db.exists("DocType", "EduEdge User Branch Access"):
+		return 0
+	rows = frappe.get_all(
+		"EduEdge User Branch Access",
+		filters={"enabled": 1},
+		fields=["valid_from", "valid_to"],
+	)
+	today = getdate(nowdate())
+	return sum(
+		1
+		for row in rows
+		if (not row.valid_from or getdate(row.valid_from) <= today)
+		and (not row.valid_to or getdate(row.valid_to) >= today)
+	)
+
+
+def _accounting_ready_count() -> int:
+	if not frappe.db.exists("DocType", "EduEdge School Branch"):
+		return 0
+	meta = frappe.get_meta("EduEdge School Branch")
+	available_fields = [fieldname for fieldname in ACCOUNTING_FIELDS if meta.has_field(fieldname)]
+	core_fields = {"cost_center", "school_fees_income_account", "default_receivable_account"}
+	if not core_fields.issubset(set(available_fields)):
+		return 0
+	rows = frappe.get_all(
+		"EduEdge School Branch",
+		filters={"enabled": 1},
+		fields=["name", *available_fields],
+	)
+	return sum(1 for row in rows if not get_missing_core_defaults(row))
 
 
 def _recommended_actions(**state) -> list[dict]:
@@ -102,6 +158,12 @@ def _recommended_actions(**state) -> list[dict]:
 		actions.append({"label": "Create School Branch", "route": "/app/eduedge-school-branch/new"})
 	elif not state["default_branch"]:
 		actions.append({"label": "Select Default School Branch", "route": "/app/eduedge-settings"})
+	if not state["branch_access_count"]:
+		actions.append({"label": "Configure User Branch Access", "route": "/app/eduedge-user-branch-access"})
+	elif not state["enforcement_enabled"]:
+		actions.append({"label": "Review and Enable Branch Enforcement", "route": "/app/eduedge-settings"})
+	if state["branch_count"] and state["accounting_ready_count"] < state["branch_count"]:
+		actions.append({"label": "Complete Branch Accounting Defaults", "route": "/app/eduedge-school-branch"})
 	if not state["current_academic_year"]:
 		actions.append({"label": "Configure Education Settings", "route": "/app/education-settings"})
 	if (

@@ -28,6 +28,8 @@ jobs:
           node --check eduedge/public/js/education/student_attendance.js
           node --check eduedge/public/js/education/assessment_plan.js
           node --check eduedge/public/js/education/assessment_result.js
+          node --check eduedge/eduedge/doctype/eduedge_school_branch/eduedge_school_branch.js
+          node --check eduedge/eduedge/doctype/eduedge_user_branch_access/eduedge_user_branch_access.js
           node --check eduedge/eduedge/doctype/eduedge_program_offering/eduedge_program_offering.js
           node --check eduedge/eduedge/doctype/eduedge_instructor_branch_assignment/eduedge_instructor_branch_assignment.js
           node --check eduedge/eduedge/doctype/eduedge_result_publication/eduedge_result_publication.js

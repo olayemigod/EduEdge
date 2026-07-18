@@ -3,7 +3,7 @@
 		product="eduedge"
 		title="EduEdge"
 		:tenant-name="context.tenant_name || ''"
-		:branch-name="context.current_branch?.branch_name || ''"
+		:branch-name="context.active_label || ''"
 		:user-name="context.user?.full_name || ''"
 		:menu-items="menuItems"
 		active-route="/app/eduedge-home"
@@ -25,9 +25,17 @@
 			<template v-else>
 				<EdgeActionBar label="Working branch">
 					<template #actions>
-						<select v-model="selectedBranch" class="form-control input-sm eduedge-branch-select" :disabled="switchingBranch || !context.allowed_branches.length" @change="switchBranch">
+						<select
+							v-model="selectedBranch"
+							class="form-control input-sm eduedge-branch-select"
+							:disabled="switchingBranch || !context.allowed_branches.length || (!context.can_switch_branch && context.allowed_branches.length > 1)"
+							@change="switchBranch"
+						>
 							<option value="">Select branch or campus</option>
-							<option v-for="branch in context.allowed_branches" :key="branch.name" :value="branch.name">{{ branch.branch_name }}{{ branch.branch_code ? ` · ${branch.branch_code}` : "" }}</option>
+							<option v-for="option in context.all_branch_options" :key="option.value" :value="option.value">{{ option.label }}</option>
+							<option v-for="branch in context.allowed_branches" :key="branch.name" :value="branch.name">
+								{{ branch.branch_name }}{{ branch.branch_code ? ` · ${branch.branch_code}` : "" }}
+							</option>
 						</select>
 					</template>
 				</EdgeActionBar>
@@ -37,15 +45,33 @@
 					<span>EduEdge keeps student, admission, schedule, assessment, and report-card activity inside the permitted branch context.</span>
 				</section>
 
+				<section class="eduedge-context-status">
+					<div>
+						<p class="edge-eyebrow">Branch governance</p>
+						<strong>{{ context.active_scope === "all" ? "Authorised HQ view" : "Active campus view" }}</strong>
+						<span>{{ scopeDescription }}</span>
+					</div>
+					<div class="eduedge-readiness-badges">
+						<EdgeStatusBadge
+							:label="context.branch_access_enforced ? 'Branch enforcement active' : 'Legacy branch access'"
+							:status="context.branch_access_enforced ? 'enforced' : 'legacy'"
+							:tone="context.branch_access_enforced ? 'success' : 'warning'"
+						/>
+						<button v-if="context.can_manage_branch_access" type="button" class="edge-button" @click="openRoute('/app/eduedge-user-branch-access')">
+							Manage branch access
+						</button>
+					</div>
+				</section>
+
 				<EdgeDashboardLayout min-column-width="12rem">
-					<EdgeStatCard label="Students" :value="context.counts.students" helper="Enabled students in this branch" />
+					<EdgeStatCard label="Students" :value="context.counts.students" :helper="scopeHelper" />
 					<EdgeStatCard label="Active Applicants" :value="context.counts.applicants" helper="Applied or approved" />
 					<EdgeStatCard label="Classes" :value="context.counts.student_groups" helper="Active Student Groups" />
 					<EdgeStatCard label="Today's Schedules" :value="context.counts.today_schedules" helper="Classes scheduled today" />
 					<EdgeStatCard label="Assessment Plans" :value="context.counts.assessment_plans" helper="Active assessment plans" />
 					<EdgeStatCard label="Pending Result Approvals" :value="context.counts.pending_result_approvals" helper="Awaiting authorized review" />
 					<EdgeStatCard label="Progression Reviews" :value="context.counts.pending_progression_reviews" helper="Recommended and awaiting approval" />
-					<EdgeStatCard label="Published Admissions" :value="context.counts.admissions" helper="Current branch admission windows" />
+					<EdgeStatCard label="Published Admissions" :value="context.counts.admissions" helper="Current admission windows" />
 					<EdgeStatCard label="Programme Offerings" :value="context.counts.program_offerings" helper="Enabled branch offerings" />
 				</EdgeDashboardLayout>
 
@@ -80,7 +106,9 @@ export default {
 			switchingBranch: false,
 			selectedBranch: "",
 			context: {
-				user: {}, current_branch: null, allowed_branches: [], requires_branch_selection: false,
+				user: {}, current_branch: null, allowed_branches: [], all_branch_options: [], requires_branch_selection: false,
+				active_scope: "branch", active_label: "", can_switch_branch: true, can_manage_branch_access: false,
+				branch_access_enforced: false,
 				readiness: { ready: false, blocker_count: 0, warning_count: 0 },
 				counts: { students: 0, applicants: 0, admissions: 0, program_offerings: 0, student_groups: 0, today_schedules: 0, assessment_plans: 0, pending_result_approvals: 0, pending_progression_reviews: 0 },
 			},
@@ -95,6 +123,17 @@ export default {
 			],
 		};
 	},
+	computed: {
+		scopeHelper() {
+			return this.context.active_scope === "all" ? "Enabled students across authorised branches" : "Enabled students in this branch";
+		},
+		scopeDescription() {
+			if (this.context.active_scope === "all") return `Aggregating authorised branches for ${this.context.active_company || "the selected company"}.`;
+			return this.context.branch_access_enforced
+				? "Branch access is enforced from active user assignments."
+				: "Branch access enforcement is not enabled yet; review assignments before activation.";
+		},
+	},
 	mounted() { this.loadContext(); },
 	methods: {
 		openRoute: openEduEdgeRoute,
@@ -104,7 +143,11 @@ export default {
 			try {
 				const response = await frappe.call("eduedge.api.home.get_home_context");
 				this.context = response.message || this.context;
-				this.selectedBranch = this.context.current_branch?.name || "";
+				if (this.context.active_scope === "all") {
+					this.selectedBranch = this.context.all_branch_options.find((option) => option.company === this.context.active_company)?.value || "";
+				} else {
+					this.selectedBranch = this.context.current_branch?.name || "";
+				}
 			} catch (error) {
 				this.error = error?.message || "EduEdge home context could not be loaded.";
 			} finally { this.loading = false; }
@@ -113,10 +156,16 @@ export default {
 			if (!this.selectedBranch) return;
 			this.switchingBranch = true;
 			try {
-				await frappe.call("eduedge.api.branch_context.switch_school_branch", { branch: this.selectedBranch });
+				let branch = this.selectedBranch;
+				let company;
+				if (branch.startsWith(`${this.context.all_branches_key}::`)) {
+					company = branch.slice(`${this.context.all_branches_key}::`.length);
+					branch = this.context.all_branches_key;
+				}
+				await frappe.call("eduedge.api.branch_context.switch_school_branch", { branch, company });
 				await this.loadContext();
 			} catch (error) {
-				frappe.msgprint({ title: __("Unable to switch branch"), message: error?.message || __("The selected branch could not be activated."), indicator: "red" });
+				frappe.msgprint({ title: __("Unable to switch branch"), message: error?.message || __("The selected branch context could not be activated."), indicator: "red" });
 			} finally { this.switchingBranch = false; }
 		},
 	},
@@ -124,13 +173,14 @@ export default {
 </script>
 
 <style scoped>
-.eduedge-branch-select { min-width: min(22rem, 70vw); }
-.eduedge-attention, .eduedge-readiness-panel { display: flex; align-items: center; justify-content: space-between; gap: var(--edge-space-4, 1rem); padding: var(--edge-space-4, 1rem); margin: var(--edge-space-4, 1rem) 0; border: 1px solid var(--border-color); border-radius: var(--edge-radius-lg, 12px); background: var(--card-bg); }
+.eduedge-branch-select { min-width: min(25rem, 75vw); }
+.eduedge-attention, .eduedge-context-status, .eduedge-readiness-panel { display: flex; align-items: center; justify-content: space-between; gap: var(--edge-space-4, 1rem); padding: var(--edge-space-4, 1rem); margin: var(--edge-space-4, 1rem) 0; border: 1px solid var(--border-color); border-radius: var(--edge-radius-lg, 12px); background: var(--card-bg); }
 .eduedge-attention { align-items: flex-start; flex-direction: column; }
+.eduedge-context-status > div:first-child { display: grid; gap: 0.25rem; }
+.eduedge-context-status span, .eduedge-module-card p { color: var(--text-muted); }
 .eduedge-home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--edge-space-4, 1rem); margin-top: var(--edge-space-5, 1.25rem); }
 .eduedge-module-card { display: flex; flex-direction: column; justify-content: space-between; gap: var(--edge-space-4, 1rem); min-height: 13rem; padding: var(--edge-space-5, 1.25rem); border: 1px solid var(--border-color); border-radius: var(--edge-radius-lg, 12px); background: var(--card-bg); }
 .eduedge-module-card h2, .eduedge-readiness-panel h2 { margin: 0.25rem 0 0.5rem; }
-.eduedge-module-card p { color: var(--text-muted); }
-.eduedge-readiness-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-@media (max-width: 640px) { .eduedge-readiness-panel { align-items: flex-start; flex-direction: column; } }
+.eduedge-readiness-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+@media (max-width: 640px) { .eduedge-context-status, .eduedge-readiness-panel { align-items: flex-start; flex-direction: column; } }
 </style>

@@ -73,6 +73,18 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - manual progression recommendation and approval
 - no automatic enrollment, class movement, or submitted-result mutation
 
+### V0.7
+
+- explicit EduEdge User Branch Access assignments
+- settings-gated backend branch enforcement with safe legacy fallback
+- company-scoped HQ / All-Branch access
+- active branch and authorised all-branch context on EduEdge Home
+- branch-scoped native lists, Link queries, APIs, reports, and operational permissions
+- expanded School Branch/Campus identity, contact, academic coverage, cost-centre, income, payment, adjustment, and stock defaults
+- company-, ledger-, account-type-, and root-type validation for accounting defaults
+- read-only branch accounting resolvers for future EduEdge and EdgePay transactions
+- no accounting documents are created or modified by V0.7
+
 ## Development installation
 
 ```bash

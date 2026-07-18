@@ -3,7 +3,10 @@ from __future__ import annotations
 import frappe
 
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.services.branch_context import get_allowed_school_branches
+from eduedge.services.branch_context import (
+	get_allowed_school_branches,
+	is_branch_access_enforced,
+)
 
 OPERATIONAL_ROLES = {
 	"Academics User",
@@ -17,6 +20,21 @@ OPERATIONAL_ROLES = {
 	"CBT Invigilator",
 	"Student Safety Officer",
 }
+
+
+def school_branch_query(user: str | None = None) -> str:
+	if not is_branch_access_enforced():
+		return ""
+	resolved_user = user or frappe.session.user
+	if not _should_apply_branch_scope(resolved_user):
+		return ""
+	allowed = _allowed_branch_names(resolved_user)
+	if allowed is None:
+		return ""
+	if not allowed:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+	return f"`tabEduEdge School Branch`.name in ({values})"
 
 
 def student_admission_query(user: str | None = None) -> str:
@@ -150,6 +168,21 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 	return None if branch in allowed else False
 
 
+def has_school_branch_record_permission(doc, user=None, permission_type=None) -> bool | None:
+	if not is_branch_access_enforced():
+		return None
+	resolved_user = user or frappe.session.user
+	if not _should_apply_branch_scope(resolved_user):
+		return None
+	if not doc:
+		return None
+	allowed = _allowed_branch_names(resolved_user)
+	if allowed is None:
+		return None
+	name = doc if isinstance(doc, str) else doc.name
+	return None if name in allowed else False
+
+
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool | None:
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
@@ -205,7 +238,7 @@ def _should_apply_branch_scope(user: str) -> bool:
 	if not user or user in {"Guest", "Administrator"}:
 		return False
 	roles = set(frappe.get_roles(user))
-	if "System Manager" in roles:
+	if roles.intersection({"System Manager", "EduEdge Administrator"}):
 		return False
 	return bool(roles.intersection(OPERATIONAL_ROLES))
 
