@@ -96,12 +96,23 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - accounting configuration remains on the validated School Branch master
 - no accounting documents or submitted academic records are created or mutated
 
+### V0.7.2
+
+- adoption of the EdgeSuite UI 0.2 professional product shell
+- grouped business navigation for Overview, School Operations, Academics and Outcomes, and Administration
+- semantic SVG icons instead of emoji and single-letter menu placeholders
+- searchable global waffle product menu with descriptions, profile context, role hints, and active-route styling
+- responsive persistent desktop sidebar and mobile off-canvas navigation
+- EduEdge blue and green brand palette applied through shared product tokens
+- consistent page padding, section gaps, card gaps, content width, focus states, and native Frappe sidebar styling
+- menu visibility remains a usability layer; backend roles and branch permissions remain authoritative
+
 ## Development installation
 
 ```bash
 cd ~/frappe-bench
 bench get-app https://github.com/frappe/education --branch version-16
-bench get-app https://github.com/olayemigod/processedge-edge-suite-ui.git
+bench get-app https://github.com/olayemigod/processedge-edge-suite-ui.git --branch agent/fix-waffle-product-menu
 bench get-app https://github.com/olayemigod/EduEdge.git --branch agent/eduedge-v0-1-foundation
 
 bench --site eduedge.local install-app erpnext
