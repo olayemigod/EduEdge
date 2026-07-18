@@ -2,7 +2,7 @@
 
 ## Business goal
 
-V0.7.1 turns the V0.7 branch-access and accounting foundation into a guided administrative workflow. School administrators should be able to see whether every campus is covered, create or maintain staff assignments, identify incomplete accounting defaults, and activate enforcement without navigating several raw DocType lists.
+V0.7.1 turns the V0.7 branch-access and accounting foundation into a guided administrative workflow. Authorised administrators should be able to see whether every campus is covered, maintain staff assignments where permitted, identify incomplete accounting defaults, and activate enforcement without navigating several raw DocType lists.
 
 ## Route
 
@@ -42,7 +42,7 @@ Only:
 - System Manager
 - EduEdge Administrator
 
-School Administrators and Bursars can inspect readiness. School Administrators may open School Branch records according to existing DocType permissions.
+System Manager and EduEdge Administrator can view named assignments and create or change them. School Administrators and Bursars receive only permission-safe branch coverage and accounting summaries; named user assignments are redacted. School Administrators may open School Branch records according to existing DocType permissions.
 
 ## Guided assignment workflow
 
