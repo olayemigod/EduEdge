@@ -85,6 +85,17 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - read-only branch accounting resolvers for future EduEdge and EdgePay transactions
 - no accounting documents are created or modified by V0.7
 
+### V0.7.1
+
+- dedicated EdgeSuite UI Branch Governance and Accounting Center
+- company-scoped branch coverage and assignment readiness dashboard
+- guided User Branch Access creation and maintenance using permission-aware APIs
+- server-blocked enforcement activation until every enabled campus is covered
+- branch-by-branch accounting readiness and missing-default visibility
+- direct navigation from EduEdge Home, Setup Center, product menu, and Workspace
+- accounting configuration remains on the validated School Branch master
+- no accounting documents or submitted academic records are created or mutated
+
 ## Development installation
 
 ```bash
