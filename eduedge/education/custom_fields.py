@@ -55,6 +55,56 @@ EDUCATION_CUSTOM_FIELDS = {
 			"description": "Inherited from the selected Student and protected by backend validation.",
 		},
 	],
+	"Student Group": [
+		{
+			"fieldname": BRANCH_FIELD,
+			"fieldtype": "Link",
+			"label": "School Branch / Campus",
+			"options": "EduEdge School Branch",
+			"insert_after": "academic_year",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"description": "Branch or campus responsible for this class or student group.",
+		},
+	],
+	"Room": [
+		{
+			"fieldname": BRANCH_FIELD,
+			"fieldtype": "Link",
+			"label": "School Branch / Campus",
+			"options": "EduEdge School Branch",
+			"insert_after": "room_name",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"description": "Branch or campus where this room is located.",
+		},
+	],
+	"Course Schedule": [
+		{
+			"fieldname": BRANCH_FIELD,
+			"fieldtype": "Link",
+			"label": "School Branch / Campus",
+			"options": "EduEdge School Branch",
+			"insert_after": "student_group",
+			"read_only": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"description": "Inherited from the selected Student Group.",
+		},
+	],
+	"Student Attendance": [
+		{
+			"fieldname": BRANCH_FIELD,
+			"fieldtype": "Link",
+			"label": "School Branch / Campus",
+			"options": "EduEdge School Branch",
+			"insert_after": "student_group",
+			"read_only": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"description": "Inherited from the Student Group or Course Schedule.",
+		},
+	],
 }
 
 
@@ -70,14 +120,15 @@ def backfill_education_branch_context() -> None:
 
 	default_branch = _get_deterministic_default_branch()
 	if default_branch:
-		frappe.db.sql(
-			f"""
-			update `tabStudent Admission`
-			set `{BRANCH_FIELD}` = %s
-			where coalesce(`{BRANCH_FIELD}`, '') = ''
-			""",
-			(default_branch,),
-		)
+		for doctype in ("Student Admission", "Student Applicant", "Student", "Room"):
+			frappe.db.sql(
+				f"""
+				update `tab{doctype}`
+				set `{BRANCH_FIELD}` = %s
+				where coalesce(`{BRANCH_FIELD}`, '') = ''
+				""",
+				(default_branch,),
+			)
 
 	frappe.db.sql(
 		f"""
@@ -90,16 +141,6 @@ def backfill_education_branch_context() -> None:
 		"""
 	)
 
-	if default_branch:
-		frappe.db.sql(
-			f"""
-			update `tabStudent Applicant`
-			set `{BRANCH_FIELD}` = %s
-			where coalesce(`{BRANCH_FIELD}`, '') = ''
-			""",
-			(default_branch,),
-		)
-
 	frappe.db.sql(
 		f"""
 		update `tabStudent` student
@@ -111,16 +152,6 @@ def backfill_education_branch_context() -> None:
 		"""
 	)
 
-	if default_branch:
-		frappe.db.sql(
-			f"""
-			update `tabStudent`
-			set `{BRANCH_FIELD}` = %s
-			where coalesce(`{BRANCH_FIELD}`, '') = ''
-			""",
-			(default_branch,),
-		)
-
 	frappe.db.sql(
 		f"""
 		update `tabProgram Enrollment` enrollment
@@ -128,6 +159,73 @@ def backfill_education_branch_context() -> None:
 		set enrollment.`{BRANCH_FIELD}` = student.`{BRANCH_FIELD}`
 		where coalesce(enrollment.`{BRANCH_FIELD}`, '') = ''
 			and coalesce(student.`{BRANCH_FIELD}`, '') != ''
+		"""
+	)
+
+	_backfill_student_groups(default_branch)
+	_backfill_course_schedules()
+	_backfill_student_attendance()
+
+
+def _backfill_student_groups(default_branch: str | None) -> None:
+	frappe.db.sql(
+		f"""
+		update `tabStudent Group` student_group
+		inner join (
+			select group_student.parent,
+				min(student.`{BRANCH_FIELD}`) as branch,
+				count(distinct student.`{BRANCH_FIELD}`) as branch_count
+			from `tabStudent Group Student` group_student
+			inner join `tabStudent` student on student.name = group_student.student
+			where coalesce(student.`{BRANCH_FIELD}`, '') != ''
+			group by group_student.parent
+			having branch_count = 1
+		) resolved on resolved.parent = student_group.name
+		set student_group.`{BRANCH_FIELD}` = resolved.branch
+		where coalesce(student_group.`{BRANCH_FIELD}`, '') = ''
+		"""
+	)
+	if default_branch:
+		frappe.db.sql(
+			f"""
+			update `tabStudent Group`
+			set `{BRANCH_FIELD}` = %s
+			where coalesce(`{BRANCH_FIELD}`, '') = ''
+			""",
+			(default_branch,),
+		)
+
+
+def _backfill_course_schedules() -> None:
+	frappe.db.sql(
+		f"""
+		update `tabCourse Schedule` schedule
+		inner join `tabStudent Group` student_group on student_group.name = schedule.student_group
+		set schedule.`{BRANCH_FIELD}` = student_group.`{BRANCH_FIELD}`
+		where coalesce(schedule.`{BRANCH_FIELD}`, '') = ''
+			and coalesce(student_group.`{BRANCH_FIELD}`, '') != ''
+		"""
+	)
+
+
+def _backfill_student_attendance() -> None:
+	frappe.db.sql(
+		f"""
+		update `tabStudent Attendance` attendance
+		left join `tabCourse Schedule` schedule on schedule.name = attendance.course_schedule
+		left join `tabStudent Group` student_group on student_group.name = attendance.student_group
+		left join `tabStudent` student on student.name = attendance.student
+		set attendance.`{BRANCH_FIELD}` = coalesce(
+			nullif(schedule.`{BRANCH_FIELD}`, ''),
+			nullif(student_group.`{BRANCH_FIELD}`, ''),
+			nullif(student.`{BRANCH_FIELD}`, '')
+		)
+		where coalesce(attendance.`{BRANCH_FIELD}`, '') = ''
+			and coalesce(
+				nullif(schedule.`{BRANCH_FIELD}`, ''),
+				nullif(student_group.`{BRANCH_FIELD}`, ''),
+				nullif(student.`{BRANCH_FIELD}`, '')
+			) is not null
 		"""
 	)
 
