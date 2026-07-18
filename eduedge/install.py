@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import frappe
 
+from eduedge.education.custom_fields import (
+	backfill_education_branch_context,
+	ensure_education_custom_fields,
+)
+
 ROLES = (
 	"EduEdge Administrator",
 	"School Administrator",
@@ -15,10 +20,14 @@ ROLES = (
 
 def after_install() -> None:
 	ensure_roles()
+	ensure_education_custom_fields()
+	backfill_education_branch_context()
 
 
 def after_migrate() -> None:
 	ensure_roles()
+	ensure_education_custom_fields()
+	backfill_education_branch_context()
 
 
 def ensure_roles() -> None:

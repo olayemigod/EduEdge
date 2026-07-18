@@ -25,6 +25,17 @@ The first implementation establishes:
 - an EdgeSuite UI-based Setup Center;
 - initial roles, workspace, tests, and documentation.
 
+## V0.2 education branch context
+
+The next implementation slice extends the upstream Frappe Education workflow without modifying its source files:
+
+- Student Applicant stores the responsible branch/campus;
+- Student inherits the applicant or active branch;
+- Program Enrollment inherits and validates the Student branch;
+- operational list and document access are branch-aware;
+- Guardian visibility is derived from linked Students, allowing one Guardian to remain linked to children in different campuses;
+- existing records are backfilled only when the branch is deterministic.
+
 ## Development installation
 
 ```bash
@@ -42,4 +53,4 @@ bench build --app edgesuite_ui --app eduedge
 bench --site eduedge.local migrate
 ```
 
-See `docs/architecture.md` and `docs/manual_qa_v0_1.md`.
+See `docs/architecture.md`, `docs/manual_qa_v0_1.md`, and `docs/eduedge_v0_2_branch_context.md`.

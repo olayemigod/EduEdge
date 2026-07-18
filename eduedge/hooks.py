@@ -19,6 +19,38 @@ add_to_apps_screen = [
 	}
 ]
 
+doctype_js = {
+	"Student Applicant": "public/js/education/student_applicant.js",
+	"Student": "public/js/education/student.js",
+	"Program Enrollment": "public/js/education/program_enrollment.js",
+}
+
+doc_events = {
+	"Student Applicant": {
+		"before_validate": "eduedge.education.branching.before_validate_student_applicant",
+	},
+	"Student": {
+		"before_validate": "eduedge.education.branching.before_validate_student",
+	},
+	"Program Enrollment": {
+		"before_validate": "eduedge.education.branching.before_validate_program_enrollment",
+	},
+}
+
+permission_query_conditions = {
+	"Student Applicant": "eduedge.education.permissions.student_applicant_query",
+	"Student": "eduedge.education.permissions.student_query",
+	"Program Enrollment": "eduedge.education.permissions.program_enrollment_query",
+	"Guardian": "eduedge.education.permissions.guardian_query",
+}
+
+has_permission = {
+	"Student Applicant": "eduedge.education.permissions.has_education_branch_permission",
+	"Student": "eduedge.education.permissions.has_education_branch_permission",
+	"Program Enrollment": "eduedge.education.permissions.has_education_branch_permission",
+	"Guardian": "eduedge.education.permissions.has_education_branch_permission",
+}
+
 fixtures = [
 	{
 		"dt": "Role",
