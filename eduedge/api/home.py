@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
+from frappe.utils import nowdate
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.branch_context import (
@@ -65,7 +66,17 @@ def get_home_context() -> dict:
 			"program_offerings": _count_for_branch(
 				"EduEdge Program Offering",
 				branch_name,
-				{"enabled": 1},
+				{"is_active": 1},
+			),
+			"student_groups": _count_for_branch(
+				"Student Group",
+				branch_name,
+				{"disabled": 0},
+			),
+			"today_schedules": _count_for_branch(
+				"Course Schedule",
+				branch_name,
+				{"schedule_date": nowdate()},
 			),
 		},
 	}
