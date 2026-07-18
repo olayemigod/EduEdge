@@ -3,6 +3,12 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from eduedge.education.academic_operations import (
+	before_validate_course_schedule,
+	before_validate_room,
+	before_validate_student_attendance,
+	before_validate_student_group,
+)
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import (
 	get_context_branch,
