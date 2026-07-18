@@ -59,6 +59,8 @@
 					<EdgeStatCard label="Active Applicants" :value="context.counts.applicants" helper="Applied or approved" />
 					<EdgeStatCard label="Classes" :value="context.counts.student_groups" helper="Active Student Groups" />
 					<EdgeStatCard label="Today's Schedules" :value="context.counts.today_schedules" helper="Classes scheduled today" />
+					<EdgeStatCard label="Assessment Plans" :value="context.counts.assessment_plans" helper="Active assessment plans" />
+					<EdgeStatCard label="Pending Result Approvals" :value="context.counts.pending_result_approvals" helper="Awaiting authorized review" />
 					<EdgeStatCard label="Published Admissions" :value="context.counts.admissions" helper="Current branch admission windows" />
 					<EdgeStatCard label="Programme Offerings" :value="context.counts.program_offerings" helper="Enabled branch offerings" />
 				</EdgeDashboardLayout>
@@ -123,6 +125,8 @@ export default {
 					program_offerings: 0,
 					student_groups: 0,
 					today_schedules: 0,
+					assessment_plans: 0,
+					pending_result_approvals: 0,
 				},
 			},
 			menuItems: EDUEDGE_MENU_ITEMS,
@@ -133,6 +137,13 @@ export default {
 					description: "View schedules and mark a branch-safe class register without leaving the EduEdge shell.",
 					action: "Open academic operations",
 					route: "/app/eduedge-academic-operations",
+				},
+				{
+					eyebrow: "Assessments and results",
+					title: "Control assessment publication",
+					description: "Review plans, confirm result completeness, approve results, and unlock report cards safely.",
+					action: "Open assessments",
+					route: "/app/eduedge-assessment-operations",
 				},
 				{
 					eyebrow: "Admission",

@@ -51,6 +51,38 @@ def student_attendance_query(user: str | None = None) -> str:
 	return _branch_condition("Student Attendance", user)
 
 
+def assessment_plan_query(user: str | None = None) -> str:
+	return _branch_condition("Assessment Plan", user)
+
+
+def assessment_result_query(user: str | None = None) -> str:
+	return _branch_condition("Assessment Result", user)
+
+
+def result_publication_query(user: str | None = None) -> str:
+	return _branch_condition("EduEdge Result Publication", user, fieldname="school_branch")
+
+
+def result_publication_log_query(user: str | None = None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _should_apply_branch_scope(resolved_user):
+		return ""
+	allowed = _allowed_branch_names(resolved_user)
+	if allowed is None:
+		return ""
+	if not allowed:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+	return f"""
+		exists (
+			select 1
+			from `tabEduEdge Result Publication` publication
+			where publication.name = `tabEduEdge Result Publication Log`.result_publication
+				and publication.school_branch in ({values})
+		)
+	"""
+
+
 def program_offering_query(user: str | None = None) -> str:
 	return _branch_condition("EduEdge Program Offering", user, fieldname="school_branch")
 
@@ -122,6 +154,21 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool |
 	if allowed is None:
 		return None
 	return None if doc.get("school_branch") in allowed else False
+
+
+def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool | None:
+	publication = frappe.db.get_value(
+		"EduEdge Result Publication", doc.get("result_publication"), "school_branch"
+	)
+	if not publication:
+		return False
+	resolved_user = user or frappe.session.user
+	if not _should_apply_branch_scope(resolved_user):
+		return None
+	allowed = _allowed_branch_names(resolved_user)
+	if allowed is None:
+		return None
+	return None if publication in allowed else False
 
 
 def _branch_condition(

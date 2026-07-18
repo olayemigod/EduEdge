@@ -78,5 +78,15 @@ def get_home_context() -> dict:
 				branch_name,
 				{"schedule_date": nowdate()},
 			),
+			"assessment_plans": _count_for_branch(
+				"Assessment Plan",
+				branch_name,
+				{"docstatus": ["!=", 2]},
+			),
+			"pending_result_approvals": _count_for_branch(
+				"EduEdge Result Publication",
+				branch_name,
+				{"status": "Pending Approval"},
+			),
 		},
 	}

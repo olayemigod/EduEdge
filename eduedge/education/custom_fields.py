@@ -105,6 +105,32 @@ EDUCATION_CUSTOM_FIELDS = {
 			"description": "Inherited from the Student Group or Course Schedule.",
 		},
 	],
+	"Assessment Plan": [
+		{
+			"fieldname": BRANCH_FIELD,
+			"fieldtype": "Link",
+			"label": "School Branch / Campus",
+			"options": "EduEdge School Branch",
+			"insert_after": "student_group",
+			"read_only": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"description": "Inherited from the selected Student Group.",
+		},
+	],
+	"Assessment Result": [
+		{
+			"fieldname": BRANCH_FIELD,
+			"fieldtype": "Link",
+			"label": "School Branch / Campus",
+			"options": "EduEdge School Branch",
+			"insert_after": "assessment_plan",
+			"read_only": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"description": "Inherited from the Assessment Plan and Student.",
+		},
+	],
 }
 
 
@@ -165,6 +191,8 @@ def backfill_education_branch_context() -> None:
 	_backfill_student_groups(default_branch)
 	_backfill_course_schedules()
 	_backfill_student_attendance()
+	_backfill_assessment_plans()
+	_backfill_assessment_results()
 
 
 def _backfill_student_groups(default_branch: str | None) -> None:
@@ -224,6 +252,37 @@ def _backfill_student_attendance() -> None:
 			and coalesce(
 				nullif(schedule.`{BRANCH_FIELD}`, ''),
 				nullif(student_group.`{BRANCH_FIELD}`, ''),
+				nullif(student.`{BRANCH_FIELD}`, '')
+			) is not null
+		"""
+	)
+
+
+def _backfill_assessment_plans() -> None:
+	frappe.db.sql(
+		f"""
+		update `tabAssessment Plan` plan
+		inner join `tabStudent Group` student_group on student_group.name = plan.student_group
+		set plan.`{BRANCH_FIELD}` = student_group.`{BRANCH_FIELD}`
+		where coalesce(plan.`{BRANCH_FIELD}`, '') = ''
+			and coalesce(student_group.`{BRANCH_FIELD}`, '') != ''
+		"""
+	)
+
+
+def _backfill_assessment_results() -> None:
+	frappe.db.sql(
+		f"""
+		update `tabAssessment Result` result
+		left join `tabAssessment Plan` plan on plan.name = result.assessment_plan
+		left join `tabStudent` student on student.name = result.student
+		set result.`{BRANCH_FIELD}` = coalesce(
+			nullif(plan.`{BRANCH_FIELD}`, ''),
+			nullif(student.`{BRANCH_FIELD}`, '')
+		)
+		where coalesce(result.`{BRANCH_FIELD}`, '') = ''
+			and coalesce(
+				nullif(plan.`{BRANCH_FIELD}`, ''),
 				nullif(student.`{BRANCH_FIELD}`, '')
 			) is not null
 		"""

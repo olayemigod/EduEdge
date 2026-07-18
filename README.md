@@ -53,6 +53,16 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - safe attendance draft and submission workflow
 - immutable submitted-attendance protection
 
+### V0.5
+
+- branch-aware Assessment Plan and Assessment Result records
+- smart examiner, supervisor, room, class, and student filtering
+- EdgeSuite UI Assessment Operations page
+- result completeness calculation by class and assessment group
+- approval, rejection, and publication workflow
+- append-only result publication audit logs
+- report-card readiness blocked until approved results are published
+
 ## Development installation
 
 ```bash

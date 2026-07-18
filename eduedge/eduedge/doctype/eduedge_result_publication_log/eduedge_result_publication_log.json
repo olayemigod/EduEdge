@@ -1,0 +1,31 @@
+{
+ "actions": [],
+ "autoname": "EDU-RPLOG-.YYYY.-.#####",
+ "creation": "2026-07-18 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["result_publication","action","from_status","to_status","acted_by","acted_on","remarks"],
+ "fields": [
+  {"fieldname":"result_publication","fieldtype":"Link","label":"Result Publication","options":"EduEdge Result Publication","reqd":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"action","fieldtype":"Data","label":"Action","reqd":1,"in_list_view":1},
+  {"fieldname":"from_status","fieldtype":"Data","label":"From Status","read_only":1},
+  {"fieldname":"to_status","fieldtype":"Data","label":"To Status","reqd":1,"in_list_view":1},
+  {"fieldname":"acted_by","fieldtype":"Link","label":"Acted By","options":"User","reqd":1,"read_only":1},
+  {"fieldname":"acted_on","fieldtype":"Datetime","label":"Acted On","reqd":1,"read_only":1,"in_list_view":1},
+  {"fieldname":"remarks","fieldtype":"Small Text","label":"Remarks","read_only":1}
+ ],
+ "links": [],
+ "modified": "2026-07-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Result Publication Log",
+ "owner": "Administrator",
+ "permissions": [
+  {"role":"System Manager","read":1,"report":1,"export":1},
+  {"role":"EduEdge Administrator","read":1,"report":1,"export":1},
+  {"role":"School Administrator","read":1,"report":1,"export":1},
+  {"role":"Academic Administrator","read":1,"report":1,"export":1}
+ ],
+ "sort_field": "acted_on",
+ "sort_order": "DESC"
+}

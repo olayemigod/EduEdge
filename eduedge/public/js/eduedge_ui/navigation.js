@@ -1,6 +1,7 @@
 export const EDUEDGE_MENU_ITEMS = Object.freeze([
 	{ label: __("Home"), route: "/app/eduedge-home", icon: "⌂" },
 	{ label: __("Academic Operations"), route: "/app/eduedge-academic-operations", icon: "C" },
+	{ label: __("Assessments & Results"), route: "/app/eduedge-assessment-operations", icon: "R" },
 	{ label: __("Admissions"), route: "/app/student-admission", icon: "A" },
 	{ label: __("Applicants"), route: "/app/student-applicant", icon: "P" },
 	{ label: __("Students"), route: "/app/student", icon: "S" },
