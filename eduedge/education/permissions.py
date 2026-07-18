@@ -7,6 +7,7 @@ from eduedge.services.branch_context import get_allowed_school_branches
 
 OPERATIONAL_ROLES = {
 	"Academics User",
+	"Education Manager",
 	"Instructor",
 	"EduEdge Administrator",
 	"School Administrator",
@@ -34,8 +35,32 @@ def program_enrollment_query(user: str | None = None) -> str:
 	return _branch_condition("Program Enrollment", user)
 
 
+def student_group_query(user: str | None = None) -> str:
+	return _branch_condition("Student Group", user)
+
+
+def room_query(user: str | None = None) -> str:
+	return _branch_condition("Room", user)
+
+
+def course_schedule_query(user: str | None = None) -> str:
+	return _branch_condition("Course Schedule", user)
+
+
+def student_attendance_query(user: str | None = None) -> str:
+	return _branch_condition("Student Attendance", user)
+
+
 def program_offering_query(user: str | None = None) -> str:
 	return _branch_condition("EduEdge Program Offering", user, fieldname="school_branch")
+
+
+def instructor_assignment_query(user: str | None = None) -> str:
+	return _branch_condition(
+		"EduEdge Instructor Branch Assignment",
+		user,
+		fieldname="school_branch",
+	)
 
 
 def guardian_query(user: str | None = None) -> str:
@@ -89,7 +114,7 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 	return None if branch in allowed else False
 
 
-def has_program_offering_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_school_branch_permission(doc, user=None, permission_type=None) -> bool | None:
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
 		return None
