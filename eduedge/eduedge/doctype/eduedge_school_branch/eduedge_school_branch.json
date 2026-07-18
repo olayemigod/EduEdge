@@ -1,0 +1,160 @@
+{
+ "actions": [],
+ "creation": "2026-07-18 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "branch_name",
+  "branch_code",
+  "branch_type",
+  "company",
+  "cost_center",
+  "default_warehouse",
+  "address",
+  "platform_branch_id",
+  "is_default",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "branch_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Branch Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "branch_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Branch Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "Campus",
+   "fieldname": "branch_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Branch Type",
+   "options": "Main Campus\nCampus\nCBT Centre\nAdministrative Office\nLearning Centre\nOther"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "default_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Link",
+   "label": "Address",
+   "options": "Address"
+  },
+  {
+   "fieldname": "platform_branch_id",
+   "fieldtype": "Data",
+   "label": "Platform Branch ID",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Default"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge School Branch",
+ "naming_rule": "By fieldname",
+ "autoname": "field:branch_code",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "EduEdge Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "School Administrator",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Academic Administrator"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Bursar"
+  },
+  {
+   "read": 1,
+   "role": "Teacher"
+  },
+  {
+   "read": 1,
+   "role": "CBT Invigilator"
+  },
+  {
+   "read": 1,
+   "role": "Student Safety Officer"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "branch_name",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}
