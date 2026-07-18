@@ -82,6 +82,7 @@ permission_query_conditions = {
 	"EduEdge Instructor Branch Assignment": "eduedge.education.permissions.instructor_assignment_query",
 	"EduEdge Result Publication": "eduedge.education.permissions.result_publication_query",
 	"EduEdge Result Publication Log": "eduedge.education.permissions.result_publication_log_query",
+	"EduEdge Report Card Review": "eduedge.education.permissions.report_card_review_query",
 }
 
 has_permission = {
@@ -100,6 +101,7 @@ has_permission = {
 	"EduEdge Instructor Branch Assignment": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Result Publication": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Result Publication Log": "eduedge.education.permissions.has_result_publication_log_permission",
+	"EduEdge Report Card Review": "eduedge.education.permissions.has_school_branch_permission",
 }
 
 fixtures = [

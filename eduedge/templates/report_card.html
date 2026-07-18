@@ -1,0 +1,117 @@
+<style>
+	.print-format {
+		font-size: 9pt;
+		font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+		padding: 0.45in;
+	}
+	.report-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+		padding-bottom: 14px;
+		margin-bottom: 16px;
+		border-bottom: 2px solid #222;
+	}
+	.report-header img { max-height: 64px; max-width: 110px; }
+	.report-title { text-align: right; }
+	.report-title h1 { margin: 0; font-size: 22px; }
+	.report-title p { margin: 3px 0 0; }
+	.meta-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 6px 18px;
+		margin-bottom: 14px;
+	}
+	.meta-row { display: flex; gap: 8px; }
+	.meta-row strong { min-width: 118px; }
+	.summary-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 8px;
+		margin: 14px 0;
+	}
+	.summary-card {
+		border: 1px solid #ccc;
+		padding: 8px;
+		text-align: center;
+	}
+	.summary-card strong { display: block; font-size: 15px; }
+	table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+	th, td { border: 1px solid #bbb; padding: 6px; }
+	th { background: #eee; }
+	.comments {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+		margin-top: 14px;
+	}
+	.comment-box { border: 1px solid #bbb; min-height: 80px; padding: 8px; }
+	.comment-box h4 { margin: 0 0 6px; }
+	.footer-note { margin-top: 18px; font-size: 8pt; color: #555; }
+</style>
+
+<div class="page-break">
+	{% if letterhead %}
+		<div>{{ letterhead }}</div>
+	{% else %}
+		<div class="report-header">
+			<div>
+				{% if company.company_logo %}<img src="{{ company.company_logo }}">{% endif %}
+				<h2 style="margin: 4px 0;">{{ company.company_name or company.name or branch.branch_name }}</h2>
+				<p>{{ branch.branch_name }}{% if branch.branch_code %} · {{ branch.branch_code }}{% endif %}</p>
+			</div>
+			<div class="report-title">
+				<h1>{{ _("Student Report Card") }}</h1>
+				<p>{{ publication.academic_term or publication.academic_year }}</p>
+			</div>
+		</div>
+	{% endif %}
+
+	<div class="meta-grid">
+		<div class="meta-row"><strong>{{ _("Student ID") }}</strong><span>{{ student.name }}</span></div>
+		<div class="meta-row"><strong>{{ _("Student Name") }}</strong><span>{{ student.student_name }}</span></div>
+		<div class="meta-row"><strong>{{ _("Class") }}</strong><span>{{ publication.student_group }}</span></div>
+		<div class="meta-row"><strong>{{ _("Assessment Group") }}</strong><span>{{ publication.assessment_group }}</span></div>
+		<div class="meta-row"><strong>{{ _("Academic Year") }}</strong><span>{{ publication.academic_year }}</span></div>
+		<div class="meta-row"><strong>{{ _("Academic Term") }}</strong><span>{{ publication.academic_term or "-" }}</span></div>
+		<div class="meta-row"><strong>{{ _("Branch / Campus") }}</strong><span>{{ branch.branch_name or branch.name }}</span></div>
+		<div class="meta-row"><strong>{{ _("Publication") }}</strong><span>{{ publication.name }}</span></div>
+	</div>
+
+	<div class="summary-grid">
+		<div class="summary-card"><span>{{ _("Average") }}</span><strong>{{ "%.1f"|format(summary.average_percent or 0) }}%</strong></div>
+		<div class="summary-card"><span>{{ _("Overall Grade") }}</span><strong>{{ summary.overall_grade or "-" }}</strong></div>
+		<div class="summary-card"><span>{{ _("Courses") }}</span><strong>{{ summary.course_count or 0 }}</strong></div>
+		<div class="summary-card"><span>{{ _("Attendance") }}</span><strong>{{ "%.1f"|format(summary.attendance_percent or 0) }}%</strong></div>
+	</div>
+
+	<table>
+		<thead><tr><th>{{ _("Course") }}</th>{% if show_marks %}<th>{{ _("Score") }}</th><th>{{ _("Maximum") }}</th>{% endif %}<th>{{ _("Average") }}</th><th>{{ _("Grade") }}</th></tr></thead>
+		<tbody>
+			{% for course in summary.courses %}
+				<tr>
+					<td>{{ course.course_name }}</td>
+					{% if show_marks %}<td>{{ "%.1f"|format(course.total_score or 0) }}</td><td>{{ "%.1f"|format(course.maximum_score or 0) }}</td>{% endif %}
+					<td>{{ "%.1f"|format(course.average_percent or 0) }}%</td>
+					<td>{{ course.grade or "-" }}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+
+	<table>
+		<thead><tr><th>{{ _("Attendance") }}</th><th>{{ _("Present") }}</th><th>{{ _("Absent") }}</th><th>{{ _("Leave") }}</th><th>{{ _("Total") }}</th></tr></thead>
+		<tbody><tr><td>{{ _("Recorded days") }}</td><td>{{ summary.attendance_present or 0 }}</td><td>{{ summary.attendance_absent or 0 }}</td><td>{{ summary.attendance_leave or 0 }}</td><td>{{ summary.attendance_total or 0 }}</td></tr></tbody>
+	</table>
+
+	<div class="comments">
+		<div class="comment-box"><h4>{{ _("Class Teacher Comment") }}</h4><p>{{ review.class_teacher_comment or "-" }}</p></div>
+		<div class="comment-box"><h4>{{ _("Principal Comment") }}</h4><p>{{ review.principal_comment or "-" }}</p></div>
+	</div>
+	<div class="comments">
+		<div class="comment-box"><h4>{{ _("Progression Recommendation") }}</h4><p>{{ review.progression_recommendation or summary.suggested_progression or _("Pending Review") }}</p></div>
+		<div class="comment-box"><h4>{{ _("Progression Review Status") }}</h4><p>{{ review.progression_status or _("Draft") }}</p></div>
+	</div>
+	<div class="footer-note">{{ _("This report card was generated from submitted Assessment Results under published result scope") }} {{ publication.name }}. {{ _("Corrections require the standard cancellation and amendment workflow.") }}</div>
+</div>

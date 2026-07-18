@@ -63,6 +63,16 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - append-only result publication audit logs
 - report-card readiness blocked until approved results are published
 
+### V0.6
+
+- EdgeSuite UI Report Cards and Progression page
+- report cards generated only from Published Result Publications
+- student course, grade, average, and attendance summaries
+- PDF report cards with branch identity and optional letterhead
+- class teacher and principal comments
+- manual progression recommendation and approval
+- no automatic enrollment, class movement, or submitted-result mutation
+
 ## Development installation
 
 ```bash

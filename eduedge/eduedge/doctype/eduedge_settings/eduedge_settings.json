@@ -8,6 +8,12 @@
   "defaults_section",
   "default_company",
   "default_school_branch",
+  "report_card_section",
+  "report_card_show_marks",
+  "report_card_letter_head",
+  "promotion_pass_average",
+  "require_class_teacher_comment",
+  "require_principal_comment",
   "features_section",
   "enable_cbt",
   "enable_student_pickup",
@@ -15,52 +21,20 @@
   "enable_edgefinder_publication"
  ],
  "fields": [
-  {
-   "fieldname": "defaults_section",
-   "fieldtype": "Section Break",
-   "label": "School Defaults"
-  },
-  {
-   "fieldname": "default_company",
-   "fieldtype": "Link",
-   "label": "Default Company",
-   "options": "Company"
-  },
-  {
-   "fieldname": "default_school_branch",
-   "fieldtype": "Link",
-   "label": "Default School Branch",
-   "options": "EduEdge School Branch"
-  },
-  {
-   "fieldname": "features_section",
-   "fieldtype": "Section Break",
-   "label": "Feature Activation"
-  },
-  {
-   "default": "1",
-   "fieldname": "enable_cbt",
-   "fieldtype": "Check",
-   "label": "Enable CBT"
-  },
-  {
-   "default": "0",
-   "fieldname": "enable_student_pickup",
-   "fieldtype": "Check",
-   "label": "Enable Student Pickup"
-  },
-  {
-   "default": "1",
-   "fieldname": "enable_school_intelligence",
-   "fieldtype": "Check",
-   "label": "Enable School Intelligence"
-  },
-  {
-   "default": "0",
-   "fieldname": "enable_edgefinder_publication",
-   "fieldtype": "Check",
-   "label": "Enable EdgeFinder Publication"
-  }
+  {"fieldname":"defaults_section","fieldtype":"Section Break","label":"School Defaults"},
+  {"fieldname":"default_company","fieldtype":"Link","label":"Default Company","options":"Company"},
+  {"fieldname":"default_school_branch","fieldtype":"Link","label":"Default School Branch","options":"EduEdge School Branch"},
+  {"fieldname":"report_card_section","fieldtype":"Section Break","label":"Report Cards and Progression"},
+  {"default":"1","fieldname":"report_card_show_marks","fieldtype":"Check","label":"Show Marks on Report Cards"},
+  {"fieldname":"report_card_letter_head","fieldtype":"Link","label":"Report Card Letter Head","options":"Letter Head"},
+  {"default":"50","fieldname":"promotion_pass_average","fieldtype":"Percent","label":"Promotion Pass Average","description":"Used only to suggest Promote or Repeat. The final recommendation remains a reviewed decision."},
+  {"default":"1","fieldname":"require_class_teacher_comment","fieldtype":"Check","label":"Require Class Teacher Comment"},
+  {"default":"1","fieldname":"require_principal_comment","fieldtype":"Check","label":"Require Principal Comment Before Approval"},
+  {"fieldname":"features_section","fieldtype":"Section Break","label":"Feature Activation"},
+  {"default":"1","fieldname":"enable_cbt","fieldtype":"Check","label":"Enable CBT"},
+  {"default":"0","fieldname":"enable_student_pickup","fieldtype":"Check","label":"Enable Student Pickup"},
+  {"default":"1","fieldname":"enable_school_intelligence","fieldtype":"Check","label":"Enable School Intelligence"},
+  {"default":"0","fieldname":"enable_edgefinder_publication","fieldtype":"Check","label":"Enable EdgeFinder Publication"}
  ],
  "issingle": 1,
  "links": [],
@@ -70,25 +44,12 @@
  "name": "EduEdge Settings",
  "owner": "Administrator",
  "permissions": [
-  {
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "role": "EduEdge Administrator"
-  },
-  {
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "role": "System Manager"
-  },
-  {
-   "read": 1,
-   "role": "School Administrator"
-  }
+  {"read":1,"write":1,"create":1,"role":"EduEdge Administrator"},
+  {"read":1,"write":1,"create":1,"role":"System Manager"},
+  {"read":1,"role":"School Administrator"}
  ],
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": [],
- "track_changes": 1
+ "sort_field":"modified",
+ "sort_order":"DESC",
+ "states":[],
+ "track_changes":1
 }

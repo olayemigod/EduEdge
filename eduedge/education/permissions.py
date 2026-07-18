@@ -83,6 +83,10 @@ def result_publication_log_query(user: str | None = None) -> str:
 	"""
 
 
+def report_card_review_query(user: str | None = None) -> str:
+	return _branch_condition("EduEdge Report Card Review", user, fieldname="school_branch")
+
+
 def program_offering_query(user: str | None = None) -> str:
 	return _branch_condition("EduEdge Program Offering", user, fieldname="school_branch")
 

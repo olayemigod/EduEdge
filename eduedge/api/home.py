@@ -17,13 +17,25 @@ def _require_login() -> None:
 		frappe.throw(_("Authentication required."), frappe.PermissionError)
 
 
-def _count_for_branch(doctype: str, branch: str | None, extra_filters: dict | None = None) -> int:
+def _count_for_branch(
+	doctype: str,
+	branch: str | None,
+	extra_filters: dict | None = None,
+	*,
+	fieldname: str | None = None,
+) -> int:
 	if not branch or not frappe.db.exists("DocType", doctype):
 		return 0
 	meta = frappe.get_meta(doctype)
-	if not meta.has_field(BRANCH_FIELD):
+	resolved_fieldname = fieldname
+	if not resolved_fieldname:
+		if meta.has_field(BRANCH_FIELD):
+			resolved_fieldname = BRANCH_FIELD
+		elif meta.has_field("school_branch"):
+			resolved_fieldname = "school_branch"
+	if not resolved_fieldname or not meta.has_field(resolved_fieldname):
 		return 0
-	filters = {BRANCH_FIELD: branch, **(extra_filters or {})}
+	filters = {resolved_fieldname: branch, **(extra_filters or {})}
 	return frappe.db.count(doctype, filters)
 
 
@@ -87,6 +99,11 @@ def get_home_context() -> dict:
 				"EduEdge Result Publication",
 				branch_name,
 				{"status": "Pending Approval"},
+			),
+			"pending_progression_reviews": _count_for_branch(
+				"EduEdge Report Card Review",
+				branch_name,
+				{"progression_status": "Recommended"},
 			),
 		},
 	}

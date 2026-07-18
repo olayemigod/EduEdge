@@ -31,13 +31,16 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_program_offering/eduedge_program_offering.js
           node --check eduedge/eduedge/doctype/eduedge_instructor_branch_assignment/eduedge_instructor_branch_assignment.js
           node --check eduedge/eduedge/doctype/eduedge_result_publication/eduedge_result_publication.js
+          node --check eduedge/eduedge/doctype/eduedge_report_card_review/eduedge_report_card_review.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
           node --check eduedge/public/js/eduedge_home.bundle.js
           node --check eduedge/public/js/eduedge_academic_operations.bundle.js
           node --check eduedge/public/js/eduedge_assessment_operations.bundle.js
+          node --check eduedge/public/js/eduedge_report_cards.bundle.js
           node --check eduedge/eduedge/page/eduedge_home/eduedge_home.js
           node --check eduedge/eduedge/page/eduedge_setup_center/eduedge_setup_center.js
           node --check eduedge/eduedge/page/eduedge_academic_operations/eduedge_academic_operations.js
           node --check eduedge/eduedge/page/eduedge_assessment_operations/eduedge_assessment_operations.js
+          node --check eduedge/eduedge/page/eduedge_report_cards/eduedge_report_cards.js
       - name: Run pure contract tests
         run: python -m unittest discover -s eduedge/tests -p "test_*.py"
