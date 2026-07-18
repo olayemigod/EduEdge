@@ -15,7 +15,7 @@ add_to_apps_screen = [
 		"name": "eduedge",
 		"logo": "/assets/eduedge/images/eduedge-mark.svg",
 		"title": "EduEdge",
-		"route": "/app/eduedge",
+		"route": "/app/eduedge-home",
 	}
 ]
 

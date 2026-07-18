@@ -23,5 +23,9 @@ jobs:
           node --check eduedge/public/js/education/student_applicant.js
           node --check eduedge/public/js/education/program_enrollment.js
           node --check eduedge/eduedge/doctype/eduedge_program_offering/eduedge_program_offering.js
+          node --check eduedge/public/js/eduedge_ui/navigation.js
+          node --check eduedge/public/js/eduedge_home.bundle.js
+          node --check eduedge/eduedge/page/eduedge_home/eduedge_home.js
+          node --check eduedge/eduedge/page/eduedge_setup_center/eduedge_setup_center.js
       - name: Run pure contract tests
         run: python -m unittest discover -s eduedge/tests -p "test_*.py"

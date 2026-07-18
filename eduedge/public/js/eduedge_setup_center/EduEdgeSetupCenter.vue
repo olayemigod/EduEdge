@@ -1,12 +1,30 @@
 <template>
-	<EdgeAppShell app-name="EduEdge">
+	<EdgeAppShell
+		product="eduedge"
+		title="EduEdge"
+		:tenant-name="readiness.school.default_company || ''"
+		:branch-name="readiness.school.default_school_branch || ''"
+		:menu-items="menuItems"
+		active-route="/app/eduedge-setup-center"
+		@navigate="openRoute"
+	>
 		<EdgePageLayout>
-			<EdgePageHeader
-				title="EduEdge Setup Center"
-				subtitle="Complete the school, academic, and platform foundation before operational rollout."
-			/>
+			<template #header>
+				<EdgePageHeader
+					eyebrow="Foundation"
+					title="EduEdge Setup Center"
+					subtitle="Complete the school, academic, and platform foundation before operational rollout."
+				/>
+			</template>
+
 			<EdgeLoadingState v-if="loading" message="Checking EduEdge readiness..." />
-			<EdgeErrorState v-else-if="error" title="Unable to check setup" :message="error" />
+			<EdgeErrorState
+				v-else-if="error"
+				title="Unable to check setup"
+				:message="error"
+				action-label="Try again"
+				@retry="loadReadiness"
+			/>
 			<template v-else>
 				<div class="eduedge-stat-grid">
 					<EdgeStatCard
@@ -14,10 +32,8 @@
 						:value="readiness.ready ? 'Ready' : 'Action Required'"
 					/>
 					<EdgeStatCard label="Enabled Branches" :value="readiness.school.enabled_branch_count" />
-					<EdgeStatCard
-						label="Program Offerings"
-						:value="readiness.school.active_program_offering_count || 0"
-					/>
+					<EdgeStatCard label="Programme Offerings" :value="readiness.school.active_program_offering_count || 0" />
+					<EdgeStatCard label="Platform Mode" :value="readiness.platform.mode" />
 					<EdgeStatCard
 						label="Current Academic Year"
 						:value="readiness.school.current_academic_year || 'Not configured'"
@@ -45,7 +61,7 @@
 						<button
 							v-for="action in readiness.recommended_actions"
 							:key="action.route"
-							class="btn btn-primary btn-sm"
+							class="edge-button edge-button--primary"
 							@click="openRoute(action.route)"
 						>
 							{{ action.label }}
@@ -58,12 +74,15 @@
 </template>
 
 <script>
+import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
+
 export default {
 	name: "EduEdgeSetupCenter",
 	data() {
 		return {
 			loading: true,
 			error: "",
+			menuItems: EDUEDGE_MENU_ITEMS,
 			readiness: {
 				ready: false,
 				blockers: [],
@@ -74,19 +93,22 @@ export default {
 			},
 		};
 	},
-	async mounted() {
-		try {
-			const response = await frappe.call("eduedge.api.setup.get_setup_readiness");
-			this.readiness = response.message || this.readiness;
-		} catch (error) {
-			this.error = error?.message || "EduEdge setup readiness could not be loaded.";
-		} finally {
-			this.loading = false;
-		}
+	mounted() {
+		this.loadReadiness();
 	},
 	methods: {
-		openRoute(route) {
-			window.location.href = route;
+		openRoute: openEduEdgeRoute,
+		async loadReadiness() {
+			this.loading = true;
+			this.error = "";
+			try {
+				const response = await frappe.call("eduedge.api.setup.get_setup_readiness");
+				this.readiness = response.message || this.readiness;
+			} catch (error) {
+				this.error = error?.message || "EduEdge setup readiness could not be loaded.";
+			} finally {
+				this.loading = false;
+			}
 		},
 	},
 };
