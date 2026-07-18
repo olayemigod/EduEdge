@@ -59,8 +59,8 @@
 				<EdgeDashboardLayout min-column-width="12rem">
 					<EdgeStatCard label="Enabled Campuses" :value="context.counts.enabled_branches" helper="Within the selected company scope" />
 					<EdgeStatCard label="Active Assignments" :value="context.counts.active_assignments" helper="Enabled and currently valid" />
-					<EdgeStatCard label="Covered Campuses" :value="`${context.counts.covered_branches}/${context.counts.enabled_branches}`" helper="Direct or company HQ access" />
-					<EdgeStatCard label="Accounting Ready" :value="`${context.counts.accounting_ready_branches}/${context.counts.enabled_branches}`" helper="Core branch defaults completed" />
+					<EdgeStatCard :label="'Covered Campuses'" :value="`${context.counts.covered_branches}/${context.counts.enabled_branches}`" helper="Direct or company HQ access" />
+					<EdgeStatCard :label="'Accounting Ready'" :value="`${context.counts.accounting_ready_branches}/${context.counts.enabled_branches}`" helper="Core branch defaults completed" />
 					<EdgeStatCard label="Enforcement" :value="context.settings.enforcement_enabled ? 'Active' : 'Not Active'" helper="Backend operational access gate" />
 				</EdgeDashboardLayout>
 
@@ -152,9 +152,14 @@
 							<h2>Operational branch access</h2>
 							<p>HQ access remains company-scoped. Disabled, expired, future-dated, or invalid assignments do not provide operational access.</p>
 						</div>
-						<button type="button" class="edge-button" @click="openRoute('/app/eduedge-user-branch-access')">Open native list</button>
+						<button v-if="context.permissions.can_view_access_details" type="button" class="edge-button" @click="openRoute('/app/eduedge-user-branch-access')">Open native list</button>
 					</div>
-					<EdgeEmptyState v-if="!filteredAssignments.length" title="No matching branch assignments" description="Add a direct campus assignment or approved company HQ assignment." />
+					<EdgeEmptyState
+						v-if="!context.permissions.can_view_access_details"
+						title="Assignment details restricted"
+						description="Only System Manager and EduEdge Administrator can view or change named user assignments. Coverage summaries remain available."
+					/>
+					<EdgeEmptyState v-else-if="!filteredAssignments.length" title="No matching branch assignments" description="Add a direct campus assignment or approved company HQ assignment." />
 					<div v-else class="eduedge-table-wrap">
 						<table class="table table-bordered eduedge-governance-table">
 							<thead>
@@ -213,7 +218,7 @@ export default {
 				user: {}, companies: [], selected_company: null, branches: [], assignments: [], activation_checks: [],
 				settings: { enforcement_enabled: false, hq_all_branch_view_enabled: true },
 				counts: { enabled_branches: 0, active_assignments: 0, covered_branches: 0, accounting_ready_branches: 0 },
-				permissions: { can_manage_access: false, can_manage_accounting: false },
+				permissions: { can_manage_access: false, can_view_access_details: false, can_manage_accounting: false },
 				can_enable_enforcement: false,
 			},
 		};
@@ -300,7 +305,7 @@ export default {
 				if (!dialog.get_value("hq_all_branch_access")) dialog.set_value("school_branch", "");
 			};
 			if (assignment) {
-				Promise.resolve(dialog.set_values({
+				dialog.set_values({
 					user: assignment.user,
 					branch_role: assignment.branch_role,
 					hq_all_branch_access: assignment.hq_all_branch_access,
@@ -311,7 +316,7 @@ export default {
 					enabled: assignment.enabled,
 					valid_from: assignment.valid_from,
 					valid_to: assignment.valid_to,
-				})).then(applyScope);
+				}).then(applyScope);
 			} else {
 				if (this.selectedCompany) dialog.set_value("company", this.selectedCompany);
 				applyScope();
@@ -345,7 +350,8 @@ export default {
 		async changeEnforcement(target) {
 			this.working = true;
 			try {
-				await frappe.call("eduedge.api.branch_governance.set_branch_enforcement", { enabled: target ? 1 : 0, confirmed: 1 });
+				const response = await frappe.call("eduedge.api.branch_governance.set_branch_enforcement", { enabled: target ? 1 : 0, confirmed: 1 });
+				this.context = { ...(response.message || this.context), permissions: this.context.permissions };
 				await this.loadContext();
 				frappe.show_alert({ message: target ? __("Branch enforcement enabled") : __("Branch enforcement disabled"), indicator: target ? "green" : "orange" });
 			} catch (error) {
