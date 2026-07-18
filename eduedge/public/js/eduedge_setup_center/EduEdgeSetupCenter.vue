@@ -14,6 +14,8 @@
 					eyebrow="Foundation"
 					title="EduEdge Setup Center"
 					subtitle="Complete the school, academic, and platform foundation before operational rollout."
+					action-label="Open Branch Governance"
+					@action="openRoute('/app/eduedge-branch-governance')"
 				/>
 			</template>
 
@@ -27,31 +29,30 @@
 			/>
 			<template v-else>
 				<div class="eduedge-stat-grid">
-					<EdgeStatCard
-						label="Overall Readiness"
-						:value="readiness.ready ? 'Ready' : 'Action Required'"
-					/>
+					<EdgeStatCard label="Overall Readiness" :value="readiness.ready ? 'Ready' : 'Action Required'" />
 					<EdgeStatCard label="Enabled Branches" :value="readiness.school.enabled_branch_count" />
+					<EdgeStatCard label="Active Branch Assignments" :value="readiness.school.active_branch_access_count || 0" />
+					<EdgeStatCard
+						label="Branch Enforcement"
+						:value="readiness.school.branch_access_enforcement_enabled ? 'Active' : 'Not Active'"
+					/>
+					<EdgeStatCard
+						label="Accounting Ready Branches"
+						:value="`${readiness.school.accounting_ready_branch_count || 0}/${readiness.school.enabled_branch_count || 0}`"
+					/>
 					<EdgeStatCard label="Programme Offerings" :value="readiness.school.active_program_offering_count || 0" />
 					<EdgeStatCard label="Platform Mode" :value="readiness.platform.mode" />
-					<EdgeStatCard
-						label="Current Academic Year"
-						:value="readiness.school.current_academic_year || 'Not configured'"
-					/>
+					<EdgeStatCard label="Current Academic Year" :value="readiness.school.current_academic_year || 'Not configured'" />
 				</div>
 
 				<section v-if="readiness.blockers.length" class="eduedge-panel">
 					<h3>Blockers</h3>
-					<ul>
-						<li v-for="item in readiness.blockers" :key="item">{{ item }}</li>
-					</ul>
+					<ul><li v-for="item in readiness.blockers" :key="item">{{ item }}</li></ul>
 				</section>
 
 				<section v-if="readiness.warnings.length" class="eduedge-panel">
 					<h3>Warnings</h3>
-					<ul>
-						<li v-for="item in readiness.warnings" :key="item">{{ item }}</li>
-					</ul>
+					<ul><li v-for="item in readiness.warnings" :key="item">{{ item }}</li></ul>
 				</section>
 
 				<section class="eduedge-panel">
@@ -93,9 +94,7 @@ export default {
 			},
 		};
 	},
-	mounted() {
-		this.loadReadiness();
-	},
+	mounted() { this.loadReadiness(); },
 	methods: {
 		openRoute: openEduEdgeRoute,
 		async loadReadiness() {
@@ -106,9 +105,7 @@ export default {
 				this.readiness = response.message || this.readiness;
 			} catch (error) {
 				this.error = error?.message || "EduEdge setup readiness could not be loaded.";
-			} finally {
-				this.loading = false;
-			}
+			} finally { this.loading = false; }
 		},
 	},
 };
@@ -121,7 +118,6 @@ export default {
 	gap: var(--edge-space-4, 1rem);
 	margin-bottom: var(--edge-space-5, 1.25rem);
 }
-
 .eduedge-panel {
 	border: 1px solid var(--border-color);
 	border-radius: var(--edge-radius-lg, 12px);
@@ -129,14 +125,6 @@ export default {
 	margin-bottom: var(--edge-space-4, 1rem);
 	background: var(--card-bg);
 }
-
-.eduedge-panel h3 {
-	margin-top: 0;
-}
-
-.eduedge-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.75rem;
-}
+.eduedge-panel h3 { margin-top: 0; }
+.eduedge-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 </style>
