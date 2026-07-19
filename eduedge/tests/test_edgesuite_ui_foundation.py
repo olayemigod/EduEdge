@@ -24,8 +24,26 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 				self.assertIn("edgeui.bundle.js", source)
 				self.assertLess(source.index("edgeui.bundle.js"), source.index(bundle_name))
 				self.assertIn("window.EdgeSuiteUI", source)
-				self.assertIn("createEdgeApp", source)
+				self.assertIn("runtime?.install", source)
 				self.assertIn("EdgeAppShell", source)
+				self.assertRegex(source, r"window\.createEduEdge[A-Za-z]+App")
+				self.assertNotIn("runtime.createEdgeApp", source)
+
+	def test_product_bundles_create_apps_with_the_product_vue_runtime(self):
+		bundle_root = APP / "public" / "js"
+		factory = (bundle_root / "eduedge_ui" / "app_factory.js").read_text()
+		self.assertIn('import { createApp } from "vue"', factory)
+		self.assertIn("runtime.install(app)", factory)
+		self.assertIn("runtime?.components?.EdgeAppShell", factory)
+
+		for path in bundle_root.glob("eduedge_*.bundle.js"):
+			if path.name == "eduedge_product_menu.bundle.js":
+				continue
+			with self.subTest(path=path):
+				source = path.read_text()
+				self.assertIn('from "./eduedge_ui/app_factory"', source)
+				self.assertIn("createEduEdgeApp(", source)
+				self.assertRegex(source, r"window\.createEduEdge[A-Za-z]+App")
 
 	def test_root_product_pages_use_edge_app_shell(self):
 		vue_root = APP / "public" / "js"
