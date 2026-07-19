@@ -38,15 +38,18 @@ frappe.pages["eduedge-assessment-operations"].on_page_show = function (wrapper) 
 	frappe.require("edgeui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
-		if (!runtime?.createEdgeApp || !runtime?.components?.EdgeAppShell) {
+		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
 			fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
 			return;
 		}
 
 		frappe.require("eduedge_assessment_operations.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (!window.EduEdgeAssessmentOperations) {
-				fail(__("The EduEdge Assessment Operations bundle is unavailable."));
+			if (
+				!window.EduEdgeAssessmentOperations ||
+				typeof window.createEduEdgeAssessmentOperationsApp !== "function"
+			) {
+				fail(__("The EduEdge Assessment Operations bundle is unavailable or incomplete."));
 				return;
 			}
 			$loading.remove();
@@ -54,7 +57,7 @@ frappe.pages["eduedge-assessment-operations"].on_page_show = function (wrapper) 
 				'<div class="eduedge-assessment-operations-root" data-edge-product="eduedge"></div>'
 			).appendTo(page.body);
 			try {
-				wrapper.vue_app = runtime.createEdgeApp(window.EduEdgeAssessmentOperations, {
+				wrapper.vue_app = window.createEduEdgeAssessmentOperationsApp({
 					pageName: "eduedge-assessment-operations",
 				});
 				wrapper.vue_app.mount(root[0]);
