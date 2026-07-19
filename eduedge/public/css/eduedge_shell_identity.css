@@ -1,0 +1,35 @@
+.edge-app-shell[data-edge-product="eduedge"] .edge-identity-mark--image {
+	background: var(--edge-color-surface, #fff);
+	border-color: var(--edge-color-border, #dce5ef);
+	box-shadow: var(--edge-shadow-xs, 0 1px 2px rgb(18 32 51 / 5%));
+	padding: .25rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-identity-logo {
+	border-radius: inherit;
+	display: block;
+	height: 100%;
+	max-height: 100%;
+	max-width: 100%;
+	object-fit: contain;
+	width: 100%;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-topbar__brand {
+	max-width: min(28rem, 42vw);
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__brand-copy strong,
+.edge-app-shell[data-edge-product="eduedge"] .edge-topbar__title-copy strong {
+	text-overflow: ellipsis;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-context-chip[data-eduedge-tenant-chip="1"] {
+	display: none;
+}
+
+@media (max-width: 47.99rem) {
+	.edge-app-shell[data-edge-product="eduedge"] .edge-topbar__brand {
+		max-width: min(15rem, 52vw);
+	}
+}
