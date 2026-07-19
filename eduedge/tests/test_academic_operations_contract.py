@@ -30,6 +30,13 @@ class TestAcademicOperationsContract(unittest.TestCase):
 		self.assertIn('current["locked"]', text)
 		self.assertNotIn("db_set(", text)
 
+	def test_aggregate_queries_use_frappe_v16_function_dicts(self):
+		text = (ROOT / "eduedge" / "api" / "academic_operations.py").read_text()
+		self.assertIn('{"COUNT": "name", "as": "student_count"}', text)
+		self.assertIn('{"COUNT": "name", "as": "record_count"}', text)
+		self.assertNotIn("count(name) as student_count", text)
+		self.assertNotIn("count(name) as record_count", text)
+
 	def test_academic_operations_page_uses_edgesuite_shell(self):
 		component = (
 			ROOT
