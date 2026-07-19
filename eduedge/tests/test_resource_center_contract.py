@@ -29,6 +29,7 @@ class TestResourceCenterContract(unittest.TestCase):
 
 	def test_resource_api_is_allowlisted_branch_safe_and_permission_aware(self):
 		api = (APP / "api/resource_center.py").read_text(encoding="utf-8")
+		safety = (APP / "api/resource_center_safe.py").read_text(encoding="utf-8")
 		for expected in (
 			"RESOURCE_CONFIG",
 			'"school_branches"',
@@ -47,6 +48,14 @@ class TestResourceCenterContract(unittest.TestCase):
 			'doc.check_permission("delete")',
 		):
 			self.assertIn(expected, api)
+		for expected in (
+			"_smart_filters",
+			"base._link_options",
+			"not allowed_branches",
+			"_empty_page",
+			"nowdate()",
+		):
+			self.assertIn(expected, safety)
 		for forbidden in (
 			"ignore_permissions=True",
 			"ignore_permissions = True",
@@ -55,7 +64,7 @@ class TestResourceCenterContract(unittest.TestCase):
 			'frappe.new_doc("Payment Entry")',
 			'frappe.new_doc("Journal Entry")',
 		):
-			self.assertNotIn(forbidden, api)
+			self.assertNotIn(forbidden, api + safety)
 
 	def test_resource_pages_use_edgesuite_dialog_crud(self):
 		component = (APP / "public/js/eduedge_resource_center/EduEdgeResourceCenter.vue").read_text(encoding="utf-8")
