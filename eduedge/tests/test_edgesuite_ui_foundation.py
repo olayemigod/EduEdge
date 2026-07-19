@@ -5,6 +5,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
+GLOBAL_DESK_BUNDLES = {
+	"eduedge_product_menu.bundle.js",
+	"eduedge_shell_identity.bundle.js",
+}
 
 
 class TestEdgeSuiteUIFoundation(unittest.TestCase):
@@ -37,7 +41,7 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 		self.assertIn("runtime?.components?.EdgeAppShell", factory)
 
 		for path in bundle_root.glob("eduedge_*.bundle.js"):
-			if path.name == "eduedge_product_menu.bundle.js":
+			if path.name in GLOBAL_DESK_BUNDLES:
 				continue
 			with self.subTest(path=path):
 				source = path.read_text()
