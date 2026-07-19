@@ -41,7 +41,9 @@ class TestProgramOfferingContract(unittest.TestCase):
 
 	def test_upstream_enrollment_api_is_not_overridden(self):
 		text = (ROOT / "eduedge" / "hooks.py").read_text()
-		self.assertNotIn("override_whitelisted_methods", text)
+		self.assertNotIn('"education.', text)
+		self.assertNotIn('"erpnext.', text)
+		self.assertIn('"eduedge.api.resource_center.get_resource_page"', text)
 		self.assertIn('"Student Admission"', text)
 		self.assertIn('"EduEdge Program Offering"', text)
 
