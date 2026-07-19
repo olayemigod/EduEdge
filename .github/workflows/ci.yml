@@ -35,7 +35,11 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_result_publication/eduedge_result_publication.js
           node --check eduedge/eduedge/doctype/eduedge_report_card_review/eduedge_report_card_review.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
+          node --check eduedge/public/js/eduedge_ui/resource_modal.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
+          node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
+          node --check eduedge/public/js/eduedge_resource_center.bundle.js
+          node --check eduedge/public/js/eduedge_settings_center.bundle.js
           node --check eduedge/public/js/eduedge_home.bundle.js
           node --check eduedge/public/js/eduedge_academic_operations.bundle.js
           node --check eduedge/public/js/eduedge_assessment_operations.bundle.js
@@ -47,5 +51,20 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_assessment_operations/eduedge_assessment_operations.js
           node --check eduedge/eduedge/page/eduedge_report_cards/eduedge_report_cards.js
           node --check eduedge/eduedge/page/eduedge_branch_governance/eduedge_branch_governance.js
+          node --check eduedge/eduedge/page/eduedge_settings_center/eduedge_settings_center.js
       - name: Run pure contract tests
-        run: python -m unittest discover -s eduedge/tests -p "test_*.py"
+        id: contract-tests
+        shell: bash
+        run: |
+          set +e
+          python -m unittest discover -s eduedge/tests -p "test_*.py" > contract-test.log 2>&1
+          status=$?
+          cat contract-test.log
+          exit $status
+      - name: Upload contract test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-diagnostics
+          path: contract-test.log
+          if-no-files-found: ignore
