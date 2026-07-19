@@ -157,7 +157,7 @@ def _get_group_strength(group_names: list[str]) -> dict[str, int]:
 	rows = frappe.get_all(
 		"Student Group Student",
 		filters={"parent": ["in", group_names], "active": 1},
-		fields=["parent", "count(name) as student_count"],
+		fields=["parent", {"COUNT": "name", "as": "student_count"}],
 		group_by="parent",
 	)
 	return {row.parent: int(row.student_count or 0) for row in rows}
@@ -167,7 +167,7 @@ def _get_attendance_summary(branch: str, date: str) -> dict:
 	rows = frappe.get_all(
 		"Student Attendance",
 		filters={BRANCH_FIELD: branch, "date": date, "docstatus": 1},
-		fields=["status", "count(name) as record_count"],
+		fields=["status", {"COUNT": "name", "as": "record_count"}],
 		group_by="status",
 	)
 	counts = Counter({row.status: int(row.record_count or 0) for row in rows})
