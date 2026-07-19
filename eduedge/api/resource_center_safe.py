@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 import frappe
@@ -11,6 +12,15 @@ from eduedge.services.branch_context import get_allowed_school_branches
 
 def _is_branch_scoped(config: dict) -> bool:
 	return config.get("doctype") == "EduEdge School Branch" or bool(config.get("branch_field"))
+
+
+def _smart_filters(config: dict, allowed_branches: list[dict]) -> list[dict]:
+	filters = deepcopy(base._filter_definitions(config, allowed_branches))
+	for field in filters:
+		if str(field.get("type") or "").lower() != "link":
+			continue
+		field["options"] = base._link_options(field, "", {})
+	return filters
 
 
 def _empty_page(resource: str, config: dict, page_length: int | str = 20) -> dict:
@@ -36,7 +46,7 @@ def _empty_page(resource: str, config: dict, page_length: int | str = 20) -> dic
 		"branch_field": config.get("branch_field") or "",
 		"columns": columns,
 		"rows": [],
-		"filters": base._filter_definitions(config, []),
+		"filters": _smart_filters(config, []),
 		"start": 0,
 		"page_length": min(base.MAX_PAGE_LENGTH, max(5, int(page_length or 20))),
 		"has_more": False,
@@ -58,7 +68,8 @@ def get_resource_page(
 	page_length: int | str = 20,
 ) -> dict:
 	config = base._config(resource)
-	if _is_branch_scoped(config) and not get_allowed_school_branches():
+	allowed_branches = get_allowed_school_branches() if _is_branch_scoped(config) else []
+	if _is_branch_scoped(config) and not allowed_branches:
 		return _empty_page(resource, config, page_length)
 	result = base.get_resource_page(
 		resource=resource,
@@ -70,6 +81,7 @@ def get_resource_page(
 	result["full_form_route"] = config["full_form_route"]
 	result["title_field"] = config.get("title_field") or "name"
 	result["branch_field"] = config.get("branch_field") or ""
+	result["filters"] = _smart_filters(config, allowed_branches)
 	return result
 
 
