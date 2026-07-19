@@ -28,7 +28,9 @@ add_to_apps_screen = [
 		"name": "eduedge",
 		"logo": "/assets/eduedge/images/eduedge-mark.svg",
 		"title": "EduEdge",
-		"route": "/app/eduedge-home",
+		# Frappe v16 recognises /desk routes as internal Desk apps. Using the
+		# legacy /app alias makes the launcher treat EduEdge as an external app.
+		"route": "/desk/eduedge-home",
 	}
 ]
 
