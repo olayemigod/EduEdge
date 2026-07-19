@@ -13,9 +13,11 @@ GLOBAL_DESK_BUNDLES = {
 
 
 class TestEdgeSuiteUIFoundation(unittest.TestCase):
-	def test_launcher_opens_edgesuite_home(self):
+	def test_launcher_opens_edgesuite_home_inside_current_desk_tab(self):
 		hooks = (APP / "hooks.py").read_text()
-		self.assertIn('"route": "/app/eduedge-home"', hooks)
+		self.assertIn('"route": "/desk/eduedge-home"', hooks)
+		self.assertNotIn('"route": "/app/eduedge-home"', hooks)
+		self.assertNotIn('"target": "_blank"', hooks)
 
 	def test_every_product_page_loader_loads_edgesuite_first(self):
 		page_root = APP / "eduedge" / "page"
