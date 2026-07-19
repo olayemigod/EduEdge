@@ -38,15 +38,18 @@ frappe.pages["eduedge-report-cards"].on_page_show = function (wrapper) {
 	frappe.require("edgeui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
-		if (!runtime?.createEdgeApp || !runtime?.components?.EdgeAppShell) {
+		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
 			fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
 			return;
 		}
 
 		frappe.require("eduedge_report_cards.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (!window.EduEdgeReportCards) {
-				fail(__("The EduEdge Report Cards bundle is unavailable."));
+			if (
+				!window.EduEdgeReportCards ||
+				typeof window.createEduEdgeReportCardsApp !== "function"
+			) {
+				fail(__("The EduEdge Report Cards bundle is unavailable or incomplete."));
 				return;
 			}
 			$loading.remove();
@@ -54,7 +57,7 @@ frappe.pages["eduedge-report-cards"].on_page_show = function (wrapper) {
 				'<div class="eduedge-report-cards-root" data-edge-product="eduedge"></div>'
 			).appendTo(page.body);
 			try {
-				wrapper.vue_app = runtime.createEdgeApp(window.EduEdgeReportCards, {
+				wrapper.vue_app = window.createEduEdgeReportCardsApp({
 					pageName: "eduedge-report-cards",
 				});
 				wrapper.vue_app.mount(root[0]);
