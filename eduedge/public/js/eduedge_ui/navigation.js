@@ -19,15 +19,15 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 		section: __("School Operations"),
 		sectionIcon: "graduation",
 		label: __("Admissions"),
-		route: "/app/student-admission",
+		route: "/app/eduedge-admissions",
 		icon: "clipboard",
-		description: __("Admission windows and applications"),
+		description: __("Admission windows and availability"),
 	},
 	{
 		section: __("School Operations"),
 		sectionIcon: "graduation",
 		label: __("Applicants"),
-		route: "/app/student-applicant",
+		route: "/app/eduedge-applicants",
 		icon: "user",
 		description: __("Review prospective students"),
 	},
@@ -35,15 +35,23 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 		section: __("School Operations"),
 		sectionIcon: "graduation",
 		label: __("Students"),
-		route: "/app/student",
+		route: "/app/eduedge-students",
 		icon: "students",
 		description: __("Student records and profiles"),
 	},
 	{
 		section: __("Academics and Outcomes"),
 		sectionIcon: "assessment",
-		label: __("Program Offerings"),
-		route: "/app/eduedge-program-offering",
+		label: __("Programmes"),
+		route: "/app/eduedge-programs",
+		icon: "book",
+		description: __("School programme catalogue"),
+	},
+	{
+		section: __("Academics and Outcomes"),
+		sectionIcon: "assessment",
+		label: __("Programme Offerings"),
+		route: "/app/eduedge-program-offerings",
 		icon: "layers",
 		description: __("Programmes by campus and session"),
 	},
@@ -66,6 +74,14 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 	{
 		section: __("Administration"),
 		sectionIcon: "settings",
+		label: __("School Branches"),
+		route: "/app/eduedge-school-branches",
+		icon: "building",
+		description: __("Campus identity and operational defaults"),
+	},
+	{
+		section: __("Administration"),
+		sectionIcon: "settings",
 		label: __("Branch Governance"),
 		route: "/app/eduedge-branch-governance",
 		icon: "shield",
@@ -79,15 +95,30 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 		icon: "settings",
 		description: __("Foundation readiness and configuration"),
 	},
+	{
+		section: __("Administration"),
+		sectionIcon: "settings",
+		label: __("EduEdge Settings"),
+		route: "/app/eduedge-settings-center",
+		icon: "settings",
+		description: __("Defaults, branding, controls, and features"),
+	},
 ]);
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home",
 	"/app/eduedge-academic-operations",
+	"/app/eduedge-admissions",
+	"/app/eduedge-applicants",
+	"/app/eduedge-students",
+	"/app/eduedge-programs",
+	"/app/eduedge-program-offerings",
 	"/app/eduedge-assessment-operations",
 	"/app/eduedge-report-cards",
+	"/app/eduedge-school-branches",
 	"/app/eduedge-branch-governance",
 	"/app/eduedge-setup-center",
+	"/app/eduedge-settings-center",
 ]);
 
 function normalizedPath(route) {
@@ -109,6 +140,8 @@ export function openEduEdgeRoute(route) {
 		return;
 	}
 
+	// Native Frappe forms and specialist workflows remain available only as
+	// deliberate full-form fallbacks, preserving the current EduEdge workspace.
 	const opened = window.open(route, "_blank", "noopener,noreferrer");
 	if (opened) opened.opener = null;
 }
