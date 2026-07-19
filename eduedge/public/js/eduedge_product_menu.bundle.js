@@ -157,7 +157,12 @@ function registerEduEdgeProductMenu() {
 	});
 }
 
-frappe.ready(registerEduEdgeProductMenu);
+if (document.readyState === "loading") {
+	document.addEventListener("DOMContentLoaded", registerEduEdgeProductMenu, { once: true });
+} else {
+	registerEduEdgeProductMenu();
+}
+
 ["desktop_screen", "sidebar_setup", "toolbar_setup", "page-change"].forEach((eventName) => {
 	document.addEventListener(eventName, registerEduEdgeProductMenu);
 });
