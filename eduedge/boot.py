@@ -56,7 +56,7 @@ def _get_user_identity() -> dict:
 
 
 def extend_bootinfo(bootinfo) -> None:
-	"""Expose permission-safe identity metadata for the EduEdge shell.
+	"""Expose permission-safe identity metadata for the shared EdgeSuite shell.
 
 	School identity remains on ERPNext Company. EduEdge product identity remains
 	in EduEdge Settings, with the packaged mark as a safe fallback. Only the
@@ -94,11 +94,22 @@ def extend_bootinfo(bootinfo) -> None:
 		"logo": "",
 	}
 
-	bootinfo["eduedge_ui_identity"] = {
+	identity = {
 		"product_name": "EduEdge",
 		"product_logo": _get_product_logo(),
+		"product_icon": "graduation",
+		"product_subtitle": "Education Management",
 		"tenant_name": active_identity.get("label") or active_identity.get("name") or "",
 		"tenant_logo": active_identity.get("logo") or "",
+		"tenant_icon": "building",
+		"tenant_subtitle": "School workspace",
 		"companies": companies,
 		"user": _get_user_identity(),
 	}
+
+	# Keep the legacy key during migration while making the generic EdgeSuite
+	# identity contract authoritative for all new product shells.
+	bootinfo["eduedge_ui_identity"] = identity
+	shared = bootinfo.get("edgesuite_ui_identity") or {}
+	shared["eduedge"] = identity
+	bootinfo["edgesuite_ui_identity"] = shared
