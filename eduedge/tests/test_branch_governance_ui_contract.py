@@ -33,7 +33,7 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 		self.assertIn("EdgeAppShell", loader)
 		self.assertIn("failed to load", loader)
 
-	def test_governance_ui_is_guided_and_branch_safe(self):
+	def test_governance_ui_is_guided_branch_safe_and_uses_edgesuite_dialogs(self):
 		vue = (
 			APP
 			/ "public"
@@ -45,13 +45,18 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 			"<EdgeAppShell",
 			"<EdgeDashboardLayout",
 			"<EdgeStatusBadge",
+			"<EdgeFormDialog",
+			"<EdgeModal",
 			"openAssignmentDialog",
+			"openQuickEditor",
+			"saveRecordModal",
 			"set_branch_enforcement",
 			"missing_accounting_labels",
-			"company: dialog.get_value(\"company\")",
 			"Assignment details restricted",
 		):
 			self.assertIn(token, vue)
+		self.assertNotIn("new frappe.ui.Dialog", vue)
+		self.assertNotIn("frappe.confirm(", vue)
 
 	def test_backend_enforces_coverage_before_activation(self):
 		service = (APP / "services" / "branch_governance.py").read_text()
