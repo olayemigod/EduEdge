@@ -6,10 +6,9 @@ app_email = "support@processedge.com.ng"
 app_license = "mit"
 
 required_apps = ["erpnext", "education", "edgesuite_ui"]
-app_include_css = ["/assets/eduedge/css/eduedge_shell_identity.css"]
+app_include_css = []
 app_include_js = [
 	"eduedge_product_menu.bundle.js",
-	"eduedge_shell_identity.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 ]
 
