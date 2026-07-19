@@ -102,10 +102,45 @@
 			</template>
 		</EdgePageLayout>
 	</EdgeAppShell>
+
+	<EdgeFormDialog
+		:open="recordModal.open"
+		:title="recordModal.title"
+		:subtitle="recordModal.subtitle"
+		:fields="recordModal.fields"
+		:model-value="recordModal.values"
+		:field-errors="recordModal.fieldErrors"
+		:error="recordModal.error"
+		:loading="recordModal.loading"
+		:busy="recordModal.busy"
+		:submit-label="recordModal.submitLabel"
+		:show-full-form="Boolean(recordModal.fullFormRoute)"
+		@update:model-value="updateModalValues"
+		@field-change="onModalFieldChange"
+		@search-options="onModalSearch"
+		@submit="saveModalRecord"
+		@open-full-form="openModalFullForm"
+		@close="closeModal"
+	/>
 </template>
 
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
+import {
+	closeRecordModal,
+	createRecordModalState,
+	handleRecordModalFieldChange,
+	openRecordFullForm,
+	openRecordModal,
+	saveRecordModal,
+	searchRecordModalOptions,
+	updateRecordModalValues,
+} from "../eduedge_ui/modal_records";
+
+const QUICK_RESOURCES = {
+	"EduEdge School Branch": "school_branch",
+	"EduEdge Program Offering": "program_offering",
+};
 
 export default {
 	name: "EduEdgeSetupCenter",
@@ -114,6 +149,7 @@ export default {
 			loading: true,
 			error: "",
 			menuItems: EDUEDGE_MENU_ITEMS,
+			recordModal: createRecordModalState(),
 			readiness: {
 				ready: false,
 				blockers: [],
@@ -127,8 +163,21 @@ export default {
 	mounted() { this.loadReadiness(); },
 	methods: {
 		openRoute: openEduEdgeRoute,
-		runAction(action) {
+		async runAction(action) {
 			if (!action) return;
+			const resource = QUICK_RESOURCES[action.doctype];
+			if (action.action_type === "new_doc" && resource) {
+				await openRecordModal(this.recordModal, {
+					resource,
+					context: {
+						company: this.readiness.school.default_company || "",
+						school_branch: this.readiness.school.default_school_branch || "",
+						academic_year: this.readiness.school.current_academic_year || "",
+						academic_term: this.readiness.school.current_academic_term || "",
+					},
+				});
+				return;
+			}
 			if (
 				action.action_type === "new_doc" &&
 				action.doctype &&
@@ -138,6 +187,18 @@ export default {
 				return;
 			}
 			this.openRoute(action.route);
+		},
+		updateModalValues(values) { updateRecordModalValues(this.recordModal, values); },
+		onModalFieldChange(payload) { handleRecordModalFieldChange(this.recordModal, payload); },
+		onModalSearch(payload) { return searchRecordModalOptions(this.recordModal, payload); },
+		closeModal() { closeRecordModal(this.recordModal); },
+		openModalFullForm() { openRecordFullForm(this.recordModal); },
+		async saveModalRecord() {
+			const result = await saveRecordModal(this.recordModal);
+			if (!result) return;
+			closeRecordModal(this.recordModal);
+			frappe.show_alert({ message: __("EduEdge record saved"), indicator: "green" });
+			await this.loadReadiness();
 		},
 		async loadReadiness() {
 			this.loading = true;
@@ -164,7 +225,7 @@ export default {
 	background: var(--edge-color-surface, var(--card-bg));
 	border: 1px solid var(--edge-color-border, var(--border-color));
 	border-radius: var(--edge-radius-lg, 12px);
-	box-shadow: var(--edge-shadow-xs, none);
+	box-shadow: none;
 	margin-bottom: var(--edge-section-gap, 1rem);
 	padding: clamp(1rem, 2vw, 1.25rem);
 }
