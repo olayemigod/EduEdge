@@ -1,0 +1,27 @@
+{
+ "content": null,
+ "creation": "2026-07-19 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "icon": "users",
+ "idx": 0,
+ "modified": "2026-07-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "eduedge-students",
+ "owner": "Administrator",
+ "page_name": "eduedge-students",
+ "roles": [
+  {"role":"System Manager"},
+  {"role":"EduEdge Administrator"},
+  {"role":"School Administrator"},
+  {"role":"Academic Administrator"},
+  {"role":"Bursar"},
+  {"role":"Teacher"}
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Students"
+}
