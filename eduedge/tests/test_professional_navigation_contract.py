@@ -40,11 +40,12 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertNotIn("import coreedge", bundle.lower())
 		self.assertNotIn("from coreedge", bundle.lower())
 
-	def test_hooks_load_product_menu_and_identity_globally(self):
+	def test_hooks_use_shared_edgesuite_identity_and_notifications(self):
 		hooks = (APP / "hooks.py").read_text()
 		self.assertIn('"eduedge_product_menu.bundle.js"', hooks)
-		self.assertIn('"eduedge_shell_identity.bundle.js"', hooks)
 		self.assertIn('extend_bootinfo = "eduedge.boot.extend_bootinfo"', hooks)
+		self.assertNotIn('"eduedge_shell_identity.bundle.js"', hooks)
+		self.assertNotIn('"/assets/eduedge/css/eduedge_shell_identity.css"', hooks)
 
 	def test_non_eduedge_desk_routes_open_in_new_tab(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
@@ -53,7 +54,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertIn('window.open(route, "_blank", "noopener,noreferrer")', navigation)
 		self.assertIn('window.location.href = route', navigation)
 
-	def test_school_product_and_user_identity_have_separate_sources(self):
+	def test_school_product_and_user_identity_use_shared_contract(self):
 		boot = (APP / "boot.py").read_text()
 		settings = (
 			APP
@@ -62,15 +63,16 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 			/ "eduedge_settings"
 			/ "eduedge_settings.json"
 		).read_text()
-		identity = (APP / "public/js/eduedge_shell_identity.bundle.js").read_text()
 		self.assertIn('"company_logo"', boot)
 		self.assertIn('"eduedge_logo"', boot)
 		self.assertIn('"user_image"', boot)
 		self.assertIn('"user": _get_user_identity()', boot)
+		self.assertIn('"product_name": "EduEdge"', boot)
+		self.assertIn('"product_icon": "graduation"', boot)
+		self.assertIn('shared["eduedge"] = identity', boot)
+		self.assertIn('bootinfo["edgesuite_ui_identity"] = shared', boot)
+		self.assertIn('bootinfo["eduedge_ui_identity"] = identity', boot)
 		self.assertIn('"eduedge_logo"', settings)
-		self.assertIn("edge-topbar__brand", identity)
-		self.assertIn("edge-sidebar__brand", identity)
-		self.assertIn("eduedge_ui_identity", identity)
 
 	def test_professional_menu_does_not_replace_backend_permissions(self):
 		bundle = (APP / "public/js/eduedge_product_menu.bundle.js").read_text()
