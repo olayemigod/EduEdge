@@ -22,7 +22,9 @@ class TestEducationBranchContract(unittest.TestCase):
 		text = (ROOT / "eduedge" / "hooks.py").read_text()
 		self.assertIn("doc_events", text)
 		self.assertIn("permission_query_conditions", text)
-		self.assertNotIn("override_whitelisted_methods", text)
+		self.assertNotIn('"education.', text)
+		self.assertNotIn('"erpnext.', text)
+		self.assertIn('"eduedge.api.resource_center.get_resource_page"', text)
 
 	def test_guardian_scope_is_derived_from_linked_students(self):
 		text = (ROOT / "eduedge" / "education" / "permissions.py").read_text()
