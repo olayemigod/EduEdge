@@ -7,7 +7,7 @@ APP = ROOT / "eduedge"
 
 
 class TestSetupCenterActionContract(unittest.TestCase):
-	def test_new_records_use_frappe_new_doc_with_safe_list_route_fallbacks(self):
+	def test_new_records_prefer_quick_editors_with_safe_fallbacks(self):
 		service = (APP / "services/setup_readiness.py").read_text(encoding="utf-8")
 		page = (
 			APP / "public/js/eduedge_setup_center/EduEdgeSetupCenter.vue"
@@ -19,6 +19,9 @@ class TestSetupCenterActionContract(unittest.TestCase):
 		self.assertNotIn('/app/eduedge-school-branch/new', service)
 		self.assertNotIn('/app/eduedge-program-offering/new', service)
 		self.assertIn('@click="runAction(action)"', page)
+		self.assertIn("QUICK_RESOURCES", page)
+		self.assertIn("openRecordModal", page)
+		self.assertIn("<EdgeFormDialog", page)
 		self.assertIn('frappe.new_doc(action.doctype)', page)
 		self.assertIn(':key="action.key || action.route || action.label"', page)
 
