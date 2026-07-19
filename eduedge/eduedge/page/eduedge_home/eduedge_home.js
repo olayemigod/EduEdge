@@ -38,22 +38,22 @@ frappe.pages["eduedge-home"].on_page_show = function (wrapper) {
 	frappe.require("edgeui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
-		if (!runtime?.createEdgeApp || !runtime?.components?.EdgeAppShell) {
+		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
 			fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
 			return;
 		}
 
 		frappe.require("eduedge_home.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (!window.EduEdgeHome) {
-				fail(__("The EduEdge Home product bundle is unavailable."));
+			if (!window.EduEdgeHome || typeof window.createEduEdgeHomeApp !== "function") {
+				fail(__("The EduEdge Home product bundle is unavailable or incomplete."));
 				return;
 			}
 			$loading.remove();
 			const root = $('<div class="eduedge-home-root" data-edge-product="eduedge"></div>')
 				.appendTo(page.body);
 			try {
-				wrapper.vue_app = runtime.createEdgeApp(window.EduEdgeHome, {
+				wrapper.vue_app = window.createEduEdgeHomeApp({
 					pageName: "eduedge-home",
 				});
 				wrapper.vue_app.mount(root[0]);
