@@ -150,31 +150,117 @@ def _accounting_ready_count() -> int:
 	return sum(1 for row in rows if not get_missing_core_defaults(row))
 
 
+def _setup_action(
+	key: str,
+	label: str,
+	description: str,
+	icon: str,
+	route: str,
+	*,
+	action_type: str = "route",
+	doctype: str | None = None,
+) -> dict:
+	action = {
+		"key": key,
+		"label": label,
+		"description": description,
+		"icon": icon,
+		"route": route,
+		"action_type": action_type,
+	}
+	if doctype:
+		action["doctype"] = doctype
+	return action
+
+
 def _recommended_actions(**state) -> list[dict]:
 	actions: list[dict] = []
 	if not state["default_company"]:
-		actions.append({"label": "Configure EduEdge Settings", "route": "/app/eduedge-settings"})
+		actions.append(
+			_setup_action(
+				"configure-eduedge-settings",
+				"Configure EduEdge Settings",
+				"Select the school company and default operating branch.",
+				"settings",
+				"/app/eduedge-settings",
+			)
+		)
 	if not state["branch_count"]:
-		actions.append({"label": "Create School Branch", "route": "/app/eduedge-school-branch/new"})
+		actions.append(
+			_setup_action(
+				"create-school-branch",
+				"Create School Branch",
+				"Add the first campus with company and accounting context.",
+				"building",
+				"/app/eduedge-school-branch",
+				action_type="new_doc",
+				doctype="EduEdge School Branch",
+			)
+		)
 	elif not state["default_branch"]:
-		actions.append({"label": "Select Default School Branch", "route": "/app/eduedge-settings"})
+		actions.append(
+			_setup_action(
+				"select-default-school-branch",
+				"Select Default School Branch",
+				"Choose the branch used when no staff-specific branch is active.",
+				"building",
+				"/app/eduedge-settings",
+			)
+		)
 	if not state["branch_access_count"]:
-		actions.append({"label": "Configure User Branch Access", "route": "/app/eduedge-branch-governance"})
+		actions.append(
+			_setup_action(
+				"configure-user-branch-access",
+				"Configure User Branch Access",
+				"Assign staff to the campuses where they are allowed to work.",
+				"students",
+				"/app/eduedge-branch-governance",
+			)
+		)
 	elif not state["enforcement_enabled"]:
-		actions.append({"label": "Review and Enable Branch Enforcement", "route": "/app/eduedge-branch-governance"})
+		actions.append(
+			_setup_action(
+				"review-branch-enforcement",
+				"Review and Enable Branch Enforcement",
+				"Review assignment coverage before activating branch restrictions.",
+				"shield",
+				"/app/eduedge-branch-governance",
+			)
+		)
 	if state["branch_count"] and state["accounting_ready_count"] < state["branch_count"]:
-		actions.append({"label": "Complete Branch Accounting Defaults", "route": "/app/eduedge-branch-governance"})
+		actions.append(
+			_setup_action(
+				"complete-branch-accounting-defaults",
+				"Complete Branch Accounting Defaults",
+				"Resolve missing cost centre, income, and receivable defaults.",
+				"wallet",
+				"/app/eduedge-branch-governance",
+			)
+		)
 	if not state["current_academic_year"]:
-		actions.append({"label": "Configure Education Settings", "route": "/app/education-settings"})
+		actions.append(
+			_setup_action(
+				"configure-education-settings",
+				"Configure Education Settings",
+				"Set the current academic year and term in Frappe Education.",
+				"calendar",
+				"/app/education-settings",
+			)
+		)
 	if (
 		state["branch_count"]
 		and state["current_academic_year"]
 		and not state["program_offering_count"]
 	):
 		actions.append(
-			{
-				"label": "Create Program Offering",
-				"route": "/app/eduedge-program-offering/new",
-			}
+			_setup_action(
+				"create-program-offering",
+				"Create Program Offering",
+				"Publish a programme for a branch and academic session.",
+				"layers",
+				"/app/eduedge-program-offering",
+				action_type="new_doc",
+				doctype="EduEdge Program Offering",
+			)
 		)
 	return actions
