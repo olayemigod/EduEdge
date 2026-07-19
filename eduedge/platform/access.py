@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from functools import wraps
 
 import frappe
 from frappe import _
@@ -118,15 +119,18 @@ def guard_eduedge_action(
 	action: str | None = None,
 ) -> Callable:
 	def decorator(function: Callable) -> Callable:
+		@wraps(function)
 		def wrapped(*args, **kwargs):
+			# Frappe includes the RPC method name as `cmd` in request arguments.
+			# The guard accepts **kwargs, so without removing this transport-only
+			# value it would be forwarded to API functions that do not declare it.
+			kwargs.pop("cmd", None)
 			require_eduedge_access(
 				feature_key=feature_key,
 				action=action or function.__name__,
 			)
 			return function(*args, **kwargs)
 
-		wrapped.__name__ = function.__name__
-		wrapped.__doc__ = function.__doc__
 		return wrapped
 
 	return decorator
