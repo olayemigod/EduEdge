@@ -45,27 +45,57 @@
 					<EdgeStatCard label="Current Academic Year" :value="readiness.school.current_academic_year || 'Not configured'" />
 				</div>
 
-				<section v-if="readiness.blockers.length" class="eduedge-panel">
-					<h3>Blockers</h3>
+				<section v-if="readiness.blockers.length" class="eduedge-panel eduedge-panel--blocker">
+					<div class="eduedge-panel__heading">
+						<EdgeIcon name="shield" size="sm" />
+						<div>
+							<h3>Blockers</h3>
+							<p>Resolve these items before the school can be treated as operationally ready.</p>
+						</div>
+					</div>
 					<ul><li v-for="item in readiness.blockers" :key="item">{{ item }}</li></ul>
 				</section>
 
-				<section v-if="readiness.warnings.length" class="eduedge-panel">
-					<h3>Warnings</h3>
+				<section v-if="readiness.warnings.length" class="eduedge-panel eduedge-panel--warning">
+					<div class="eduedge-panel__heading">
+						<EdgeIcon name="bell" size="sm" />
+						<div>
+							<h3>Warnings</h3>
+							<p>These items do not always block access, but they should be reviewed before rollout.</p>
+						</div>
+					</div>
 					<ul><li v-for="item in readiness.warnings" :key="item">{{ item }}</li></ul>
 				</section>
 
 				<section class="eduedge-panel">
-					<h3>Recommended actions</h3>
-					<div v-if="!readiness.recommended_actions.length">No setup actions are outstanding.</div>
-					<div class="eduedge-actions">
+					<div class="eduedge-panel__heading">
+						<EdgeIcon name="settings" size="sm" />
+						<div>
+							<h3>Recommended actions</h3>
+							<p>Use these guided actions to complete only the foundation items that remain outstanding.</p>
+						</div>
+					</div>
+					<div v-if="!readiness.recommended_actions.length" class="eduedge-ready-message">
+						<EdgeIcon name="check" size="sm" />
+						<span>No setup actions are outstanding.</span>
+					</div>
+					<div v-else class="eduedge-actions">
 						<button
-							v-for="action in readiness.recommended_actions"
-							:key="action.route"
-							class="edge-button edge-button--primary"
-							@click="openRoute(action.route)"
+							v-for="(action, index) in readiness.recommended_actions"
+							:key="action.key || action.route || action.label"
+							type="button"
+							class="edge-button eduedge-setup-action"
+							:class="{ 'edge-button--primary': index === 0 }"
+							:title="action.description || action.label"
+							@click="runAction(action)"
 						>
-							{{ action.label }}
+							<span class="eduedge-setup-action__icon">
+								<EdgeIcon :name="action.icon || 'settings'" size="sm" />
+							</span>
+							<span class="eduedge-setup-action__copy">
+								<strong>{{ action.label }}</strong>
+								<small v-if="action.description">{{ action.description }}</small>
+							</span>
 						</button>
 					</div>
 				</section>
@@ -97,6 +127,18 @@ export default {
 	mounted() { this.loadReadiness(); },
 	methods: {
 		openRoute: openEduEdgeRoute,
+		runAction(action) {
+			if (!action) return;
+			if (
+				action.action_type === "new_doc" &&
+				action.doctype &&
+				typeof frappe.new_doc === "function"
+			) {
+				frappe.new_doc(action.doctype);
+				return;
+			}
+			this.openRoute(action.route);
+		},
 		async loadReadiness() {
 			this.loading = true;
 			this.error = "";
@@ -115,16 +157,98 @@ export default {
 .eduedge-stat-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	gap: var(--edge-space-4, 1rem);
-	margin-bottom: var(--edge-space-5, 1.25rem);
+	gap: var(--edge-card-gap, 1rem);
+	margin-bottom: var(--edge-section-gap, 1.25rem);
 }
 .eduedge-panel {
-	border: 1px solid var(--border-color);
+	background: var(--edge-color-surface, var(--card-bg));
+	border: 1px solid var(--edge-color-border, var(--border-color));
 	border-radius: var(--edge-radius-lg, 12px);
-	padding: var(--edge-space-5, 1.25rem);
-	margin-bottom: var(--edge-space-4, 1rem);
-	background: var(--card-bg);
+	box-shadow: var(--edge-shadow-xs, none);
+	margin-bottom: var(--edge-section-gap, 1rem);
+	padding: clamp(1rem, 2vw, 1.25rem);
 }
-.eduedge-panel h3 { margin-top: 0; }
-.eduedge-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.eduedge-panel--blocker { border-left: 4px solid var(--red-500, #d64545); }
+.eduedge-panel--warning { border-left: 4px solid var(--orange-500, #d97706); }
+.eduedge-panel__heading {
+	align-items: flex-start;
+	display: grid;
+	gap: .75rem;
+	grid-template-columns: 2rem minmax(0, 1fr);
+	margin-bottom: .8rem;
+}
+.eduedge-panel__heading > .edge-icon {
+	align-items: center;
+	background: var(--edge-color-brand-50, #edf5ff);
+	border: 1px solid var(--edge-color-brand-100, #dcecff);
+	border-radius: .65rem;
+	color: var(--edge-color-brand-700, #174ea6);
+	display: inline-flex;
+	height: 2rem;
+	justify-content: center;
+	width: 2rem;
+}
+.eduedge-panel h3 { margin: 0; }
+.eduedge-panel p {
+	color: var(--edge-color-ink-500, var(--text-muted));
+	font-size: .8rem;
+	line-height: 1.45;
+	margin: .2rem 0 0;
+}
+.eduedge-panel ul { margin-bottom: 0; padding-left: 1.25rem; }
+.eduedge-panel li + li { margin-top: .35rem; }
+.eduedge-actions {
+	display: grid;
+	gap: .75rem;
+	grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.eduedge-setup-action {
+	align-items: center;
+	display: grid;
+	gap: .75rem;
+	grid-template-columns: 2rem minmax(0, 1fr);
+	justify-content: stretch;
+	min-height: 4.25rem;
+	padding: .7rem .8rem;
+	text-align: left;
+	width: 100%;
+}
+.eduedge-setup-action__icon {
+	align-items: center;
+	background: var(--edge-color-brand-50, #edf5ff);
+	border: 1px solid var(--edge-color-brand-100, #dcecff);
+	border-radius: .6rem;
+	color: var(--edge-color-brand-700, #174ea6);
+	display: inline-flex;
+	height: 2rem;
+	justify-content: center;
+	width: 2rem;
+}
+.edge-button--primary .eduedge-setup-action__icon {
+	background: rgb(255 255 255 / 14%);
+	border-color: rgb(255 255 255 / 28%);
+	color: #fff;
+}
+.eduedge-setup-action__copy { display: grid; min-width: 0; }
+.eduedge-setup-action__copy strong { font-size: .82rem; line-height: 1.25; }
+.eduedge-setup-action__copy small {
+	font-size: .7rem;
+	line-height: 1.35;
+	margin-top: .18rem;
+	opacity: .78;
+}
+.eduedge-ready-message {
+	align-items: center;
+	background: var(--edge-color-accent-soft, #e8f8f0);
+	border: 1px solid color-mix(in srgb, var(--edge-color-accent, #22a06b) 26%, transparent);
+	border-radius: .75rem;
+	color: var(--edge-color-accent, #14804a);
+	display: flex;
+	font-weight: 650;
+	gap: .55rem;
+	padding: .8rem .9rem;
+}
+@media (max-width: 35.99rem) {
+	.eduedge-actions { grid-template-columns: minmax(0, 1fr); }
+}
 </style>
