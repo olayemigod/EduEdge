@@ -39,11 +39,28 @@ def _get_company_identity(company: str) -> dict:
 	}
 
 
+def _get_user_identity() -> dict:
+	user = frappe.session.user
+	row = frappe.db.get_value(
+		"User",
+		user,
+		["name", "full_name", "email", "user_image"],
+		as_dict=True,
+	) or {}
+	return {
+		"name": row.get("name") or user,
+		"full_name": row.get("full_name") or user,
+		"email": row.get("email") or user,
+		"image": row.get("user_image") or "",
+	}
+
+
 def extend_bootinfo(bootinfo) -> None:
 	"""Expose permission-safe identity metadata for the EduEdge shell.
 
 	School identity remains on ERPNext Company. EduEdge product identity remains
-	in EduEdge Settings, with the packaged mark as a safe fallback.
+	in EduEdge Settings, with the packaged mark as a safe fallback. Only the
+	current user's own profile image is exposed for the shell avatar.
 	"""
 	if frappe.session.user == "Guest":
 		return
@@ -83,4 +100,5 @@ def extend_bootinfo(bootinfo) -> None:
 		"tenant_name": active_identity.get("label") or active_identity.get("name") or "",
 		"tenant_logo": active_identity.get("logo") or "",
 		"companies": companies,
+		"user": _get_user_identity(),
 	}
