@@ -53,7 +53,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertIn('window.open(route, "_blank", "noopener,noreferrer")', navigation)
 		self.assertIn('window.location.href = route', navigation)
 
-	def test_school_and_product_identity_have_separate_sources(self):
+	def test_school_product_and_user_identity_have_separate_sources(self):
 		boot = (APP / "boot.py").read_text()
 		settings = (
 			APP
@@ -65,6 +65,8 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		identity = (APP / "public/js/eduedge_shell_identity.bundle.js").read_text()
 		self.assertIn('"company_logo"', boot)
 		self.assertIn('"eduedge_logo"', boot)
+		self.assertIn('"user_image"', boot)
+		self.assertIn('"user": _get_user_identity()', boot)
 		self.assertIn('"eduedge_logo"', settings)
 		self.assertIn("edge-topbar__brand", identity)
 		self.assertIn("edge-sidebar__brand", identity)
