@@ -81,8 +81,34 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 	},
 ]);
 
-export function openEduEdgeRoute(route) {
-	if (route) {
-		window.location.href = route;
+export const EDUEDGE_UI_ROUTES = Object.freeze([
+	"/app/eduedge-home",
+	"/app/eduedge-academic-operations",
+	"/app/eduedge-assessment-operations",
+	"/app/eduedge-report-cards",
+	"/app/eduedge-branch-governance",
+	"/app/eduedge-setup-center",
+]);
+
+function normalizedPath(route) {
+	try {
+		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+	} catch (_error) {
+		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
 	}
+}
+
+export function isEduEdgeUIRoute(route) {
+	return EDUEDGE_UI_ROUTES.includes(normalizedPath(route));
+}
+
+export function openEduEdgeRoute(route) {
+	if (!route) return;
+	if (isEduEdgeUIRoute(route)) {
+		window.location.href = route;
+		return;
+	}
+
+	const opened = window.open(route, "_blank", "noopener,noreferrer");
+	if (opened) opened.opener = null;
 }
