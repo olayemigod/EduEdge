@@ -43,11 +43,42 @@ ADMISSION_PERMISSION_TYPES = (
 	"share",
 )
 
+TRAINING_PROGRESS_ROLES = (
+	"EduEdge Super Administrator",
+	"System Manager",
+	"EduEdge Administrator",
+	"School Administrator",
+	"Academic Administrator",
+	"School Operations Manager",
+	"Registrar",
+	"Admission Officer",
+	"Bursar",
+	"Accounts User",
+	"Accounts Manager",
+	"Teacher",
+	"Instructor",
+	"CBT Invigilator",
+	"Student Safety Officer",
+	"School HR Officer",
+	"HR User",
+	"HR Manager",
+	"Procurement Officer",
+	"Purchase User",
+	"Purchase Manager",
+	"Stock User",
+	"Stock Manager",
+	"Asset User",
+	"Asset Manager",
+	"Student",
+	"EduEdge Parent",
+)
+
 
 def after_install() -> None:
 	ensure_roles()
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()
+	ensure_training_progress_permissions()
 	backfill_education_branch_context()
 
 
@@ -55,6 +86,7 @@ def after_migrate() -> None:
 	ensure_roles()
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()
+	ensure_training_progress_permissions()
 	backfill_education_branch_context()
 
 
@@ -100,3 +132,34 @@ def ensure_admission_manager_permissions() -> None:
 			)
 
 	frappe.clear_cache(doctype="Student Admission")
+
+
+def ensure_training_progress_permissions() -> None:
+	"""Allow supported role families to maintain only their own training progress."""
+	if not frappe.db.exists("DocType", "EduEdge Training Progress"):
+		return
+
+	for role in TRAINING_PROGRESS_ROLES:
+		if not frappe.db.exists("Role", role):
+			continue
+		if not frappe.db.exists(
+			"Custom DocPerm",
+			{
+				"parent": "EduEdge Training Progress",
+				"role": role,
+				"permlevel": 0,
+				"if_owner": 0,
+			},
+		):
+			add_permission("EduEdge Training Progress", role, permlevel=0, ptype="read")
+		for permission_type in ("read", "write", "create", "delete"):
+			update_permission_property(
+				"EduEdge Training Progress",
+				role,
+				0,
+				permission_type,
+				1,
+				validate=False,
+			)
+
+	frappe.clear_cache(doctype="EduEdge Training Progress")
