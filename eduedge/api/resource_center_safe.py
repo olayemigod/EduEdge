@@ -7,11 +7,25 @@ import frappe
 from frappe.utils import nowdate
 
 from eduedge.api import resource_center as base
+from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches
+
+RESOURCE_FEATURES = {
+	"school_branches": "school_branch",
+	"admissions": "admission",
+	"applicants": "admission",
+	"students": "student_management",
+	"programs": "academics",
+	"program_offerings": "academics",
+}
 
 
 def _is_branch_scoped(config: dict) -> bool:
 	return config.get("doctype") == "EduEdge School Branch" or bool(config.get("branch_field"))
+
+
+def _feature_key(resource: str) -> str:
+	return RESOURCE_FEATURES.get(str(resource or "").strip(), "foundation")
 
 
 def _smart_filters(config: dict, allowed_branches: list[dict]) -> list[dict]:
@@ -101,9 +115,26 @@ def get_resource_editor(resource: str, name: str | None = None, context: str | d
 
 @frappe.whitelist()
 def save_resource_record(resource: str, values: str | dict, name: str | None = None) -> dict:
+	require_eduedge_access(
+		feature_key=_feature_key(resource),
+		action="update_resource_record" if name else "create_resource_record",
+		reference_doctype=(base._config(resource) or {}).get("doctype"),
+		reference_name=name,
+	)
 	parsed = base._parse_json(values)
 	return base.save_resource_record(
 		resource=resource,
 		values=_resolve_today(parsed),
 		name=name,
 	)
+
+
+@frappe.whitelist()
+def delete_resource_record(resource: str, name: str) -> dict:
+	require_eduedge_access(
+		feature_key=_feature_key(resource),
+		action="delete_resource_record",
+		reference_doctype=(base._config(resource) or {}).get("doctype"),
+		reference_name=name,
+	)
+	return base.delete_resource_record(resource=resource, name=name)
