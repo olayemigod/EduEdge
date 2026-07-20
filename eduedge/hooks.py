@@ -25,6 +25,7 @@ scheduler_events = {
 override_whitelisted_methods = {
 	"eduedge.api.resource_center.get_resource_page": "eduedge.api.resource_center_safe.get_resource_page",
 	"eduedge.api.resource_center.get_resource_editor": "eduedge.api.resource_center_safe.get_resource_editor",
+	"eduedge.api.resource_center.search_resource_options": "eduedge.api.resource_center_safe.search_resource_options",
 	"eduedge.api.resource_center.save_resource_record": "eduedge.api.resource_center_safe.save_resource_record",
 	"eduedge.api.resource_center.delete_resource_record": "eduedge.api.resource_center_safe.delete_resource_record",
 	"eduedge.api.modal_records.save_modal_record": "eduedge.api.modal_records_safe.save_modal_record",
