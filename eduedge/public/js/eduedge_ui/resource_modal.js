@@ -44,12 +44,17 @@ function fieldRequired(field, values) {
 	return Boolean(field?.required_when && conditionMatches(field.required_when, values));
 }
 
+function emptyValue(value) {
+	if (Array.isArray(value)) return value.length === 0;
+	return value === undefined || value === null || String(value).trim() === "";
+}
+
 function validateResourceModal(modal) {
 	const errors = {};
 	for (const field of modal.fields || []) {
 		if (!fieldVisible(field, modal.values) || !fieldRequired(field, modal.values)) continue;
 		const value = modal.values?.[field.fieldname];
-		if (value === undefined || value === null || String(value).trim() === "") {
+		if (emptyValue(value)) {
 			errors[field.fieldname] = `${field.label || field.fieldname} is required.`;
 		}
 	}
@@ -102,10 +107,20 @@ export function updateResourceModalValues(modal, values) {
 	modal.error = "";
 }
 
-export function handleResourceFieldChange(modal, { field, values } = {}) {
+export async function handleResourceFieldChange(modal, { field, values } = {}) {
 	modal.values = { ...(values || modal.values || {}) };
 	modal.fieldErrors = { ...(modal.fieldErrors || {}), [field?.fieldname]: "" };
 	modal.error = "";
+
+	for (const fieldname of field?.refresh_fields || []) {
+		const target = (modal.fields || []).find((item) => item.fieldname === fieldname);
+		if (!target) continue;
+		await searchResourceOptions(modal, {
+			field: target,
+			query: "",
+			values: modal.values,
+		});
+	}
 }
 
 export async function searchResourceOptions(modal, { field, query = "", values = {} } = {}) {
