@@ -147,6 +147,12 @@ fixtures = [
 					"Teacher",
 					"CBT Invigilator",
 					"Student Safety Officer",
+					"Registrar",
+					"Admission Officer",
+					"School HR Officer",
+					"Procurement Officer",
+					"School Operations Manager",
+					"EduEdge Parent",
 				],
 			]
 		],
