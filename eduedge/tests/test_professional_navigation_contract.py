@@ -48,6 +48,13 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertNotIn('"eduedge_shell_identity.bundle.js"', hooks)
 		self.assertNotIn('"/assets/eduedge/css/eduedge_shell_identity.css"', hooks)
 
+	def test_home_requires_edgesuite_ui_0_3_shared_contracts(self):
+		loader = (APP / "eduedge/page/eduedge_home/eduedge_home.js").read_text()
+		self.assertIn("supportsSharedShell", loader)
+		self.assertIn("EdgeSuite UI 0.3 or newer", loader)
+		self.assertIn("runtime.version", loader)
+		self.assertLess(loader.index('frappe.require("edgeui.bundle.js"'), loader.index('frappe.require("eduedge_home.bundle.js"'))
+
 	def test_non_eduedge_desk_routes_open_in_new_tab(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
 		self.assertIn("EDUEDGE_UI_ROUTES", navigation)
