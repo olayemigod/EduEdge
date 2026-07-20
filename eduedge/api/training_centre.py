@@ -12,6 +12,7 @@ from eduedge.training.catalog import (
 	allowed_audience_keys,
 	can_view_module,
 	extract_heading_section,
+	load_manifest,
 	module_availability,
 	module_by_id,
 	primary_audience,
@@ -19,6 +20,10 @@ from eduedge.training.catalog import (
 	screenshot_references,
 	visible_modules,
 )
+
+
+def _is_administrator(user: str | None = None) -> bool:
+	return (user or frappe.session.user) == "Administrator"
 
 
 def _parse_list(value) -> list[str]:
@@ -65,10 +70,19 @@ def _progress_rows(user: str, module_ids: list[str]) -> dict[str, dict]:
 	return {row["module_id"]: row for row in rows}
 
 
-def _public_module(module: dict, progress: dict | None, completed_modules: set[str]) -> dict:
+def _public_module(
+	module: dict,
+	progress: dict | None,
+	completed_modules: set[str],
+	user: str | None = None,
+) -> dict:
+	user = user or frappe.session.user
+	administrator_override = _is_administrator(user)
 	progress = progress or {}
 	missing = [item for item in module.get("prerequisites") or [] if item not in completed_modules]
-	availability = module_availability(module)
+	site_availability = module_availability(module)
+	available = site_availability["available"] or administrator_override
+	locked = False if administrator_override else bool(missing) or not site_availability["available"]
 	return {
 		"module_id": module["module_id"],
 		"title": module["title"],
@@ -83,8 +97,13 @@ def _public_module(module: dict, progress: dict | None, completed_modules: set[s
 		"missing_prerequisites": missing,
 		"required_apps": module.get("required_apps") or [],
 		"required_doctypes": module.get("required_doctypes") or [],
-		**availability,
-		"locked": bool(missing) or not availability["available"],
+		"site_available": site_availability["available"],
+		"available": available,
+		"missing_apps": site_availability["missing_apps"],
+		"missing_doctypes": site_availability["missing_doctypes"],
+		"availability_message": site_availability["availability_message"],
+		"administrator_override": administrator_override,
+		"locked": locked,
 		"has_video": module["has_video"],
 		"video_display_status": module["video_display_status"],
 		"status": progress.get("status") or "Not Started",
@@ -98,6 +117,8 @@ def _public_module(module: dict, progress: dict | None, completed_modules: set[s
 
 
 def _assert_prerequisites(module: dict, user: str) -> None:
+	if _is_administrator(user):
+		return
 	prerequisites = module.get("prerequisites") or []
 	if not prerequisites:
 		return
@@ -110,7 +131,9 @@ def _assert_prerequisites(module: dict, user: str) -> None:
 		)
 
 
-def _assert_available(module: dict) -> None:
+def _assert_available(module: dict, user: str | None = None) -> None:
+	if _is_administrator(user):
+		return
 	availability = module_availability(module)
 	if availability["available"]:
 		return
@@ -123,17 +146,24 @@ def _assert_available(module: dict) -> None:
 @frappe.whitelist()
 def get_training_overview(audience: str | None = None) -> dict:
 	user = frappe.session.user
-	allowed = allowed_audience_keys(user)
-	selected = str(audience or "").strip() or primary_audience(user)
+	administrator_override = _is_administrator(user)
+	allowed = list(AUDIENCES) if administrator_override else allowed_audience_keys(user)
+	selected = str(audience or "").strip() or (
+		"processedge_staff" if administrator_override else primary_audience(user)
+	)
 	if selected not in allowed:
 		frappe.throw(_("That training path is not available for your role."), frappe.PermissionError)
-	modules = visible_modules(user)
+	modules = (
+		[module for module in load_manifest() if module["status"] == "Published"]
+		if administrator_override
+		else visible_modules(user)
+	)
 	rows = _progress_rows(user, [module["module_id"] for module in modules])
 	completed_modules = {
 		module_id for module_id, progress in rows.items() if progress.get("status") == "Completed"
 	}
 	payload = [
-		_public_module(module, rows.get(module["module_id"]), completed_modules)
+		_public_module(module, rows.get(module["module_id"]), completed_modules, user)
 		for module in modules
 		if module["audience"] in {"shared", selected}
 	]
@@ -152,8 +182,9 @@ def get_training_overview(audience: str | None = None) -> dict:
 			"full_name": user_doc.get("full_name") or user,
 			"image": user_doc.get("user_image") or "",
 		},
+		"administrator_override": administrator_override,
 		"selected_audience": selected,
-		"primary_audience": primary_audience(user),
+		"primary_audience": "processedge_staff" if administrator_override else primary_audience(user),
 		"audiences": [
 			{
 				"key": key,
@@ -180,13 +211,14 @@ def get_training_overview(audience: str | None = None) -> dict:
 
 @frappe.whitelist()
 def get_training_module_content(module_id: str) -> dict:
+	user = frappe.session.user
 	module = module_by_id(module_id)
-	if not can_view_module(module):
+	if not _is_administrator(user) and not can_view_module(module, user):
 		frappe.throw(_("You are not permitted to view this training module."), frappe.PermissionError)
-	_assert_available(module)
+	_assert_available(module, user)
 	markdown = read_markdown(module)
 	rows = _progress_rows(
-		frappe.session.user,
+		user,
 		[module_id, *(module.get("prerequisites") or [])],
 	)
 	completed_modules = {
@@ -194,7 +226,7 @@ def get_training_module_content(module_id: str) -> dict:
 	}
 	return {
 		"module": {
-			**_public_module(module, rows.get(module_id), completed_modules),
+			**_public_module(module, rows.get(module_id), completed_modules, user),
 			"steps": module["steps"],
 			"video_embed_url": module["video_embed_url"],
 			"video_title": module["video_title"],
@@ -216,9 +248,9 @@ def save_training_progress(
 ) -> dict:
 	user = frappe.session.user
 	module = module_by_id(module_id)
-	if not can_view_module(module, user):
+	if not _is_administrator(user) and not can_view_module(module, user):
 		frappe.throw(_("You are not permitted to update this training module."), frappe.PermissionError)
-	_assert_available(module)
+	_assert_available(module, user)
 	_assert_prerequisites(module, user)
 	valid_steps = [step["step_id"] for step in module["steps"]]
 	completed = [step_id for step_id in _parse_list(completed_step_ids) if step_id in valid_steps]
@@ -269,11 +301,12 @@ def save_training_progress(
 
 @frappe.whitelist()
 def reset_training_progress(module_id: str) -> dict:
+	user = frappe.session.user
 	module = module_by_id(module_id)
-	if not can_view_module(module):
+	if not _is_administrator(user) and not can_view_module(module, user):
 		frappe.throw(_("You are not permitted to reset this training module."), frappe.PermissionError)
-	_assert_available(module)
-	key = _progress_key(frappe.session.user, module_id)
+	_assert_available(module, user)
+	key = _progress_key(user, module_id)
 	name = frappe.db.get_value("EduEdge Training Progress", {"training_key": key}, "name")
 	if name:
 		doc = frappe.get_doc("EduEdge Training Progress", name)
