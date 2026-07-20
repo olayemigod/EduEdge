@@ -11,6 +11,10 @@ class EduEdgeCBTSyncLog(Document):
 		self.received_on = self.received_on or now_datetime()
 		self.user = self.user or frappe.session.user
 
+	def before_save(self) -> None:
+		if not self.is_new():
+			frappe.throw(_("CBT sync audit logs are append-only."), frappe.ValidationError)
+
 	def validate(self) -> None:
 		if not self.flags.get("from_cbt_service"):
 			frappe.throw(_("CBT sync logs are created only by the sync service."), frappe.PermissionError)
@@ -39,10 +43,6 @@ class EduEdgeCBTSyncLog(Document):
 			frappe.throw(_("CBT sync counts cannot be negative."), frappe.ValidationError)
 		if sum(counts) != cint(self.received_count):
 			frappe.throw(_("CBT sync outcome counts must equal the received answer count."), frappe.ValidationError)
-
-	def on_update(self) -> None:
-		if not self.is_new():
-			frappe.throw(_("CBT sync audit logs are append-only."), frappe.ValidationError)
 
 	def on_trash(self) -> None:
 		frappe.throw(_("CBT sync audit logs cannot be deleted."), frappe.ValidationError)
