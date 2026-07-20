@@ -6,6 +6,7 @@ from typing import Any
 import frappe
 from frappe.utils import nowdate
 
+from eduedge.api import admission_resource
 from eduedge.api import resource_center as base
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches
@@ -110,7 +111,29 @@ def _resolve_today(values: dict[str, Any]) -> dict[str, Any]:
 def get_resource_editor(resource: str, name: str | None = None, context: str | dict | None = None) -> dict:
 	result = base.get_resource_editor(resource=resource, name=name, context=context)
 	result["values"] = _resolve_today(result.get("values") or {})
+	if str(resource or "").strip() == "admissions":
+		result = admission_resource.enrich_editor(result, name=name)
 	return result
+
+
+@frappe.whitelist()
+def search_resource_options(
+	resource: str,
+	fieldname: str,
+	txt: str = "",
+	values: str | dict | None = None,
+) -> list[dict]:
+	if (
+		str(resource or "").strip() == "admissions"
+		and str(fieldname or "").strip() == admission_resource.PROGRAMS_FIELD
+	):
+		return admission_resource.search_program_options(values=values, txt=txt)
+	return base.search_resource_options(
+		resource=resource,
+		fieldname=fieldname,
+		txt=txt,
+		values=values,
+	)
 
 
 @frappe.whitelist()
@@ -121,10 +144,12 @@ def save_resource_record(resource: str, values: str | dict, name: str | None = N
 		reference_doctype=(base._config(resource) or {}).get("doctype"),
 		reference_name=name,
 	)
-	parsed = base._parse_json(values)
+	parsed = _resolve_today(base._parse_json(values))
+	if str(resource or "").strip() == "admissions":
+		return admission_resource.save_admission(values=parsed, name=name)
 	return base.save_resource_record(
 		resource=resource,
-		values=_resolve_today(parsed),
+		values=parsed,
 		name=name,
 	)
 

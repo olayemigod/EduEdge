@@ -6,10 +6,9 @@ app_email = "support@processedge.com.ng"
 app_license = "mit"
 
 required_apps = ["erpnext", "education", "edgesuite_ui"]
-app_include_css = ["/assets/eduedge/css/eduedge_shell_identity.css"]
+app_include_css = []
 app_include_js = [
 	"eduedge_product_menu.bundle.js",
-	"eduedge_shell_identity.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 ]
 
@@ -26,6 +25,7 @@ scheduler_events = {
 override_whitelisted_methods = {
 	"eduedge.api.resource_center.get_resource_page": "eduedge.api.resource_center_safe.get_resource_page",
 	"eduedge.api.resource_center.get_resource_editor": "eduedge.api.resource_center_safe.get_resource_editor",
+	"eduedge.api.resource_center.search_resource_options": "eduedge.api.resource_center_safe.search_resource_options",
 	"eduedge.api.resource_center.save_resource_record": "eduedge.api.resource_center_safe.save_resource_record",
 	"eduedge.api.resource_center.delete_resource_record": "eduedge.api.resource_center_safe.delete_resource_record",
 	"eduedge.api.modal_records.save_modal_record": "eduedge.api.modal_records_safe.save_modal_record",
