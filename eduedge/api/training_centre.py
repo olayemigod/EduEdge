@@ -12,6 +12,7 @@ from eduedge.training.catalog import (
 	allowed_audience_keys,
 	can_view_module,
 	extract_heading_section,
+	module_availability,
 	module_by_id,
 	primary_audience,
 	read_markdown,
@@ -67,6 +68,7 @@ def _progress_rows(user: str, module_ids: list[str]) -> dict[str, dict]:
 def _public_module(module: dict, progress: dict | None, completed_modules: set[str]) -> dict:
 	progress = progress or {}
 	missing = [item for item in module.get("prerequisites") or [] if item not in completed_modules]
+	availability = module_availability(module)
 	return {
 		"module_id": module["module_id"],
 		"title": module["title"],
@@ -79,7 +81,10 @@ def _public_module(module: dict, progress: dict | None, completed_modules: set[s
 		"content_version": module["content_version"],
 		"prerequisites": module.get("prerequisites") or [],
 		"missing_prerequisites": missing,
-		"locked": bool(missing),
+		"required_apps": module.get("required_apps") or [],
+		"required_doctypes": module.get("required_doctypes") or [],
+		**availability,
+		"locked": bool(missing) or not availability["available"],
 		"has_video": module["has_video"],
 		"video_display_status": module["video_display_status"],
 		"status": progress.get("status") or "Not Started",
@@ -105,6 +110,16 @@ def _assert_prerequisites(module: dict, user: str) -> None:
 		)
 
 
+def _assert_available(module: dict) -> None:
+	availability = module_availability(module)
+	if availability["available"]:
+		return
+	frappe.throw(
+		availability["availability_message"] or _("This training module is not available on this site."),
+		frappe.ValidationError,
+	)
+
+
 @frappe.whitelist()
 def get_training_overview(audience: str | None = None) -> dict:
 	user = frappe.session.user
@@ -124,6 +139,7 @@ def get_training_overview(audience: str | None = None) -> dict:
 	]
 	completed = sum(1 for module in payload if module["status"] == "Completed")
 	in_progress = sum(1 for module in payload if module["status"] == "In Progress")
+	available = sum(1 for module in payload if module["available"])
 	user_doc = frappe.get_cached_value(
 		"User",
 		user,
@@ -150,10 +166,14 @@ def get_training_overview(audience: str | None = None) -> dict:
 		"modules": payload,
 		"summary": {
 			"total": len(payload),
+			"available": available,
+			"unavailable": len(payload) - available,
 			"completed": completed,
 			"in_progress": in_progress,
-			"estimated_minutes": sum(module["estimated_minutes"] for module in payload),
-			"progress_percent": round((completed / len(payload)) * 100, 1) if payload else 0,
+			"estimated_minutes": sum(
+				module["estimated_minutes"] for module in payload if module["available"]
+			),
+			"progress_percent": round((completed / available) * 100, 1) if available else 0,
 		},
 	}
 
@@ -163,6 +183,7 @@ def get_training_module_content(module_id: str) -> dict:
 	module = module_by_id(module_id)
 	if not can_view_module(module):
 		frappe.throw(_("You are not permitted to view this training module."), frappe.PermissionError)
+	_assert_available(module)
 	markdown = read_markdown(module)
 	rows = _progress_rows(
 		frappe.session.user,
@@ -197,6 +218,7 @@ def save_training_progress(
 	module = module_by_id(module_id)
 	if not can_view_module(module, user):
 		frappe.throw(_("You are not permitted to update this training module."), frappe.PermissionError)
+	_assert_available(module)
 	_assert_prerequisites(module, user)
 	valid_steps = [step["step_id"] for step in module["steps"]]
 	completed = [step_id for step_id in _parse_list(completed_step_ids) if step_id in valid_steps]
@@ -250,6 +272,7 @@ def reset_training_progress(module_id: str) -> dict:
 	module = module_by_id(module_id)
 	if not can_view_module(module):
 		frappe.throw(_("You are not permitted to reset this training module."), frappe.PermissionError)
+	_assert_available(module)
 	key = _progress_key(frappe.session.user, module_id)
 	name = frappe.db.get_value("EduEdge Training Progress", {"training_key": key}, "name")
 	if name:
