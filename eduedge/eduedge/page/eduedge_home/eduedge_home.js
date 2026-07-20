@@ -35,11 +35,26 @@ frappe.pages["eduedge-home"].on_page_show = function (wrapper) {
 		).appendTo(page.body);
 	};
 
+	const supportsSharedShell = (version) => {
+		const parts = String(version || "0.0.0")
+			.split(".")
+			.map((value) => Number.parseInt(value, 10) || 0);
+		return parts[0] > 0 || (parts[0] === 0 && parts[1] >= 3);
+	};
+
 	frappe.require("edgeui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
 			fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
+			return;
+		}
+		if (!supportsSharedShell(runtime.version)) {
+			fail(
+				__("EduEdge requires EdgeSuite UI 0.3 or newer. Loaded version: {0}.", [
+					runtime.version || __("unknown"),
+				])
+			);
 			return;
 		}
 
