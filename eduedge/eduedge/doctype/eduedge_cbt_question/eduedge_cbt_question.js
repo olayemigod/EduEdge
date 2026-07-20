@@ -2,9 +2,6 @@ frappe.ui.form.on("EduEdge CBT Question", {
 	setup(frm) {
 		frm.set_query("school_branch", () => ({ filters: { enabled: 1 } }));
 	},
-	refresh(frm) {
-		frm.set_df_property("options", "cannot_add_rows", frm.doc.is_active && !frm.is_new() ? 0 : 0);
-	},
 });
 
 frappe.ui.form.on("EduEdge CBT Question Option", {
