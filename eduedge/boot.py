@@ -42,7 +42,7 @@ def _get_user_identity() -> dict:
 
 
 def extend_bootinfo(bootinfo) -> None:
-	"""Expose permission-safe identity metadata for the EduEdge shell.
+	"""Expose permission-safe identity metadata for the shared EdgeSuite shell.
 
 	School identity remains on ERPNext Company. EduEdge product identity is
 	centrally managed by CoreEdge and inherited through the cached runtime
@@ -82,13 +82,24 @@ def extend_bootinfo(bootinfo) -> None:
 	}
 	product_identity = get_product_identity()
 
-	bootinfo["eduedge_ui_identity"] = {
+	identity = {
 		"product_code": product_identity["product_code"],
 		"product_name": product_identity["product_name"],
 		"product_logo": product_identity["product_logo"],
 		"product_identity_source": product_identity["source"],
+		"product_icon": "graduation",
+		"product_subtitle": "Education Management",
 		"tenant_name": active_identity.get("label") or active_identity.get("name") or "",
 		"tenant_logo": active_identity.get("logo") or "",
+		"tenant_icon": "building",
+		"tenant_subtitle": "School workspace",
 		"companies": companies,
 		"user": _get_user_identity(),
 	}
+
+	# Retain the legacy key while making the shared EdgeSuite contract
+	# authoritative for identity, notifications, and context switching.
+	bootinfo["eduedge_ui_identity"] = identity
+	shared = bootinfo.get("edgesuite_ui_identity") or {}
+	shared["eduedge"] = identity
+	bootinfo["edgesuite_ui_identity"] = shared
