@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import frappe
+
 from eduedge.api import modal_records as base
 from eduedge.platform.access import require_eduedge_access
 
@@ -15,6 +17,7 @@ def _feature_key(resource: str) -> str:
 	return RESOURCE_FEATURES.get(str(resource or "").strip(), "foundation")
 
 
+@frappe.whitelist()
 def save_modal_record(
 	resource: str,
 	values: str | dict,
