@@ -46,6 +46,20 @@ def _assert_branch_access(branch: str | None) -> None:
 		)
 
 
+def _assert_program_option_permission() -> None:
+	admission_allowed = any(
+		frappe.has_permission("Student Admission", permission_type)
+		for permission_type in ("read", "create", "write")
+	)
+	offering_allowed = frappe.has_permission("EduEdge Program Offering", "read")
+	if admission_allowed and offering_allowed:
+		return
+	frappe.throw(
+		_("You are not permitted to view admission programme options."),
+		frappe.PermissionError,
+	)
+
+
 def get_program_options(
 	*,
 	branch: str | None,
@@ -54,11 +68,12 @@ def get_program_options(
 ) -> list[dict]:
 	if not branch or not academic_year:
 		return []
+	_assert_program_option_permission()
 	_assert_branch_access(branch)
 	if not frappe.db.exists("DocType", "EduEdge Program Offering"):
 		return []
 
-	rows = frappe.get_all(
+	rows = frappe.get_list(
 		"EduEdge Program Offering",
 		filters={
 			"school_branch": branch,
