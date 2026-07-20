@@ -34,6 +34,19 @@ def test_admission_editor_is_branch_safe_and_supports_repeated_campus_records():
 		assert contract in adapter
 
 
+def test_admission_program_options_require_doctype_permissions():
+	adapter = read("api/admission_resource.py")
+	for contract in (
+		"_assert_program_option_permission()",
+		'frappe.has_permission("Student Admission", permission_type)',
+		'frappe.has_permission("EduEdge Program Offering", "read")',
+		'frappe.get_list(',
+		"You are not permitted to view admission programme options.",
+	):
+		assert contract in adapter
+	assert 'frappe.get_all(\n\t\t"EduEdge Program Offering"' not in adapter
+
+
 def test_admission_option_refresh_is_cascading_and_server_routed():
 	safe = read("api/resource_center_safe.py")
 	hooks = read("hooks.py")
