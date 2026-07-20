@@ -14,7 +14,7 @@
 				<EdgePageHeader
 					eyebrow="Guided Learning"
 					title="EduEdge Training Centre"
-					subtitle="Role-based, step-by-step learning for students, teachers, school leaders, administrators, and ProcessEdge support staff."
+					subtitle="Role-based, step-by-step learning for parents, students, teachers, registrars, finance, HR, operations, school leaders, and ProcessEdge support staff."
 				/>
 			</template>
 
@@ -45,11 +45,12 @@
 					</div>
 
 					<EdgeDashboardLayout min-column-width="11rem">
-						<EdgeStatCard label="Modules" :value="overview.summary.total" helper="Required and shared guides" />
+						<EdgeStatCard label="Modules" :value="overview.summary.total" helper="Role and shared guides" />
+						<EdgeStatCard label="Available" :value="overview.summary.available" helper="Enabled on this site" />
 						<EdgeStatCard label="Completed" :value="overview.summary.completed" helper="Finished modules" />
 						<EdgeStatCard label="In progress" :value="overview.summary.in_progress" helper="Continue where you stopped" />
-						<EdgeStatCard label="Estimated time" :value="`${overview.summary.estimated_minutes} min`" helper="Approximate guided time" />
-						<EdgeStatCard label="Path progress" :value="`${overview.summary.progress_percent}%`" helper="Completed module ratio" />
+						<EdgeStatCard label="Estimated time" :value="`${overview.summary.estimated_minutes} min`" helper="Available guided time" />
+						<EdgeStatCard label="Path progress" :value="`${overview.summary.progress_percent}%`" helper="Completed available modules" />
 					</EdgeDashboardLayout>
 
 					<EdgeActionBar label="Training modules">
@@ -59,13 +60,18 @@
 					</EdgeActionBar>
 
 					<div v-if="filteredModules.length" class="etc-module-grid">
-						<article v-for="module in filteredModules" :key="module.module_id" class="etc-module-card" :class="{ 'is-locked': module.locked }">
+						<article
+							v-for="module in filteredModules"
+							:key="module.module_id"
+							class="etc-module-card"
+							:class="{ 'is-locked': module.locked, 'is-unavailable': !module.available }"
+						>
 							<div class="etc-module-card__top">
 								<div>
 									<p class="edge-eyebrow">{{ module.category }} · {{ module.estimated_minutes }} min</p>
 									<h3>{{ module.title }}</h3>
 								</div>
-								<EdgeStatusBadge :label="module.locked ? 'Locked' : module.status" :status="module.status" :tone="moduleTone(module)" />
+								<EdgeStatusBadge :label="moduleStatusLabel(module)" :status="module.status" :tone="moduleTone(module)" />
 							</div>
 							<p>{{ module.short_description }}</p>
 							<div class="etc-progress-track" aria-hidden="true"><span :style="{ width: `${module.progress_percent}%` }"></span></div>
@@ -73,7 +79,8 @@
 								<span>{{ module.step_count }} guided steps</span>
 								<span>{{ module.has_video ? 'Video available' : module.video_display_status }}</span>
 							</div>
-							<p v-if="module.locked" class="etc-lock-message">Complete: {{ module.missing_prerequisites.join(', ') }}</p>
+							<p v-if="!module.available" class="etc-lock-message">{{ module.availability_message }}</p>
+							<p v-else-if="module.locked" class="etc-lock-message">Complete: {{ module.missing_prerequisites.join(', ') }}</p>
 							<button type="button" class="edge-button edge-button--primary" :disabled="module.locked" @click="openModule(module)">
 								{{ moduleButtonLabel(module) }}
 							</button>
@@ -151,7 +158,7 @@ const EMPTY_OVERVIEW = {
 	primary_audience: "",
 	audiences: [],
 	modules: [],
-	summary: { total: 0, completed: 0, in_progress: 0, estimated_minutes: 0, progress_percent: 0 },
+	summary: { total: 0, available: 0, unavailable: 0, completed: 0, in_progress: 0, estimated_minutes: 0, progress_percent: 0 },
 };
 
 export default {
@@ -190,7 +197,7 @@ export default {
 			const menu = [
 				{ section: "Help & Training", sectionIcon: "book", label: "Training Centre", route: "/app/eduedge-training-centre", icon: "book", description: "Role-based guided learning" },
 			];
-			if (this.overview.primary_audience !== "student") {
+			if (!["student", "parent"].includes(this.overview.primary_audience)) {
 				menu.unshift({ section: "Overview", sectionIcon: "home", label: "EduEdge Home", route: "/app/eduedge-home", icon: "home", description: "School command centre" });
 			}
 			return menu;
@@ -217,13 +224,19 @@ export default {
 	},
 	methods: {
 		openRoute: openEduEdgeRoute,
+		moduleStatusLabel(module) {
+			if (!module.available) return "Requires setup";
+			if (module.locked) return "Locked";
+			return module.status;
+		},
 		moduleTone(module) {
-			if (module.locked) return "neutral";
+			if (!module.available || module.locked) return "neutral";
 			if (module.status === "Completed") return "success";
 			if (module.status === "In Progress") return "warning";
 			return "neutral";
 		},
 		moduleButtonLabel(module) {
+			if (!module.available) return "Module not enabled on this site";
 			if (module.locked) return "Complete prerequisite first";
 			if (module.status === "Completed") return "Review module";
 			if (module.status === "In Progress") return "Continue module";
@@ -241,7 +254,7 @@ export default {
 				const requested = new URLSearchParams(window.location.search).get("module");
 				if (requested && !this.activeModule) {
 					const module = this.overview.modules.find((item) => item.module_id === requested);
-					if (module && !module.locked) await this.openModule(module, false);
+					if (module && !module.locked && module.available) await this.openModule(module, false);
 				}
 			} catch (error) {
 				this.error = error?.message || "Your EduEdge training path could not be loaded.";
@@ -255,7 +268,7 @@ export default {
 			await this.loadOverview();
 		},
 		async openModule(module, updateUrl = true) {
-			if (module.locked) return;
+			if (module.locked || !module.available) return;
 			this.moduleLoading = true;
 			this.activeTab = "guide";
 			try {
@@ -331,7 +344,7 @@ export default {
 			if (!link) return;
 			event.preventDefault();
 			const module = this.overview.modules.find((item) => item.module_id === link.dataset.trainingModule);
-			if (module && !module.locked) this.openModule(module);
+			if (module && !module.locked && module.available) this.openModule(module);
 		},
 		updateUrl(moduleId = "") {
 			const params = new URLSearchParams();
@@ -354,6 +367,7 @@ export default {
 .etc-module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
 .etc-module-card { display: flex; flex-direction: column; gap: .8rem; min-height: 17rem; padding: 1rem; border: 1px solid var(--edge-color-border, var(--border-color)); border-radius: var(--edge-radius-lg, 12px); background: var(--edge-color-surface, var(--card-bg)); }
 .etc-module-card.is-locked { opacity: .72; }
+.etc-module-card.is-unavailable { border-style: dashed; }
 .etc-module-card__top, .etc-module-meta, .etc-complete-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
 .etc-module-card h3 { margin: .25rem 0 0; font-size: 1rem; }
 .etc-module-meta { color: var(--text-muted); font-size: .72rem; margin-top: auto; }
