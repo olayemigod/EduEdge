@@ -7,6 +7,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from eduedge.platform.access import require_eduedge_access
+from eduedge.platform.runtime_context import get_product_identity
 from eduedge.services.branch_context import get_allowed_school_branches, is_branch_access_enforced
 
 MAX_OPTIONS = 50
@@ -18,13 +20,6 @@ TAB_CONFIG = {
 		"fields": [
 			{"fieldname": "default_company", "label": _("Default Company"), "type": "Link", "options_doctype": "Company"},
 			{"fieldname": "default_school_branch", "label": _("Default School Branch"), "type": "Link", "options_doctype": "EduEdge School Branch"},
-		],
-	},
-	"branding": {
-		"label": _("Branding"),
-		"description": _("Control the EduEdge product mark shown inside the school workspace."),
-		"fields": [
-			{"fieldname": "eduedge_logo", "label": _("EduEdge Logo"), "type": "Attach Image"},
 		],
 	},
 	"branch_access": {
@@ -88,10 +83,7 @@ def _company_options() -> list[dict]:
 		order_by="company_name asc",
 		limit_page_length=MAX_OPTIONS,
 	)
-	return [
-		{"value": row.name, "label": row.company_name or row.name}
-		for row in rows
-	]
+	return [{"value": row.name, "label": row.company_name or row.name} for row in rows]
 
 
 def _branch_options(company: str | None = None) -> list[dict]:
@@ -141,20 +133,21 @@ def get_settings_center() -> dict:
 		for config in TAB_CONFIG.values()
 		for fieldname in {field["fieldname"] for field in config["fields"]}
 	}
-	tabs = []
-	for key, config in TAB_CONFIG.items():
-		tabs.append(
-			{
-				"key": key,
-				"label": config["label"],
-				"description": config["description"],
-				"fields": _with_options(config["fields"], values),
-			}
-		)
+	tabs = [
+		{
+			"key": key,
+			"label": config["label"],
+			"description": config["description"],
+			"fields": _with_options(config["fields"], values),
+		}
+		for key, config in TAB_CONFIG.items()
+	]
 	return {
 		"tabs": tabs,
 		"values": values,
 		"can_write": bool(frappe.has_permission("EduEdge Settings", "write")),
+		"product_identity": get_product_identity(),
+		"product_identity_managed_by": "CoreEdge",
 		"branch_enforcement": {
 			"enabled": is_branch_access_enforced(),
 			"manage_route": "/app/eduedge-branch-governance",
@@ -177,6 +170,7 @@ def save_settings_tab(tab: str, values: str | dict) -> dict:
 		frappe.throw(_("This settings section is not available."), frappe.PermissionError)
 	if not frappe.has_permission("EduEdge Settings", "write"):
 		frappe.throw(_("You are not permitted to change EduEdge Settings."), frappe.PermissionError)
+	require_eduedge_access(feature_key="foundation", action=f"save_settings_{tab}")
 	payload = _parse_json(values)
 	allowed = _field_map(tab)
 	clean_values = {
@@ -197,7 +191,4 @@ def save_settings_tab(tab: str, values: str | dict) -> dict:
 	doc.check_permission("write")
 	doc.update(clean_values)
 	doc.save()
-	return {
-		"tab": tab,
-		"values": {fieldname: doc.get(fieldname) for fieldname in allowed},
-	}
+	return {"tab": tab, "values": {fieldname: doc.get(fieldname) for fieldname in allowed}}
