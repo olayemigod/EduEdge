@@ -101,7 +101,15 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 		label: __("EduEdge Settings"),
 		route: "/app/eduedge-settings-center",
 		icon: "settings",
-		description: __("Defaults, branding, controls, and features"),
+		description: __("Defaults, controls, and features"),
+	},
+	{
+		section: __("Help & Training"),
+		sectionIcon: "book",
+		label: __("Training Centre"),
+		route: "/app/eduedge-training-centre",
+		icon: "book",
+		description: __("Role-based guided learning"),
 	},
 ]);
 
@@ -119,6 +127,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-branch-governance",
 	"/app/eduedge-setup-center",
 	"/app/eduedge-settings-center",
+	"/app/eduedge-training-centre",
 ]);
 
 function normalizedPath(route) {
