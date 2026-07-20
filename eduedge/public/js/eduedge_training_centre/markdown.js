@@ -64,56 +64,6 @@ function renderLine(line) {
 	return `<p>${inline(line)}</p>`;
 }
 
-export function renderTrainingMarkdown(markdown) {
-	const lines = String(markdown || "").split("\n");
-	const blocks = [];
-	let inCode = false;
-	let codeLanguage = "";
-	let codeLines = [];
-	for (let index = 0; index < lines.length; index += 1) {
-		const line = lines[index];
-		const fence = line.match(/^```(.*)$/);
-		if (fence) {
-			if (inCode) {
-				blocks.push(
-					`<pre><code class="language-${escapeHtml(codeLanguage)}">${escapeHtml(codeLines.join("\n"))}</code></pre>`,
-				);
-				inCode = false;
-				codeLanguage = "";
-				codeLines = [];
-			} else {
-				inCode = true;
-				codeLanguage = String(fence[1] || "").trim();
-			}
-			continue;
-		}
-		if (inCode) {
-			codeLines.push(line);
-			continue;
-		}
-		if (!line.trim()) {
-			blocks.push("");
-			continue;
-		}
-		if (line.startsWith("|") && lines[index + 1] && /^\|\s*:?-{3,}/.test(lines[index + 1])) {
-			const tableLines = [line, lines[index + 1]];
-			index += 2;
-			while (index < lines.length && lines[index].startsWith("|")) {
-				tableLines.push(lines[index]);
-				index += 1;
-			}
-			index -= 1;
-			blocks.push(renderTable(tableLines));
-			continue;
-		}
-		blocks.push(renderLine(line));
-	}
-	if (inCode) {
-		blocks.push(`<pre><code class="language-${escapeHtml(codeLanguage)}">${escapeHtml(codeLines.join("\n"))}</code></pre>`);
-	}
-	return `<div class="edge-training-markdown">${blocks.join("\n")}</div>`;
-}
-
 function parseFlowchart(source) {
 	const lines = String(source || "").split("\n").map((line) => line.trim()).filter(Boolean);
 	const header = lines.shift() || "";
@@ -159,26 +109,80 @@ function parseFlowchart(source) {
 	return { direction, nodes: order };
 }
 
+function renderFlowchartMarkup(parsed) {
+	if (!parsed) return "";
+	const horizontal = ["LR", "RL"].includes(parsed.direction);
+	const nodes = parsed.nodes.map((node, index) => {
+		const card = `<div class="edge-training-flow__node${node.decision ? " is-decision" : ""}">${escapeHtml(node.label)}</div>`;
+		if (index >= parsed.nodes.length - 1) return card;
+		return `${card}<div class="edge-training-flow__arrow" aria-hidden="true">${horizontal ? "→" : "↓"}</div>`;
+	});
+	return `<div class="edge-training-flow edge-training-flow--${parsed.direction.toLowerCase()}" role="img" aria-label="Training workflow diagram">${nodes.join("")}</div>`;
+}
+
+function renderCodeBlock(language, source) {
+	if (/^(?:mermaid)$/i.test(language)) {
+		const diagram = renderFlowchartMarkup(parseFlowchart(source));
+		if (diagram) return diagram;
+	}
+	return `<pre><code class="language-${escapeHtml(language)}">${escapeHtml(source)}</code></pre>`;
+}
+
+export function renderTrainingMarkdown(markdown) {
+	const lines = String(markdown || "").split("\n");
+	const blocks = [];
+	let inCode = false;
+	let codeLanguage = "";
+	let codeLines = [];
+	for (let index = 0; index < lines.length; index += 1) {
+		const line = lines[index];
+		const fence = line.match(/^```(.*)$/);
+		if (fence) {
+			if (inCode) {
+				blocks.push(renderCodeBlock(codeLanguage, codeLines.join("\n")));
+				inCode = false;
+				codeLanguage = "";
+				codeLines = [];
+			} else {
+				inCode = true;
+				codeLanguage = String(fence[1] || "").trim();
+			}
+			continue;
+		}
+		if (inCode) {
+			codeLines.push(line);
+			continue;
+		}
+		if (!line.trim()) {
+			blocks.push("");
+			continue;
+		}
+		if (line.startsWith("|") && lines[index + 1] && /^\|\s*:?-{3,}/.test(lines[index + 1])) {
+			const tableLines = [line, lines[index + 1]];
+			index += 2;
+			while (index < lines.length && lines[index].startsWith("|")) {
+				tableLines.push(lines[index]);
+				index += 1;
+			}
+			index -= 1;
+			blocks.push(renderTable(tableLines));
+			continue;
+		}
+		blocks.push(renderLine(line));
+	}
+	if (inCode) blocks.push(renderCodeBlock(codeLanguage, codeLines.join("\n")));
+	return `<div class="edge-training-markdown">${blocks.join("\n")}</div>`;
+}
+
 export function renderTrainingFlowcharts(root) {
 	if (!root) return;
 	root.querySelectorAll('pre code.language-mermaid, pre code.lang-mermaid').forEach((code) => {
 		const parsed = parseFlowchart(code.textContent || "");
 		const pre = code.closest("pre");
 		if (!parsed || !pre) return;
-		const flow = document.createElement("div");
-		flow.className = `edge-training-flow edge-training-flow--${parsed.direction.toLowerCase()}`;
-		parsed.nodes.forEach((node, index) => {
-			const card = document.createElement("div");
-			card.className = `edge-training-flow__node${node.decision ? " is-decision" : ""}`;
-			card.textContent = node.label;
-			flow.appendChild(card);
-			if (index < parsed.nodes.length - 1) {
-				const arrow = document.createElement("div");
-				arrow.className = "edge-training-flow__arrow";
-				arrow.textContent = ["LR", "RL"].includes(parsed.direction) ? "→" : "↓";
-				flow.appendChild(arrow);
-			}
-		});
-		pre.replaceWith(flow);
+		const wrapper = document.createElement("div");
+		wrapper.innerHTML = renderFlowchartMarkup(parsed);
+		const flow = wrapper.firstElementChild;
+		if (flow) pre.replaceWith(flow);
 	});
 }
