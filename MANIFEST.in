@@ -1,0 +1,14 @@
+include license.txt
+recursive-include eduedge *.css
+recursive-include eduedge *.csv
+recursive-include eduedge *.html
+recursive-include eduedge *.ico
+recursive-include eduedge *.js
+recursive-include eduedge *.json
+recursive-include eduedge *.md
+recursive-include eduedge *.png
+recursive-include eduedge *.py
+recursive-include eduedge *.svg
+recursive-include eduedge *.txt
+recursive-include eduedge *.vue
+recursive-exclude eduedge *.pyc

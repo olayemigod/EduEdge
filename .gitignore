@@ -1,0 +1,11 @@
+*.pyc
+__pycache__/
+.DS_Store
+node_modules/
+*.log
+.coverage
+.pytest_cache/
+.ruff_cache/
+
+# Frappe/esbuild generated frontend assets
+eduedge/public/dist/
