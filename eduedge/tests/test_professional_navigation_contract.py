@@ -56,7 +56,10 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertIn("supportsSharedShell", loader)
 		self.assertIn("EdgeSuite UI 0.3 or newer", loader)
 		self.assertIn("runtime.version", loader)
-		self.assertLess(loader.index('frappe.require("edgeui.bundle.js"'), loader.index('frappe.require("eduedge_home.bundle.js"'))
+		self.assertLess(
+			loader.index('frappe.require("edgeui.bundle.js"'),
+			loader.index('frappe.require("eduedge_home.bundle.js"'),
+		)
 
 	def test_non_eduedge_desk_routes_open_in_new_tab(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
