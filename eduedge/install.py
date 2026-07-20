@@ -79,6 +79,7 @@ def after_install() -> None:
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
+	ensure_training_page_roles()
 	backfill_education_branch_context()
 
 
@@ -87,6 +88,7 @@ def after_migrate() -> None:
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
+	ensure_training_page_roles()
 	backfill_education_branch_context()
 
 
@@ -163,3 +165,24 @@ def ensure_training_progress_permissions() -> None:
 			)
 
 	frappe.clear_cache(doctype="EduEdge Training Progress")
+
+
+def ensure_training_page_roles() -> None:
+	"""Expose the Desk Training Centre only to existing roles with Desk access."""
+	if not frappe.db.exists("Page", "eduedge-training-centre"):
+		return
+	page = frappe.get_doc("Page", "eduedge-training-centre")
+	existing = {row.role for row in page.roles}
+	changed = False
+	for role in TRAINING_PROGRESS_ROLES:
+		if role in existing or role in {"EduEdge Parent", "Student"}:
+			continue
+		desk_access = frappe.db.get_value("Role", role, "desk_access")
+		if not desk_access:
+			continue
+		page.append("roles", {"role": role})
+		existing.add(role)
+		changed = True
+	if changed:
+		page.save(ignore_permissions=True)
+		frappe.clear_cache()
