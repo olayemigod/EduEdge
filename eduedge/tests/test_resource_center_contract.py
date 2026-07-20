@@ -27,7 +27,7 @@ class TestResourceCenterContract(unittest.TestCase):
 		):
 			self.assertNotIn(native_route, navigation)
 
-	def test_resource_api_is_allowlisted_branch_safe_and_permission_aware(self):
+	def test_resource_api_is_allowlisted_branch_safe_permission_aware_and_platform_guarded(self):
 		api = (APP / "api/resource_center.py").read_text(encoding="utf-8")
 		safety = (APP / "api/resource_center_safe.py").read_text(encoding="utf-8")
 		for expected in (
@@ -54,8 +54,11 @@ class TestResourceCenterContract(unittest.TestCase):
 			"not allowed_branches",
 			"_empty_page",
 			"nowdate()",
+			"RESOURCE_FEATURES",
+			"require_eduedge_access",
+			' action="delete_resource_record"',
 		):
-			self.assertIn(expected, safety)
+			self.assertIn(expected.strip(), safety)
 		for forbidden in (
 			"ignore_permissions=True",
 			"ignore_permissions = True",
@@ -83,23 +86,41 @@ class TestResourceCenterContract(unittest.TestCase):
 		self.assertIn("eduedge_resource_center.bundle.js", loader)
 		self.assertNotIn("new frappe.ui.Dialog", component + client)
 
-	def test_settings_center_is_tabbed_and_keeps_enforcement_safe(self):
+	def test_quick_entry_mutations_are_platform_guarded(self):
+		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
+		safe_api = (APP / "api/modal_records_safe.py").read_text(encoding="utf-8")
+		self.assertIn('"eduedge.api.modal_records.save_modal_record"', hooks)
+		self.assertIn("require_eduedge_access", safe_api)
+		self.assertIn("RESOURCE_FEATURES", safe_api)
+		self.assertIn("reference_doctype", safe_api)
+
+	def test_settings_center_is_tabbed_and_product_branding_is_not_tenant_editable(self):
 		api = (APP / "api/settings_center.py").read_text(encoding="utf-8")
 		component = (APP / "public/js/eduedge_settings_center/EduEdgeSettingsCenter.vue").read_text(encoding="utf-8")
+		settings = (
+			APP
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_settings"
+			/ "eduedge_settings.json"
+		).read_text(encoding="utf-8")
 		for expected in (
 			"TAB_CONFIG",
 			'"defaults"',
-			'"branding"',
 			'"branch_access"',
 			'"report_cards"',
 			'"features"',
 			"save_settings_tab",
 			"get_default_branch_options",
 			"eduedge-settings-tabs",
-			"FileUploader",
 			"Open Branch Governance",
+			"product_identity_managed_by",
+			"get_product_identity",
+			"require_eduedge_access",
 		):
 			self.assertIn(expected, api + component)
+		self.assertNotIn('"branding"', api)
+		self.assertNotIn('"eduedge_logo"', settings)
 		self.assertNotIn('"enable_user_branch_access_enforcement", "label"', api)
 		self.assertNotIn("ignore_permissions", api)
 
