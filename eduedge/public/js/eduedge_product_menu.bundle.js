@@ -1,4 +1,4 @@
-const ADMIN_ROLES = ["System Manager", "EduEdge Administrator"];
+const ADMIN_ROLES = ["EduEdge Super Administrator", "System Manager", "EduEdge Administrator"];
 const SETUP_ROLES = [...ADMIN_ROLES, "School Administrator"];
 const GOVERNANCE_VIEW_ROLES = [...SETUP_ROLES, "Bursar"];
 
@@ -130,11 +130,25 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 				},
 				{
 					label: "EduEdge Settings",
-					description: "Defaults, branding, controls, and optional features",
+					description: "Defaults, controls, and optional features",
 					icon: "settings",
 					route: "/app/eduedge-settings-center",
 					roles: SETUP_ROLES,
-					keywords: ["settings", "branding", "features", "defaults"],
+					keywords: ["settings", "features", "defaults"],
+				},
+			],
+		},
+		{
+			label: "Help & Training",
+			description: "Role-based learning, practice, and readiness",
+			icon: "book",
+			items: [
+				{
+					label: "EduEdge Training Centre",
+					description: "Step-by-step guides, flowcharts, videos, and progress",
+					icon: "book",
+					route: "/app/eduedge-training-centre",
+					keywords: ["training", "guide", "help", "video", "onboarding"],
 				},
 			],
 		},
