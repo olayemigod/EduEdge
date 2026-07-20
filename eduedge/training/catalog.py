@@ -10,7 +10,10 @@ from frappe import _
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 TRAINING_ROOT = APP_ROOT / "docs" / "training" / "eduedge"
-TRAINING_MANIFEST = TRAINING_ROOT / "training_modules.json"
+TRAINING_MANIFESTS = (
+	TRAINING_ROOT / "training_modules.json",
+	TRAINING_ROOT / "training_modules_school_operations.json",
+)
 
 AUDIENCES = {
 	"shared": {
@@ -21,39 +24,89 @@ AUDIENCES = {
 	},
 	"student": {
 		"label": "Students",
-		"description": "Learn how to access learning activities, CBT, results, and support safely.",
+		"description": "Access learning activities, CBT, results, report cards and support safely.",
 		"roles": {"Student"},
 		"order": 10,
 	},
+	"parent": {
+		"label": "Parents / Guardians",
+		"description": "Use the Parent Portal, linked-child records, notices, fees, results and pickup controls safely.",
+		"roles": {"EduEdge Parent"},
+		"order": 15,
+	},
 	"teacher": {
 		"label": "Teachers",
-		"description": "Run classes, attendance, assessments, result entry, and report-card handoffs.",
-		"roles": {"Teacher"},
+		"description": "Run classes, attendance, assessments, result entry and report-card handoffs.",
+		"roles": {"Teacher", "Instructor"},
 		"order": 20,
 	},
-	"school_admin": {
-		"label": "School Administration",
-		"description": "Configure branches, programmes, admissions, staff access, and daily school operations.",
-		"roles": {
-			"School Administrator",
-			"Academic Administrator",
-			"Bursar",
-			"CBT Invigilator",
-			"Student Safety Officer",
-		},
+	"registrar": {
+		"label": "Registrar / Admissions",
+		"description": "Manage admissions, applicants, student identity, guardians, enrolment and record lifecycle.",
+		"roles": {"Registrar", "Admission Officer"},
+		"order": 25,
+	},
+	"finance": {
+		"label": "Bursary / Accounts",
+		"description": "Operate fees, receipts, allocations, reconciliation, payables and financial reporting safely.",
+		"roles": {"Bursar", "Accounts User", "Accounts Manager"},
 		"order": 30,
+	},
+	"people_ops": {
+		"label": "HR / People Operations",
+		"description": "Manage staff records, onboarding, leave, attendance, payroll and separation when HRMS is installed.",
+		"roles": {"HR User", "HR Manager", "School HR Officer"},
+		"order": 35,
+	},
+	"procurement_assets": {
+		"label": "Procurement, Stores and Assets",
+		"description": "Control school purchasing, receiving, stores, inventory, assets and custody evidence.",
+		"roles": {
+			"Purchase User",
+			"Purchase Manager",
+			"Stock User",
+			"Stock Manager",
+			"Asset User",
+			"Asset Manager",
+			"Procurement Officer",
+		},
+		"order": 40,
+	},
+	"school_operations": {
+		"label": "School Operations and Management",
+		"description": "Coordinate facilities, communications, approvals, reports, incidents and cross-functional follow-up.",
+		"roles": {"School Operations Manager", "School Administrator"},
+		"order": 45,
+	},
+	"cbt_ops": {
+		"label": "CBT Operations",
+		"description": "Prepare examinations, verify candidates, monitor integrity and resolve pending answer sync.",
+		"roles": {"CBT Invigilator"},
+		"order": 50,
+	},
+	"student_safety": {
+		"label": "Student Safety and Pickup",
+		"description": "Control student release, school-bus handoffs, incidents and parent notification evidence.",
+		"roles": {"Student Safety Officer"},
+		"order": 55,
+	},
+	"school_admin": {
+		"label": "Academic and School Administration",
+		"description": "Configure branches, programmes, staff access and daily academic operations.",
+		"roles": {"School Administrator", "Academic Administrator"},
+		"order": 60,
 	},
 	"school_owner": {
 		"label": "School Owners / System Managers",
-		"description": "Govern access, readiness, approvals, reporting, and platform access.",
+		"description": "Govern access, readiness, approvals, reporting and platform accountability.",
 		"roles": {"System Manager", "EduEdge Administrator"},
-		"order": 40,
+		"order": 70,
 	},
 	"processedge_staff": {
 		"label": "ProcessEdge Super Administrators",
-		"description": "Provision, activate, support, upgrade, diagnose, and hand over EduEdge tenants safely.",
+		"description": "Provision, activate, support, upgrade, diagnose and hand over EduEdge tenants safely.",
 		"roles": {"EduEdge Super Administrator"},
-		"order": 50,
+		"order": 80,
 	},
 }
 
@@ -79,7 +132,7 @@ def allowed_audience_keys(user: str | None = None) -> list[str]:
 	if "EduEdge Super Administrator" in roles:
 		return list(AUDIENCES)
 	if roles & AUDIENCES["school_owner"]["roles"]:
-		return ["shared", "student", "teacher", "school_admin", "school_owner"]
+		return [key for key in AUDIENCES if key != "processedge_staff"]
 	allowed = ["shared"]
 	for key, config in AUDIENCES.items():
 		if key != "shared" and roles & config["roles"]:
@@ -89,22 +142,46 @@ def allowed_audience_keys(user: str | None = None) -> list[str]:
 
 def primary_audience(user: str | None = None) -> str:
 	allowed = allowed_audience_keys(user)
-	for key in ("processedge_staff", "school_owner", "school_admin", "teacher", "student"):
+	for key in (
+		"processedge_staff",
+		"school_owner",
+		"school_admin",
+		"school_operations",
+		"finance",
+		"registrar",
+		"people_ops",
+		"procurement_assets",
+		"cbt_ops",
+		"student_safety",
+		"teacher",
+		"parent",
+		"student",
+	):
 		if key in allowed:
 			return key
 	return "shared"
 
 
-def load_manifest() -> list[dict]:
-	if not TRAINING_MANIFEST.exists():
-		frappe.throw(_("EduEdge training module setup was not found."), frappe.DoesNotExistError)
+def _read_manifest(path: Path) -> list[dict]:
+	if not path.exists():
+		frappe.throw(
+			_("EduEdge training module setup was not found: {0}").format(path.name),
+			frappe.DoesNotExistError,
+		)
 	try:
-		raw = json.loads(TRAINING_MANIFEST.read_text(encoding="utf-8"))
+		raw = json.loads(path.read_text(encoding="utf-8"))
 	except json.JSONDecodeError as error:
-		frappe.throw(_("EduEdge training module setup is invalid: {0}").format(error))
+		frappe.throw(_("EduEdge training module setup is invalid in {0}: {1}").format(path.name, error))
 	if not isinstance(raw, list):
-		frappe.throw(_("EduEdge training module setup must contain a list."))
-	modules = [normalize_module(row) for row in raw]
+		frappe.throw(_("EduEdge training module setup must contain a list: {0}").format(path.name))
+	return raw
+
+
+def load_manifest() -> list[dict]:
+	raw_modules = []
+	for manifest_path in TRAINING_MANIFESTS:
+		raw_modules.extend(_read_manifest(manifest_path))
+	modules = [normalize_module(row) for row in raw_modules]
 	seen: set[str] = set()
 	for module in modules:
 		if module["module_id"] in seen:
@@ -159,6 +236,8 @@ def normalize_module(row: dict) -> dict:
 		"estimated_minutes": max(1, int(row["estimated_minutes"] or 1)),
 		"content_version": max(1, int(row["content_version"] or 1)),
 		"prerequisites": [str(item).strip() for item in row.get("prerequisites") or [] if str(item).strip()],
+		"required_apps": [str(item).strip().lower() for item in row.get("required_apps") or [] if str(item).strip()],
+		"required_doctypes": [str(item).strip() for item in row.get("required_doctypes") or [] if str(item).strip()],
 		"steps": normalize_steps(row["steps"], module_id),
 	}
 	module["video_embed_url"] = safe_youtube_embed_url(module["youtube_url"])
@@ -244,6 +323,28 @@ def module_by_id(module_id: str) -> dict:
 		if module["module_id"] == module_id:
 			return module
 	frappe.throw(_("Training module was not found."), frappe.DoesNotExistError)
+
+
+def module_availability(module: dict) -> dict:
+	installed = {str(app).lower() for app in frappe.get_installed_apps()}
+	missing_apps = [app for app in module.get("required_apps") or [] if app not in installed]
+	missing_doctypes = [
+		doctype
+		for doctype in module.get("required_doctypes") or []
+		if not frappe.db.exists("DocType", doctype)
+	]
+	available = not missing_apps and not missing_doctypes
+	parts = []
+	if missing_apps:
+		parts.append(_("Install app(s): {0}").format(", ".join(missing_apps)))
+	if missing_doctypes:
+		parts.append(_("Required module records are unavailable: {0}").format(", ".join(missing_doctypes)))
+	return {
+		"available": available,
+		"missing_apps": missing_apps,
+		"missing_doctypes": missing_doctypes,
+		"availability_message": " ".join(parts),
+	}
 
 
 def can_view_module(module: dict, user: str | None = None) -> bool:
