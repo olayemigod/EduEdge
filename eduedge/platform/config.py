@@ -98,9 +98,14 @@ class PlatformConfig:
 				blockers.append("CoreEdge tenant key is not configured.")
 			if not self.client_id or not self.client_secret:
 				blockers.append("CoreEdge client credentials are incomplete.")
+			if not self.runtime_context_path:
+				message = "CoreEdge runtime-context contract path is not configured."
+				(blockers if self.required else warnings).append(message)
 			if not self.access_decision_path:
 				message = "CoreEdge remote access-decision contract path is not configured."
 				(blockers if self.required else warnings).append(message)
+			if not self.health_path:
+				warnings.append("CoreEdge health contract path is not configured.")
 		return {
 			"ready": not blockers,
 			"blockers": blockers,
@@ -119,6 +124,7 @@ class PlatformConfig:
 			"fail_closed": self.fail_closed,
 			"timeout_seconds": self.timeout_seconds,
 			"access_cache_seconds": self.access_cache_seconds,
+			"runtime_context_configured": bool(self.runtime_context_path),
 			"remote_contract_configured": bool(self.access_decision_path),
 			**self.readiness(),
 		}
