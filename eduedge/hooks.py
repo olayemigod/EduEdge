@@ -19,7 +19,12 @@ extend_bootinfo = "eduedge.boot.extend_bootinfo"
 scheduler_events = {
 	"hourly": [
 		"eduedge.platform.runtime_context.refresh_cached_runtime_context",
-	]
+	],
+	"cron": {
+		"*/5 * * * *": [
+			"eduedge.cbt.tasks.refresh_attempt_timeouts",
+		],
+	},
 }
 
 override_whitelisted_methods = {
@@ -108,6 +113,11 @@ permission_query_conditions = {
 	"EduEdge Result Publication Log": "eduedge.education.permissions.result_publication_log_query",
 	"EduEdge Report Card Review": "eduedge.education.permissions.report_card_review_query",
 	"EduEdge Training Progress": "eduedge.training.permissions.training_progress_query",
+	"EduEdge CBT Question": "eduedge.cbt.permissions.cbt_question_query",
+	"EduEdge CBT Exam": "eduedge.cbt.permissions.cbt_exam_query",
+	"EduEdge CBT Attempt": "eduedge.cbt.permissions.cbt_attempt_query",
+	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.cbt_answer_query",
+	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.cbt_sync_log_query",
 }
 
 has_permission = {
@@ -129,6 +139,11 @@ has_permission = {
 	"EduEdge Result Publication Log": "eduedge.education.permissions.has_result_publication_log_permission",
 	"EduEdge Report Card Review": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Training Progress": "eduedge.training.permissions.has_training_progress_permission",
+	"EduEdge CBT Question": "eduedge.cbt.permissions.has_cbt_question_permission",
+	"EduEdge CBT Exam": "eduedge.cbt.permissions.has_cbt_exam_permission",
+	"EduEdge CBT Attempt": "eduedge.cbt.permissions.has_cbt_attempt_permission",
+	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.has_cbt_answer_permission",
+	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.has_cbt_sync_log_permission",
 }
 
 fixtures = [
@@ -156,5 +171,5 @@ fixtures = [
 				],
 			]
 		],
-	},
+	}
 ]
