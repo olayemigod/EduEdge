@@ -9,6 +9,7 @@ from eduedge.education.custom_fields import (
 )
 
 ROLES = (
+	"EduEdge Super Administrator",
 	"EduEdge Administrator",
 	"School Administrator",
 	"Academic Administrator",
