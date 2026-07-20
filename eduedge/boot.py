@@ -2,25 +2,11 @@ from __future__ import annotations
 
 import frappe
 
+from eduedge.platform.runtime_context import get_product_identity
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	get_current_school_branch,
 )
-
-DEFAULT_PRODUCT_LOGO = "/assets/eduedge/images/eduedge-mark.svg"
-
-
-def _get_product_logo() -> str:
-	try:
-		meta = frappe.get_meta("EduEdge Settings")
-		if meta.has_field("eduedge_logo"):
-			return (
-				frappe.db.get_single_value("EduEdge Settings", "eduedge_logo")
-				or DEFAULT_PRODUCT_LOGO
-			)
-	except Exception:
-		pass
-	return DEFAULT_PRODUCT_LOGO
 
 
 def _get_company_identity(company: str) -> dict:
@@ -58,9 +44,10 @@ def _get_user_identity() -> dict:
 def extend_bootinfo(bootinfo) -> None:
 	"""Expose permission-safe identity metadata for the EduEdge shell.
 
-	School identity remains on ERPNext Company. EduEdge product identity remains
-	in EduEdge Settings, with the packaged mark as a safe fallback. Only the
-	current user's own profile image is exposed for the shell avatar.
+	School identity remains on ERPNext Company. EduEdge product identity is
+	centrally managed by CoreEdge and inherited through the cached runtime
+	context; standalone sites use the packaged EduEdge mark. Tenants cannot
+	override the product logo from EduEdge Settings.
 	"""
 	if frappe.session.user == "Guest":
 		return
@@ -93,10 +80,13 @@ def extend_bootinfo(bootinfo) -> None:
 		"label": active_company or "",
 		"logo": "",
 	}
+	product_identity = get_product_identity()
 
 	bootinfo["eduedge_ui_identity"] = {
-		"product_name": "EduEdge",
-		"product_logo": _get_product_logo(),
+		"product_code": product_identity["product_code"],
+		"product_name": product_identity["product_name"],
+		"product_logo": product_identity["product_logo"],
+		"product_identity_source": product_identity["source"],
 		"tenant_name": active_identity.get("label") or active_identity.get("name") or "",
 		"tenant_logo": active_identity.get("logo") or "",
 		"companies": companies,
