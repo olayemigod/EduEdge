@@ -46,3 +46,23 @@ def test_admission_option_refresh_is_cascading_and_server_routed():
 	assert "field?.refresh_fields" in frontend
 	assert "await searchResourceOptions" in frontend
 	assert "Array.isArray(value)" in frontend
+
+
+def test_school_administrators_receive_normal_frappe_admission_permissions():
+	install = read("install.py")
+	for role in (
+		"EduEdge Administrator",
+		"School Administrator",
+		"Academic Administrator",
+	):
+		assert role in install
+	for permission_type in (
+		"read",
+		"write",
+		"create",
+		"delete",
+		"report",
+	):
+		assert f'"{permission_type}"' in install
+	assert "ensure_admission_manager_permissions()" in install
+	assert "update_permission_property(" in install
