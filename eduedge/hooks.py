@@ -107,6 +107,7 @@ permission_query_conditions = {
 	"EduEdge Result Publication": "eduedge.education.permissions.result_publication_query",
 	"EduEdge Result Publication Log": "eduedge.education.permissions.result_publication_log_query",
 	"EduEdge Report Card Review": "eduedge.education.permissions.report_card_review_query",
+	"EduEdge Training Progress": "eduedge.training.permissions.training_progress_query",
 }
 
 has_permission = {
@@ -127,6 +128,7 @@ has_permission = {
 	"EduEdge Result Publication": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Result Publication Log": "eduedge.education.permissions.has_result_publication_log_permission",
 	"EduEdge Report Card Review": "eduedge.education.permissions.has_school_branch_permission",
+	"EduEdge Training Progress": "eduedge.training.permissions.has_training_progress_permission",
 }
 
 fixtures = [
@@ -137,6 +139,7 @@ fixtures = [
 				"role_name",
 				"in",
 				[
+					"EduEdge Super Administrator",
 					"EduEdge Administrator",
 					"School Administrator",
 					"Academic Administrator",
@@ -144,8 +147,14 @@ fixtures = [
 					"Teacher",
 					"CBT Invigilator",
 					"Student Safety Officer",
+					"Registrar",
+					"Admission Officer",
+					"School HR Officer",
+					"Procurement Officer",
+					"School Operations Manager",
+					"EduEdge Parent",
 				],
 			]
 		],
-	}
+	},
 ]

@@ -114,6 +114,7 @@ export default {
 			},
 			menuItems: EDUEDGE_MENU_ITEMS,
 			modules: [
+				{ eyebrow: "Guided learning", title: "Train every EduEdge role", description: "Follow role-based steps, flowcharts, practice exercises, and future embedded videos for students, teachers, administrators, owners, and ProcessEdge support staff.", action: "Open Training Centre", route: "/app/eduedge-training-centre" },
 				{ eyebrow: "Daily operations", title: "Run classes and attendance", description: "View schedules and mark a branch-safe class register without leaving the EduEdge shell.", action: "Open academic operations", route: "/app/eduedge-academic-operations" },
 				{ eyebrow: "Assessments and results", title: "Control assessment publication", description: "Review plans, confirm result completeness, approve results, and unlock report cards safely.", action: "Open assessments", route: "/app/eduedge-assessment-operations" },
 				{ eyebrow: "Report cards", title: "Review comments and progression", description: "Prepare published report cards, record teacher and principal comments, and review promotion recommendations.", action: "Open report cards", route: "/app/eduedge-report-cards" },
