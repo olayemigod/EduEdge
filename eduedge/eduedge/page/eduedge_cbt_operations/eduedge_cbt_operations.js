@@ -15,16 +15,19 @@ const CBT_CREATE_OPTIONS = [
 		label: "Examination Centre",
 		description: "Set up a school CBT centre and manage its operational status.",
 		route: "/app/eduedge-examination-centre/new-eduedge-examination-centre",
+		edgesuite: false,
 	},
 	{
 		label: "Question",
-		description: "Add a governed question to the school Question Bank.",
-		route: "/app/eduedge-cbt-question/new-eduedge-cbt-question",
+		description: "Create a governed question in the friendly EduEdge Question Builder.",
+		route: "/app/eduedge-question-builder",
+		edgesuite: true,
 	},
 	{
 		label: "Exam Template",
 		description: "Create a reusable examination definition from approved questions.",
 		route: "/app/eduedge-cbt-exam-template/new-eduedge-cbt-exam-template",
+		edgesuite: false,
 	},
 ];
 
@@ -38,6 +41,14 @@ function openNativeDeskRouteInNewTab(route) {
 	window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
 
+function openCreateRoute(route, edgesuite) {
+	if (edgesuite) {
+		window.location.href = route;
+		return;
+	}
+	openNativeDeskRouteInNewTab(route);
+}
+
 function showCreateDialog() {
 	if (!canConfigureCBT()) return;
 
@@ -48,10 +59,12 @@ function showCreateDialog() {
 	const escape = frappe.utils.escape_html;
 	const cards = CBT_CREATE_OPTIONS.map(
 		(option) => `
-			<button type="button" class="btn btn-default btn-block text-left mb-3 p-3" data-create-route="${escape(option.route)}">
+			<button type="button" class="btn btn-default btn-block text-left mb-3 p-3" data-create-route="${escape(option.route)}" data-create-edgesuite="${option.edgesuite ? "1" : "0"}">
 				<div class="font-weight-bold mb-1">${escape(__(option.label))}</div>
 				<div class="text-muted small">${escape(__(option.description))}</div>
-				<div class="text-muted small mt-1">${escape(__("Opens in a new EduEdge Desk tab"))}</div>
+				<div class="text-muted small mt-1">${escape(
+					__(option.edgesuite ? "Opens in the EduEdge workspace" : "Opens in a new EduEdge Desk tab")
+				)}</div>
 			</button>`
 	).join("");
 
@@ -62,8 +75,9 @@ function showCreateDialog() {
 		.find("[data-create-route]")
 		.on("click", function () {
 			const route = $(this).attr("data-create-route");
+			const edgesuite = $(this).attr("data-create-edgesuite") === "1";
 			dialog.hide();
-			openNativeDeskRouteInNewTab(route);
+			openCreateRoute(route, edgesuite);
 		});
 	dialog.show();
 }
