@@ -1,4 +1,4 @@
-export const EDUEDGE_MENU_ITEMS = Object.freeze([
+const RAW_EDUEDGE_MENU_ITEMS = [
 	{
 		section: __("Overview"),
 		sectionIcon: "home",
@@ -119,7 +119,7 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 		icon: "book",
 		description: __("Role-based guided learning"),
 	},
-]);
+];
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home",
@@ -149,6 +149,18 @@ function normalizedPath(route) {
 	}
 }
 
+export function hasEduEdgeRouteAccess(route) {
+	if (frappe.session.user === "Administrator") return true;
+	const path = normalizedPath(route);
+	const routes = frappe.boot?.eduedge_access_manifest?.routes;
+	if (!routes || !Object.prototype.hasOwnProperty.call(routes, path)) return true;
+	return Boolean(routes[path]);
+}
+
+export const EDUEDGE_MENU_ITEMS = Object.freeze(
+	RAW_EDUEDGE_MENU_ITEMS.filter((item) => hasEduEdgeRouteAccess(item.route))
+);
+
 export function isEduEdgeUIRoute(route) {
 	return EDUEDGE_UI_ROUTES.includes(normalizedPath(route));
 }
@@ -156,12 +168,20 @@ export function isEduEdgeUIRoute(route) {
 export function openEduEdgeRoute(route) {
 	if (!route) return;
 	if (isEduEdgeUIRoute(route)) {
+		if (!hasEduEdgeRouteAccess(route)) {
+			frappe.msgprint({
+				title: __("Access not available"),
+				message: __("Your current role permissions do not provide access to this EduEdge area."),
+				indicator: "orange",
+			});
+			return;
+		}
 		window.location.href = route;
 		return;
 	}
 
 	// Native Frappe forms and specialist workflows remain available only as
-	// deliberate full-form fallbacks, preserving the current EduEdge workspace.
+	// deliberate full-form fallbacks. Frappe enforces their DocType rights.
 	const opened = window.open(route, "_blank", "noopener,noreferrer");
 	if (opened) opened.opener = null;
 }
