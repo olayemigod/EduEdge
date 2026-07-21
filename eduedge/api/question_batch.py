@@ -167,10 +167,15 @@ def _parse_csv(content: bytes) -> list[dict]:
 	reader = csv.DictReader(io.StringIO(text))
 	if not reader.fieldnames:
 		frappe.throw(_("The CSV file has no header row."), frappe.ValidationError)
-	headers = [_normalise_header(header) for header in reader.fieldnames]
+	raw_headers = list(reader.fieldnames)
+	headers = [_normalise_header(header) for header in raw_headers]
 	rows = []
 	for row_number, values in enumerate(reader, start=2):
-		row = {headers[index]: _cell_text(value) for index, value in enumerate(values.values())}
+		row = {
+			header: _cell_text(values.get(raw_header))
+			for raw_header, header in zip(raw_headers, headers)
+			if header
+		}
 		if any(value for value in row.values()):
 			row["_row_number"] = row_number
 			rows.append(row)
@@ -189,26 +194,29 @@ def _parse_xlsx(content: bytes) -> list[dict]:
 		workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
 	except Exception:
 		frappe.throw(_("The XLSX workbook could not be read."), frappe.ValidationError)
-	worksheet = workbook.active
-	iterator = worksheet.iter_rows(values_only=True)
 	try:
-		raw_headers = next(iterator)
-	except StopIteration:
-		frappe.throw(_("The XLSX workbook is empty."), frappe.ValidationError)
-	headers = [_normalise_header(value) for value in raw_headers]
-	if not any(headers):
-		frappe.throw(_("The XLSX workbook has no header row."), frappe.ValidationError)
-	rows = []
-	for row_number, values in enumerate(iterator, start=2):
-		row = {
-			headers[index]: _cell_text(values[index]) if index < len(values) else ""
-			for index in range(len(headers))
-			if headers[index]
-		}
-		if any(value for value in row.values()):
-			row["_row_number"] = row_number
-			rows.append(row)
-	return rows
+		worksheet = workbook.active
+		iterator = worksheet.iter_rows(values_only=True)
+		try:
+			raw_headers = next(iterator)
+		except StopIteration:
+			frappe.throw(_("The XLSX workbook is empty."), frappe.ValidationError)
+		headers = [_normalise_header(value) for value in raw_headers]
+		if not any(headers):
+			frappe.throw(_("The XLSX workbook has no header row."), frappe.ValidationError)
+		rows = []
+		for row_number, values in enumerate(iterator, start=2):
+			row = {
+				headers[index]: _cell_text(values[index]) if index < len(values) else ""
+				for index in range(len(headers))
+				if headers[index]
+			}
+			if any(value for value in row.values()):
+				row["_row_number"] = row_number
+				rows.append(row)
+		return rows
+	finally:
+		workbook.close()
 
 
 def _parse_upload(file_name: str, content: bytes) -> list[dict]:
@@ -258,16 +266,15 @@ def _upload_answer_options(row: dict, question_type: str) -> list[dict]:
 			)
 	else:
 		answers = []
-		gap_found = False
+		blank_seen = False
 		for column in ANSWER_COLUMNS:
 			answer = _cell_text(row.get(column))
 			if not answer:
-				if answers:
-					gap_found = True
+				blank_seen = True
 				continue
-			if gap_found:
+			if blank_seen:
 				frappe.throw(
-					_("Answer columns must be continuous without a blank column between answers."),
+					_("Answer columns must start at Answer A and remain continuous without gaps."),
 					frappe.ValidationError,
 				)
 			answers.append(answer)
@@ -361,11 +368,17 @@ def _normalise_common(payload: dict) -> dict:
 def _duplicate_codes(rows: list[dict]) -> tuple[set[str], set[str]]:
 	codes = [cstr(row.get("question_code") or "").strip().upper() for row in rows]
 	within_batch = {code for code, count in Counter(code for code in codes if code).items() if count > 1}
-	existing = {
-		code
-		for code in set(codes)
-		if code and frappe.db.exists(QUESTION_DOCTYPE, code)
-	}
+	unique_codes = sorted({code for code in codes if code})
+	existing = set()
+	if unique_codes:
+		existing = set(
+			frappe.get_all(
+				QUESTION_DOCTYPE,
+				filters={"name": ["in", unique_codes]},
+				pluck="name",
+				limit_page_length=0,
+			)
+		)
 	return within_batch, existing
 
 
@@ -427,13 +440,12 @@ def preview_question_upload(file_name: str, file_content: str, common) -> dict:
 	raw_rows = _parse_upload(file_name, _decode_upload(file_content))
 	within_batch, existing = _duplicate_codes(raw_rows)
 	preview = []
-	valid_questions = []
 
 	for position, row in enumerate(raw_rows, start=1):
 		row_number = cint(row.get("_row_number")) or position + 1
 		code = cstr(row.get("question_code") or "").strip().upper()
 		error = ""
-		normalised = None
+		normalised_type = row.get("question_type")
 		if code and code in within_batch:
 			error = _("Question Code is repeated in this file.")
 		elif code and code in existing:
@@ -442,36 +454,17 @@ def preview_question_upload(file_name: str, file_content: str, common) -> dict:
 			try:
 				doc = _build_question_doc(common_values, row, upload=True)
 				doc.run_method("validate")
-				normalised = {
-					"question_code": doc.question_code,
-					"question_type": doc.question_type,
-					"question_text": doc.question_text,
-					"difficulty": doc.difficulty,
-					"answer_key": doc.answer_key,
-					"marking_guide": doc.marking_guide,
-					"default_mark": flt(doc.default_mark),
-					"negative_mark": flt(doc.negative_mark),
-					"notes": doc.notes,
-					"options": [
-						{
-							"option_text": answer.option_text,
-							"is_correct": cint(answer.is_correct),
-						}
-						for answer in (doc.get("options") or [])
-					],
-				}
+				normalised_type = doc.question_type
 			except frappe.PermissionError:
 				raise
 			except Exception as exc:
 				error = cstr(exc)
 
-		if normalised:
-			valid_questions.append(normalised)
 		preview.append(
 			{
 				"row_number": row_number,
 				"question_code": code,
-				"question_type": normalised.get("question_type") if normalised else row.get("question_type"),
+				"question_type": normalised_type,
 				"question_text": cstr(row.get("question_text") or row.get("question") or "")[:180],
 				"valid": not bool(error),
 				"error": error,
@@ -481,7 +474,6 @@ def preview_question_upload(file_name: str, file_content: str, common) -> dict:
 	return {
 		"file_name": file_name,
 		"rows": preview,
-		"questions": valid_questions if len(valid_questions) == len(preview) else [],
 		"total_rows": len(preview),
 		"valid_rows": sum(1 for row in preview if row["valid"]),
 		"error_rows": sum(1 for row in preview if not row["valid"]),
