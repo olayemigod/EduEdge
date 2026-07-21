@@ -7,15 +7,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class TestQuestionBatchContract(unittest.TestCase):
-	def test_question_batch_page_is_author_only_edgesuite_page(self):
+	def test_question_batch_page_is_permission_driven_edgesuite_page(self):
 		page_root = ROOT / "eduedge" / "eduedge" / "page" / "eduedge_question_batch"
 		payload = json.loads((page_root / "eduedge_question_batch.json").read_text())
-		roles = {row["role"] for row in payload["roles"]}
 		self.assertEqual(payload["name"], "eduedge-question-batch")
-		self.assertIn("Teacher", roles)
-		self.assertIn("Academic Administrator", roles)
-		self.assertNotIn("Student", roles)
-		self.assertNotIn("CBT Invigilator", roles)
+		self.assertEqual(payload["roles"], [])
+
+		access = (ROOT / "eduedge" / "access_control.py").read_text()
+		self.assertIn('"/app/eduedge-question-batch": (("cbt_question", "create"),)', access)
 
 		loader = (page_root / "eduedge_question_batch.js").read_text()
 		self.assertIn('frappe.require("edgeui.bundle.js"', loader)
@@ -51,7 +50,7 @@ class TestQuestionBatchContract(unittest.TestCase):
 		self.assertIn('doc.run_method("validate")', api)
 		self.assertIn("doc.insert()", api)
 		self.assertIn("_duplicate_codes", api)
-		self.assertIn("frappe.has_permission(QUESTION_DOCTYPE, \"create\")", api)
+		self.assertIn('frappe.has_permission(QUESTION_DOCTYPE, "create")', api)
 		self.assertNotIn("ignore_permissions=True", api)
 		self.assertNotIn("frappe.db.commit", api)
 
@@ -106,7 +105,7 @@ class TestQuestionBatchContract(unittest.TestCase):
 		self.assertIn('"True/False": ["True", "False"]', component)
 		self.assertIn('"Yes/No": ["Yes", "No"]', component)
 		self.assertIn("while (question.options.length < 2)", component)
-		self.assertIn("question.question_type === \"Multiple Choice\"", component)
+		self.assertIn('question.question_type === "Multiple Choice"', component)
 		self.assertIn("The operation is all-or-nothing", component)
 
 	def test_upload_template_documents_answer_key_conventions(self):
