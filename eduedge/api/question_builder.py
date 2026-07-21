@@ -159,10 +159,13 @@ def _can_review(scope: str, public_access: dict) -> bool:
 	return True
 
 
-def _builder_response(question: dict, public_access: dict) -> dict:
+def _builder_response(question: dict, public_access: dict, source_doc=None) -> dict:
 	status = question.get("status") or "Draft"
 	is_new = not question.get("name")
-	can_write = frappe.has_permission(QUESTION_DOCTYPE, "create" if is_new else "write")
+	if is_new:
+		can_write = frappe.has_permission(QUESTION_DOCTYPE, "create")
+	else:
+		can_write = bool(source_doc and source_doc.has_permission("write"))
 	if status in {"Approved", "Retired"}:
 		can_write = False
 	current_branch = get_current_school_branch() or {}
@@ -182,8 +185,13 @@ def _builder_response(question: dict, public_access: dict) -> dict:
 		"permissions": {
 			"can_write": bool(can_write),
 			"can_review": _can_review(question.get("ownership_scope") or SCHOOL_BANK, public_access),
-			"can_create_version": bool(question.get("name") and status in {"Approved", "Retired"} and frappe.has_permission(QUESTION_DOCTYPE, "create")),
-			"can_open_technical_record": "System Manager" in frappe.get_roles(frappe.session.user) or frappe.session.user == "Administrator",
+			"can_create_version": bool(
+				question.get("name")
+				and status in {"Approved", "Retired"}
+				and frappe.has_permission(QUESTION_DOCTYPE, "create")
+			),
+			"can_open_technical_record": "System Manager" in frappe.get_roles(frappe.session.user)
+			or frappe.session.user == "Administrator",
 		},
 		"public_exam_access": public_access,
 	}
@@ -196,9 +204,8 @@ def get_question_builder_context(question: str | None = None) -> dict:
 	if question:
 		doc = _require_readable_question(question)
 		payload = _serialize_question(doc)
-	else:
-		payload = _new_question()
-	return _builder_response(payload, public_access)
+		return _builder_response(payload, public_access, doc)
+	return _builder_response(_new_question(), public_access)
 
 
 @frappe.whitelist()
@@ -267,9 +274,8 @@ def save_question(payload) -> dict:
 		doc.insert()
 	else:
 		doc.save()
-	frappe.db.commit()
 	public_access = get_public_exam_capability_summary(frappe.session.user)
-	return _builder_response(_serialize_question(doc), public_access)
+	return _builder_response(_serialize_question(doc), public_access, doc)
 
 
 def _next_version_code(source_code: str, version_number: int) -> str:
@@ -301,6 +307,5 @@ def create_question_version(question: str) -> dict:
 	doc.reviewed_by = None
 	doc.reviewed_on = None
 	doc.insert()
-	frappe.db.commit()
 	public_access = get_public_exam_capability_summary(frappe.session.user)
-	return _builder_response(_serialize_question(doc), public_access)
+	return _builder_response(_serialize_question(doc), public_access, doc)
