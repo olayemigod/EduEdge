@@ -34,6 +34,8 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_instructor_branch_assignment/eduedge_instructor_branch_assignment.js
           node --check eduedge/eduedge/doctype/eduedge_result_publication/eduedge_result_publication.js
           node --check eduedge/eduedge/doctype/eduedge_report_card_review/eduedge_report_card_review.js
+          node --check eduedge/eduedge/doctype/eduedge_examination_centre/eduedge_examination_centre.js
+          node --check eduedge/eduedge/doctype/eduedge_cbt_question/eduedge_cbt_question.js
           node --check eduedge/eduedge/doctype/eduedge_cbt_exam_template/eduedge_cbt_exam_template.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
           node --check eduedge/public/js/eduedge_ui/resource_modal.js
