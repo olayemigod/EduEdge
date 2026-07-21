@@ -58,6 +58,7 @@ class PlatformConfig:
 	health_path: str = ""
 	runtime_context_path: str = ""
 	access_decision_path: str = ""
+	feature_access_decision_path: str = ""
 
 	@classmethod
 	def from_mapping(cls, values: Mapping[str, Any] | None = None) -> "PlatformConfig":
@@ -86,6 +87,9 @@ class PlatformConfig:
 			health_path=str(values.get("coreedge_health_path") or "").strip(),
 			runtime_context_path=str(values.get("coreedge_runtime_context_path") or "").strip(),
 			access_decision_path=str(values.get("coreedge_access_decision_path") or "").strip(),
+			feature_access_decision_path=str(
+				values.get("coreedge_feature_access_decision_path") or ""
+			).strip(),
 		)
 
 	@property
@@ -108,8 +112,10 @@ class PlatformConfig:
 				message = "CoreEdge runtime-context contract path is not configured."
 				(blockers if self.required else warnings).append(message)
 			if not self.access_decision_path:
-				message = "CoreEdge remote access-decision contract path is not configured."
+				message = "CoreEdge remote runtime-access contract path is not configured."
 				(blockers if self.required else warnings).append(message)
+			if not self.feature_access_decision_path:
+				warnings.append("CoreEdge feature-access contract path is not configured.")
 			if not self.health_path:
 				warnings.append("CoreEdge health contract path is not configured.")
 		return {
@@ -132,7 +138,8 @@ class PlatformConfig:
 			"timeout_seconds": self.timeout_seconds,
 			"access_cache_seconds": self.access_cache_seconds,
 			"runtime_context_configured": bool(self.runtime_context_path),
-			"remote_contract_configured": bool(self.access_decision_path),
+			"runtime_access_contract_configured": bool(self.access_decision_path),
+			"feature_access_contract_configured": bool(self.feature_access_decision_path),
 			**self.readiness(),
 		}
 
