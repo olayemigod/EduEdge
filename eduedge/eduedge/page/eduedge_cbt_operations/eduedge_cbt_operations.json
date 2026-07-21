@@ -14,6 +14,7 @@
  "roles": [
   {"role":"System Manager"},
   {"role":"EduEdge Super Administrator"},
+  {"role":"EduEdge Public Exam Administrator"},
   {"role":"EduEdge Administrator"},
   {"role":"School Administrator"},
   {"role":"Academic Administrator"},
