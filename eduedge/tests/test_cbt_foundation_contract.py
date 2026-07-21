@@ -22,6 +22,12 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("mandatory_depends_on", fields["school_branch"])
 		self.assertIn("allow_public_registration", fields)
 		self.assertIn("allow_paid_exams", fields)
+		self.assertIn("centre_status", fields)
+		self.assertIn("Draft\nActive\nSuspended\nRetired", fields["centre_status"]["options"])
+		self.assertTrue(fields["enabled"]["read_only"])
+		self.assertTrue(fields["enabled"]["hidden"])
+		self.assertIn("public_hosting_status", fields)
+		self.assertTrue(fields["public_hosting_status"]["read_only"])
 
 	def test_question_bank_has_ownership_versioning_and_answer_governance(self):
 		payload = self._load_doctype(
@@ -62,6 +68,7 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("Teacher", roles)
 		self.assertIn("Academic Administrator", roles)
 		self.assertIn("EduEdge Super Administrator", roles)
+		self.assertIn("EduEdge Public Exam Administrator", roles)
 
 	def test_question_controller_enforces_approval_and_immutability(self):
 		text = (
@@ -74,7 +81,7 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("Create a new version instead", text)
 		self.assertIn("Approved or Retired CBT questions cannot be deleted", text)
 		self.assertIn("def autoname", text)
-		self.assertIn("Only an EduEdge platform administrator", text)
+		self.assertIn("require_public_exam_authoring", text)
 		self.assertIn("assert_branch_access", text)
 
 	def test_platform_records_remain_hidden_during_legacy_branch_fallback(self):
@@ -82,7 +89,8 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("school_branch` is not null", text)
 		self.assertIn("if not branch:", text)
 		self.assertIn("return False", text)
-		self.assertIn("PLATFORM_MANAGER_ROLES", text)
+		self.assertIn("can_author_public_exams", text)
+		self.assertNotIn("PLATFORM_MANAGER_ROLES", text)
 
 	def test_cbt_records_are_registered_for_branch_permissions(self):
 		hooks = (ROOT / "eduedge" / "hooks.py").read_text()
@@ -101,6 +109,12 @@ class TestCBTFoundationContract(unittest.TestCase):
 			fields,
 			{"option_key", "option_text", "is_correct", "display_order"},
 		)
+
+	def test_centre_status_patch_is_registered(self):
+		patches = (ROOT / "eduedge" / "patches.txt").read_text()
+		patch = (ROOT / "eduedge" / "patches" / "v0_8" / "backfill_examination_centre_status.py").read_text()
+		self.assertIn("backfill_examination_centre_status", patches)
+		self.assertIn("WHEN COALESCE(`enabled`, 0) = 1 THEN 'Active'", patch)
 
 
 if __name__ == "__main__":
