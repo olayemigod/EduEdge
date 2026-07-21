@@ -4,3 +4,4 @@
 eduedge.patches.v0_8.backfill_examination_centre_status
 eduedge.patches.v0_8.enforce_examination_centre_master_lifecycle
 eduedge.patches.v0_8.enforce_cbt_master_lifecycle
+eduedge.patches.v0_8.backfill_cbt_question_topics
