@@ -33,6 +33,7 @@ class EduEdgeExaminationCentre(Document):
 			self.name = self.centre_code
 
 	def validate(self) -> None:
+		self._validate_master_docstatus()
 		self.centre_code = (self.centre_code or "").strip().upper()
 		self.centre_name = (self.centre_name or "").strip()
 		self._validate_identity()
@@ -42,6 +43,12 @@ class EduEdgeExaminationCentre(Document):
 		self._validate_status_transition()
 		self.enabled = 1 if self.centre_status == "Active" else 0
 
+	def before_submit(self) -> None:
+		self._throw_master_lifecycle_error()
+
+	def before_cancel(self) -> None:
+		self._throw_master_lifecycle_error()
+
 	def on_trash(self) -> None:
 		if self.centre_status != "Draft":
 			frappe.throw(
@@ -50,6 +57,20 @@ class EduEdgeExaminationCentre(Document):
 			)
 		if self.centre_type == PLATFORM_CENTRE:
 			require_public_exam_authoring()
+
+	def _validate_master_docstatus(self) -> None:
+		if cint(self.docstatus) != 0:
+			self._throw_master_lifecycle_error()
+
+	def _throw_master_lifecycle_error(self) -> None:
+		frappe.throw(
+			_(
+				"Examination Centres are non-submittable master records. "
+				"Use Centre Status to activate, suspend, or retire a centre."
+			),
+			frappe.ValidationError,
+			title=_("Use Centre Status"),
+		)
 
 	def _validate_identity(self) -> None:
 		if not self.centre_code:
