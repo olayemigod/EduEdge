@@ -1,3 +1,4 @@
+import ast
 import json
 import unittest
 from pathlib import Path
@@ -133,6 +134,43 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertNotIn("REVIEW_ROLES", template)
 		self.assertIn('user_has_role_permission(TRAINING_PROGRESS_DOCTYPE, "delete", user)', training)
 		self.assertNotIn("frappe.has_permission", training)
+
+	def test_training_progress_controller_internal_imports_exist_and_portal_roles_are_excluded(self):
+		controller_path = (
+			EDUEDGE
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_training_progress"
+			/ "eduedge_training_progress.py"
+		)
+		controller_text = controller_path.read_text()
+		controller_tree = ast.parse(controller_text)
+		self.assertNotIn("TRAINING_OVERSIGHT_ROLES", controller_text)
+		self.assertIn("user_has_role_permission", controller_text)
+
+		for node in ast.walk(controller_tree):
+			if not isinstance(node, ast.ImportFrom) or not (node.module or "").startswith("eduedge."):
+				continue
+			module_path = ROOT.joinpath(*(node.module or "").split(".")).with_suffix(".py")
+			self.assertTrue(module_path.exists(), f"Missing internal module {node.module}")
+			module_tree = ast.parse(module_path.read_text())
+			defined_names = set()
+			for statement in module_tree.body:
+				if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+					defined_names.add(statement.name)
+				elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+					targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+					defined_names.update(target.id for target in targets if isinstance(target, ast.Name))
+			for alias in node.names:
+				self.assertIn(alias.name, defined_names, f"{node.module}.{alias.name} is not defined")
+
+		metadata = json.loads(controller_path.with_suffix(".json").read_text())
+		permissions = {row["role"]: row for row in metadata["permissions"]}
+		for role in ("Student", "Guardian", "EduEdge Parent"):
+			self.assertNotIn(role, permissions)
+		for role in ("School Administrator", "Academic Administrator", "Education Manager"):
+			self.assertEqual(permissions[role].get("delete"), 1)
+		self.assertFalse(permissions["Teacher"].get("delete", 0))
 
 
 if __name__ == "__main__":
