@@ -5,6 +5,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime
 
+from eduedge.cbt.public_access import require_public_exam_authoring
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
 
@@ -14,12 +15,9 @@ SCHOOL_BANK = "School Question Bank"
 PLATFORM_BANK = "EduEdge Examination Bank"
 SCHOOL_CENTRE = "School Examination Centre"
 PLATFORM_CENTRE = "EduEdge Exam Centre"
-PLATFORM_MANAGER_ROLES = {
+REVIEW_ROLES = {
 	"System Manager",
-	"EduEdge Super Administrator",
 	"EduEdge Administrator",
-}
-REVIEW_ROLES = PLATFORM_MANAGER_ROLES | {
 	"School Administrator",
 	"Academic Administrator",
 	"Education Manager",
@@ -79,6 +77,8 @@ class EduEdgeCBTExamTemplate(Document):
 				_("Approved or Retired exam templates cannot be deleted."),
 				frappe.ValidationError,
 			)
+		if self.exam_scope == PUBLIC_EXAM:
+			require_public_exam_authoring()
 
 	def _validate_identity(self) -> None:
 		if not self.template_code:
@@ -104,7 +104,7 @@ class EduEdgeCBTExamTemplate(Document):
 			return
 
 		if self.exam_scope == PUBLIC_EXAM:
-			self._assert_platform_manager()
+			require_public_exam_authoring()
 			self.school_branch = None
 			self.academic_year = None
 			self.academic_term = None
@@ -178,11 +178,11 @@ class EduEdgeCBTExamTemplate(Document):
 		centre = frappe.db.get_value(
 			"EduEdge Examination Centre",
 			self.default_examination_centre,
-			["name", "centre_type", "school_branch", "enabled"],
+			["name", "centre_type", "school_branch", "centre_status", "enabled"],
 			as_dict=True,
 		)
-		if not centre or not cint(centre.enabled):
-			frappe.throw(_("Select an enabled Examination Centre."), frappe.ValidationError)
+		if not centre or (centre.centre_status != "Active" and not cint(centre.enabled)):
+			frappe.throw(_("Select an Active Examination Centre."), frappe.ValidationError)
 		if self.exam_scope == SCHOOL_EXAM:
 			if centre.centre_type != SCHOOL_CENTRE or centre.school_branch != self.school_branch:
 				frappe.throw(
@@ -379,22 +379,15 @@ class EduEdgeCBTExamTemplate(Document):
 			)
 
 	def _assert_review_authority(self) -> None:
+		if self.exam_scope == PUBLIC_EXAM:
+			require_public_exam_authoring()
+			return
 		if frappe.session.user == "Administrator":
 			return
 		roles = set(frappe.get_roles(frappe.session.user))
 		if not roles.intersection(REVIEW_ROLES):
 			frappe.throw(
 				_("You are not permitted to approve or retire CBT exam templates."),
-				frappe.PermissionError,
-			)
-
-	def _assert_platform_manager(self) -> None:
-		if frappe.session.user == "Administrator":
-			return
-		roles = set(frappe.get_roles(frappe.session.user))
-		if not roles.intersection(PLATFORM_MANAGER_ROLES):
-			frappe.throw(
-				_("Only an EduEdge platform administrator can manage public examination templates."),
 				frappe.PermissionError,
 			)
 
