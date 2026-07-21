@@ -67,6 +67,15 @@ CoreEdge evaluates the grant only after confirming:
 4. the registered tenant and EduEdge product activation are valid;
 5. the exact feature/action grant is active and within its validity window.
 
+## Runtime access versus feature access
+
+EduEdge uses two separate CoreEdge contracts:
+
+- **Runtime access** confirms the tenant can operate EduEdge generally.
+- **Feature access** confirms a specific optional service action such as public-exam hosting or launch.
+
+A missing public-exam grant must not disable normal school operations. Feature-access decisions always fail closed after their short cache expires, even when an ordinary runtime check is configured to warn/fail open.
+
 ## Authoring policy
 
 Public authoring requires both:
@@ -100,7 +109,7 @@ A standalone/white-label site is registered in central CoreEdge as one Service C
 - environment;
 - API credentials.
 
-The EduEdge site configuration uses remote platform mode and the CoreEdge feature-access endpoint:
+The EduEdge site configuration keeps runtime and feature endpoints separate:
 
 ```json
 {
@@ -112,11 +121,12 @@ The EduEdge site configuration uses remote platform mode and the CoreEdge featur
   "coreedge_site_identifier": "school.example.com",
   "coreedge_client_id": "API-KEY",
   "coreedge_client_secret": "API-SECRET",
-  "coreedge_access_decision_path": "/api/method/coreedge.api.v1.service_gateway.check_feature_access"
+  "coreedge_access_decision_path": "/api/method/coreedge.api.v1.service_gateway.check_runtime_access",
+  "coreedge_feature_access_decision_path": "/api/method/coreedge.api.v1.service_gateway.check_feature_access"
 }
 ```
 
-Credentials must be transferred through a secure channel and must not be committed to Git, documentation, support tickets, or screenshots.
+The runtime endpoint remains responsible for general EduEdge activation. The feature endpoint evaluates exact action grants. Credentials must be transferred through a secure channel and must not be committed to Git, documentation, support tickets, or screenshots.
 
 ## Examination centre governance
 
@@ -146,8 +156,8 @@ The public-hosting status and central centre reference are controlled by Process
 
 - CoreEdge is authoritative for public-exam capabilities.
 - Allowed or blocked decisions may be cached only for the configured short TTL.
-- After cache expiry, required public-exam actions fail closed when CoreEdge is unavailable.
-- School-owned CBT remains separate and should not be blocked merely because a public-exam service is unavailable, unless the whole EduEdge product activation is centrally blocked.
+- After cache expiry, public-exam capabilities fail closed when CoreEdge is unavailable.
+- School-owned CBT remains separate and is not blocked merely because a public-exam feature endpoint is unavailable, unless general EduEdge runtime access is also blocked.
 - Candidate launch and answer-sync phases will use stricter signed-session and server-time controls than catalogue browsing.
 
 ## Current V0.8A boundary
@@ -157,6 +167,7 @@ V0.8A implements:
 - capability evaluation and display;
 - central authoring restrictions;
 - exact-site remote adapter binding;
+- separate runtime and feature-access contracts;
 - centre lifecycle and public-hosting readiness;
 - branch-safe public-master isolation.
 
