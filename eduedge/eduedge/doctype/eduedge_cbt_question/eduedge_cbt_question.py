@@ -5,6 +5,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime
 
+from eduedge.access_control import user_has_role_permission
 from eduedge.cbt.public_access import require_public_exam_authoring
 from eduedge.education.offerings import assert_branch_access
 
@@ -16,13 +17,6 @@ BINARY_ANSWER_PRESETS = {
 }
 CHOICE_TYPES = {"Single Choice", "Multiple Choice"}
 OBJECTIVE_TYPES = CHOICE_TYPES | set(BINARY_ANSWER_PRESETS)
-REVIEW_ROLES = {
-	"System Manager",
-	"EduEdge Administrator",
-	"School Administrator",
-	"Academic Administrator",
-	"Education Manager",
-}
 PROTECTED_FIELDS = (
 	"question_code",
 	"ownership_scope",
@@ -58,6 +52,11 @@ def option_label(position: int) -> str:
 		label = chr(65 + (value % 26)) + label
 		value //= 26
 	return label
+
+
+def can_review_questions(user: str | None = None) -> bool:
+	"""Use a configurable DocType right as the question-review capability."""
+	return user_has_role_permission("EduEdge CBT Question", "delete", user)
 
 
 def _require_question_author() -> None:
@@ -163,10 +162,7 @@ class EduEdgeCBTQuestion(Document):
 		if not previous:
 			frappe.throw(_("The question selected to supersede does not exist."), frappe.ValidationError)
 		if previous.status not in {"Approved", "Retired"}:
-			frappe.throw(
-				_("Only an Approved or Retired question can be superseded."),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("Only an Approved or Retired question can be superseded."), frappe.ValidationError)
 		if (
 			previous.ownership_scope != self.ownership_scope
 			or previous.school_branch != self.school_branch
@@ -188,10 +184,7 @@ class EduEdgeCBTQuestion(Document):
 		if flt(self.negative_mark) < 0:
 			frappe.throw(_("Negative Mark cannot be negative."), frappe.ValidationError)
 		if flt(self.negative_mark) > flt(self.default_mark):
-			frappe.throw(
-				_("Negative Mark cannot exceed the Default Mark."),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("Negative Mark cannot exceed the Default Mark."), frappe.ValidationError)
 
 	def _prepare_answer_options(self) -> None:
 		"""Prepare fixed binary answers for form, import, and API requests."""
@@ -236,18 +229,12 @@ class EduEdgeCBTQuestion(Document):
 			row.option_key = label
 			row.option_text = (row.option_text or "").strip()
 			if not row.option_text:
-				frappe.throw(
-					_("Enter an Answer for option {0}.").format(label),
-					frappe.ValidationError,
-				)
+				frappe.throw(_("Enter an Answer for option {0}.").format(label), frappe.ValidationError)
 			row.display_order = index
 			correct_count += cint(row.is_correct)
 
 		if self.question_type in {"Single Choice", "True/False", "Yes/No"} and correct_count != 1:
-			frappe.throw(
-				_("This question type requires exactly one Correct Answer."),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("This question type requires exactly one Correct Answer."), frappe.ValidationError)
 		if self.question_type == "Multiple Choice" and correct_count < 1:
 			frappe.throw(
 				_("Multiple Choice questions require at least one Correct Answer."),
@@ -289,10 +276,7 @@ class EduEdgeCBTQuestion(Document):
 		if self.ownership_scope == PLATFORM_BANK:
 			require_public_exam_authoring()
 			return
-		if frappe.session.user == "Administrator":
-			return
-		roles = set(frappe.get_roles(frappe.session.user))
-		if not roles.intersection(REVIEW_ROLES):
+		if not can_review_questions(frappe.session.user):
 			frappe.throw(
 				_("You are not permitted to approve or retire CBT questions."),
 				frappe.PermissionError,
