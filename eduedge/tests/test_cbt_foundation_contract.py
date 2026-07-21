@@ -60,6 +60,19 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("Yes/No", fields["question_type"]["options"])
 		self.assertIn("'Yes/No'", fields["options"]["depends_on"])
 
+	def test_question_uses_native_course_topics_and_friendly_defaults(self):
+		payload = self._load_doctype(
+			"eduedge_cbt_question", "eduedge_cbt_question.json"
+		)
+		fields = {field["fieldname"]: field for field in payload["fields"]}
+		self.assertEqual(fields["topic"]["fieldtype"], "Link")
+		self.assertEqual(fields["topic"]["options"], "Topic")
+		self.assertEqual(fields["curriculum"]["fieldtype"], "Data")
+		self.assertIn("does not currently provide a native Curriculum master", fields["curriculum"]["description"])
+		self.assertEqual(fields["exam_body"]["default"], "School Internal")
+		self.assertEqual(fields["question_type"]["default"], "Single Choice")
+		self.assertIn("starts without preloaded answer rows", fields["question_type"]["description"])
+
 	def test_question_permissions_do_not_expose_answer_bank_to_candidates_or_invigilators(self):
 		payload = self._load_doctype(
 			"eduedge_cbt_question", "eduedge_cbt_question.json"
@@ -87,7 +100,7 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("require_public_exam_authoring", text)
 		self.assertIn("assert_branch_access", text)
 
-	def test_question_controller_prepares_objective_answer_rows(self):
+	def test_question_controller_prepares_only_fixed_binary_answers(self):
 		text = (
 			DOCTYPE_ROOT
 			/ "eduedge_cbt_question"
@@ -96,11 +109,31 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn('"Yes/No": ("Yes", "No")', text)
 		self.assertIn('"True/False": ("True", "False")', text)
 		self.assertIn("def option_label", text)
-		self.assertIn("while len(rows) < 2", text)
 		self.assertIn("def _prepare_answer_options", text)
+		self.assertNotIn("while len(rows) < 2", text)
 		self.assertIn('row.option_key = label', text)
 		self.assertIn('Enter an Answer for option {0}', text)
 		self.assertIn('self.question_type in {"Single Choice", "True/False", "Yes/No"}', text)
+
+	def test_question_topic_is_course_filtered_and_server_validated(self):
+		controller = (
+			DOCTYPE_ROOT
+			/ "eduedge_cbt_question"
+			/ "eduedge_cbt_question.py"
+		).read_text()
+		script = (
+			DOCTYPE_ROOT
+			/ "eduedge_cbt_question"
+			/ "eduedge_cbt_question.js"
+		).read_text()
+		self.assertIn("def _validate_topic", controller)
+		self.assertIn('frappe.db.exists(\n\t\t\t"Course Topic"', controller)
+		self.assertIn("def course_topic_query", controller)
+		self.assertIn("INNER JOIN `tabTopic`", controller)
+		self.assertIn("course_topic.parentfield = 'topics'", controller)
+		self.assertIn('frm.set_query("topic"', script)
+		self.assertIn("course_topic_query", script)
+		self.assertIn('await frm.set_value("topic", null)', script)
 
 	def test_question_form_prepares_answer_rows_when_type_changes(self):
 		text = (
@@ -114,6 +147,7 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("function prepareAnswerOptions", text)
 		self.assertIn("question_type(frm)", text)
 		self.assertIn("ensureMinimumChoiceAnswers(frm)", text)
+		self.assertIn("fresh question defaults to Single Choice without preloading answers", text)
 		self.assertIn("normaliseAnswerOptions(frm)", text)
 		self.assertIn('frappe.ui.form.on("EduEdge Question Option"', text)
 
