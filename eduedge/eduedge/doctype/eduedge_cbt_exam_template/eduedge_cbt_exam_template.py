@@ -261,6 +261,8 @@ class EduEdgeCBTExamTemplate(Document):
 				frappe.ValidationError,
 			)
 
+		before = self.get_doc_before_save()
+		uses_frozen_snapshot = bool(before and before.status in {"Approved", "Retired"})
 		expected_bank = SCHOOL_BANK if self.exam_scope == SCHOOL_EXAM else PLATFORM_BANK
 		seen_questions: set[str] = set()
 		seen_orders: set[int] = set()
@@ -276,58 +278,66 @@ class EduEdgeCBTExamTemplate(Document):
 				)
 			seen_questions.add(row.question)
 
-			question = frappe.db.get_value(
-				"EduEdge CBT Question",
-				row.question,
-				[
-					"question_code",
-					"status",
-					"ownership_scope",
-					"school_branch",
-					"course",
-					"question_type",
-					"topic",
-					"default_mark",
-					"negative_mark",
-				],
-				as_dict=True,
-			)
-			if not question or question.status != "Approved":
-				frappe.throw(
-					_("Question {0} must be Approved before it can be used in an exam template.").format(
-						row.question
-					),
-					frappe.ValidationError,
-				)
-			if question.ownership_scope != expected_bank:
-				frappe.throw(
-					_("Question {0} belongs to a different Question Bank.").format(row.question),
-					frappe.ValidationError,
-				)
-			if self.exam_scope == SCHOOL_EXAM and question.school_branch != self.school_branch:
-				frappe.throw(
-					_("Question {0} does not belong to the selected School Branch / Campus.").format(
-						row.question
-					),
-					frappe.ValidationError,
-				)
-			if question.course != self.course:
-				frappe.throw(
-					_("Question {0} does not match the template Subject / Course.").format(row.question),
-					frappe.ValidationError,
-				)
-
 			row.display_order = cint(row.display_order) or index
 			if row.display_order < 1 or row.display_order in seen_orders:
 				frappe.throw(_("Template Question Order values must be unique positive numbers."), frappe.ValidationError)
 			seen_orders.add(row.display_order)
-			row.question_type = question.question_type
-			row.topic = question.topic
-			row.mark = flt(question.default_mark)
-			row.negative_mark = flt(question.negative_mark)
-			total_marks += row.mark
+
+			if uses_frozen_snapshot:
+				if flt(row.mark) <= 0:
+					frappe.throw(
+						_("Approved template question snapshots must retain a positive Mark."),
+						frappe.ValidationError,
+					)
+			else:
+				question = frappe.db.get_value(
+					"EduEdge CBT Question",
+					row.question,
+					[
+						"question_code",
+						"status",
+						"ownership_scope",
+						"school_branch",
+						"course",
+						"question_type",
+						"topic",
+						"default_mark",
+						"negative_mark",
+					],
+					as_dict=True,
+				)
+				if not question or question.status != "Approved":
+					frappe.throw(
+						_("Question {0} must be Approved before it can be used in an exam template.").format(
+							row.question
+						),
+						frappe.ValidationError,
+					)
+				if question.ownership_scope != expected_bank:
+					frappe.throw(
+						_("Question {0} belongs to a different Question Bank.").format(row.question),
+						frappe.ValidationError,
+					)
+				if self.exam_scope == SCHOOL_EXAM and question.school_branch != self.school_branch:
+					frappe.throw(
+						_("Question {0} does not belong to the selected School Branch / Campus.").format(
+							row.question
+						),
+						frappe.ValidationError,
+					)
+				if question.course != self.course:
+					frappe.throw(
+						_("Question {0} does not match the template Subject / Course.").format(row.question),
+						frappe.ValidationError,
+					)
+				row.question_type = question.question_type
+				row.topic = question.topic
+				row.mark = flt(question.default_mark)
+				row.negative_mark = flt(question.negative_mark)
+
+			total_marks += flt(row.mark)
 			if self.marking_policy != "Disable Negative Marking":
-				total_negative_marks += row.negative_mark
+				total_negative_marks += flt(row.negative_mark)
 
 		self.question_count = len(rows)
 		self.total_marks = total_marks
