@@ -2,118 +2,157 @@
 
 ## Business goal
 
-Establish a safe, branch-aware CBT foundation without changing completed admissions, academic operations, assessment publication, report-card, branch-governance, or accounting behaviour.
+Establish a safe, branch-aware CBT definition layer without changing completed admissions, academic operations, assessment publication, report-card, branch-governance, or accounting behaviour.
 
-The implementation deliberately separates:
+V0.8A separates:
 
-- school-owned examinations and question banks operated inside an EduEdge school tenant; and
-- EduEdge-operated public examinations, practice products, and examination-bank content managed by ProcessEdge platform administrators.
+- school-owned CBT operated inside an EduEdge tenant; and
+- ProcessEdge-governed EduEdge public examinations consumed through central services.
 
-V0.8A defines governed records and operating controls. It does not yet create candidate attempts, collect payments, publish CBT results, or operate the offline-resilient answer-sync engine.
+V0.8A does not yet create candidate attempts, collect payments, publish CBT results, or operate the offline-resilient answer-sync engine.
 
-## Delivered in V0.8A.1
+## V0.8A.1 — Centres and question governance
 
-### EduEdge Examination Centre
+### Examination Centres
 
 Two centre types are supported:
 
-- **School Examination Centre** — owned by an enabled EduEdge School Branch / Campus and restricted by branch access.
-- **EduEdge Exam Centre** — operated at platform level and manageable only by EduEdge platform administrators.
+- **School Examination Centre** — owned by an EduEdge School Branch / Campus and restricted by branch access.
+- **EduEdge Exam Centre** — centrally operated and manageable only through ProcessEdge public-exam authority.
 
-The model records centre identity, enablement, candidate capacity, paid-exam readiness, public-registration readiness, location, and contact details.
+Centres are non-submittable master records. Their operational status is:
 
-### EduEdge CBT Question
+- Draft;
+- Active;
+- Suspended;
+- Retired.
+
+Only Active centres may be selected for schedules. The old `enabled` field is retained as a hidden compatibility value derived from Centre Status.
+
+A School Examination Centre may separately receive a centrally controlled public-hosting status:
+
+- Not Requested;
+- Pending;
+- Approved;
+- Suspended;
+- Revoked.
+
+School staff cannot self-approve public hosting.
+
+### Question Banks
 
 Questions support:
 
 - School Question Bank or EduEdge Examination Bank ownership;
 - branch-safe school ownership;
-- Subject / Course, topic, curriculum, exam body, and difficulty classification;
+- course, topic, curriculum, exam body, and difficulty classification;
 - Single Choice, Multiple Choice, True/False, Short Answer, Essay, and Numeric types;
-- governed answer options and marking information;
+- governed answer options and marking data;
 - positive marks and optional negative marking;
 - Draft, Under Review, Approved, and Retired statuses;
-- explicit version numbers and superseded-question links;
-- role-gated approval and retirement;
+- explicit versioning and supersession;
 - immutable approved content and answer options.
 
-Teachers and instructors can prepare school-owned questions. Approval and retirement require an authorised academic or platform management role. Candidate, parent, and invigilator roles are not granted direct Question Bank access because answer keys must never be exposed through ordinary DocType permissions.
+Teachers and instructors may prepare school questions. School approval requires an authorised academic role. EduEdge Examination Bank creation, approval, retirement, and deletion require ProcessEdge public-exam authoring authority.
 
-## Delivered in V0.8A.2
+Students, parents, and invigilators are not granted Question Bank access because answer keys must not be exposed through ordinary DocType permissions.
 
-### EduEdge CBT Exam Template
+## V0.8A.2 — Exam templates and CBT Operations
 
-Exam templates define a reusable examination blueprint and support:
+### Exam Templates
 
-- **School Examination** and **EduEdge Public Examination** ownership scopes;
-- branch, academic year, academic term, programme, class, subject, assessment group, and exam-body context for school examinations;
-- optional default examination-centre selection;
-- duration, maximum-attempt, pass-percentage, navigation, timeout, and resume policies;
-- question and answer-option randomisation policies;
-- use of question-level marks or disabling of negative marking;
-- manual or after-submission result-release definitions for later attempt processing;
+Templates define reusable examination blueprints and support:
+
+- School Examination and EduEdge Public Examination ownership;
+- branch, year, term, programme, class, course, assessment group, and exam-body context for school examinations;
+- an optional Active default examination centre;
+- duration, maximum attempts, pass percentage, navigation, timeout, and resume policies;
+- question and option randomisation;
+- question marks or disabled negative marking;
+- manual or after-submission result-release definitions;
 - Draft, Under Review, Approved, and Retired governance;
-- explicit template versioning and supersession;
-- approved-template immutability and deletion protection.
+- versioning, supersession, immutability, and deletion protection.
 
-Public examination templates clear school-only academic context and can be managed only by an EduEdge platform administrator.
+Public templates clear school-only context and require ProcessEdge public-exam authoring authority.
 
 ### Approved-question selection
 
 Template question rows:
 
 - load only Approved questions from the matching ownership scope;
-- filter by selected school branch and Subject / Course;
-- reject duplicate questions and duplicate or invalid display-order values;
-- snapshot question type, topic, positive mark, and negative mark;
-- calculate question count, total marks, and maximum negative marks;
-- remain immutable after template approval.
+- filter by branch and course;
+- reject duplicates and invalid display order;
+- snapshot question type, topic, marks, and negative marks;
+- calculate question count and totals;
+- remain immutable after approval.
 
-An already approved template uses its stored scoring snapshot when it is later retired. This prevents a subsequently retired source question from blocking template retirement or altering the historical template definition.
+An approved template retains its stored scoring snapshot even when a source question is later retired.
 
-### Smart form behaviour
+### Smart forms
 
-The exam-template form uses cascading filters and clearing rules:
+Frontend behaviour guides users toward valid records:
 
-- Branch changes clear invalid centres, classes, questions, and superseded-template selections.
-- Academic Year changes clear Academic Term and Student Group / Class.
-- Programme and Academic Term changes refresh class validity.
-- Subject / Course changes clear invalid classes, questions, and version links.
-- Examination Centre options are filtered by school/public scope and branch.
-- Question options are provided by a permission-aware server query and include only Approved questions valid for the selected scope, branch, and course.
+- Branch changes clear invalid centres, classes, questions, and version links.
+- Academic Year changes clear incompatible term/class context.
+- Programme, term, and course changes refresh dependent filters.
+- Centre options show only Active centres in the valid scope and branch.
+- Question options come from permission-aware server queries.
+- Public centre, bank, and template choices are hidden unless server-authoritative public authoring is available.
 
-Backend validation repeats every business-critical rule. Frontend filtering is only a guided data-entry layer.
+Backend validation repeats all business-critical rules.
 
-### CBT Operations page
+### CBT Operations
 
-The first EdgeSuite UI CBT Operations page now provides:
+The EdgeSuite UI page provides:
 
-- School Examination and authorised EduEdge Public Examination scope switching;
-- branch-safe centre, template, and question readiness counts;
-- enabled-centre and approved-template visibility;
-- recent centre and template records with direct navigation;
-- question-bank readiness visibility only for authorised question authors;
-- a clear statement that scheduling, attempts, offline sync, invigilation, and result processing remain future phases.
+- School Examination scope and, only for authorised ProcessEdge authors, public-authoring scope;
+- branch-safe centre, question, and template readiness;
+- centre lifecycle and public-hosting visibility;
+- direct navigation into governed records;
+- a CoreEdge capability matrix for public catalogue, assignment, hosting, launch, results, and authoring;
+- clear visibility of what remains outside V0.8A.
 
-The page is available through:
+It is registered in the persistent EduEdge sidebar, global product menu, and native Workspace.
 
-- the persistent EduEdge EdgeSuite sidebar;
-- the global EdgeSuite product menu;
-- the native EduEdge Workspace.
+## Public exam access across deployment types
+
+Deployment mode does not grant public-exam privilege.
+
+Shared-hosted, standalone, and white-label sites use the same CoreEdge capability model:
+
+```text
+cbt_public_exam/catalog
+cbt_public_exam/assign
+cbt_public_exam/host
+cbt_public_exam/launch
+cbt_public_exam/results
+cbt_public_exam/author
+```
+
+Each grant belongs to one authenticated CoreEdge Service Client bound to the exact tenant, EduEdge product, integration user, and site identifier.
+
+Standalone and white-label sites continue to own their School CBT records. When whitelisted, they consume central public exam versions without receiving editable public questions or answer keys.
+
+Public authoring requires:
+
+- `EduEdge Super Administrator` or `EduEdge Public Exam Administrator`; and
+- an allowed CoreEdge `author` grant, or the controlled central-authority server flag.
+
+`System Manager`, local `Administrator`, deployment mode, or server ownership alone does not grant public authoring.
+
+See `docs/eduedge_public_exam_access_model.md` for the complete architecture and onboarding contract.
 
 ## Safety rules
 
-- Approved and retired question content cannot be edited in place.
-- A corrected question must be created as a higher version that supersedes an Approved or Retired question.
-- Approved and retired exam-template content and question rows cannot be edited in place.
-- A corrected template must be created as a higher version that supersedes an Approved or Retired template.
-- EduEdge Examination Bank and public-template records cannot be converted into school-owned records by normal school users.
-- School-owned centres, questions, and templates require access to the selected enabled branch.
-- School roles cannot list platform-owned CBT records even while strict branch enforcement is using the legacy fallback.
-- Students and parents have no direct Question Bank or Exam Template access.
-- CBT Invigilators may read permitted school templates but cannot open the Question Bank or answer keys.
-- Public registration, paid-exam readiness, maximum-attempt, result-release, resume, and timeout fields are definitions only until their execution engines are implemented.
-- No Sales Invoice, Payment Entry, Journal Entry, assessment result, result publication, or submitted academic record is created or modified.
+- Approved questions and templates cannot be edited in place.
+- Corrections require a higher version referencing an Approved or Retired record.
+- School users cannot list or open centrally owned records through ordinary Desk permissions.
+- Public authoring is not inferred from tenant administrative roles.
+- Candidate, parent, and invigilator roles cannot access answer banks.
+- Public hosting approval is controlled centrally.
+- Public capability decisions fail closed after the allowed cache window.
+- Public registration, paid-exam, attempts, resume, timeout, and result-release fields are definitions only in V0.8A.
+- No Sales Invoice, Payment Entry, Journal Entry, candidate attempt, CBT result, academic result, or result publication is created or mutated.
 
 ## Migration
 
@@ -126,81 +165,117 @@ bench build --app eduedge
 bench --site <site-name> clear-cache
 ```
 
-Then restart development processes or reload the production workers as appropriate for the deployment.
+The idempotent V0.8 centre patch maps legacy records safely:
 
-No data patch is required because V0.8A adds new DocTypes, a Page, permission hooks, and frontend assets. Existing school, branch, assessment, and accounting records are not backfilled or mutated.
+- existing `enabled = 1` centres become Active;
+- existing disabled centres become Draft;
+- centres already changed through the new audited status flow are not overwritten.
 
-## Automated tests
+The migration also provisions `EduEdge Public Exam Administrator`.
 
-The repository contract and CI suite validates:
+## Controlled site configuration
 
-- centre-scope separation;
-- question ownership, answer options, approval, versioning, and immutability;
-- absence of candidate, parent, and invigilator access to the Question Bank;
-- exam-template ownership and academic/timing/policy fields;
-- template question snapshot structure;
-- approved-question-only and branch/course validation markers;
-- platform-record isolation and Frappe permission-hook registration;
-- cascading smart-form query configuration;
-- CBT Operations page, bundle, navigation, product-menu, and Workspace registration;
-- Python compilation, JSON validity, and frontend entry-script syntax.
+A normal client site must use remote CoreEdge configuration and must not set itself as the authoring authority.
+
+The centrally controlled ProcessEdge exam-authoring site may use:
+
+```json
+{
+  "eduedge_public_exam_authority": true
+}
+```
+
+A standalone/white-label client uses settings similar to:
+
+```json
+{
+  "edge_platform_mode": "remote",
+  "coreedge_required": true,
+  "coreedge_fail_closed": true,
+  "coreedge_base_url": "https://coreedge.example.com",
+  "coreedge_tenant_key": "TENANT-KEY",
+  "coreedge_site_identifier": "school.example.com",
+  "coreedge_client_id": "API-KEY",
+  "coreedge_client_secret": "API-SECRET",
+  "coreedge_access_decision_path": "/api/method/coreedge.api.v1.service_gateway.check_feature_access"
+}
+```
+
+Secrets must not be committed to Git or copied into normal documentation.
+
+## Automated validation
+
+CI validates:
+
+- Python compilation and JSON validity;
+- frontend form/page syntax;
+- centre lifecycle, migration, and hosting controls;
+- question/template ownership and immutability;
+- approved-question filtering and scoring snapshots;
+- branch and public-master isolation;
+- explicit public capability/action contract;
+- absence of `System Manager` from public author roles;
+- exact site identifier and Frappe token authentication in the remote adapter;
+- CBT Operations registration and capability matrix.
 
 ## Manual QA checklist
 
-### V0.8A.1 centre and question QA
+### Centre lifecycle
 
-1. Create a School Examination Centre for an authorised branch.
-2. Confirm another branch-restricted user cannot list or open that centre.
-3. Confirm a School Administrator cannot create an EduEdge Exam Centre.
-4. Create a Single Choice school question with two options and one correct answer.
-5. Confirm duplicate option keys and multiple correct answers are rejected.
-6. Move the question to Under Review and approve it as an Academic Administrator.
-7. Confirm its question text, marks, ownership, and answer options can no longer be edited.
-8. Create Version 2 referencing the Approved question and confirm the new version number is greater.
-9. Confirm Student, EduEdge Parent, and CBT Invigilator users cannot open the Question Bank list.
+1. Migrate an existing enabled centre and confirm it becomes Active.
+2. Create a new School Examination Centre and confirm it starts as Draft.
+3. Confirm Draft can become Active.
+4. Confirm Active can become Suspended and then Active again.
+5. Confirm Active or Suspended can become Retired.
+6. Confirm Retired cannot return to another status.
+7. Confirm only Draft centres can be deleted.
+8. Confirm only Active centres appear in template centre queries.
+9. Confirm school staff cannot edit Public Exam Hosting Status or Public Centre Reference.
 
-### V0.8A.2 exam-template QA
+### School question and template flow
 
-10. Open CBT Operations and confirm a user without a current branch can still reach the page and select an authorised branch.
-11. Confirm a school user cannot select EduEdge Public Examination scope.
-12. Create a School Examination template and confirm Branch and Academic Year are mandatory.
-13. Confirm the Examination Centre field shows only enabled School Examination Centres in the selected branch.
-14. Confirm Student Group / Class options respect branch, year, term, programme, and course context.
-15. Add questions and confirm the Link field shows only Approved questions for the selected branch and course.
-16. Confirm a Draft, Under Review, Retired, cross-branch, public-bank, or different-course question is rejected by backend validation.
-17. Confirm duplicate questions and duplicate display-order values are rejected.
-18. Save the template and confirm question count, total marks, and negative-mark totals are populated.
-19. Approve the template as an authorised academic administrator.
-20. Confirm timing, academic context, question rows, marks, randomisation, and candidate instructions cannot be edited after approval.
-21. Retire a linked source question, then confirm the Approved template can still be moved to Retired using its stored scoring snapshot.
-22. Create a higher template version and confirm the superseded template has the same scope, branch, course, and exam body.
-23. As a platform administrator, create an EduEdge Public Examination template and confirm school-only fields are cleared.
-24. Confirm a normal school role cannot list or open the public centre, public question, or public template.
-25. Confirm the CBT Operations counts and recent records change correctly between school and public scopes.
-26. Confirm no accounting, candidate-attempt, CBT-result, or academic-result document is created.
+10. Create and approve a valid school question.
+11. Confirm invalid options, marks, branch, course, and status combinations are rejected.
+12. Confirm approved question content becomes immutable.
+13. Create a School Examination template and verify cascading academic filters.
+14. Add only approved questions from the matching branch/course.
+15. Confirm totals are calculated and duplicate questions/orders are rejected.
+16. Approve the template and confirm immutability.
+17. Create higher question and template versions safely.
+
+### Public access governance
+
+18. On a standalone site without CoreEdge grants, confirm the capability matrix shows Not Activated.
+19. Confirm only School Examination Centre, School Question Bank, and School Examination choices appear on new forms.
+20. Attempt to create public records through API/import and confirm backend permission rejection.
+21. Confirm tenant `System Manager` and local `Administrator` cannot list public records without author authority.
+22. On the controlled authority site, enable the authority flag temporarily and confirm an authorised ProcessEdge role can create public masters.
+23. Disable the authority flag and confirm access closes again.
+24. On a registered remote test site, activate only `catalog` and confirm other actions remain blocked.
+25. Activate `host` separately and confirm hosting remains dependent on an Approved centre verification.
+26. Suspend or revoke a CoreEdge grant and confirm the site loses that capability.
+27. Confirm an incorrect site identifier is rejected before capability evaluation.
+
+### UI and safety
+
+28. Confirm CBT Operations loads with EdgeSuite UI and realtime services.
+29. Confirm branch and public-scope counts do not leak records.
+30. Confirm no accounting, attempt, CBT-result, or academic-result record is created.
 
 ## Not included in V0.8A
 
-- exam schedules and examination sessions;
-- candidate generation and eligibility rules;
+- central public catalogue synchronization;
+- exam schedules and candidate eligibility;
+- signed launch sessions;
 - one active attempt per candidate;
-- server-authoritative attempt timing;
+- server-authoritative timing;
 - browser answer storage and automatic sync;
-- pending-sync visibility and duplicate-event prevention;
-- invigilator live monitoring and incident handling;
-- answer snapshots inside attempts;
-- automated and human marking execution;
-- CBT result review, approval, publication, or Frappe Education result sync;
-- EdgePay collection for public or paid examinations.
+- invigilator live monitoring;
+- automated/human marking execution;
+- signed result return and reconciliation;
+- academic-result sync;
+- EdgePay collection and wallet charging.
 
 ## Next implementation slice
 
-V0.8A.3 should add the **CBT Exam Schedule and Candidate Eligibility Foundation**:
-
-- scheduled examination instances created from Approved templates;
-- branch, centre, start-window, end-window, and server-time rules;
-- candidate source and eligibility definitions;
-- duplicate-candidate prevention;
-- schedule capacity and centre consistency checks;
-- initial invigilator assignment and schedule readiness;
-- no attempt creation or answer capture until the following attempt-engine slice.
+V0.8A.3 adds the CBT Exam Schedule and Candidate Eligibility Foundation, including school schedules and central public-exam references. Attempt creation and answer capture remain in the following attempt-engine slice.
