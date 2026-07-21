@@ -107,6 +107,7 @@ def get_cbt_operations_context(
 		require_public_exam_authoring()
 
 	can_author_questions = frappe.session.user == "Administrator" or bool(roles.intersection(CBT_AUTHOR_ROLES))
+	all_centres = []
 	centres = []
 	templates = []
 	questions = []
@@ -127,7 +128,7 @@ def get_cbt_operations_context(
 			template_filters["school_branch"] = resolved_branch
 			question_filters["school_branch"] = resolved_branch
 
-		centres = frappe.get_list(
+		all_centres = frappe.get_list(
 			"EduEdge Examination Centre",
 			filters=centre_filters,
 			fields=[
@@ -148,6 +149,9 @@ def get_cbt_operations_context(
 			order_by="enabled desc, centre_name asc",
 			page_length=200,
 		)
+		centres = [
+			row for row in all_centres if row.centre_status == "Active" or cint(row.enabled)
+		]
 		templates = frappe.get_list(
 			"EduEdge CBT Exam Template",
 			filters=template_filters,
@@ -202,9 +206,10 @@ def get_cbt_operations_context(
 		"can_author_questions": can_author_questions,
 		"can_manage_templates": frappe.session.user == "Administrator" or bool(roles.intersection(CBT_AUTHOR_ROLES)),
 		"counts": {
-			"centres": len(centres),
-			"enabled_centres": sum(1 for row in centres if row.centre_status == "Active" or cint(row.enabled)),
-			"public_host_centres": sum(1 for row in centres if row.public_hosting_status == "Approved"),
+			"centres": len(all_centres),
+			"enabled_centres": len(centres),
+			"non_active_centres": len(all_centres) - len(centres),
+			"public_host_centres": sum(1 for row in all_centres if row.public_hosting_status == "Approved"),
 			"templates": len(templates),
 			"approved_templates": sum(1 for row in templates if row.status == "Approved"),
 			"draft_templates": sum(1 for row in templates if row.status in {"Draft", "Under Review"}),
