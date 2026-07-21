@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import unittest
 
 
@@ -64,6 +65,16 @@ class TestPublicExamAccessContract(unittest.TestCase):
 		self.assertNotIn("get_eduedge_capability_decision", guard_block)
 
 	def test_centre_lifecycle_is_non_submittable_and_status_governed(self):
+		doctype = json.loads(
+			(
+				ROOT
+				/ "eduedge"
+				/ "eduedge"
+				/ "doctype"
+				/ "eduedge_examination_centre"
+				/ "eduedge_examination_centre.json"
+			).read_text()
+		)
 		controller = (
 			ROOT
 			/ "eduedge"
@@ -72,11 +83,38 @@ class TestPublicExamAccessContract(unittest.TestCase):
 			/ "eduedge_examination_centre"
 			/ "eduedge_examination_centre.py"
 		).read_text()
+		self.assertEqual(doctype["is_submittable"], 0)
 		self.assertIn("ALLOWED_STATUS_TRANSITIONS", controller)
 		self.assertIn('"Draft": {"Draft", "Active"}', controller)
 		self.assertIn('"Active": {"Active", "Suspended", "Retired"}', controller)
 		self.assertIn("Only a Draft examination centre can be deleted", controller)
 		self.assertIn('self.enabled = 1 if self.centre_status == "Active" else 0', controller)
+		self.assertIn("def before_submit", controller)
+		self.assertIn("def before_cancel", controller)
+		self.assertIn("non-submittable master records", controller)
+
+	def test_cbt_operations_lists_only_active_centres_but_counts_all(self):
+		api = (ROOT / "eduedge" / "api" / "cbt.py").read_text()
+		self.assertIn("all_centres = frappe.get_list", api)
+		self.assertIn('row.centre_status == "Active" or cint(row.enabled)', api)
+		self.assertIn('"centres": len(all_centres)', api)
+		self.assertIn('"non_active_centres": len(all_centres) - len(centres)', api)
+		self.assertIn('"centres": centres[:12]', api)
+
+	def test_cbt_operations_keeps_create_actions_visible(self):
+		loader = (
+			ROOT
+			/ "eduedge"
+			/ "eduedge"
+			/ "page"
+			/ "eduedge_cbt_operations"
+			/ "eduedge_cbt_operations.js"
+		).read_text()
+		self.assertIn("configureCreateActions", loader)
+		self.assertIn('frappe.new_doc("EduEdge Examination Centre")', loader)
+		self.assertIn('frappe.new_doc("EduEdge CBT Question")', loader)
+		self.assertIn('frappe.new_doc("EduEdge CBT Exam Template")', loader)
+		self.assertIn('__("Create New")', loader)
 
 	def test_public_hosting_approval_is_platform_controlled(self):
 		controller = (
