@@ -30,14 +30,18 @@ class RemoteCoreEdgeClient:
 				"platform_mode": "remote",
 				"primary_reason_code": "REMOTE_CONTRACT_NOT_CONFIGURED",
 			}
-		return self._request(self.config.health_path, {})
+		return self._request(self.config.health_path, {"site_identifier": self.config.site_identifier})
 
 	def get_runtime_context(self, user: str | None = None) -> dict:
 		if not self.config.runtime_context_path:
 			raise RemoteContractNotConfigured("REMOTE_CONTRACT_NOT_CONFIGURED")
 		return self._request(
 			self.config.runtime_context_path,
-			{"user": user, "tenant_key": self.config.tenant_key},
+			{
+				"user": user,
+				"tenant_key": self.config.tenant_key,
+				"site_identifier": self.config.site_identifier,
+			},
 		)
 
 	def get_access_decision(
@@ -57,6 +61,7 @@ class RemoteCoreEdgeClient:
 			feature_key=feature_key,
 		)
 		payload = {
+			"site_identifier": self.config.site_identifier,
 			"user": user,
 			"tenant_key": tenant_key or self.config.tenant_key,
 			"product_code": identity["product_code"],
@@ -79,7 +84,7 @@ class RemoteCoreEdgeClient:
 			"Content-Type": "application/json",
 			"X-CoreEdge-Tenant": self.config.tenant_key,
 			"X-CoreEdge-Client": self.config.client_id,
-			"Authorization": f"Bearer {self.config.client_secret}",
+			"Authorization": f"token {self.config.client_id}:{self.config.client_secret}",
 		}
 		try:
 			response = self.transport(url, payload, headers, self.config.timeout_seconds)
