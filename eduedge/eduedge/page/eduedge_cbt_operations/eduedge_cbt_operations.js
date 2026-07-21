@@ -18,9 +18,21 @@ const CBT_CREATE_OPTIONS = [
 		edgesuite: false,
 	},
 	{
-		label: "Question",
-		description: "Create a governed question in the friendly EduEdge Question Builder.",
+		label: "Single Question",
+		description: "Create one governed question in the friendly EduEdge Question Builder.",
 		route: "/app/eduedge-question-builder",
+		edgesuite: true,
+	},
+	{
+		label: "Multiple Questions",
+		description: "Enter several questions with shared Branch, Subject, Topic and source details.",
+		route: "/app/eduedge-question-batch?mode=entry",
+		edgesuite: true,
+	},
+	{
+		label: "Upload Questions",
+		description: "Validate and import a prepared CSV or XLSX question file as Draft records.",
+		route: "/app/eduedge-question-batch?mode=upload",
 		edgesuite: true,
 	},
 	{
