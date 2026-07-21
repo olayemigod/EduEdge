@@ -16,6 +16,11 @@ PLATFORM_MANAGER_ROLES = {
 
 
 class EduEdgeExaminationCentre(Document):
+	def autoname(self) -> None:
+		self.centre_code = (self.centre_code or "").strip().upper()
+		if self.centre_code:
+			self.name = self.centre_code
+
 	def validate(self) -> None:
 		self.centre_code = (self.centre_code or "").strip().upper()
 		self.centre_name = (self.centre_name or "").strip()
