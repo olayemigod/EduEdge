@@ -1,3 +1,41 @@
+const CBT_CONFIGURE_ROLES = new Set([
+	"System Manager",
+	"EduEdge Super Administrator",
+	"EduEdge Public Exam Administrator",
+	"EduEdge Administrator",
+	"School Administrator",
+	"Academic Administrator",
+	"Education Manager",
+	"Teacher",
+	"Instructor",
+]);
+
+function canConfigureCBT() {
+	if (frappe.session.user === "Administrator") return true;
+	return (frappe.user_roles || []).some((role) => CBT_CONFIGURE_ROLES.has(role));
+}
+
+function configureCreateActions(page) {
+	page.clear_inner_toolbar();
+	if (!canConfigureCBT()) return;
+
+	page.add_inner_button(
+		__("Examination Centre"),
+		() => frappe.new_doc("EduEdge Examination Centre"),
+		__("Create New")
+	);
+	page.add_inner_button(
+		__("Question"),
+		() => frappe.new_doc("EduEdge CBT Question"),
+		__("Create New")
+	);
+	page.add_inner_button(
+		__("Exam Template"),
+		() => frappe.new_doc("EduEdge CBT Exam Template"),
+		__("Create New")
+	);
+}
+
 frappe.pages["eduedge-cbt-operations"].on_page_load = function (wrapper) {
 	wrapper.page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -8,6 +46,7 @@ frappe.pages["eduedge-cbt-operations"].on_page_load = function (wrapper) {
 
 frappe.pages["eduedge-cbt-operations"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
+	configureCreateActions(page);
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
 
