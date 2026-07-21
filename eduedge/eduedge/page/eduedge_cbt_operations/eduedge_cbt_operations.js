@@ -1,51 +1,53 @@
-const CBT_CONFIGURE_ROLES = new Set([
-	"System Manager",
-	"EduEdge Super Administrator",
-	"EduEdge Public Exam Administrator",
-	"EduEdge Administrator",
-	"School Administrator",
-	"Academic Administrator",
-	"Education Manager",
-	"Teacher",
-	"Instructor",
-]);
-
 const CBT_CREATE_OPTIONS = [
 	{
 		label: "Examination Centre",
 		description: "Set up a school CBT centre and manage its operational status.",
 		route: "/app/eduedge-examination-centre/new-eduedge-examination-centre",
 		edgesuite: false,
+		resource: "examination_centre",
+		permission: "create",
 	},
 	{
 		label: "Single Question",
 		description: "Create one governed question in the friendly EduEdge Question Builder.",
 		route: "/app/eduedge-question-builder",
 		edgesuite: true,
+		resource: "cbt_question",
+		permission: "create",
 	},
 	{
 		label: "Multiple Questions",
 		description: "Enter several questions with shared Branch, Subject, Topic and source details.",
 		route: "/app/eduedge-question-batch?mode=entry",
 		edgesuite: true,
+		resource: "cbt_question",
+		permission: "create",
 	},
 	{
 		label: "Upload Questions",
 		description: "Validate and import a prepared CSV or XLSX question file as Draft records.",
 		route: "/app/eduedge-question-batch?mode=upload",
 		edgesuite: true,
+		resource: "cbt_question",
+		permission: "create",
 	},
 	{
 		label: "Exam Template",
 		description: "Create a reusable examination definition from approved questions.",
 		route: "/app/eduedge-cbt-exam-template/new-eduedge-cbt-exam-template",
 		edgesuite: false,
+		resource: "cbt_template",
+		permission: "create",
 	},
 ];
 
-function canConfigureCBT() {
+function resourceAllowed(resource, permission) {
 	if (frappe.session.user === "Administrator") return true;
-	return (frappe.user_roles || []).some((role) => CBT_CONFIGURE_ROLES.has(role));
+	return Boolean(frappe.boot?.eduedge_access_manifest?.resources?.[resource]?.[permission]);
+}
+
+function availableCreateOptions() {
+	return CBT_CREATE_OPTIONS.filter((option) => resourceAllowed(option.resource, option.permission));
 }
 
 function openNativeDeskRouteInNewTab(route) {
@@ -62,14 +64,15 @@ function openCreateRoute(route, edgesuite) {
 }
 
 function showCreateDialog() {
-	if (!canConfigureCBT()) return;
+	const options = availableCreateOptions();
+	if (!options.length) return;
 
 	const dialog = new frappe.ui.Dialog({
 		title: __("Create New"),
 		fields: [{ fieldname: "create_options", fieldtype: "HTML" }],
 	});
 	const escape = frappe.utils.escape_html;
-	const cards = CBT_CREATE_OPTIONS.map(
+	const cards = options.map(
 		(option) => `
 			<button type="button" class="btn btn-default btn-block text-left mb-3 p-3" data-create-route="${escape(option.route)}" data-create-edgesuite="${option.edgesuite ? "1" : "0"}">
 				<div class="font-weight-bold mb-1">${escape(__(option.label))}</div>
@@ -95,7 +98,7 @@ function showCreateDialog() {
 }
 
 function installHeaderCreateLauncher(root) {
-	if (!canConfigureCBT() || !root) return;
+	if (!availableCreateOptions().length || !root) return;
 
 	const acceptedLabels = new Set([
 		"New Exam Template",
