@@ -108,6 +108,8 @@ permission_query_conditions = {
 	"EduEdge Result Publication Log": "eduedge.education.permissions.result_publication_log_query",
 	"EduEdge Report Card Review": "eduedge.education.permissions.report_card_review_query",
 	"EduEdge Training Progress": "eduedge.training.permissions.training_progress_query",
+	"EduEdge Examination Centre": "eduedge.cbt.permissions.examination_centre_query",
+	"EduEdge CBT Question": "eduedge.cbt.permissions.cbt_question_query",
 }
 
 has_permission = {
@@ -129,6 +131,8 @@ has_permission = {
 	"EduEdge Result Publication Log": "eduedge.education.permissions.has_result_publication_log_permission",
 	"EduEdge Report Card Review": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Training Progress": "eduedge.training.permissions.has_training_progress_permission",
+	"EduEdge Examination Centre": "eduedge.cbt.permissions.has_school_branch_permission",
+	"EduEdge CBT Question": "eduedge.cbt.permissions.has_school_branch_permission",
 }
 
 fixtures = [
@@ -156,5 +160,5 @@ fixtures = [
 				],
 			]
 		],
-	},
+	}
 ]
