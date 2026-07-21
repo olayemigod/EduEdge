@@ -58,6 +58,14 @@ export const EDUEDGE_MENU_ITEMS = Object.freeze([
 	{
 		section: __("Academics and Outcomes"),
 		sectionIcon: "assessment",
+		label: __("CBT Operations"),
+		route: "/app/eduedge-cbt-operations",
+		icon: "assessment",
+		description: __("Centres, question banks, and exam templates"),
+	},
+	{
+		section: __("Academics and Outcomes"),
+		sectionIcon: "assessment",
 		label: __("Assessments & Results"),
 		route: "/app/eduedge-assessment-operations",
 		icon: "assessment",
@@ -121,6 +129,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-students",
 	"/app/eduedge-programs",
 	"/app/eduedge-program-offerings",
+	"/app/eduedge-cbt-operations",
 	"/app/eduedge-assessment-operations",
 	"/app/eduedge-report-cards",
 	"/app/eduedge-school-branches",
