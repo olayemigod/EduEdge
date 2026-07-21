@@ -4,6 +4,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from eduedge.cbt.public_access import (
+	can_author_public_exams,
+	get_public_exam_capability_summary,
+	require_public_exam_authoring,
+)
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -13,12 +18,11 @@ SCHOOL_BANK = "School Question Bank"
 PLATFORM_BANK = "EduEdge Examination Bank"
 SCHOOL_CENTRE = "School Examination Centre"
 PLATFORM_CENTRE = "EduEdge Exam Centre"
-PLATFORM_MANAGER_ROLES = {
+CBT_AUTHOR_ROLES = {
 	"System Manager",
 	"EduEdge Super Administrator",
+	"EduEdge Public Exam Administrator",
 	"EduEdge Administrator",
-}
-CBT_AUTHOR_ROLES = PLATFORM_MANAGER_ROLES | {
 	"School Administrator",
 	"Academic Administrator",
 	"Education Manager",
@@ -56,20 +60,6 @@ def _require_author() -> set[str]:
 	return roles
 
 
-def _is_platform_manager(roles: set[str] | None = None) -> bool:
-	if frappe.session.user == "Administrator":
-		return True
-	return bool((roles or _roles()).intersection(PLATFORM_MANAGER_ROLES))
-
-
-def _require_platform_manager(roles: set[str] | None = None) -> None:
-	if not _is_platform_manager(roles):
-		frappe.throw(
-			_("Only an EduEdge platform administrator can access public examination records."),
-			frappe.PermissionError,
-		)
-
-
 def _school_branch_candidate(branch: str | None = None) -> str | None:
 	return branch or (get_current_school_branch() or {}).get("name") or get_context_branch()
 
@@ -89,11 +79,20 @@ def _parse_filters(filters) -> dict:
 
 
 @frappe.whitelist()
+def get_public_exam_access_context() -> dict:
+	"""Return server-authoritative capability flags for forms and CBT pages."""
+	_require_login()
+	return get_public_exam_capability_summary(frappe.session.user)
+
+
+@frappe.whitelist()
 def get_cbt_operations_context(
 	exam_scope: str | None = None,
 	branch: str | None = None,
 ) -> dict:
 	roles = _require_viewer()
+	public_access = get_public_exam_capability_summary(frappe.session.user)
+	can_manage_public = bool(public_access["capabilities"]["author"]["allowed"])
 	exam_scope = exam_scope or SCHOOL_EXAM
 	if exam_scope not in {SCHOOL_EXAM, PUBLIC_EXAM}:
 		frappe.throw(_("Select a valid Examination Scope."), frappe.ValidationError)
@@ -105,7 +104,7 @@ def get_cbt_operations_context(
 			assert_branch_access(candidate)
 			resolved_branch = candidate
 	else:
-		_require_platform_manager(roles)
+		require_public_exam_authoring()
 
 	can_author_questions = frappe.session.user == "Administrator" or bool(roles.intersection(CBT_AUTHOR_ROLES))
 	centres = []
@@ -137,10 +136,13 @@ def get_cbt_operations_context(
 				"centre_code",
 				"centre_type",
 				"school_branch",
+				"centre_status",
 				"enabled",
 				"allow_public_registration",
 				"allow_paid_exams",
 				"capacity",
+				"public_hosting_status",
+				"public_centre_reference",
 				"location",
 			],
 			order_by="enabled desc, centre_name asc",
@@ -195,12 +197,14 @@ def get_cbt_operations_context(
 			"exam_scope": exam_scope,
 			"branch": resolved_branch,
 		},
-		"can_manage_public": _is_platform_manager(roles),
+		"public_exam_access": public_access,
+		"can_manage_public": can_manage_public,
 		"can_author_questions": can_author_questions,
 		"can_manage_templates": frappe.session.user == "Administrator" or bool(roles.intersection(CBT_AUTHOR_ROLES)),
 		"counts": {
 			"centres": len(centres),
-			"enabled_centres": sum(1 for row in centres if cint(row.enabled)),
+			"enabled_centres": sum(1 for row in centres if row.centre_status == "Active" or cint(row.enabled)),
+			"public_host_centres": sum(1 for row in centres if row.public_hosting_status == "Approved"),
 			"templates": len(templates),
 			"approved_templates": sum(1 for row in templates if row.status == "Approved"),
 			"draft_templates": sum(1 for row in templates if row.status in {"Draft", "Under Review"}),
@@ -223,7 +227,7 @@ def approved_question_query(
 	page_len: int,
 	filters,
 ):
-	roles = _require_author()
+	_require_author()
 	filters = _parse_filters(filters)
 	exam_scope = filters.get("exam_scope")
 	course = filters.get("course")
@@ -241,7 +245,7 @@ def approved_question_query(
 		branch = _resolve_school_branch(filters.get("school_branch"))
 		query_filters["school_branch"] = branch
 	else:
-		_require_platform_manager(roles)
+		require_public_exam_authoring()
 
 	or_filters = []
 	if txt:
@@ -281,21 +285,21 @@ def examination_centre_link_query(
 	page_len: int,
 	filters,
 ):
-	roles = _require_author()
+	_require_author()
 	filters = _parse_filters(filters)
 	exam_scope = filters.get("exam_scope")
 	if exam_scope not in {SCHOOL_EXAM, PUBLIC_EXAM}:
 		return []
 
 	query_filters = {
-		"enabled": 1,
+		"centre_status": "Active",
 		"centre_type": SCHOOL_CENTRE if exam_scope == SCHOOL_EXAM else PLATFORM_CENTRE,
 	}
 	if exam_scope == SCHOOL_EXAM:
 		branch = _resolve_school_branch(filters.get("school_branch"))
 		query_filters["school_branch"] = branch
 	else:
-		_require_platform_manager(roles)
+		require_public_exam_authoring()
 
 	or_filters = []
 	if txt:
