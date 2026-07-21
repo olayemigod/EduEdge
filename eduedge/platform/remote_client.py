@@ -56,11 +56,55 @@ class RemoteCoreEdgeClient:
 	) -> dict:
 		if not self.config.access_decision_path:
 			raise RemoteContractNotConfigured("REMOTE_CONTRACT_NOT_CONFIGURED")
+		identity, payload = self._build_access_payload(
+			user=user,
+			tenant_key=tenant_key,
+			feature_key=feature_key,
+			action=action,
+			reference_doctype=reference_doctype,
+			reference_name=reference_name,
+		)
+		response = self._request(self.config.access_decision_path, payload)
+		return self._normalize_access_decision(response, feature_key=identity["feature_key"])
+
+	def get_feature_access_decision(
+		self,
+		*,
+		user: str | None = None,
+		tenant_key: str | None = None,
+		feature_key: str | None = None,
+		action: str | None = None,
+		reference_doctype: str | None = None,
+		reference_name: str | None = None,
+	) -> dict:
+		if not self.config.feature_access_decision_path:
+			raise RemoteContractNotConfigured("REMOTE_FEATURE_CONTRACT_NOT_CONFIGURED")
+		identity, payload = self._build_access_payload(
+			user=user,
+			tenant_key=tenant_key,
+			feature_key=feature_key,
+			action=action,
+			reference_doctype=reference_doctype,
+			reference_name=reference_name,
+		)
+		response = self._request(self.config.feature_access_decision_path, payload)
+		return self._normalize_access_decision(response, feature_key=identity["feature_key"])
+
+	def _build_access_payload(
+		self,
+		*,
+		user: str | None,
+		tenant_key: str | None,
+		feature_key: str | None,
+		action: str | None,
+		reference_doctype: str | None,
+		reference_name: str | None,
+	) -> tuple[dict, dict]:
 		identity = resolve_product_identity(
 			tenant_key=tenant_key or self.config.tenant_key,
 			feature_key=feature_key,
 		)
-		payload = {
+		return identity, {
 			"site_identifier": self.config.site_identifier,
 			"user": user,
 			"tenant_key": tenant_key or self.config.tenant_key,
@@ -72,8 +116,6 @@ class RemoteCoreEdgeClient:
 			"reference_doctype": reference_doctype,
 			"reference_name": reference_name,
 		}
-		response = self._request(self.config.access_decision_path, payload)
-		return self._normalize_access_decision(response, feature_key=identity["feature_key"])
 
 	def _request(self, path: str, payload: dict) -> dict:
 		if not self.config.base_url:
@@ -100,17 +142,18 @@ class RemoteCoreEdgeClient:
 
 	@staticmethod
 	def _normalize_access_decision(response: dict, *, feature_key: str | None) -> dict:
-		allowed = response.get("allowed")
-		action = response.get("enforcement_action")
-		reason_code = response.get("primary_reason_code")
+		decision = response.get("access") if isinstance(response.get("access"), dict) else response
+		allowed = decision.get("allowed")
+		action = decision.get("enforcement_action")
+		reason_code = decision.get("primary_reason_code")
 		if not isinstance(allowed, bool) or action not in {"Allow", "Warn", "Block"} or not reason_code:
 			raise RemoteResponseInvalid("REMOTE_RESPONSE_INVALID")
 		return {
 			"allowed": allowed,
 			"enforcement_action": action,
 			"primary_reason_code": str(reason_code),
-			"reason": str(response.get("reason") or ""),
-			"warnings": list(response.get("warnings") or []),
+			"reason": str(decision.get("reason") or ""),
+			"warnings": list(decision.get("warnings") or []),
 			"platform_mode": "remote",
 			"feature_key": feature_key,
 		}
