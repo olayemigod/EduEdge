@@ -167,18 +167,19 @@ class EduEdgeCBTQuestion(Document):
 		correct_count = 0
 		for index, row in enumerate(rows, start=1):
 			row.option_key = (row.option_key or "").strip().upper()
-			row.option_text = (row.option_text or "").strip()
-			if not row.option_key or not row.option_text:
-				frappe.throw(
-					_("Every Answer Option requires an Option Key and Option Text."),
-					frappe.ValidationError,
-				)
+			if not row.option_key:
+				frappe.throw(_("Every Answer Option requires an Option Key."), frappe.ValidationError)
+			# A blank label intentionally means that the visible answer is simply
+			# the key itself, for example A, B, C, True, or False.
+			row.option_text = (row.option_text or row.option_key).strip()
 			if row.option_key in seen_keys:
 				frappe.throw(
 					_("Answer Option Key {0} is used more than once.").format(row.option_key),
 					frappe.ValidationError,
 				)
 			seen_keys.add(row.option_key)
+			# When no custom order is supplied, preserve the user's current row
+			# arrangement. This value is snapshotted for approved questions.
 			row.display_order = cint(row.display_order) or index
 			correct_count += cint(row.is_correct)
 
