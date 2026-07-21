@@ -60,6 +60,14 @@ async function applyQuestionBankGovernance(frm) {
 	}
 }
 
+function addQuestionBuilderButton(frm) {
+	if (frm.is_new() || !frm.doc.name) return;
+	frm.add_custom_button(__("Open Question Builder"), () => {
+		const route = `/app/eduedge-question-builder?question=${encodeURIComponent(frm.doc.name)}`;
+		window.location.href = route;
+	});
+}
+
 function normaliseAnswerOptions(frm) {
 	for (const [index, row] of (frm.doc.options || []).entries()) {
 		row.option_key = optionLabel(index + 1);
@@ -157,6 +165,7 @@ frappe.ui.form.on("EduEdge CBT Question", {
 	},
 
 	refresh(frm) {
+		addQuestionBuilderButton(frm);
 		applyQuestionBankGovernance(frm).catch((error) => {
 			console.error("Failed to resolve EduEdge public question bank access", error);
 		});
