@@ -39,9 +39,12 @@ def after_install() -> None:
 
 
 def after_migrate() -> None:
-	"""Maintain schema/runtime foundations without overwriting permission choices."""
+	"""Maintain schema/runtime foundations without overwriting role permissions."""
 	ensure_roles()
 	ensure_education_custom_fields()
+	# Standard Page JSON may reintroduce legacy role rows during model sync.
+	# Keep EdgeSuite shells neutral; menus, APIs and DocTypes remain authoritative.
+	ensure_eduedge_page_role_baseline()
 	backfill_education_branch_context()
 
 
