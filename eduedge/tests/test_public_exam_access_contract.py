@@ -114,7 +114,7 @@ class TestPublicExamAccessContract(unittest.TestCase):
 		self.assertIn("non-submittable master record", guard)
 		self.assertIn("enforce_cbt_master_lifecycle", patches)
 
-	def test_question_options_default_blank_text_and_order_safely(self):
+	def test_question_options_require_answers_and_derive_labels_and_order(self):
 		option_doctype = json.loads(
 			(
 				ROOT
@@ -126,8 +126,11 @@ class TestPublicExamAccessContract(unittest.TestCase):
 			).read_text()
 		)
 		fields = {field["fieldname"]: field for field in option_doctype["fields"]}
-		self.assertFalse(fields["option_text"].get("reqd"))
-		self.assertNotIn("default", fields["display_order"])
+		self.assertTrue(fields["option_text"].get("reqd"))
+		self.assertEqual(fields["option_text"]["label"], "Answer")
+		self.assertTrue(fields["option_key"].get("read_only"))
+		self.assertTrue(fields["display_order"].get("hidden"))
+		self.assertTrue(fields["display_order"].get("read_only"))
 
 		controller = (
 			ROOT
@@ -145,8 +148,10 @@ class TestPublicExamAccessContract(unittest.TestCase):
 			/ "eduedge_cbt_question"
 			/ "eduedge_cbt_question.js"
 		).read_text()
-		self.assertIn("row.option_text or row.option_key", controller)
-		self.assertIn("cint(row.display_order) or index", controller)
+		self.assertIn("row.option_key = label", controller)
+		self.assertIn("row.display_order = index", controller)
+		self.assertIn("Enter an Answer for option {0}", controller)
+		self.assertIn("row.option_key = optionLabel(index + 1)", script)
 		self.assertIn("normaliseAnswerOptions", script)
 		self.assertIn("Previous Question Version", json.dumps(json.loads((ROOT / "eduedge" / "eduedge" / "doctype" / "eduedge_cbt_question" / "eduedge_cbt_question.json").read_text())))
 		self.assertIn("previousVersion + 1", script)
