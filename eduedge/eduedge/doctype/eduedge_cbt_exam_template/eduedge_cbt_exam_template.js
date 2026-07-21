@@ -13,6 +13,10 @@ function clearStudentGroup(frm) {
 	if (frm.doc.student_group) frm.set_value("student_group", null);
 }
 
+function clearSupersedesTemplate(frm) {
+	if (frm.doc.supersedes_template) frm.set_value("supersedes_template", null);
+}
+
 function studentGroupFilters(frm) {
 	const filters = { disabled: 0 };
 	if (frm.doc.school_branch) filters.eduedge_school_branch = frm.doc.school_branch;
@@ -20,6 +24,19 @@ function studentGroupFilters(frm) {
 	if (frm.doc.academic_term) filters.academic_term = ["in", [frm.doc.academic_term, ""]];
 	if (frm.doc.program) filters.program = frm.doc.program;
 	if (frm.doc.course) filters.course = ["in", [frm.doc.course, ""]];
+	return filters;
+}
+
+function supersedesTemplateFilters(frm) {
+	const filters = {
+		status: ["in", ["Approved", "Retired"]],
+		exam_scope: frm.doc.exam_scope,
+		course: frm.doc.course,
+		exam_body: frm.doc.exam_body || "",
+	};
+	if (frm.doc.exam_scope === SCHOOL_EXAM && frm.doc.school_branch) {
+		filters.school_branch = frm.doc.school_branch;
+	}
 	return filters;
 }
 
@@ -63,13 +80,7 @@ frappe.ui.form.on("EduEdge CBT Exam Template", {
 			},
 		}));
 		frm.set_query("supersedes_template", () => ({
-			filters: {
-				status: ["in", ["Approved", "Retired"]],
-				exam_scope: frm.doc.exam_scope,
-				school_branch: frm.doc.school_branch || "",
-				course: frm.doc.course,
-				exam_body: frm.doc.exam_body || "",
-			},
+			filters: supersedesTemplateFilters(frm),
 		}));
 	},
 
@@ -81,6 +92,7 @@ frappe.ui.form.on("EduEdge CBT Exam Template", {
 
 	exam_scope(frm) {
 		frm.set_value("default_examination_centre", null);
+		clearSupersedesTemplate(frm);
 		clearQuestions(frm);
 		if (frm.doc.exam_scope !== SCHOOL_EXAM) {
 			frm.set_value("school_branch", null);
@@ -94,6 +106,7 @@ frappe.ui.form.on("EduEdge CBT Exam Template", {
 
 	school_branch(frm) {
 		frm.set_value("default_examination_centre", null);
+		clearSupersedesTemplate(frm);
 		clearStudentGroup(frm);
 		clearQuestions(frm);
 	},
@@ -112,18 +125,21 @@ frappe.ui.form.on("EduEdge CBT Exam Template", {
 	},
 
 	course(frm) {
+		clearSupersedesTemplate(frm);
 		clearStudentGroup(frm);
 		clearQuestions(frm);
 	},
 
 	exam_body(frm) {
-		if (frm.doc.supersedes_template) frm.set_value("supersedes_template", null);
+		clearSupersedesTemplate(frm);
 	},
 
 	marking_policy(frm) {
 		recalculateQuestionTotals(frm);
 	},
+});
 
+frappe.ui.form.on("EduEdge CBT Template Question", {
 	questions_add(frm) {
 		recalculateQuestionTotals(frm);
 	},
@@ -131,12 +147,17 @@ frappe.ui.form.on("EduEdge CBT Exam Template", {
 	questions_remove(frm) {
 		recalculateQuestionTotals(frm);
 	},
-});
 
-frappe.ui.form.on("EduEdge CBT Template Question", {
 	async question(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
-		if (!row.question) return;
+		if (!row.question) {
+			await frappe.model.set_value(cdt, cdn, "question_type", "");
+			await frappe.model.set_value(cdt, cdn, "topic", "");
+			await frappe.model.set_value(cdt, cdn, "mark", 0);
+			await frappe.model.set_value(cdt, cdn, "negative_mark", 0);
+			recalculateQuestionTotals(frm);
+			return;
+		}
 		const response = await frappe.db.get_value("EduEdge CBT Question", row.question, [
 			"question_type",
 			"topic",
