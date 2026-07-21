@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from frappe import _
 import frappe
+from frappe import _
 from frappe.utils import cstr
 
 from eduedge.api.question_batch import (
@@ -53,6 +53,11 @@ def import_question_upload(file_name: str, file_content: str, common) -> dict:
 	for doc in docs:
 		doc.insert()
 		created.append(doc.name)
+	frappe.msgprint(
+		_("{0} Draft question(s) imported successfully.").format(len(created)),
+		alert=True,
+		indicator="green",
+	)
 	return {
 		"created": created,
 		"count": len(created),
