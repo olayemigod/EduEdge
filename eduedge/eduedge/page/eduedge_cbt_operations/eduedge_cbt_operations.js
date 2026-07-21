@@ -156,11 +156,9 @@ function installPublicAccessDisclosure(root) {
 		panel.style.paddingTop = expanded ? "" : "0.85rem";
 		panel.style.paddingBottom = expanded ? "" : "0.85rem";
 		toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-		toggle.setAttribute("aria-controls", "eduedge-cbt-public-access-details");
 		toggle.textContent = expanded ? __("Hide access details") : __("Show access details");
 	};
 
-	for (const row of detailRows) row.id ||= "eduedge-cbt-public-access-details";
 	toggle.addEventListener("click", () => {
 		expanded = !expanded;
 		writePublicAccessPreference(expanded);
