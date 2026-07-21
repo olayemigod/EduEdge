@@ -26,9 +26,11 @@ class TestExaminationCentreTeacherPermission(unittest.TestCase):
 		for permission in ("create", "write", "delete", "import", "share"):
 			self.assertFalse(teacher.get(permission, 0))
 
-	def test_teacher_remains_covered_by_branch_permission_hooks(self):
+	def test_any_authorised_role_remains_covered_by_branch_permission_hooks(self):
 		permissions = (ROOT / "eduedge" / "cbt" / "permissions.py").read_text()
-		self.assertIn('"Teacher"', permissions)
+		self.assertIn("user_has_role_permission", permissions)
+		self.assertIn("CBT_DOCTYPES", permissions)
+		self.assertNotIn("CBT_OPERATIONAL_ROLES", permissions)
 		self.assertIn("def examination_centre_query", permissions)
 		self.assertIn("def has_school_branch_permission", permissions)
 		self.assertIn("if not branch:", permissions)
