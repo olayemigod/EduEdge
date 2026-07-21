@@ -54,6 +54,7 @@ class TestCBTFoundationContract(unittest.TestCase):
 		):
 			self.assertIn(fieldname, fields)
 		self.assertEqual(fields["options"]["options"], "EduEdge Question Option")
+		self.assertEqual(fields["options"]["label"], "Answer Choices")
 		self.assertIn("School Question Bank", fields["ownership_scope"]["options"])
 		self.assertIn("EduEdge Examination Bank", fields["ownership_scope"]["options"])
 		self.assertIn("Yes/No", fields["question_type"]["options"])
@@ -92,10 +93,13 @@ class TestCBTFoundationContract(unittest.TestCase):
 			/ "eduedge_cbt_question"
 			/ "eduedge_cbt_question.py"
 		).read_text()
-		self.assertIn('"Yes/No": (("YES", "Yes"), ("NO", "No"))', text)
-		self.assertIn('"True/False": (("TRUE", "True"), ("FALSE", "False"))', text)
-		self.assertIn('MINIMUM_CHOICE_KEYS = ("A", "B")', text)
+		self.assertIn('"Yes/No": ("Yes", "No")', text)
+		self.assertIn('"True/False": ("True", "False")', text)
+		self.assertIn("def option_label", text)
+		self.assertIn("while len(rows) < 2", text)
 		self.assertIn("def _prepare_answer_options", text)
+		self.assertIn('row.option_key = label', text)
+		self.assertIn('Enter an Answer for option {0}', text)
 		self.assertIn('self.question_type in {"Single Choice", "True/False", "Yes/No"}', text)
 
 	def test_question_form_prepares_answer_rows_when_type_changes(self):
@@ -104,13 +108,14 @@ class TestCBTFoundationContract(unittest.TestCase):
 			/ "eduedge_cbt_question"
 			/ "eduedge_cbt_question.js"
 		).read_text()
-		self.assertIn('"Yes/No": [', text)
-		self.assertIn('{ option_key: "YES", option_text: "Yes" }', text)
-		self.assertIn('{ option_key: "NO", option_text: "No" }', text)
-		self.assertIn('const MINIMUM_CHOICE_KEYS = ["A", "B"]', text)
+		self.assertIn('"Yes/No": ["Yes", "No"]', text)
+		self.assertIn('"True/False": ["True", "False"]', text)
+		self.assertIn("function optionLabel", text)
 		self.assertIn("function prepareAnswerOptions", text)
 		self.assertIn("question_type(frm)", text)
-		self.assertIn("ensureMinimumChoiceOptions(frm)", text)
+		self.assertIn("ensureMinimumChoiceAnswers(frm)", text)
+		self.assertIn("normaliseAnswerOptions(frm)", text)
+		self.assertIn('frappe.ui.form.on("EduEdge Question Option"', text)
 
 	def test_platform_records_remain_hidden_during_legacy_branch_fallback(self):
 		text = (ROOT / "eduedge" / "cbt" / "permissions.py").read_text()
@@ -127,16 +132,23 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn('"EduEdge Examination Centre": "eduedge.cbt.permissions.has_school_branch_permission"', hooks)
 		self.assertIn('"EduEdge CBT Question": "eduedge.cbt.permissions.has_school_branch_permission"', hooks)
 
-	def test_question_option_is_a_child_table(self):
+	def test_question_option_is_a_friendly_child_table(self):
 		payload = self._load_doctype(
 			"eduedge_question_option", "eduedge_question_option.json"
 		)
 		self.assertEqual(payload["istable"], 1)
-		fields = {field["fieldname"] for field in payload["fields"]}
+		fields = {field["fieldname"]: field for field in payload["fields"]}
 		self.assertEqual(
-			fields,
+			set(fields),
 			{"option_key", "option_text", "is_correct", "display_order"},
 		)
+		self.assertEqual(fields["option_key"]["label"], "Option")
+		self.assertTrue(fields["option_key"]["read_only"])
+		self.assertEqual(fields["option_text"]["label"], "Answer")
+		self.assertTrue(fields["option_text"]["reqd"])
+		self.assertEqual(fields["is_correct"]["label"], "Correct Answer")
+		self.assertTrue(fields["display_order"]["hidden"])
+		self.assertTrue(fields["display_order"]["read_only"])
 
 	def test_centre_status_patch_is_registered(self):
 		patches = (ROOT / "eduedge" / "patches.txt").read_text()
