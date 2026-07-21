@@ -49,6 +49,7 @@ class PlatformConfig:
 	required: bool = False
 	base_url: str = ""
 	tenant_key: str = ""
+	site_identifier: str = ""
 	client_id: str = ""
 	client_secret: str = ""
 	fail_closed: bool = False
@@ -70,6 +71,9 @@ class PlatformConfig:
 			required=required,
 			base_url=str(values.get("coreedge_base_url") or "").strip().rstrip("/"),
 			tenant_key=str(values.get("coreedge_tenant_key") or "").strip(),
+			site_identifier=str(
+				values.get("coreedge_site_identifier") or values.get("host_name") or ""
+			).strip(),
 			client_id=str(values.get("coreedge_client_id") or "").strip(),
 			client_secret=str(values.get("coreedge_client_secret") or "").strip(),
 			fail_closed=fail_closed,
@@ -96,6 +100,8 @@ class PlatformConfig:
 				blockers.append("CoreEdge base URL is not configured.")
 			if not self.tenant_key:
 				blockers.append("CoreEdge tenant key is not configured.")
+			if not self.site_identifier:
+				blockers.append("CoreEdge product-site identifier is not configured.")
 			if not self.client_id or not self.client_secret:
 				blockers.append("CoreEdge client credentials are incomplete.")
 			if not self.runtime_context_path:
@@ -119,6 +125,7 @@ class PlatformConfig:
 			"required": self.required,
 			"base_url_configured": bool(self.base_url),
 			"tenant_key_configured": bool(self.tenant_key),
+			"site_identifier_configured": bool(self.site_identifier),
 			"client_id_configured": bool(self.client_id),
 			"client_secret_configured": bool(self.client_secret),
 			"fail_closed": self.fail_closed,
