@@ -60,6 +60,16 @@ def option_label(position: int) -> str:
 	return label
 
 
+def _require_question_author() -> None:
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Authentication required."), frappe.PermissionError)
+	if not (
+		frappe.has_permission("EduEdge CBT Question", "create")
+		or frappe.has_permission("EduEdge CBT Question", "write")
+	):
+		frappe.throw(_("You are not permitted to configure CBT questions."), frappe.PermissionError)
+
+
 class EduEdgeCBTQuestion(Document):
 	def autoname(self) -> None:
 		self.question_code = (self.question_code or "").strip().upper()
@@ -70,6 +80,7 @@ class EduEdgeCBTQuestion(Document):
 		self.question_code = (self.question_code or "").strip().upper()
 		self._validate_identity()
 		self._validate_scope()
+		self._validate_topic()
 		self._validate_version()
 		self._validate_marks()
 		self._prepare_answer_options()
@@ -108,6 +119,27 @@ class EduEdgeCBTQuestion(Document):
 			return
 
 		frappe.throw(_("Select a valid Question Bank."), frappe.ValidationError)
+
+	def _validate_topic(self) -> None:
+		if not self.topic:
+			return
+		if not self.course:
+			frappe.throw(_("Select a Subject / Course before selecting a Topic."), frappe.ValidationError)
+		if not frappe.db.exists(
+			"Course Topic",
+			{
+				"parent": self.course,
+				"parenttype": "Course",
+				"parentfield": "topics",
+				"topic": self.topic,
+			},
+		):
+			frappe.throw(
+				_("Topic {0} is not configured under Subject / Course {1}.").format(
+					frappe.bold(self.topic), frappe.bold(self.course)
+				),
+				frappe.ValidationError,
+			)
 
 	def _validate_version(self) -> None:
 		if cint(self.version_number) < 1:
@@ -162,35 +194,19 @@ class EduEdgeCBTQuestion(Document):
 			)
 
 	def _prepare_answer_options(self) -> None:
-		"""Prepare the minimum answer rows for form, import, and API requests."""
+		"""Prepare fixed binary answers for form, import, and API requests."""
 		rows = list(self.get("options") or [])
-		if self.question_type in BINARY_ANSWER_PRESETS:
-			if rows:
-				return
-			for index, answer_text in enumerate(BINARY_ANSWER_PRESETS[self.question_type], start=1):
-				self.append(
-					"options",
-					{
-						"option_key": option_label(index),
-						"option_text": answer_text,
-						"display_order": index,
-					},
-				)
+		if self.question_type not in BINARY_ANSWER_PRESETS or rows:
 			return
-
-		if self.question_type not in CHOICE_TYPES:
-			return
-		while len(rows) < 2:
-			index = len(rows) + 1
-			row = self.append(
+		for index, answer_text in enumerate(BINARY_ANSWER_PRESETS[self.question_type], start=1):
+			self.append(
 				"options",
 				{
 					"option_key": option_label(index),
-					"option_text": "",
+					"option_text": answer_text,
 					"display_order": index,
 				},
 			)
-			rows.append(row)
 
 	def _validate_answers(self) -> None:
 		rows = list(self.get("options") or [])
@@ -293,3 +309,47 @@ class EduEdgeCBTQuestion(Document):
 			)
 			for row in (doc.get("options") or [])
 		)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def course_topic_query(
+	doctype: str,
+	txt: str,
+	searchfield: str,
+	start: int,
+	page_len: int,
+	filters,
+):
+	"""Return only Topic masters configured under the selected Course."""
+	_require_question_author()
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	course = filters.get("course")
+	if not course or not frappe.db.exists("Course", course):
+		return []
+	course_doc = frappe.get_doc("Course", course)
+	if not course_doc.has_permission("read"):
+		frappe.throw(_("You are not permitted to view this Subject / Course."), frappe.PermissionError)
+
+	return frappe.db.sql(
+		"""
+		SELECT DISTINCT
+			topic.name,
+			topic.topic_name,
+			COALESCE(topic.description, '')
+		FROM `tabCourse Topic` course_topic
+		INNER JOIN `tabTopic` topic ON topic.name = course_topic.topic
+		WHERE course_topic.parent = %(course)s
+			AND course_topic.parenttype = 'Course'
+			AND course_topic.parentfield = 'topics'
+			AND (topic.name LIKE %(txt)s OR topic.topic_name LIKE %(txt)s)
+		ORDER BY topic.topic_name ASC
+		LIMIT %(start)s, %(page_len)s
+		""",
+		{
+			"course": course,
+			"txt": f"%{txt or ''}%",
+			"start": cint(start),
+			"page_len": cint(page_len) or 20,
+		},
+	)
