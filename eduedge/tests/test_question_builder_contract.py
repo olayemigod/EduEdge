@@ -9,14 +9,15 @@ VUE_PATH = ROOT / "eduedge" / "public" / "js" / "eduedge_question_builder" / "Ed
 
 
 class TestQuestionBuilderContract(unittest.TestCase):
-	def test_page_is_author_only_and_uses_edgesuite_runtime(self):
+	def test_page_shell_is_permission_neutral_and_uses_edgesuite_runtime(self):
 		metadata = json.loads((PAGE_ROOT / "eduedge_question_builder.json").read_text())
-		roles = {row["role"] for row in metadata["roles"]}
-		self.assertIn("Teacher", roles)
-		self.assertIn("Academic Administrator", roles)
-		self.assertNotIn("Student", roles)
-		self.assertNotIn("EduEdge Parent", roles)
-		self.assertNotIn("CBT Invigilator", roles)
+		self.assertEqual(metadata["roles"], [])
+
+		access = (ROOT / "eduedge" / "access_control.py").read_text()
+		self.assertIn('"/app/eduedge-question-builder"', access)
+		self.assertIn('("cbt_question", "read")', access)
+		self.assertIn('("cbt_question", "create")', access)
+		self.assertIn('("cbt_question", "write")', access)
 
 		loader = (PAGE_ROOT / "eduedge_question_builder.js").read_text()
 		self.assertIn('frappe.require("edgeui.bundle.js"', loader)
@@ -82,6 +83,8 @@ class TestQuestionBuilderContract(unittest.TestCase):
 		self.assertIn("course_topic_query", api)
 		self.assertIn("get_allowed_school_branches", api)
 		self.assertIn("get_public_exam_capability_summary", api)
+		self.assertIn("can_review_questions", api)
+		self.assertNotIn("REVIEW_ROLES", api)
 		self.assertIn("Question Code cannot be changed after the first save", api)
 		self.assertIn("frappe.copy_doc(source)", api)
 		self.assertIn('doc.supersedes_question = source.name', api)
