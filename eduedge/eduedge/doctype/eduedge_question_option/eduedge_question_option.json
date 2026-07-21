@@ -11,10 +11,10 @@
   "display_order"
  ],
  "fields": [
-  {"description": "Required identifier such as A, B, C, D, True, or False.", "fieldname": "option_key", "fieldtype": "Data", "in_list_view": 1, "label": "Option Key", "reqd": 1},
-  {"description": "Optional. Leave blank when the visible answer should simply be the Option Key.", "fieldname": "option_text", "fieldtype": "Small Text", "in_list_view": 1, "label": "Option Text"},
-  {"default": "0", "fieldname": "is_correct", "fieldtype": "Check", "in_list_view": 1, "label": "Correct"},
-  {"description": "Optional. Leave blank to use the current row arrangement.", "fieldname": "display_order", "fieldtype": "Int", "label": "Display Order"}
+  {"description": "Generated automatically from the row position as A, B, C, D and so on.", "fieldname": "option_key", "fieldtype": "Data", "in_list_view": 1, "label": "Option", "read_only": 1},
+  {"description": "Required answer text shown to candidates.", "fieldname": "option_text", "fieldtype": "Small Text", "in_list_view": 1, "label": "Answer", "reqd": 1},
+  {"default": "0", "fieldname": "is_correct", "fieldtype": "Check", "in_list_view": 1, "label": "Correct Answer"},
+  {"description": "Maintained automatically from the current row arrangement.", "fieldname": "display_order", "fieldtype": "Int", "hidden": 1, "label": "Display Order", "read_only": 1}
  ],
  "istable": 1,
  "links": [],
