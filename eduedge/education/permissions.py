@@ -2,23 +2,34 @@ from __future__ import annotations
 
 import frappe
 
+from eduedge.access_control import user_has_role_permission
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	is_branch_access_enforced,
 )
 
-OPERATIONAL_ROLES = {
-	"Academics User",
-	"Education Manager",
-	"Instructor",
+BRANCH_AWARE_DOCTYPES = (
+	"Student Admission",
+	"Student Applicant",
+	"Student",
+	"Guardian",
+	"Program Enrollment",
+	"Student Group",
+	"Room",
+	"Course Schedule",
+	"Student Attendance",
+	"Assessment Plan",
+	"Assessment Result",
+	"EduEdge Result Publication",
+	"EduEdge Report Card Review",
+	"EduEdge Program Offering",
+	"EduEdge Instructor Branch Assignment",
+)
+BRANCH_SCOPE_BYPASS_ROLES = {
+	"System Manager",
+	"EduEdge Super Administrator",
 	"EduEdge Administrator",
-	"School Administrator",
-	"Academic Administrator",
-	"Bursar",
-	"Teacher",
-	"CBT Invigilator",
-	"Student Safety Officer",
 }
 
 
@@ -147,6 +158,8 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
 		return True
+	if not doc:
+		return True
 
 	if doc.doctype == "Guardian":
 		if doc.is_new():
@@ -188,6 +201,8 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
 		return True
+	if not doc:
+		return True
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
 		return True
@@ -195,6 +210,8 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 
 
 def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool:
+	if not doc:
+		return True
 	publication = frappe.db.get_value(
 		"EduEdge Result Publication", doc.get("result_publication"), "school_branch"
 	)
@@ -239,9 +256,13 @@ def _should_apply_branch_scope(user: str) -> bool:
 	if not user or user in {"Guest", "Administrator"}:
 		return False
 	roles = set(frappe.get_roles(user))
-	if roles.intersection({"System Manager", "EduEdge Administrator"}):
+	if roles.intersection(BRANCH_SCOPE_BYPASS_ROLES):
 		return False
-	return bool(roles.intersection(OPERATIONAL_ROLES))
+	return any(
+		user_has_role_permission(doctype, permission_type, user)
+		for doctype in BRANCH_AWARE_DOCTYPES
+		for permission_type in ("read", "create", "write", "report")
+	)
 
 
 def _branch_field_exists(doctype: str, fieldname: str = BRANCH_FIELD) -> bool:
