@@ -50,6 +50,11 @@ ALLOWED_STATUS_TRANSITIONS = {
 
 
 class EduEdgeCBTQuestion(Document):
+	def autoname(self) -> None:
+		self.question_code = (self.question_code or "").strip().upper()
+		if self.question_code:
+			self.name = self.question_code
+
 	def validate(self) -> None:
 		self.question_code = (self.question_code or "").strip().upper()
 		self._validate_identity()
@@ -59,6 +64,13 @@ class EduEdgeCBTQuestion(Document):
 		self._validate_answers()
 		self._validate_status_transition()
 		self._prevent_approved_content_mutation()
+
+	def on_trash(self) -> None:
+		if self.status in {"Approved", "Retired"}:
+			frappe.throw(
+				_("Approved or Retired CBT questions cannot be deleted. Retain the record for audit history."),
+				frappe.ValidationError,
+			)
 
 	def _validate_identity(self) -> None:
 		if not self.question_code:
