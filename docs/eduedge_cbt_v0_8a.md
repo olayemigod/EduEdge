@@ -138,7 +138,7 @@ Public authoring requires:
 - `EduEdge Super Administrator` or `EduEdge Public Exam Administrator`; and
 - an allowed CoreEdge `author` grant, or the controlled central-authority server flag.
 
-`System Manager`, local `Administrator`, deployment mode, or server ownership alone does not grant public authoring.
+`System Manager`, local `Administrator`, deployment mode, or server ownership alone does not grant central public authoring authority.
 
 General EduEdge runtime activation and optional public-exam feature grants are deliberately separate. A missing public grant must not disable ordinary school operations. See `docs/eduedge_public_exam_access_model.md` for the complete architecture and onboarding contract.
 
@@ -146,7 +146,8 @@ General EduEdge runtime activation and optional public-exam feature grants are d
 
 - Approved questions and templates cannot be edited in place.
 - Corrections require a higher version referencing an Approved or Retired record.
-- School users cannot list or open centrally owned records through ordinary Desk permissions.
+- Normal school roles cannot list or open centrally owned records through ordinary Desk permissions.
+- Customer-owned technical administrators and database owners are not treated as a security boundary; central questions and answers are not replicated to their sites.
 - Public authoring is not inferred from tenant administrative roles.
 - Candidate, parent, and invigilator roles cannot access answer banks.
 - Public hosting approval is controlled centrally.
@@ -169,6 +170,7 @@ The idempotent V0.8 centre patch maps legacy records safely:
 
 - existing `enabled = 1` centres become Active;
 - existing disabled centres become Draft;
+- blank legacy public-hosting states become Not Requested;
 - centres already changed through the new audited status flow are not overwritten.
 
 The migration also provisions `EduEdge Public Exam Administrator`.
@@ -213,7 +215,7 @@ CI validates:
 - centre lifecycle, migration, and hosting controls;
 - question/template ownership and immutability;
 - approved-question filtering and scoring snapshots;
-- branch and public-master isolation;
+- branch and public-master isolation for normal application roles;
 - explicit public capability/action contract;
 - absence of `System Manager` from public author roles;
 - exact site identifier and Frappe token authentication in the remote adapter;
@@ -248,22 +250,24 @@ CI validates:
 ### Public access governance
 
 18. On a standalone site without CoreEdge grants, confirm the capability matrix shows Not Activated.
-19. Confirm only School Examination Centre, School Question Bank, and School Examination choices appear on new forms.
-20. Attempt to create public records through API/import and confirm backend permission rejection.
-21. Confirm tenant `System Manager` and local `Administrator` cannot list public records without author authority.
-22. On the controlled authority site, enable the authority flag temporarily and confirm an authorised ProcessEdge role can create public masters.
-23. Disable the authority flag and confirm access closes again.
-24. On a registered remote test site, activate only `catalog` and confirm other actions remain blocked.
-25. Activate `host` separately and confirm hosting remains dependent on an Approved centre verification.
-26. Suspend or revoke a CoreEdge grant and confirm the site loses that capability.
-27. Confirm an incorrect site identifier is rejected before capability evaluation.
-28. Confirm a missing feature endpoint blocks public capabilities without blocking valid ordinary school operations.
+19. Confirm only School Examination Centre, School Question Bank, and School Examination choices appear for normal tenant roles on new forms.
+20. Attempt to create public records through normal API/import paths and confirm backend permission rejection.
+21. Confirm tenant `System Manager` and `EduEdge Administrator` roles cannot list branch-null public masters or enable public authoring without the explicit role and capability.
+22. Confirm no centrally governed public questions or answer keys are replicated to a customer-owned standalone database.
+23. On the controlled authority site, enable the authority flag temporarily and confirm an authorised ProcessEdge role can create public masters.
+24. Disable the authority flag and confirm access closes again.
+25. On a registered remote test site, activate only `catalog` and confirm other actions remain blocked.
+26. Activate `host` separately and confirm hosting remains dependent on an Approved centre verification.
+27. Suspend or revoke a CoreEdge grant and confirm the site loses that capability.
+28. Confirm an incorrect site identifier is rejected before capability evaluation.
+29. Confirm a missing feature endpoint blocks public capabilities without blocking valid ordinary school operations.
+30. Confirm central launch/result services reject locally fabricated exam identifiers when those services are implemented.
 
 ### UI and safety
 
-29. Confirm CBT Operations loads with EdgeSuite UI and realtime services.
-30. Confirm branch and public-scope counts do not leak records.
-31. Confirm no accounting, attempt, CBT-result, or academic-result record is created.
+31. Confirm CBT Operations loads with EdgeSuite UI and realtime services.
+32. Confirm branch and public-scope counts do not leak records to normal tenant roles.
+33. Confirm no accounting, attempt, CBT-result, or academic-result record is created.
 
 ## Not included in V0.8A
 
