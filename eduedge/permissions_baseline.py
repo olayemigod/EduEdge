@@ -15,6 +15,18 @@ VIEW = ("read", "report", "print")
 VIEW_EXPORT = VIEW + ("export",)
 OPERATE = VIEW + ("create", "write")
 MANAGE = OPERATE + ("delete", "import", "email", "share", "export")
+AUDIT_PERMISSION_TYPES = (
+	"read",
+	"create",
+	"write",
+	"delete",
+	"report",
+	"import",
+	"export",
+	"print",
+	"email",
+	"share",
+)
 
 PLATFORM_MANAGERS = (
 	"System Manager",
@@ -193,9 +205,12 @@ def get_default_permission_matrix() -> dict[str, dict[str, set[str]]]:
 	_grant(matrix, "EduEdge CBT Exam Template", ("Teacher", "Instructor"), OPERATE)
 	_grant(matrix, "EduEdge CBT Exam Template", ("Academics User", "CBT Invigilator"), VIEW)
 
-	_grant(matrix, "EduEdge Training Course", PLATFORM_MANAGERS, MANAGE)
+	# School managers must be able to administer staff training and delegate
+	# oversight through Role Permission Manager. Other Desk users manage only
+	# their own progress records through the record-level permission hook.
+	_grant(matrix, "EduEdge Training Course", managers, MANAGE)
 	_grant(matrix, "EduEdge Training Course", EDUEDGE_DESK_ROLES, VIEW)
-	_grant(matrix, "EduEdge Training Progress", PLATFORM_MANAGERS, MANAGE)
+	_grant(matrix, "EduEdge Training Progress", managers, MANAGE)
 	_grant(matrix, "EduEdge Training Progress", EDUEDGE_DESK_ROLES, OPERATE)
 	return matrix
 
@@ -267,9 +282,35 @@ def ensure_eduedge_page_role_baseline() -> dict:
 	return {"changed_pages": changed_pages}
 
 
+def _role_classification(role: str, managed_roles: set[str]) -> str:
+	if role in PORTAL_ONLY_ROLES:
+		return "portal_only"
+	if role in NO_EDUEDGE_DEFAULT_GRANTS:
+		return "native_erpnext_no_eduedge_default"
+	if role in managed_roles:
+		return "eduedge_managed_default"
+	return "custom_or_unclassified"
+
+
+def _effective_role_rights(audited_doctypes: list[str]) -> dict[str, list[dict]]:
+	rights_by_role: dict[str, list[dict]] = defaultdict(list)
+	for doctype in audited_doctypes:
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		for row in get_valid_perms(doctype):
+			if int(row.permlevel or 0) != 0:
+				continue
+			rights = [permission for permission in AUDIT_PERMISSION_TYPES if int(row.get(permission) or 0)]
+			if rights:
+				rights_by_role[row.role].append({"doctype": doctype, "rights": rights})
+	return rights_by_role
+
+
 def get_role_permission_audit() -> dict:
+	"""Audit every installed role against EduEdge and Frappe Education access."""
+	matrix = get_default_permission_matrix()
 	missing_defaults = []
-	for doctype, role_permissions in get_default_permission_matrix().items():
+	for doctype, role_permissions in matrix.items():
 		if not frappe.db.exists("DocType", doctype):
 			continue
 		valid_rows = get_valid_perms(doctype)
@@ -285,8 +326,52 @@ def get_role_permission_audit() -> dict:
 			missing = sorted(set(expected) - actual)
 			if missing:
 				missing_defaults.append({"doctype": doctype, "role": role, "missing": missing})
+
+	audited_doctypes = sorted(matrix)
+	rights_by_role = _effective_role_rights(audited_doctypes)
+	managed_roles = {
+		role
+		for role_permissions in matrix.values()
+		for role in role_permissions
+	}
+	installed_roles = frappe.get_all(
+		"Role",
+		fields=["name", "desk_access", "disabled"],
+		order_by="name asc",
+		page_length=0,
+	)
+	roles = []
+	unclassified_desk_roles = []
+	for row in installed_roles:
+		classification = _role_classification(row.name, managed_roles)
+		role_payload = {
+			"role": row.name,
+			"desk_access": bool(row.desk_access),
+			"disabled": bool(row.disabled),
+			"classification": classification,
+			"audited_permissions": rights_by_role.get(row.name, []),
+		}
+		roles.append(role_payload)
+		if classification == "custom_or_unclassified" and row.desk_access and not row.disabled:
+			unclassified_desk_roles.append(row.name)
+
+	remaining_page_role_gates = frappe.get_all(
+		"Has Role",
+		filters={
+			"parent": ["in", EDUEDGE_PAGES],
+			"parenttype": "Page",
+			"parentfield": "roles",
+		},
+		fields=["parent", "role"],
+		order_by="parent asc, role asc",
+		page_length=0,
+	)
 	return {
+		"audited_doctypes": audited_doctypes,
 		"missing_defaults": missing_defaults,
+		"roles": roles,
+		"unclassified_desk_roles": unclassified_desk_roles,
+		"remaining_page_role_gates": remaining_page_role_gates,
 		"no_eduedge_default_grants": list(NO_EDUEDGE_DEFAULT_GRANTS),
 		"portal_only_roles": list(PORTAL_ONLY_ROLES),
 	}
