@@ -10,7 +10,13 @@ from eduedge.education.offerings import assert_branch_access
 
 SCHOOL_BANK = "School Question Bank"
 PLATFORM_BANK = "EduEdge Examination Bank"
-OBJECTIVE_TYPES = {"Single Choice", "Multiple Choice", "True/False"}
+BINARY_OPTION_PRESETS = {
+	"True/False": (("TRUE", "True"), ("FALSE", "False")),
+	"Yes/No": (("YES", "Yes"), ("NO", "No")),
+}
+CHOICE_TYPES = {"Single Choice", "Multiple Choice"}
+OBJECTIVE_TYPES = CHOICE_TYPES | set(BINARY_OPTION_PRESETS)
+MINIMUM_CHOICE_KEYS = ("A", "B")
 REVIEW_ROLES = {
 	"System Manager",
 	"EduEdge Administrator",
@@ -56,6 +62,7 @@ class EduEdgeCBTQuestion(Document):
 		self._validate_scope()
 		self._validate_version()
 		self._validate_marks()
+		self._prepare_answer_options()
 		self._validate_answers()
 		self._validate_status_transition()
 		self._prevent_approved_content_mutation()
@@ -144,6 +151,45 @@ class EduEdgeCBTQuestion(Document):
 				frappe.ValidationError,
 			)
 
+	def _prepare_answer_options(self) -> None:
+		"""Prepare safe minimum rows for form, import, and API-created questions."""
+		rows = list(self.get("options") or [])
+		if self.question_type in BINARY_OPTION_PRESETS:
+			if rows:
+				return
+			for index, (option_key, option_text) in enumerate(
+				BINARY_OPTION_PRESETS[self.question_type], start=1
+			):
+				self.append(
+					"options",
+					{
+						"option_key": option_key,
+						"option_text": option_text,
+						"display_order": index,
+					},
+				)
+			return
+
+		if self.question_type not in CHOICE_TYPES or len(rows) >= 2:
+			return
+
+		existing_keys = {(row.option_key or "").strip().upper() for row in rows}
+		for option_key in MINIMUM_CHOICE_KEYS:
+			if len(rows) >= 2:
+				break
+			if option_key in existing_keys:
+				continue
+			row = self.append(
+				"options",
+				{
+					"option_key": option_key,
+					"option_text": "",
+					"display_order": len(rows) + 1,
+				},
+			)
+			rows.append(row)
+			existing_keys.add(option_key)
+
 	def _validate_answers(self) -> None:
 		rows = list(self.get("options") or [])
 		if self.question_type not in OBJECTIVE_TYPES:
@@ -160,8 +206,11 @@ class EduEdgeCBTQuestion(Document):
 
 		if len(rows) < 2:
 			frappe.throw(_("Objective questions require at least two Answer Options."), frappe.ValidationError)
-		if self.question_type == "True/False" and len(rows) != 2:
-			frappe.throw(_("True/False questions require exactly two Answer Options."), frappe.ValidationError)
+		if self.question_type in BINARY_OPTION_PRESETS and len(rows) != 2:
+			frappe.throw(
+				_("{0} questions require exactly two Answer Options.").format(self.question_type),
+				frappe.ValidationError,
+			)
 
 		seen_keys: set[str] = set()
 		correct_count = 0
@@ -170,7 +219,7 @@ class EduEdgeCBTQuestion(Document):
 			if not row.option_key:
 				frappe.throw(_("Every Answer Option requires an Option Key."), frappe.ValidationError)
 			# A blank label intentionally means that the visible answer is simply
-			# the key itself, for example A, B, C, True, or False.
+			# the key itself, for example A, B, C, True, False, Yes, or No.
 			row.option_text = (row.option_text or row.option_key).strip()
 			if row.option_key in seen_keys:
 				frappe.throw(
@@ -183,7 +232,7 @@ class EduEdgeCBTQuestion(Document):
 			row.display_order = cint(row.display_order) or index
 			correct_count += cint(row.is_correct)
 
-		if self.question_type in {"Single Choice", "True/False"} and correct_count != 1:
+		if self.question_type in {"Single Choice", "True/False", "Yes/No"} and correct_count != 1:
 			frappe.throw(
 				_("This question type requires exactly one correct Answer Option."),
 				frappe.ValidationError,
