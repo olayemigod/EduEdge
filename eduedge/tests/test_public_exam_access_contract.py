@@ -13,6 +13,8 @@ class TestPublicExamAccessContract(unittest.TestCase):
 			self.assertIn(f'"{action}"', text)
 		self.assertIn("PUBLIC_EXAM_ACCESS_NOT_ACTIVATED", text)
 		self.assertIn("eduedge_public_exam_authority", text)
+		self.assertIn("get_eduedge_capability_decision", text)
+		self.assertNotIn("get_eduedge_access_decision", text)
 
 	def test_public_authoring_does_not_come_from_system_manager(self):
 		text = (ROOT / "eduedge" / "cbt" / "public_access.py").read_text()
@@ -40,9 +42,26 @@ class TestPublicExamAccessContract(unittest.TestCase):
 		client = (ROOT / "eduedge" / "platform" / "remote_client.py").read_text()
 		self.assertIn("site_identifier", config)
 		self.assertIn("coreedge_site_identifier", config)
+		self.assertIn("coreedge_feature_access_decision_path", config)
+		self.assertIn("feature_access_decision_path", config)
 		self.assertIn('"site_identifier": self.config.site_identifier', client)
 		self.assertIn('"Authorization": f"token {self.config.client_id}:{self.config.client_secret}"', client)
+		self.assertIn("def get_feature_access_decision", client)
+		self.assertIn("self.config.feature_access_decision_path", client)
 		self.assertNotIn('"Authorization": f"Bearer {self.config.client_secret}"', client)
+
+	def test_service_capabilities_fail_closed_without_affecting_runtime_guards(self):
+		access = (ROOT / "eduedge" / "platform" / "access.py").read_text()
+		self.assertIn("def get_eduedge_access_decision", access)
+		self.assertIn("def get_eduedge_capability_decision", access)
+		self.assertIn('decision_type="runtime"', access)
+		self.assertIn('decision_type="capability"', access)
+		self.assertIn("client.get_feature_access_decision", access)
+		self.assertIn("Capabilities always fail closed", access)
+		self.assertIn("guard_eduedge_action", access)
+		guard_block = access.split("def guard_eduedge_action", 1)[1]
+		self.assertIn("require_eduedge_access", guard_block)
+		self.assertNotIn("get_eduedge_capability_decision", guard_block)
 
 	def test_centre_lifecycle_is_non_submittable_and_status_governed(self):
 		controller = (
