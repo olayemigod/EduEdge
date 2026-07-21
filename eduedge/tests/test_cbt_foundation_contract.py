@@ -61,6 +61,7 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertNotIn("CBT Invigilator", roles)
 		self.assertIn("Teacher", roles)
 		self.assertIn("Academic Administrator", roles)
+		self.assertIn("EduEdge Super Administrator", roles)
 
 	def test_question_controller_enforces_approval_and_immutability(self):
 		text = (
@@ -71,8 +72,17 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("ALLOWED_STATUS_TRANSITIONS", text)
 		self.assertIn("Approved question content is immutable", text)
 		self.assertIn("Create a new version instead", text)
+		self.assertIn("Approved or Retired CBT questions cannot be deleted", text)
+		self.assertIn("def autoname", text)
 		self.assertIn("Only an EduEdge platform administrator", text)
 		self.assertIn("assert_branch_access", text)
+
+	def test_platform_records_remain_hidden_during_legacy_branch_fallback(self):
+		text = (ROOT / "eduedge" / "cbt" / "permissions.py").read_text()
+		self.assertIn("school_branch` is not null", text)
+		self.assertIn("if not branch:", text)
+		self.assertIn("return False", text)
+		self.assertIn("PLATFORM_MANAGER_ROLES", text)
 
 	def test_cbt_records_are_registered_for_branch_permissions(self):
 		hooks = (ROOT / "eduedge" / "hooks.py").read_text()
