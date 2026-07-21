@@ -10,30 +10,95 @@ const CBT_CONFIGURE_ROLES = new Set([
 	"Instructor",
 ]);
 
+const CBT_CREATE_OPTIONS = [
+	{
+		doctype: "EduEdge Examination Centre",
+		label: "Examination Centre",
+		description: "Set up a school CBT centre and manage its operational status.",
+	},
+	{
+		doctype: "EduEdge CBT Question",
+		label: "Question",
+		description: "Add a governed question to the school Question Bank.",
+	},
+	{
+		doctype: "EduEdge CBT Exam Template",
+		label: "Exam Template",
+		description: "Create a reusable examination definition from approved questions.",
+	},
+];
+
 function canConfigureCBT() {
 	if (frappe.session.user === "Administrator") return true;
 	return (frappe.user_roles || []).some((role) => CBT_CONFIGURE_ROLES.has(role));
 }
 
-function configureCreateActions(page) {
-	page.clear_inner_toolbar();
+function showCreateDialog() {
 	if (!canConfigureCBT()) return;
 
-	page.add_inner_button(
-		__("Examination Centre"),
-		() => frappe.new_doc("EduEdge Examination Centre"),
-		__("Create New")
+	const dialog = new frappe.ui.Dialog({
+		title: __("Create New"),
+		fields: [{ fieldname: "create_options", fieldtype: "HTML" }],
+	});
+	const escape = frappe.utils.escape_html;
+	const cards = CBT_CREATE_OPTIONS.map(
+		(option) => `
+			<button type="button" class="btn btn-default btn-block text-left mb-3 p-3" data-create-doctype="${escape(option.doctype)}">
+				<div class="font-weight-bold mb-1">${escape(__(option.label))}</div>
+				<div class="text-muted small">${escape(__(option.description))}</div>
+			</button>`
+	).join("");
+
+	$(dialog.fields_dict.create_options.wrapper).html(
+		`<div class="eduedge-cbt-create-options">${cards}</div>`
 	);
-	page.add_inner_button(
-		__("Question"),
-		() => frappe.new_doc("EduEdge CBT Question"),
-		__("Create New")
-	);
-	page.add_inner_button(
-		__("Exam Template"),
-		() => frappe.new_doc("EduEdge CBT Exam Template"),
-		__("Create New")
-	);
+	$(dialog.fields_dict.create_options.wrapper)
+		.find("[data-create-doctype]")
+		.on("click", function () {
+			const doctype = $(this).attr("data-create-doctype");
+			dialog.hide();
+			frappe.new_doc(doctype);
+		});
+	dialog.show();
+}
+
+function installHeaderCreateLauncher(root) {
+	if (!canConfigureCBT() || !root) return;
+
+	const acceptedLabels = new Set([
+		"New Exam Template",
+		__("New Exam Template"),
+		"Create New",
+		__("Create New"),
+	]);
+	const install = () => {
+		const button = Array.from(root.querySelectorAll("button")).find((candidate) =>
+			acceptedLabels.has((candidate.textContent || "").trim())
+		);
+		if (!button) return false;
+
+		button.textContent = __("Create New");
+		if (button.dataset.eduedgeCreateLauncher === "1") return true;
+		button.dataset.eduedgeCreateLauncher = "1";
+		button.addEventListener(
+			"click",
+			(event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				event.stopImmediatePropagation();
+				showCreateDialog();
+			},
+			true
+		);
+		return true;
+	};
+
+	if (install()) return;
+	const observer = new MutationObserver(() => {
+		if (install()) observer.disconnect();
+	});
+	observer.observe(root, { childList: true, subtree: true });
+	window.setTimeout(() => observer.disconnect(), 3000);
 }
 
 frappe.pages["eduedge-cbt-operations"].on_page_load = function (wrapper) {
@@ -46,7 +111,7 @@ frappe.pages["eduedge-cbt-operations"].on_page_load = function (wrapper) {
 
 frappe.pages["eduedge-cbt-operations"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
-	configureCreateActions(page);
+	page.clear_inner_toolbar();
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
 
@@ -100,6 +165,7 @@ frappe.pages["eduedge-cbt-operations"].on_page_show = function (wrapper) {
 					pageName: "eduedge-cbt-operations",
 				});
 				wrapper.vue_app.mount(root[0]);
+				window.requestAnimationFrame(() => installHeaderCreateLauncher(root[0]));
 			} catch (error) {
 				console.error("Failed to mount EduEdge CBT Operations", error);
 				fail(error.message || String(error));
