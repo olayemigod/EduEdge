@@ -23,3 +23,15 @@ def execute() -> None:
 		WHERE `status_changed_on` IS NULL
 		"""
 	)
+
+	if frappe.db.has_column("EduEdge Examination Centre", "public_hosting_status"):
+		# Existing centres predate public-hosting governance. Normalise the empty
+		# state so an ordinary school-side edit is not mistaken for a protected
+		# ProcessEdge status change on first save.
+		frappe.db.sql(
+			"""
+			UPDATE `tabEduEdge Examination Centre`
+			SET `public_hosting_status` = 'Not Requested'
+			WHERE COALESCE(`public_hosting_status`, '') = ''
+			"""
+		)
