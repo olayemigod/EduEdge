@@ -12,25 +12,30 @@ const CBT_CONFIGURE_ROLES = new Set([
 
 const CBT_CREATE_OPTIONS = [
 	{
-		doctype: "EduEdge Examination Centre",
 		label: "Examination Centre",
 		description: "Set up a school CBT centre and manage its operational status.",
+		route: "/app/eduedge-examination-centre/new-eduedge-examination-centre",
 	},
 	{
-		doctype: "EduEdge CBT Question",
 		label: "Question",
 		description: "Add a governed question to the school Question Bank.",
+		route: "/app/eduedge-cbt-question/new-eduedge-cbt-question",
 	},
 	{
-		doctype: "EduEdge CBT Exam Template",
 		label: "Exam Template",
 		description: "Create a reusable examination definition from approved questions.",
+		route: "/app/eduedge-cbt-exam-template/new-eduedge-cbt-exam-template",
 	},
 ];
 
 function canConfigureCBT() {
 	if (frappe.session.user === "Administrator") return true;
 	return (frappe.user_roles || []).some((role) => CBT_CONFIGURE_ROLES.has(role));
+}
+
+function openNativeDeskRouteInNewTab(route) {
+	const url = new URL(route, window.location.origin);
+	window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
 
 function showCreateDialog() {
@@ -43,9 +48,10 @@ function showCreateDialog() {
 	const escape = frappe.utils.escape_html;
 	const cards = CBT_CREATE_OPTIONS.map(
 		(option) => `
-			<button type="button" class="btn btn-default btn-block text-left mb-3 p-3" data-create-doctype="${escape(option.doctype)}">
+			<button type="button" class="btn btn-default btn-block text-left mb-3 p-3" data-create-route="${escape(option.route)}">
 				<div class="font-weight-bold mb-1">${escape(__(option.label))}</div>
 				<div class="text-muted small">${escape(__(option.description))}</div>
+				<div class="text-muted small mt-1">${escape(__("Opens in a new EduEdge Desk tab"))}</div>
 			</button>`
 	).join("");
 
@@ -53,11 +59,11 @@ function showCreateDialog() {
 		`<div class="eduedge-cbt-create-options">${cards}</div>`
 	);
 	$(dialog.fields_dict.create_options.wrapper)
-		.find("[data-create-doctype]")
+		.find("[data-create-route]")
 		.on("click", function () {
-			const doctype = $(this).attr("data-create-doctype");
+			const route = $(this).attr("data-create-route");
 			dialog.hide();
-			frappe.new_doc(doctype);
+			openNativeDeskRouteInNewTab(route);
 		});
 	dialog.show();
 }
