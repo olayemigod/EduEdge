@@ -56,6 +56,8 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertEqual(fields["options"]["options"], "EduEdge Question Option")
 		self.assertIn("School Question Bank", fields["ownership_scope"]["options"])
 		self.assertIn("EduEdge Examination Bank", fields["ownership_scope"]["options"])
+		self.assertIn("Yes/No", fields["question_type"]["options"])
+		self.assertIn("'Yes/No'", fields["options"]["depends_on"])
 
 	def test_question_permissions_do_not_expose_answer_bank_to_candidates_or_invigilators(self):
 		payload = self._load_doctype(
@@ -83,6 +85,32 @@ class TestCBTFoundationContract(unittest.TestCase):
 		self.assertIn("def autoname", text)
 		self.assertIn("require_public_exam_authoring", text)
 		self.assertIn("assert_branch_access", text)
+
+	def test_question_controller_prepares_objective_answer_rows(self):
+		text = (
+			DOCTYPE_ROOT
+			/ "eduedge_cbt_question"
+			/ "eduedge_cbt_question.py"
+		).read_text()
+		self.assertIn('"Yes/No": (("YES", "Yes"), ("NO", "No"))', text)
+		self.assertIn('"True/False": (("TRUE", "True"), ("FALSE", "False"))', text)
+		self.assertIn('MINIMUM_CHOICE_KEYS = ("A", "B")', text)
+		self.assertIn("def _prepare_answer_options", text)
+		self.assertIn('self.question_type in {"Single Choice", "True/False", "Yes/No"}', text)
+
+	def test_question_form_prepares_answer_rows_when_type_changes(self):
+		text = (
+			DOCTYPE_ROOT
+			/ "eduedge_cbt_question"
+			/ "eduedge_cbt_question.js"
+		).read_text()
+		self.assertIn('"Yes/No": [', text)
+		self.assertIn('{ option_key: "YES", option_text: "Yes" }', text)
+		self.assertIn('{ option_key: "NO", option_text: "No" }', text)
+		self.assertIn('const MINIMUM_CHOICE_KEYS = ["A", "B"]', text)
+		self.assertIn("function prepareAnswerOptions", text)
+		self.assertIn("question_type(frm)", text)
+		self.assertIn("ensureMinimumChoiceOptions(frm)", text)
 
 	def test_platform_records_remain_hidden_during_legacy_branch_fallback(self):
 		text = (ROOT / "eduedge" / "cbt" / "permissions.py").read_text()
