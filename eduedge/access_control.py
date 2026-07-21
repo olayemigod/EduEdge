@@ -145,7 +145,7 @@ def _has_permission(doctype: str, permission_type: str, user: str) -> bool:
 		# Frappe 16 accepts doctype, permission type, and user here. Avoid
 		# unsupported legacy keyword arguments such as print_logs.
 		return bool(frappe.has_permission(doctype, permission_type, user=user))
-	 except (frappe.DoesNotExistError, frappe.PermissionError):
+	except (frappe.DoesNotExistError, frappe.PermissionError):
 		return False
 
 
