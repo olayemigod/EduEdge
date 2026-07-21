@@ -101,7 +101,7 @@ class TestPublicExamAccessContract(unittest.TestCase):
 		self.assertIn('"non_active_centres": len(all_centres) - len(centres)', api)
 		self.assertIn('"centres": centres[:12]', api)
 
-	def test_cbt_operations_keeps_create_actions_visible(self):
+	def test_cbt_operations_uses_visible_header_create_launcher(self):
 		loader = (
 			ROOT
 			/ "eduedge"
@@ -110,11 +110,15 @@ class TestPublicExamAccessContract(unittest.TestCase):
 			/ "eduedge_cbt_operations"
 			/ "eduedge_cbt_operations.js"
 		).read_text()
-		self.assertIn("configureCreateActions", loader)
-		self.assertIn('frappe.new_doc("EduEdge Examination Centre")', loader)
-		self.assertIn('frappe.new_doc("EduEdge CBT Question")', loader)
-		self.assertIn('frappe.new_doc("EduEdge CBT Exam Template")', loader)
-		self.assertIn('__("Create New")', loader)
+		self.assertIn("installHeaderCreateLauncher", loader)
+		self.assertIn("showCreateDialog", loader)
+		self.assertIn("page.clear_inner_toolbar()", loader)
+		self.assertNotIn("page.add_inner_button", loader)
+		self.assertIn('doctype: "EduEdge Examination Centre"', loader)
+		self.assertIn('doctype: "EduEdge CBT Question"', loader)
+		self.assertIn('doctype: "EduEdge CBT Exam Template"', loader)
+		self.assertIn('button.textContent = __("Create New")', loader)
+		self.assertIn("event.stopImmediatePropagation()", loader)
 
 	def test_public_hosting_approval_is_platform_controlled(self):
 		controller = (
