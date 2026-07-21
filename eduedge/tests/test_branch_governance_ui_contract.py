@@ -72,7 +72,7 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 		self.assertIn("include_assignment_details", service)
 		self.assertIn("include_all_branches", service)
 		self.assertIn("user_has_role_permission", api)
-		self.assertIn('_has("write", "EduEdge User Branch Access")', api)
+		self.assertIn('"write", "EduEdge User Branch Access"', api)
 		self.assertIn('_has("write", "EduEdge School Branch")', api)
 		self.assertIn('_has("write", "EduEdge Settings")', api)
 		self.assertNotIn("MANAGE_ROLES", api)
