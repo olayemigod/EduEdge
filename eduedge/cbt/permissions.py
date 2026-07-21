@@ -2,25 +2,18 @@ from __future__ import annotations
 
 import frappe
 
+from eduedge.access_control import user_has_role_permission
 from eduedge.cbt.public_access import can_author_public_exams
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	is_branch_access_enforced,
 )
 
-CBT_OPERATIONAL_ROLES = {
-	"System Manager",
-	"EduEdge Super Administrator",
-	"EduEdge Public Exam Administrator",
-	"EduEdge Administrator",
-	"Academics User",
-	"Education Manager",
-	"Instructor",
-	"Teacher",
-	"School Administrator",
-	"Academic Administrator",
-	"CBT Invigilator",
-}
+CBT_DOCTYPES = (
+	"EduEdge Examination Centre",
+	"EduEdge CBT Question",
+	"EduEdge CBT Exam Template",
+)
 
 
 def examination_centre_query(user: str | None = None) -> str:
@@ -83,6 +76,8 @@ def _allowed_branch_names(user: str) -> set[str] | None:
 def _is_cbt_operational_user(user: str) -> bool:
 	if not user or user == "Guest":
 		return False
-	if user == "Administrator":
-		return True
-	return bool(set(frappe.get_roles(user)).intersection(CBT_OPERATIONAL_ROLES))
+	return any(
+		user_has_role_permission(doctype, permission_type, user)
+		for doctype in CBT_DOCTYPES
+		for permission_type in ("read", "create", "write", "report")
+	)
