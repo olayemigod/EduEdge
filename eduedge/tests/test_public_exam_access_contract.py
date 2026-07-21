@@ -123,6 +123,23 @@ class TestPublicExamAccessContract(unittest.TestCase):
 		self.assertIn('button.textContent = __("Create New")', loader)
 		self.assertIn("event.stopImmediatePropagation()", loader)
 
+	def test_cbt_operations_collapses_optional_public_access_details(self):
+		loader = (
+			ROOT
+			/ "eduedge"
+			/ "eduedge"
+			/ "page"
+			/ "eduedge_cbt_operations"
+			/ "eduedge_cbt_operations.js"
+		).read_text()
+		self.assertIn("installPublicAccessDisclosure", loader)
+		self.assertIn("queuePublicAccessDisclosure", loader)
+		self.assertIn('root.querySelector(".eduedge-cbt-access-panel")', loader)
+		self.assertIn("operationallyRelevant || savedPreference === \"1\"", loader)
+		self.assertIn('toggle.textContent = expanded ? __("Hide access details") : __("Show access details")', loader)
+		self.assertIn("row.hidden = !expanded", loader)
+		self.assertIn("window.localStorage.setItem", loader)
+
 	def test_public_hosting_approval_is_platform_controlled(self):
 		controller = (
 			ROOT
