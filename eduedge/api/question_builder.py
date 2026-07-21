@@ -9,9 +9,9 @@ from frappe.utils import cint, flt
 from eduedge.cbt.public_access import get_public_exam_capability_summary
 from eduedge.eduedge.doctype.eduedge_cbt_question.eduedge_cbt_question import (
 	PLATFORM_BANK,
-	REVIEW_ROLES,
 	SCHOOL_BANK,
 	_require_question_author,
+	can_review_questions,
 	course_topic_query,
 )
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
@@ -149,10 +149,7 @@ def _new_question() -> dict:
 
 
 def _can_review(scope: str, public_access: dict) -> bool:
-	if frappe.session.user == "Administrator":
-		return True
-	roles = set(frappe.get_roles(frappe.session.user))
-	if not roles.intersection(REVIEW_ROLES):
+	if not can_review_questions(frappe.session.user):
 		return False
 	if scope == PLATFORM_BANK:
 		return bool(public_access.get("capabilities", {}).get("author", {}).get("allowed"))
@@ -190,8 +187,7 @@ def _builder_response(question: dict, public_access: dict, source_doc=None) -> d
 				and status in {"Approved", "Retired"}
 				and frappe.has_permission(QUESTION_DOCTYPE, "create")
 			),
-			"can_open_technical_record": "System Manager" in frappe.get_roles(frappe.session.user)
-			or frappe.session.user == "Administrator",
+			"can_open_technical_record": bool(frappe.has_permission(QUESTION_DOCTYPE, "read")),
 		},
 		"public_exam_access": public_access,
 	}
