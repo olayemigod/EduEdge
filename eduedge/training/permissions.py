@@ -2,25 +2,15 @@ from __future__ import annotations
 
 import frappe
 
+from eduedge.access_control import user_has_role_permission
+
 TRAINING_PROGRESS_DOCTYPE = "EduEdge Training Progress"
 
 
 def _has_oversight(user: str) -> bool:
-	if user == "Administrator":
-		return True
-	try:
-		# Delete is reserved for oversight roles in the default matrix. Using a
-		# configured DocType right keeps Role Permission Manager authoritative.
-		return bool(
-			frappe.has_permission(
-				TRAINING_PROGRESS_DOCTYPE,
-				"delete",
-				user=user,
-				print_logs=False,
-			)
-		)
-	except (frappe.DoesNotExistError, frappe.PermissionError):
-		return False
+	# Delete is reserved for oversight roles in the default matrix. Using the
+	# configured role row avoids recursively invoking this DocType's own hooks.
+	return user_has_role_permission(TRAINING_PROGRESS_DOCTYPE, "delete", user)
 
 
 def training_progress_query(user: str | None = None) -> str:
