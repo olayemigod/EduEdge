@@ -1,18 +1,22 @@
 const SCHOOL_BANK = "School Question Bank";
 const PUBLIC_BANK = "EduEdge Examination Bank";
-const BINARY_OPTION_PRESETS = {
-	"True/False": [
-		{ option_key: "TRUE", option_text: "True" },
-		{ option_key: "FALSE", option_text: "False" },
-	],
-	"Yes/No": [
-		{ option_key: "YES", option_text: "Yes" },
-		{ option_key: "NO", option_text: "No" },
-	],
+const BINARY_ANSWER_PRESETS = {
+	"True/False": ["True", "False"],
+	"Yes/No": ["Yes", "No"],
 };
 const CHOICE_TYPES = new Set(["Single Choice", "Multiple Choice"]);
-const MINIMUM_CHOICE_KEYS = ["A", "B"];
-const GENERATED_BINARY_KEYS = new Set(["TRUE", "FALSE", "YES", "NO"]);
+const GENERATED_BINARY_ANSWERS = new Set(["", "true", "false", "yes", "no"]);
+
+function optionLabel(position) {
+	let value = Number(position || 0);
+	let label = "";
+	while (value > 0) {
+		value -= 1;
+		label = String.fromCharCode(65 + (value % 26)) + label;
+		value = Math.floor(value / 26);
+	}
+	return label;
+}
 
 function getPublicExamAccess() {
 	if (!window.__eduedgePublicExamAccessPromise) {
@@ -58,72 +62,63 @@ async function applyQuestionBankGovernance(frm) {
 
 function normaliseAnswerOptions(frm) {
 	for (const [index, row] of (frm.doc.options || []).entries()) {
-		row.option_key = (row.option_key || "").trim().toUpperCase();
-		if (!String(row.option_text || "").trim() && row.option_key) {
-			row.option_text = row.option_key;
-		}
-		if (!Number(row.display_order)) {
-			row.display_order = index + 1;
-		}
+		row.option_key = optionLabel(index + 1);
+		row.option_text = String(row.option_text || "").trim();
+		row.display_order = index + 1;
 	}
 	frm.refresh_field("options");
 }
 
-function addPreparedOption(frm, option, displayOrder = 0) {
+function addPreparedAnswer(frm, answerText = "") {
 	const row = frm.add_child("options");
-	row.option_key = option.option_key;
-	row.option_text = option.option_text || "";
-	row.display_order = displayOrder;
+	const position = (frm.doc.options || []).length;
+	row.option_key = optionLabel(position);
+	row.option_text = answerText;
+	row.display_order = position;
 	return row;
 }
 
 function matchesPreset(rows, preset) {
 	if (rows.length !== preset.length) return false;
-	return rows.every((row, index) => {
-		const expected = preset[index];
-		return (row.option_key || "").trim().toUpperCase() === expected.option_key;
-	});
+	return rows.every(
+		(row, index) =>
+			String(row.option_text || "").trim().toLowerCase() === preset[index].toLowerCase()
+	);
 }
 
 function canReplaceWithBinaryPreset(rows) {
 	if (!rows.length) return true;
 	return rows.every((row) => {
-		const key = (row.option_key || "").trim().toUpperCase();
-		return GENERATED_BINARY_KEYS.has(key) && !Number(row.is_correct || 0);
+		const answer = String(row.option_text || "").trim().toLowerCase();
+		return GENERATED_BINARY_ANSWERS.has(answer) && !Number(row.is_correct || 0);
 	});
 }
 
 function applyBinaryPreset(frm, preset) {
 	frm.clear_table("options");
-	for (const [index, option] of preset.entries()) {
-		addPreparedOption(frm, option, index + 1);
+	for (const answerText of preset) {
+		addPreparedAnswer(frm, answerText);
 	}
-	frm.refresh_field("options");
+	normaliseAnswerOptions(frm);
 }
 
-function ensureMinimumChoiceOptions(frm) {
-	const rows = frm.doc.options || [];
-	if (rows.length >= 2) return;
-
-	const existingKeys = new Set(
-		rows.map((row) => (row.option_key || "").trim().toUpperCase()).filter(Boolean)
-	);
-	for (const optionKey of MINIMUM_CHOICE_KEYS) {
-		if ((frm.doc.options || []).length >= 2) break;
-		if (existingKeys.has(optionKey)) continue;
-		addPreparedOption(frm, { option_key: optionKey, option_text: "" });
-		existingKeys.add(optionKey);
+function ensureMinimumChoiceAnswers(frm) {
+	while ((frm.doc.options || []).length < 2) {
+		addPreparedAnswer(frm);
 	}
-	frm.refresh_field("options");
+	normaliseAnswerOptions(frm);
 }
 
 function prepareAnswerOptions(frm) {
 	const questionType = frm.doc.question_type;
-	const preset = BINARY_OPTION_PRESETS[questionType];
+	const preset = BINARY_ANSWER_PRESETS[questionType];
 	const rows = frm.doc.options || [];
 
 	if (preset) {
-		if (matchesPreset(rows, preset)) return;
+		if (matchesPreset(rows, preset)) {
+			normaliseAnswerOptions(frm);
+			return;
+		}
 		if (canReplaceWithBinaryPreset(rows)) {
 			applyBinaryPreset(frm, preset);
 			return;
@@ -131,7 +126,7 @@ function prepareAnswerOptions(frm) {
 		frappe.show_alert(
 			{
 				message: __(
-					"Existing answer options were kept. Clear them before applying the {0} preset."
+					"Existing answers were kept. Clear them before applying the {0} answers."
 				).replace("{0}", questionType),
 				indicator: "orange",
 			},
@@ -141,7 +136,7 @@ function prepareAnswerOptions(frm) {
 	}
 
 	if (CHOICE_TYPES.has(questionType)) {
-		ensureMinimumChoiceOptions(frm);
+		ensureMinimumChoiceAnswers(frm);
 	}
 }
 
@@ -193,5 +188,15 @@ frappe.ui.form.on("EduEdge CBT Question", {
 		if (previousVersion) {
 			await frm.set_value("version_number", previousVersion + 1);
 		}
+	},
+});
+
+frappe.ui.form.on("EduEdge Question Option", {
+	options_add(frm) {
+		normaliseAnswerOptions(frm);
+	},
+
+	options_move(frm) {
+		normaliseAnswerOptions(frm);
 	},
 });
