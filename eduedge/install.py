@@ -10,6 +10,7 @@ from eduedge.education.custom_fields import (
 
 ROLE_DESK_ACCESS = {
 	"EduEdge Super Administrator": 1,
+	"EduEdge Public Exam Administrator": 1,
 	"EduEdge Administrator": 1,
 	"School Administrator": 1,
 	"Academic Administrator": 1,
@@ -45,6 +46,7 @@ ADMISSION_PERMISSION_TYPES = (
 
 TRAINING_PROGRESS_ROLES = (
 	"EduEdge Super Administrator",
+	"EduEdge Public Exam Administrator",
 	"System Manager",
 	"EduEdge Administrator",
 	"School Administrator",
