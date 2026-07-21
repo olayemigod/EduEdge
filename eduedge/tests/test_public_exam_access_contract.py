@@ -93,6 +93,64 @@ class TestPublicExamAccessContract(unittest.TestCase):
 		self.assertIn("def before_cancel", controller)
 		self.assertIn("non-submittable master records", controller)
 
+	def test_question_and_template_are_non_submittable_server_guarded_masters(self):
+		for doctype_folder, json_name in (
+			("eduedge_cbt_question", "eduedge_cbt_question.json"),
+			("eduedge_cbt_exam_template", "eduedge_cbt_exam_template.json"),
+		):
+			doctype = json.loads(
+				(ROOT / "eduedge" / "eduedge" / "doctype" / doctype_folder / json_name).read_text()
+			)
+			self.assertEqual(doctype["is_submittable"], 0)
+
+		hooks = (ROOT / "eduedge" / "hooks.py").read_text()
+		guard = (ROOT / "eduedge" / "cbt" / "master_lifecycle.py").read_text()
+		patches = (ROOT / "eduedge" / "patches.txt").read_text()
+		for doctype in ("EduEdge CBT Question", "EduEdge CBT Exam Template"):
+			self.assertIn(f'"{doctype}": {{', hooks)
+		self.assertIn("validate_master_docstatus", hooks)
+		self.assertIn("block_master_submit", hooks)
+		self.assertIn("block_master_cancel", hooks)
+		self.assertIn("non-submittable master record", guard)
+		self.assertIn("enforce_cbt_master_lifecycle", patches)
+
+	def test_question_options_default_blank_text_and_order_safely(self):
+		option_doctype = json.loads(
+			(
+				ROOT
+				/ "eduedge"
+				/ "eduedge"
+				/ "doctype"
+				/ "eduedge_question_option"
+				/ "eduedge_question_option.json"
+			).read_text()
+		)
+		fields = {field["fieldname"]: field for field in option_doctype["fields"]}
+		self.assertFalse(fields["option_text"].get("reqd"))
+		self.assertNotIn("default", fields["display_order"])
+
+		controller = (
+			ROOT
+			/ "eduedge"
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_cbt_question"
+			/ "eduedge_cbt_question.py"
+		).read_text()
+		script = (
+			ROOT
+			/ "eduedge"
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_cbt_question"
+			/ "eduedge_cbt_question.js"
+		).read_text()
+		self.assertIn("row.option_text or row.option_key", controller)
+		self.assertIn("cint(row.display_order) or index", controller)
+		self.assertIn("normaliseAnswerOptions", script)
+		self.assertIn("Previous Question Version", json.dumps(json.loads((ROOT / "eduedge" / "eduedge" / "doctype" / "eduedge_cbt_question" / "eduedge_cbt_question.json").read_text())))
+		self.assertIn("previousVersion + 1", script)
+
 	def test_cbt_operations_lists_only_active_centres_but_counts_all(self):
 		api = (ROOT / "eduedge" / "api" / "cbt.py").read_text()
 		self.assertIn("all_centres = frappe.get_list", api)
@@ -135,7 +193,7 @@ class TestPublicExamAccessContract(unittest.TestCase):
 		self.assertIn("installPublicAccessDisclosure", loader)
 		self.assertIn("queuePublicAccessDisclosure", loader)
 		self.assertIn('root.querySelector(".eduedge-cbt-access-panel")', loader)
-		self.assertIn("operationallyRelevant || savedPreference === \"1\"", loader)
+		self.assertIn('operationallyRelevant || savedPreference === "1"', loader)
 		self.assertIn('toggle.textContent = expanded ? __("Hide access details") : __("Show access details")', loader)
 		self.assertIn("row.hidden = !expanded", loader)
 		self.assertIn("window.localStorage.setItem", loader)
