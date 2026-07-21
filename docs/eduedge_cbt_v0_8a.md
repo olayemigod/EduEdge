@@ -140,7 +140,7 @@ Public authoring requires:
 
 `System Manager`, local `Administrator`, deployment mode, or server ownership alone does not grant public authoring.
 
-See `docs/eduedge_public_exam_access_model.md` for the complete architecture and onboarding contract.
+General EduEdge runtime activation and optional public-exam feature grants are deliberately separate. A missing public grant must not disable ordinary school operations. See `docs/eduedge_public_exam_access_model.md` for the complete architecture and onboarding contract.
 
 ## Safety rules
 
@@ -185,7 +185,7 @@ The centrally controlled ProcessEdge exam-authoring site may use:
 }
 ```
 
-A standalone/white-label client uses settings similar to:
+A standalone/white-label client keeps runtime and feature-access endpoints separate:
 
 ```json
 {
@@ -197,11 +197,12 @@ A standalone/white-label client uses settings similar to:
   "coreedge_site_identifier": "school.example.com",
   "coreedge_client_id": "API-KEY",
   "coreedge_client_secret": "API-SECRET",
-  "coreedge_access_decision_path": "/api/method/coreedge.api.v1.service_gateway.check_feature_access"
+  "coreedge_access_decision_path": "/api/method/coreedge.api.v1.service_gateway.check_runtime_access",
+  "coreedge_feature_access_decision_path": "/api/method/coreedge.api.v1.service_gateway.check_feature_access"
 }
 ```
 
-Secrets must not be committed to Git or copied into normal documentation.
+The first endpoint controls general EduEdge activation. The second controls exact optional capabilities. Secrets must not be committed to Git or copied into normal documentation.
 
 ## Automated validation
 
@@ -216,6 +217,7 @@ CI validates:
 - explicit public capability/action contract;
 - absence of `System Manager` from public author roles;
 - exact site identifier and Frappe token authentication in the remote adapter;
+- separate runtime and feature-access paths with fail-closed capability behaviour;
 - CBT Operations registration and capability matrix.
 
 ## Manual QA checklist
@@ -255,12 +257,13 @@ CI validates:
 25. Activate `host` separately and confirm hosting remains dependent on an Approved centre verification.
 26. Suspend or revoke a CoreEdge grant and confirm the site loses that capability.
 27. Confirm an incorrect site identifier is rejected before capability evaluation.
+28. Confirm a missing feature endpoint blocks public capabilities without blocking valid ordinary school operations.
 
 ### UI and safety
 
-28. Confirm CBT Operations loads with EdgeSuite UI and realtime services.
-29. Confirm branch and public-scope counts do not leak records.
-30. Confirm no accounting, attempt, CBT-result, or academic-result record is created.
+29. Confirm CBT Operations loads with EdgeSuite UI and realtime services.
+30. Confirm branch and public-scope counts do not leak records.
+31. Confirm no accounting, attempt, CBT-result, or academic-result record is created.
 
 ## Not included in V0.8A
 
