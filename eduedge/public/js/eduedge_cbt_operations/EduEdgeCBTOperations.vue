@@ -14,7 +14,7 @@
 				<EdgePageHeader
 					eyebrow="Computer-Based Testing"
 					title="CBT Operations"
-					subtitle="Govern examination centres, approved question banks, reusable exam templates, and candidate-control policies."
+					subtitle="Govern school CBT locally and review centrally activated EduEdge Exams access for this site."
 					:action-label="context.can_manage_templates ? 'New Exam Template' : null"
 					@action="openRoute('/app/eduedge-cbt-exam-template/new-eduedge-cbt-exam-template')"
 				/>
@@ -36,7 +36,7 @@
 							<select v-model="filters.exam_scope" class="form-control" @change="changeScope">
 								<option value="School Examination">School Examination</option>
 								<option v-if="context.can_manage_public" value="EduEdge Public Examination">
-									EduEdge Public Examination
+									EduEdge Public Examination Authoring
 								</option>
 							</select>
 						</label>
@@ -59,9 +59,40 @@
 					Select a School Branch / Campus to view its CBT centres, question bank, and templates.
 				</div>
 
+				<section class="eduedge-cbt-panel eduedge-cbt-access-panel">
+					<div class="eduedge-cbt-panel-heading">
+						<div>
+							<p class="edge-eyebrow">CoreEdge activation</p>
+							<h2>EduEdge Exams access for this site</h2>
+						</div>
+						<EdgeStatusBadge
+							:label="publicAccessLabel"
+							:status="publicAccessLabel"
+							:tone="publicAccessTone"
+						/>
+					</div>
+					<p class="eduedge-cbt-access-summary">{{ publicAccessMessage }}</p>
+					<div class="eduedge-cbt-capability-grid">
+						<div v-for="capability in publicCapabilityRows" :key="capability.key" class="eduedge-cbt-capability">
+							<div>
+								<strong>{{ capability.label }}</strong>
+								<span>{{ capability.description }}</span>
+							</div>
+							<EdgeStatusBadge
+								:label="capability.allowed ? 'Available' : 'Not Activated'"
+								:status="capability.allowed ? 'available' : 'not-activated'"
+								:tone="capability.allowed ? 'success' : 'neutral'"
+							/>
+						</div>
+					</div>
+					<p class="eduedge-cbt-access-note">
+						Standalone and white-label sites consume centrally governed exam versions through CoreEdge. Public question banks and answer keys are not copied into editable tenant records.
+					</p>
+				</section>
+
 				<EdgeDashboardLayout min-column-width="12rem">
 					<EdgeStatCard label="Examination Centres" :value="context.counts.centres || 0" helper="Centres in the selected scope" />
-					<EdgeStatCard label="Enabled Centres" :value="context.counts.enabled_centres || 0" helper="Available for future schedules" />
+					<EdgeStatCard label="Active Centres" :value="context.counts.enabled_centres || 0" helper="Available for future schedules" />
 					<EdgeStatCard label="Exam Templates" :value="context.counts.templates || 0" helper="Reusable examination definitions" />
 					<EdgeStatCard label="Approved Templates" :value="context.counts.approved_templates || 0" helper="Ready for scheduling" />
 					<EdgeStatCard
@@ -86,7 +117,7 @@
 						<EdgeEmptyState
 							v-if="!context.centres.length"
 							title="No examination centres found"
-							description="Create a centre that matches the selected school or EduEdge public examination scope."
+							description="Create a centre that matches the selected school or ProcessEdge public-authoring scope."
 							:action-label="context.can_manage_templates ? 'Create examination centre' : null"
 							@action="openRoute('/app/eduedge-examination-centre/new-eduedge-examination-centre')"
 						/>
@@ -100,12 +131,15 @@
 							>
 								<div>
 									<strong>{{ centre.centre_name || centre.name }}</strong>
-									<span>{{ centre.centre_code }} · {{ centre.location || 'No location' }} · Capacity {{ centre.capacity || 0 }}</span>
+									<span>
+										{{ centre.centre_code }} · {{ centre.location || 'No location' }} · Capacity {{ centre.capacity || 0 }}
+										<template v-if="centre.public_hosting_status === 'Approved'"> · Public host approved</template>
+									</span>
 								</div>
 								<EdgeStatusBadge
-									:label="centre.enabled ? 'Enabled' : 'Disabled'"
-									:status="centre.enabled ? 'enabled' : 'disabled'"
-									:tone="centre.enabled ? 'success' : 'neutral'"
+									:label="centre.centre_status || (centre.enabled ? 'Active' : 'Draft')"
+									:status="centre.centre_status || (centre.enabled ? 'Active' : 'Draft')"
+									:tone="centreTone(centre.centre_status || (centre.enabled ? 'Active' : 'Draft'))"
 								/>
 							</button>
 						</div>
@@ -172,9 +206,7 @@
 						<div v-if="context.can_author_questions" class="eduedge-cbt-readiness">
 							<div><span>Approved questions</span><strong>{{ context.counts.approved_questions || 0 }}</strong></div>
 							<div><span>Draft or under review</span><strong>{{ context.counts.draft_questions || 0 }}</strong></div>
-							<p>
-								Only approved questions from the matching ownership scope, branch, and course can be selected in a template.
-							</p>
+							<p>Only approved questions from the matching ownership scope, branch, and course can be selected in a template.</p>
 						</div>
 						<div v-else class="eduedge-cbt-scope-note">
 							Question content and answer governance are restricted to authorised academic staff. Invigilators can view approved exam templates without direct Question Bank access.
@@ -191,10 +223,11 @@
 						<div class="eduedge-cbt-roadmap">
 							<p>Exam templates are definitions only. They do not yet create candidate attempts or publish results.</p>
 							<ul>
+								<li>Central public-exam catalogue references and signed launch sessions</li>
 								<li>Exam schedule and candidate eligibility</li>
 								<li>Server-authoritative timing and one active attempt</li>
 								<li>Browser answer saving and pending-sync visibility</li>
-								<li>Invigilator monitoring and result approval safety</li>
+								<li>Invigilator monitoring and signed result return</li>
 							</ul>
 						</div>
 					</article>
@@ -207,6 +240,15 @@
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
 
+const PUBLIC_CAPABILITY_META = [
+	["catalog", "Exam Catalogue", "Browse centrally published EduEdge Exams"],
+	["assign", "Candidate Assignment", "Assign entitled candidates from this site"],
+	["host", "Centre Hosting", "Host public exams at a verified school centre"],
+	["launch", "Candidate Launch", "Create signed central examination sessions"],
+	["results", "Results Access", "Receive signed public-exam result records"],
+	["author", "Content Authoring", "Create ProcessEdge public questions and templates"],
+];
+
 export default {
 	name: "EduEdgeCBTOperations",
 	data() {
@@ -214,10 +256,7 @@ export default {
 			loading: true,
 			error: "",
 			menuItems: EDUEDGE_MENU_ITEMS,
-			filters: {
-				exam_scope: "School Examination",
-				branch: "",
-			},
+			filters: { exam_scope: "School Examination", branch: "" },
 			context: {
 				user: {},
 				current_branch: null,
@@ -229,12 +268,42 @@ export default {
 				can_manage_public: false,
 				can_author_questions: false,
 				can_manage_templates: false,
+				public_exam_access: { authority_site: false, platform_mode: "standalone", capabilities: {} },
 			},
 		};
 	},
 	computed: {
 		isSchoolScope() {
 			return this.filters.exam_scope === "School Examination";
+		},
+		publicCapabilityRows() {
+			const capabilities = this.context.public_exam_access?.capabilities || {};
+			return PUBLIC_CAPABILITY_META.map(([key, label, description]) => ({
+				key,
+				label,
+				description,
+				allowed: Boolean(capabilities[key]?.allowed),
+			}));
+		},
+		publicAccessLabel() {
+			if (this.context.public_exam_access?.authority_site) return "Authority Site";
+			const enabled = this.publicCapabilityRows.filter((row) => row.allowed).length;
+			return enabled ? `${enabled} Capabilities Active` : "Not Activated";
+		},
+		publicAccessTone() {
+			return this.publicCapabilityRows.some((row) => row.allowed) ? "success" : "neutral";
+		},
+		publicAccessMessage() {
+			if (this.context.public_exam_access?.authority_site) {
+				return "This site is the controlled ProcessEdge authoring authority for EduEdge public examinations.";
+			}
+			if (this.context.public_exam_access?.capabilities?.catalog?.allowed) {
+				return "CoreEdge has activated selected EduEdge Exams capabilities for this tenant. Public content remains centrally governed.";
+			}
+			if (this.context.public_exam_access?.platform_mode === "remote") {
+				return "This site is connected to CoreEdge, but EduEdge Exams access has not been activated for the current tenant or user.";
+			}
+			return "School CBT remains available locally. Connect this site to CoreEdge to activate EduEdge public-exam catalogue, hosting, launch, and result capabilities.";
 		},
 	},
 	mounted() {
@@ -244,8 +313,13 @@ export default {
 		openRoute: openEduEdgeRoute,
 		statusTone(status) {
 			if (status === "Approved") return "success";
-			if (status === "Retired") return "neutral";
 			if (status === "Under Review") return "warning";
+			return "neutral";
+		},
+		centreTone(status) {
+			if (status === "Active") return "success";
+			if (status === "Suspended") return "warning";
+			if (status === "Retired") return "danger";
 			return "neutral";
 		},
 		async loadContext() {
@@ -314,6 +388,10 @@ export default {
 	box-shadow: var(--edge-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
 }
 
+.eduedge-cbt-access-panel {
+	margin: 1rem 0;
+}
+
 .eduedge-cbt-panel-heading {
 	display: flex;
 	align-items: flex-start;
@@ -327,20 +405,29 @@ export default {
 	font-size: 1.05rem;
 }
 
-.eduedge-cbt-list {
+.eduedge-cbt-list,
+.eduedge-cbt-capability-grid {
 	display: grid;
 	gap: 0.65rem;
 }
 
+.eduedge-cbt-capability-grid {
+	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.eduedge-cbt-capability,
 .eduedge-cbt-row {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 1rem;
-	width: 100%;
 	padding: 0.85rem;
 	border: 1px solid var(--edge-border, #e2e8f0);
 	border-radius: var(--edge-radius-md, 0.7rem);
+}
+
+.eduedge-cbt-row {
+	width: 100%;
 	background: transparent;
 	text-align: left;
 }
@@ -350,24 +437,37 @@ export default {
 	background: var(--edge-primary-soft, #eff6ff);
 }
 
+.eduedge-cbt-capability > div,
 .eduedge-cbt-row div {
 	display: grid;
 	gap: 0.25rem;
 	min-width: 0;
 }
 
+.eduedge-cbt-capability span,
 .eduedge-cbt-row span,
 .eduedge-cbt-readiness p,
 .eduedge-cbt-roadmap,
-.eduedge-cbt-scope-note {
+.eduedge-cbt-scope-note,
+.eduedge-cbt-access-summary,
+.eduedge-cbt-access-note {
 	color: var(--edge-text-muted, #64748b);
+}
+
+.eduedge-cbt-capability span,
+.eduedge-cbt-row span {
+	font-size: 0.82rem;
 }
 
 .eduedge-cbt-row span {
 	overflow: hidden;
-	font-size: 0.82rem;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.eduedge-cbt-access-note {
+	margin: 0.85rem 0 0;
+	font-size: 0.84rem;
 }
 
 .eduedge-cbt-readiness {
@@ -401,6 +501,7 @@ export default {
 
 @media (max-width: 640px) {
 	.eduedge-cbt-panel-heading,
+	.eduedge-cbt-capability,
 	.eduedge-cbt-row {
 		align-items: stretch;
 		flex-direction: column;
