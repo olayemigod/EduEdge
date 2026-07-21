@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 
+from eduedge.access_control import build_access_manifest
 from eduedge.platform.runtime_context import get_product_identity
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
@@ -42,13 +43,7 @@ def _get_user_identity() -> dict:
 
 
 def extend_bootinfo(bootinfo) -> None:
-	"""Expose permission-safe identity metadata for the shared EdgeSuite shell.
-
-	School identity remains on ERPNext Company. EduEdge product identity is
-	centrally managed by CoreEdge and inherited through the cached runtime
-	context; standalone sites use the packaged EduEdge mark. Tenants cannot
-	override the product logo from EduEdge Settings.
-	"""
+	"""Expose permission-safe identity and access metadata for EdgeSuite UI."""
 	if frappe.session.user == "Guest":
 		return
 
@@ -98,8 +93,18 @@ def extend_bootinfo(bootinfo) -> None:
 	}
 
 	# Retain the legacy key while making the shared EdgeSuite contract
-	# authoritative for identity, notifications, and context switching.
+	# authoritative for identity, notifications, context switching, and access.
 	bootinfo["eduedge_ui_identity"] = identity
 	shared = bootinfo.get("edgesuite_ui_identity") or {}
 	shared["eduedge"] = identity
 	bootinfo["edgesuite_ui_identity"] = shared
+
+	try:
+		bootinfo["eduedge_access_manifest"] = build_access_manifest(frappe.session.user)
+	except Exception:
+		# A malformed permission row must not make the entire Desk boot fail.
+		bootinfo["eduedge_access_manifest"] = {
+			"resources": {},
+			"routes": {},
+			"can_access_eduedge": False,
+		}
