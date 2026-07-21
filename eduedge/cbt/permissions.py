@@ -31,6 +31,10 @@ def cbt_question_query(user: str | None = None) -> str:
 	return _school_branch_condition("EduEdge CBT Question", user)
 
 
+def cbt_exam_template_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Exam Template", user)
+
+
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool | None:
 	resolved_user = user or frappe.session.user
 	if _is_platform_manager(resolved_user) or not _is_cbt_operational_user(resolved_user):
@@ -38,8 +42,8 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool |
 
 	branch = doc.get("school_branch") if doc else None
 	if not branch:
-		# Platform-level centres and questions must never be exposed through
-		# ordinary school-role DocPerms, even before strict branch enforcement.
+		# Platform-level centres, questions, and templates must never be exposed
+		# through ordinary school-role DocPerms, even before strict branch enforcement.
 		return False
 	if not is_branch_access_enforced():
 		return None
