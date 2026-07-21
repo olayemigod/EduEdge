@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import frappe
+from frappe.permissions import get_valid_perms
+from frappe.utils import cint
 
 
 PERMISSION_TYPES = (
@@ -107,6 +109,31 @@ def _doctype_exists(doctype: str) -> bool:
 		return bool(frappe.db.exists("DocType", doctype))
 	except Exception:
 		return False
+
+
+def user_has_role_permission(
+	doctype: str,
+	permission_type: str = "read",
+	user: str | None = None,
+) -> bool:
+	"""Check effective role rows without invoking query/has_permission hooks.
+
+	This helper is safe inside permission hooks and makes custom school roles
+	participate in branch isolation as soon as Role Permission Manager grants them
+	access to a branch-aware DocType.
+	"""
+	resolved_user = user or frappe.session.user
+	if resolved_user == "Administrator":
+		return True
+	if not resolved_user or resolved_user == "Guest" or not _doctype_exists(doctype):
+		return False
+	roles = set(frappe.get_roles(resolved_user))
+	for row in get_valid_perms(doctype):
+		if row.role not in roles or cint(row.permlevel) != 0:
+			continue
+		if cint(row.get(permission_type)):
+			return True
+	return False
 
 
 def _has_permission(doctype: str, permission_type: str, user: str) -> bool:
