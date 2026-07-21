@@ -1,17 +1,3 @@
-const ADMIN_ROLES = ["EduEdge Super Administrator", "System Manager", "EduEdge Administrator"];
-const SETUP_ROLES = [...ADMIN_ROLES, "School Administrator"];
-const GOVERNANCE_VIEW_ROLES = [...SETUP_ROLES, "Bursar"];
-const CBT_ROLES = [
-	...ADMIN_ROLES,
-	"School Administrator",
-	"Academic Administrator",
-	"Education Manager",
-	"Academics User",
-	"Instructor",
-	"Teacher",
-	"CBT Invigilator",
-];
-
 const EDUEDGE_PRODUCT_MENU = Object.freeze({
 	product: "EduEdge",
 	subtitle: "School operations and intelligence",
@@ -90,7 +76,6 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					description: "Centres, approved questions, and exam templates",
 					icon: "assessment",
 					route: "/app/eduedge-cbt-operations",
-					roles: CBT_ROLES,
 					keywords: ["cbt", "exam", "question bank", "invigilation", "template"],
 				},
 				{
@@ -119,7 +104,6 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					description: "Campus identity and operational defaults",
 					icon: "building",
 					route: "/app/eduedge-school-branches",
-					roles: GOVERNANCE_VIEW_ROLES,
 					keywords: ["campus", "branch", "cost centre", "account"],
 				},
 				{
@@ -127,7 +111,6 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					description: "Campus access coverage and accounting readiness",
 					icon: "shield",
 					route: "/app/eduedge-branch-governance",
-					roles: GOVERNANCE_VIEW_ROLES,
 					keywords: ["branch", "campus", "access", "accounting"],
 				},
 				{
@@ -135,7 +118,8 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					description: "Maintain staff campus assignments inside Branch Governance",
 					icon: "students",
 					route: "/app/eduedge-branch-governance",
-					roles: ADMIN_ROLES,
+					resource: "user_branch_access",
+					permissions: ["read", "write"],
 					keywords: ["user", "role", "assignment", "hq"],
 				},
 				{
@@ -143,7 +127,6 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					description: "Review foundation readiness and configuration",
 					icon: "settings",
 					route: "/app/eduedge-setup-center",
-					roles: SETUP_ROLES,
 					keywords: ["setup", "readiness", "configuration"],
 				},
 				{
@@ -151,7 +134,6 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					description: "Defaults, controls, and optional features",
 					icon: "settings",
 					route: "/app/eduedge-settings-center",
-					roles: SETUP_ROLES,
 					keywords: ["settings", "features", "defaults"],
 				},
 			],
@@ -173,6 +155,40 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 	],
 });
 
+function normalizeRoute(route) {
+	try {
+		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+	} catch (_error) {
+		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
+	}
+}
+
+function itemAllowed(item) {
+	if (frappe.session.user === "Administrator") return true;
+	const manifest = frappe.boot?.eduedge_access_manifest;
+	if (!manifest) return true;
+
+	if (item.resource) {
+		const resource = manifest.resources?.[item.resource] || {};
+		return (item.permissions || ["read"]).some((permission) => Boolean(resource[permission]));
+	}
+	const route = normalizeRoute(item.route);
+	if (!Object.prototype.hasOwnProperty.call(manifest.routes || {}, route)) return true;
+	return Boolean(manifest.routes[route]);
+}
+
+function permissionFilteredMenu() {
+	return {
+		...EDUEDGE_PRODUCT_MENU,
+		sections: EDUEDGE_PRODUCT_MENU.sections
+			.map((section) => ({
+				...section,
+				items: section.items.filter(itemAllowed).map(({ resource, permissions, ...item }) => item),
+			}))
+			.filter((section) => section.items.length),
+	};
+}
+
 function getProfile() {
 	const bootUser = frappe.boot?.user || {};
 	const userDefaults = bootUser.defaults || {};
@@ -192,7 +208,7 @@ function registerEduEdgeProductMenu() {
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.registerProductMenu) return;
 		runtime.registerProductMenu({
-			...EDUEDGE_PRODUCT_MENU,
+			...permissionFilteredMenu(),
 			profile: getProfile(),
 		});
 	});
