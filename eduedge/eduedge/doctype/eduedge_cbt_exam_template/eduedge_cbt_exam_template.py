@@ -5,6 +5,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime
 
+from eduedge.access_control import user_has_role_permission
 from eduedge.cbt.public_access import require_public_exam_authoring
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
@@ -15,13 +16,6 @@ SCHOOL_BANK = "School Question Bank"
 PLATFORM_BANK = "EduEdge Examination Bank"
 SCHOOL_CENTRE = "School Examination Centre"
 PLATFORM_CENTRE = "EduEdge Exam Centre"
-REVIEW_ROLES = {
-	"System Manager",
-	"EduEdge Administrator",
-	"School Administrator",
-	"Academic Administrator",
-	"Education Manager",
-}
 ALLOWED_STATUS_TRANSITIONS = {
 	"Draft": {"Draft", "Under Review", "Approved"},
 	"Under Review": {"Draft", "Under Review", "Approved"},
@@ -55,6 +49,11 @@ PROTECTED_FIELDS = (
 	"result_release_policy",
 	"candidate_instructions",
 )
+
+
+def can_review_templates(user: str | None = None) -> bool:
+	"""Use a configurable DocType right as the template-review capability."""
+	return user_has_role_permission("EduEdge CBT Exam Template", "delete", user)
 
 
 class EduEdgeCBTExamTemplate(Document):
@@ -382,10 +381,7 @@ class EduEdgeCBTExamTemplate(Document):
 		if self.exam_scope == PUBLIC_EXAM:
 			require_public_exam_authoring()
 			return
-		if frappe.session.user == "Administrator":
-			return
-		roles = set(frappe.get_roles(frappe.session.user))
-		if not roles.intersection(REVIEW_ROLES):
+		if not can_review_templates(frappe.session.user):
 			frappe.throw(
 				_("You are not permitted to approve or retire CBT exam templates."),
 				frappe.PermissionError,
