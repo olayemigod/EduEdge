@@ -1,4 +1,35 @@
 const SCHOOL_EXAM = "School Examination";
+const PUBLIC_EXAM = "EduEdge Public Examination";
+
+function getPublicExamAccess() {
+	if (!window.__eduedgePublicExamAccessPromise) {
+		window.__eduedgePublicExamAccessPromise = frappe
+			.call("eduedge.api.cbt.get_public_exam_access_context")
+			.then((response) => response.message || {})
+			.catch((error) => {
+				window.__eduedgePublicExamAccessPromise = null;
+				throw error;
+			});
+	}
+	return window.__eduedgePublicExamAccessPromise;
+}
+
+async function applyTemplateScopeGovernance(frm) {
+	const access = await getPublicExamAccess();
+	const canAuthorPublic = Boolean(access.capabilities?.author?.allowed);
+	frm.__can_author_public_exams = canAuthorPublic;
+	frm.set_df_property(
+		"exam_scope",
+		"options",
+		canAuthorPublic ? `${SCHOOL_EXAM}\n${PUBLIC_EXAM}` : SCHOOL_EXAM
+	);
+	if (frm.is_new() && !canAuthorPublic && frm.doc.exam_scope !== SCHOOL_EXAM) {
+		await frm.set_value("exam_scope", SCHOOL_EXAM);
+	}
+	if (!canAuthorPublic && frm.doc.exam_scope === PUBLIC_EXAM) {
+		frm.set_df_property("exam_scope", "read_only", 1);
+	}
+}
 
 function clearQuestions(frm) {
 	if (!(frm.doc.questions || []).length) return;
@@ -88,6 +119,12 @@ frappe.ui.form.on("EduEdge CBT Exam Template", {
 		if (frm.is_new() && !frm.doc.exam_scope) {
 			frm.set_value("exam_scope", SCHOOL_EXAM);
 		}
+	},
+
+	refresh(frm) {
+		applyTemplateScopeGovernance(frm).catch((error) => {
+			console.error("Failed to resolve EduEdge public exam template access", error);
+		});
 	},
 
 	exam_scope(frm) {
