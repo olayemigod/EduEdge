@@ -105,8 +105,11 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			"require_public_exam_authoring",
 			"ALLOWED_STATUS_TRANSITIONS",
 			"_question_fingerprint",
+			"can_review_templates",
+			"user_has_role_permission",
 		):
 			self.assertIn(marker, text)
+		self.assertNotIn("REVIEW_ROLES", text)
 
 	def test_smart_form_cascades_context_and_uses_server_queries(self):
 		text = (
@@ -158,7 +161,9 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 		)
 		self.assertIn("/app/eduedge-cbt-operations", navigation)
 		self.assertIn("CBT Operations", menu)
-		self.assertIn("CBT_ROLES", menu)
+		self.assertIn("eduedge_access_manifest", menu)
+		self.assertIn("itemAllowed", menu)
+		self.assertNotIn("CBT_ROLES", menu)
 		self.assertIn("CBT Operations", workspace["content"])
 		shortcut_labels = {shortcut["label"] for shortcut in workspace["shortcuts"]}
 		self.assertIn("CBT Operations", shortcut_labels)
@@ -178,6 +183,7 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			/ "EduEdgeCBTOperations.vue"
 		).read_text()
 		self.assertEqual(page["name"], "eduedge-cbt-operations")
+		self.assertEqual(page["roles"], [])
 		self.assertIn('frappe.require("edgeui.bundle.js"', loader)
 		self.assertIn("createEduEdgeCBTOperationsApp", loader)
 		self.assertIn("createEduEdgeApp", bundle)
