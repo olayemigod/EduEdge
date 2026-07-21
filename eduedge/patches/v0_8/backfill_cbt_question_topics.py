@@ -16,7 +16,7 @@ def execute() -> None:
 
 	questions = frappe.get_all(
 		QUESTION_DOCTYPE,
-		filters={"topic": ["not in", ["", None]]},
+		filters={"topic": ["!=", ""]},
 		fields=["name", "course", "topic"],
 		limit_page_length=0,
 	)
