@@ -5,6 +5,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime
 
+from eduedge.cbt.public_access import require_public_exam_authoring
 from eduedge.education.offerings import assert_branch_access
 
 SCHOOL_BANK = "School Question Bank"
@@ -12,16 +13,10 @@ PLATFORM_BANK = "EduEdge Examination Bank"
 OBJECTIVE_TYPES = {"Single Choice", "Multiple Choice", "True/False"}
 REVIEW_ROLES = {
 	"System Manager",
-	"EduEdge Super Administrator",
 	"EduEdge Administrator",
 	"School Administrator",
 	"Academic Administrator",
 	"Education Manager",
-}
-PLATFORM_MANAGER_ROLES = {
-	"System Manager",
-	"EduEdge Super Administrator",
-	"EduEdge Administrator",
 }
 PROTECTED_FIELDS = (
 	"question_code",
@@ -71,6 +66,8 @@ class EduEdgeCBTQuestion(Document):
 				_("Approved or Retired CBT questions cannot be deleted. Retain the record for audit history."),
 				frappe.ValidationError,
 			)
+		if self.ownership_scope == PLATFORM_BANK:
+			require_public_exam_authoring()
 
 	def _validate_identity(self) -> None:
 		if not self.question_code:
@@ -89,7 +86,7 @@ class EduEdgeCBTQuestion(Document):
 			return
 
 		if self.ownership_scope == PLATFORM_BANK:
-			self._assert_platform_manager()
+			require_public_exam_authoring()
 			self.school_branch = None
 			return
 
@@ -228,22 +225,15 @@ class EduEdgeCBTQuestion(Document):
 			)
 
 	def _assert_review_authority(self) -> None:
+		if self.ownership_scope == PLATFORM_BANK:
+			require_public_exam_authoring()
+			return
 		if frappe.session.user == "Administrator":
 			return
 		roles = set(frappe.get_roles(frappe.session.user))
 		if not roles.intersection(REVIEW_ROLES):
 			frappe.throw(
 				_("You are not permitted to approve or retire CBT questions."),
-				frappe.PermissionError,
-			)
-
-	def _assert_platform_manager(self) -> None:
-		if frappe.session.user == "Administrator":
-			return
-		roles = set(frappe.get_roles(frappe.session.user))
-		if not roles.intersection(PLATFORM_MANAGER_ROLES):
-			frappe.throw(
-				_("Only an EduEdge platform administrator can manage the EduEdge Examination Bank."),
 				frappe.PermissionError,
 			)
 
