@@ -137,7 +137,7 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertIn('user_has_role_permission("EduEdge CBT Exam Template", "delete", user)', template)
 		self.assertNotIn("REVIEW_ROLES", question)
 		self.assertNotIn("REVIEW_ROLES", template)
-		self.assertIn("TRAINING_OVERSIGHT_PERMISSION = \"report\"", training)
+		self.assertIn('TRAINING_OVERSIGHT_PERMISSION = "report"', training)
 		self.assertIn("user_has_role_permission(TRAINING_PROGRESS_DOCTYPE, TRAINING_OVERSIGHT_PERMISSION, user)", training)
 		self.assertNotIn("frappe.has_permission", training)
 
@@ -152,7 +152,7 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		controller_text = controller_path.read_text()
 		controller_tree = ast.parse(controller_text)
 		self.assertNotIn("TRAINING_OVERSIGHT_ROLES", controller_text)
-		self.assertIn("TRAINING_OVERSIGHT_PERMISSION = \"report\"", controller_text)
+		self.assertIn('TRAINING_OVERSIGHT_PERMISSION = "report"', controller_text)
 		self.assertIn("def on_trash", controller_text)
 		self.assertIn("Training progress records cannot be deleted", controller_text)
 
@@ -202,6 +202,12 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertIn("Custom roles are deliberately untouched", patch)
 		self.assertIn("_set_exact_permission_row", patch)
 		self.assertIn("_remove_known_legacy_row", patch)
+
+	def test_access_manifest_uses_frappe_16_permission_signature(self):
+		access = (EDUEDGE / "access_control.py").read_text()
+		self.assertIn("frappe.has_permission(doctype, permission_type, user=user)", access)
+		self.assertNotIn("print_logs=", access)
+		ast.parse(access)
 
 
 if __name__ == "__main__":
