@@ -107,6 +107,81 @@ function installHeaderCreateLauncher(root) {
 	window.setTimeout(() => observer.disconnect(), 3000);
 }
 
+function publicAccessPreferenceKey() {
+	return `eduedge:cbt-public-access-expanded:${frappe.session.user || "user"}`;
+}
+
+function readPublicAccessPreference() {
+	try {
+		return window.localStorage.getItem(publicAccessPreferenceKey());
+	} catch (error) {
+		return null;
+	}
+}
+
+function writePublicAccessPreference(expanded) {
+	try {
+		window.localStorage.setItem(publicAccessPreferenceKey(), expanded ? "1" : "0");
+	} catch (error) {
+		// Private browsing or a restricted browser may disable local storage.
+	}
+}
+
+function installPublicAccessDisclosure(root) {
+	if (!root) return false;
+	const panel = root.querySelector(".eduedge-cbt-access-panel");
+	if (!panel) return false;
+	if (panel.dataset.eduedgeAccessDisclosure === "1") return true;
+
+	const heading = panel.querySelector(".eduedge-cbt-panel-heading");
+	if (!heading) return false;
+
+	const headingText = (heading.textContent || "").trim();
+	const operationallyRelevant = /Authority Site|Capabilities Active/.test(headingText);
+	const savedPreference = readPublicAccessPreference();
+	let expanded = operationallyRelevant || savedPreference === "1";
+
+	const toggle = document.createElement("button");
+	toggle.type = "button";
+	toggle.className = "edge-button eduedge-cbt-access-toggle";
+	toggle.style.marginLeft = "auto";
+	toggle.style.whiteSpace = "nowrap";
+
+	const detailRows = Array.from(panel.children).filter((child) => child !== heading);
+	const render = () => {
+		for (const row of detailRows) row.hidden = !expanded;
+		heading.style.marginBottom = expanded ? "1rem" : "0";
+		heading.style.alignItems = "center";
+		heading.style.flexWrap = "wrap";
+		panel.style.paddingTop = expanded ? "" : "0.85rem";
+		panel.style.paddingBottom = expanded ? "" : "0.85rem";
+		toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+		toggle.setAttribute("aria-controls", "eduedge-cbt-public-access-details");
+		toggle.textContent = expanded ? __("Hide access details") : __("Show access details");
+	};
+
+	for (const row of detailRows) row.id ||= "eduedge-cbt-public-access-details";
+	toggle.addEventListener("click", () => {
+		expanded = !expanded;
+		writePublicAccessPreference(expanded);
+		render();
+	});
+
+	heading.appendChild(toggle);
+	panel.dataset.eduedgeAccessDisclosure = "1";
+	render();
+	return true;
+}
+
+function queuePublicAccessDisclosure(root) {
+	if (installPublicAccessDisclosure(root)) return;
+	const observer = new MutationObserver(() => {
+		if (installPublicAccessDisclosure(root)) observer.disconnect();
+	});
+	observer.observe(root, { childList: true, subtree: true });
+	window.setTimeout(() => observer.disconnect(), 5000);
+}
+
 frappe.pages["eduedge-cbt-operations"].on_page_load = function (wrapper) {
 	wrapper.page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -171,7 +246,10 @@ frappe.pages["eduedge-cbt-operations"].on_page_show = function (wrapper) {
 					pageName: "eduedge-cbt-operations",
 				});
 				wrapper.vue_app.mount(root[0]);
-				window.requestAnimationFrame(() => installHeaderCreateLauncher(root[0]));
+				window.requestAnimationFrame(() => {
+					installHeaderCreateLauncher(root[0]);
+					queuePublicAccessDisclosure(root[0]);
+				});
 			} catch (error) {
 				console.error("Failed to mount EduEdge CBT Operations", error);
 				fail(error.message || String(error));
