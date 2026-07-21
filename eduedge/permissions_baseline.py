@@ -15,6 +15,8 @@ VIEW = ("read", "report", "print")
 VIEW_EXPORT = VIEW + ("export",)
 OPERATE = VIEW + ("create", "write")
 MANAGE = OPERATE + ("delete", "import", "email", "share", "export")
+SELF_PROGRESS = ("read", "create", "write")
+TRAINING_OVERSIGHT = SELF_PROGRESS + ("report", "export", "print")
 AUDIT_PERMISSION_TYPES = (
 	"read",
 	"create",
@@ -205,13 +207,16 @@ def get_default_permission_matrix() -> dict[str, dict[str, set[str]]]:
 	_grant(matrix, "EduEdge CBT Exam Template", ("Teacher", "Instructor"), OPERATE)
 	_grant(matrix, "EduEdge CBT Exam Template", ("Academics User", "CBT Invigilator"), VIEW)
 
-	# School managers must be able to administer staff training and delegate
-	# oversight through Role Permission Manager. Other Desk users manage only
-	# their own progress records through the record-level permission hook.
-	_grant(matrix, "EduEdge Training Course", managers, MANAGE)
-	_grant(matrix, "EduEdge Training Course", EDUEDGE_DESK_ROLES, VIEW)
-	_grant(matrix, "EduEdge Training Progress", managers, MANAGE)
-	_grant(matrix, "EduEdge Training Progress", EDUEDGE_DESK_ROLES, OPERATE)
+	# Every Desk user records only their own training progress by default. Report
+	# is the explicit oversight capability for school/platform managers and the
+	# School HR Officer. Delete is deliberately absent for audit integrity.
+	_grant(matrix, "EduEdge Training Progress", EDUEDGE_DESK_ROLES, SELF_PROGRESS)
+	_grant(
+		matrix,
+		"EduEdge Training Progress",
+		managers + ("School HR Officer",),
+		TRAINING_OVERSIGHT,
+	)
 	return matrix
 
 
@@ -295,8 +300,6 @@ def _role_classification(role: str, managed_roles: set[str]) -> str:
 def _effective_role_rights(audited_doctypes: list[str]) -> dict[str, list[dict]]:
 	rights_by_role: dict[str, list[dict]] = defaultdict(list)
 	for doctype in audited_doctypes:
-		if not frappe.db.exists("DocType", doctype):
-			continue
 		for row in get_valid_perms(doctype):
 			if int(row.permlevel or 0) != 0:
 				continue
@@ -306,15 +309,42 @@ def _effective_role_rights(audited_doctypes: list[str]) -> dict[str, list[dict]]
 	return rights_by_role
 
 
+def _sensitive_permission_warnings(rights_by_role: dict[str, list[dict]]) -> list[dict]:
+	warnings = []
+	for role in PORTAL_ONLY_ROLES + NO_EDUEDGE_DEFAULT_GRANTS:
+		for permission in rights_by_role.get(role, []):
+			if permission["doctype"].startswith("EduEdge "):
+				warnings.append(
+					{
+						"role": role,
+						"doctype": permission["doctype"],
+						"rights": permission["rights"],
+						"reason": "Role should not receive automatic EduEdge Desk permissions.",
+					}
+				)
+	for role, permissions in rights_by_role.items():
+		for permission in permissions:
+			if permission["doctype"] == "EduEdge Training Progress" and "delete" in permission["rights"]:
+				warnings.append(
+					{
+						"role": role,
+						"doctype": permission["doctype"],
+						"rights": permission["rights"],
+						"reason": "Training progress history must not be deletable.",
+					}
+				)
+	return warnings
+
+
 def get_role_permission_audit() -> dict:
 	"""Audit every installed role against EduEdge and Frappe Education access."""
 	matrix = get_default_permission_matrix()
+	missing_doctypes = sorted(doctype for doctype in matrix if not frappe.db.exists("DocType", doctype))
+	audited_doctypes = sorted(doctype for doctype in matrix if frappe.db.exists("DocType", doctype))
 	missing_defaults = []
-	for doctype, role_permissions in matrix.items():
-		if not frappe.db.exists("DocType", doctype):
-			continue
+	for doctype in audited_doctypes:
 		valid_rows = get_valid_perms(doctype)
-		for role, expected in role_permissions.items():
+		for role, expected in matrix[doctype].items():
 			if not frappe.db.exists("Role", role):
 				continue
 			role_rows = [row for row in valid_rows if row.role == role and int(row.permlevel or 0) == 0]
@@ -327,7 +357,6 @@ def get_role_permission_audit() -> dict:
 			if missing:
 				missing_defaults.append({"doctype": doctype, "role": role, "missing": missing})
 
-	audited_doctypes = sorted(matrix)
 	rights_by_role = _effective_role_rights(audited_doctypes)
 	managed_roles = {
 		role
@@ -342,6 +371,7 @@ def get_role_permission_audit() -> dict:
 	)
 	roles = []
 	unclassified_desk_roles = []
+	portal_roles_with_desk_access = []
 	for row in installed_roles:
 		classification = _role_classification(row.name, managed_roles)
 		role_payload = {
@@ -354,6 +384,8 @@ def get_role_permission_audit() -> dict:
 		roles.append(role_payload)
 		if classification == "custom_or_unclassified" and row.desk_access and not row.disabled:
 			unclassified_desk_roles.append(row.name)
+		if classification == "portal_only" and row.desk_access and not row.disabled:
+			portal_roles_with_desk_access.append(row.name)
 
 	remaining_page_role_gates = frappe.get_all(
 		"Has Role",
@@ -368,9 +400,12 @@ def get_role_permission_audit() -> dict:
 	)
 	return {
 		"audited_doctypes": audited_doctypes,
+		"missing_doctypes": missing_doctypes,
 		"missing_defaults": missing_defaults,
+		"sensitive_permission_warnings": _sensitive_permission_warnings(rights_by_role),
 		"roles": roles,
 		"unclassified_desk_roles": unclassified_desk_roles,
+		"portal_roles_with_desk_access": portal_roles_with_desk_access,
 		"remaining_page_role_gates": remaining_page_role_gates,
 		"no_eduedge_default_grants": list(NO_EDUEDGE_DEFAULT_GRANTS),
 		"portal_only_roles": list(PORTAL_ONLY_ROLES),
