@@ -131,6 +131,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-program-offerings",
 	"/app/eduedge-cbt-operations",
 	"/app/eduedge-question-builder",
+	"/app/eduedge-question-batch",
 	"/app/eduedge-assessment-operations",
 	"/app/eduedge-report-cards",
 	"/app/eduedge-school-branches",
