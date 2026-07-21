@@ -35,10 +35,11 @@ def cbt_exam_template_query(user: str | None = None) -> str:
 	return _school_branch_condition("EduEdge CBT Exam Template", user)
 
 
-def has_school_branch_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
+	"""Allow role permissions unless tenant/public or branch isolation denies the record."""
 	resolved_user = user or frappe.session.user
 	if can_author_public_exams(resolved_user) or not _is_cbt_operational_user(resolved_user):
-		return None
+		return True
 
 	branch = doc.get("school_branch") if doc else None
 	if not branch:
@@ -46,12 +47,12 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool |
 		# with the CoreEdge author capability and an explicit ProcessEdge role.
 		return False
 	if not is_branch_access_enforced():
-		return None
+		return True
 
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return None
-	return None if branch in allowed else False
+		return True
+	return branch in allowed
 
 
 def _school_branch_condition(doctype: str, user: str | None) -> str:
