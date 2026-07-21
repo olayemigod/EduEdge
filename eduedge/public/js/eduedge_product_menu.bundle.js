@@ -1,6 +1,16 @@
 const ADMIN_ROLES = ["EduEdge Super Administrator", "System Manager", "EduEdge Administrator"];
 const SETUP_ROLES = [...ADMIN_ROLES, "School Administrator"];
 const GOVERNANCE_VIEW_ROLES = [...SETUP_ROLES, "Bursar"];
+const CBT_ROLES = [
+	...ADMIN_ROLES,
+	"School Administrator",
+	"Academic Administrator",
+	"Education Manager",
+	"Academics User",
+	"Instructor",
+	"Teacher",
+	"CBT Invigilator",
+];
 
 const EDUEDGE_PRODUCT_MENU = Object.freeze({
 	product: "EduEdge",
@@ -58,7 +68,7 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 		},
 		{
 			label: "Academics and Outcomes",
-			description: "Programmes, assessments, results, and progression",
+			description: "Programmes, CBT, assessments, results, and progression",
 			icon: "assessment",
 			items: [
 				{
@@ -74,6 +84,14 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					icon: "layers",
 					route: "/app/eduedge-program-offerings",
 					keywords: ["programme", "offering", "academic year"],
+				},
+				{
+					label: "CBT Operations",
+					description: "Centres, approved questions, and exam templates",
+					icon: "assessment",
+					route: "/app/eduedge-cbt-operations",
+					roles: CBT_ROLES,
+					keywords: ["cbt", "exam", "question bank", "invigilation", "template"],
 				},
 				{
 					label: "Assessments & Results",
