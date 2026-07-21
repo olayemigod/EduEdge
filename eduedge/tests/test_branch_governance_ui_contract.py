@@ -18,7 +18,11 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 			self.assertTrue((page_root / filename).exists(), filename)
 		payload = json.loads((page_root / "eduedge_branch_governance.json").read_text())
 		self.assertEqual(payload["name"], "eduedge-branch-governance")
-		self.assertIn("EduEdge Administrator", {row["role"] for row in payload["roles"]})
+		self.assertEqual(payload["roles"], [])
+		access = (APP / "access_control.py").read_text()
+		self.assertIn('"/app/eduedge-branch-governance"', access)
+		self.assertIn('("user_branch_access", "read")', access)
+		self.assertIn('("school_branch", "write")', access)
 
 	def test_page_uses_edgesuite_runtime_and_controlled_failure_state(self):
 		loader = (
@@ -58,7 +62,7 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 		self.assertNotIn("new frappe.ui.Dialog", vue)
 		self.assertNotIn("frappe.confirm(", vue)
 
-	def test_backend_enforces_coverage_before_activation(self):
+	def test_backend_enforces_coverage_and_configured_permissions(self):
 		service = (APP / "services" / "branch_governance.py").read_text()
 		api = (APP / "api" / "branch_governance.py").read_text()
 		self.assertIn("Every enabled campus is covered", service)
@@ -66,9 +70,14 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 		self.assertIn("enable_user_branch_access_enforcement", service)
 		self.assertIn("get_allowed_school_branches", service)
 		self.assertIn("include_assignment_details", service)
-		self.assertIn("MANAGE_ROLES", api)
-		self.assertIn("_require_roles(MANAGE_ROLES)", api)
-		self.assertIn("can_view_access_details", api)
+		self.assertIn("include_all_branches", service)
+		self.assertIn("user_has_role_permission", api)
+		self.assertIn('"EduEdge User Branch Access", "write"', api)
+		self.assertIn('"EduEdge School Branch", "write"', api)
+		self.assertIn('"EduEdge Settings", "write"', api)
+		self.assertNotIn("MANAGE_ROLES", api)
+		self.assertNotIn("VIEW_ROLES", api)
+		self.assertNotIn("frappe.get_roles", service)
 		for forbidden in (
 			"ignore_permissions=True",
 			'frappe.new_doc("Sales Invoice")',
