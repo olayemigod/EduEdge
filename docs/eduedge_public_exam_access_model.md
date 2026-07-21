@@ -55,7 +55,7 @@ Each action is activated separately for one registered `CoreEdge Service Client`
 | `host` | Host an EduEdge public examination at an approved school centre |
 | `launch` | Create or resume signed candidate examination sessions |
 | `results` | Receive signed result and reconciliation records |
-| `author` | Create or govern ProcessEdge public question and template masters |
+| `author` | Reserved ProcessEdge authority for governing central public question and template masters |
 
 A catalogue grant does not imply hosting. Hosting does not imply authoring. Grants can be activated, suspended, expired, or revoked independently.
 
@@ -95,7 +95,21 @@ The central ProcessEdge authoring site uses the server-side setting:
 }
 ```
 
-This flag must not be set on customer or white-label sites.
+This flag must not be set on customer or white-label sites. The `author` capability is reserved for ProcessEdge-controlled authoring infrastructure or a future expressly governed content-partner workflow; it is not part of normal client whitelisting.
+
+## Technical trust boundary for customer-owned sites
+
+A customer who owns a standalone server, database, and source code can technically alter local records or application code. Local role checks therefore cannot be the final security boundary for ProcessEdge public examinations.
+
+The enforceable boundary is central:
+
+- central public questions and answer keys are never replicated as editable tenant data;
+- a local record labelled “EduEdge Public Examination” has no central authority by itself;
+- catalogue entries, exam versions, candidate launch sessions, question delivery, marking, and result acceptance must carry centrally issued identifiers and signed/time-bound service evidence;
+- CoreEdge and the future EduEdge Exam Service validate the registered service client, exact site, action grant, exam version, and session before returning protected content or accepting results;
+- locally modified or counterfeit public-exam records are ignored by central services.
+
+On ProcessEdge-managed shared hosting, normal tenant users are never the technical Frappe `Administrator`. On a customer-owned site, ProcessEdge protects its service and content centrally rather than claiming that the customer cannot inspect or modify its own server.
 
 ## Standalone and white-label onboarding
 
@@ -169,7 +183,7 @@ V0.8A implements:
 - exact-site remote adapter binding;
 - separate runtime and feature-access contracts;
 - centre lifecycle and public-hosting readiness;
-- branch-safe public-master isolation.
+- branch-safe public-master isolation for normal application roles.
 
 V0.8A does not yet implement:
 
