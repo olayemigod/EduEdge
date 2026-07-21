@@ -70,8 +70,12 @@ def _require_platform_manager(roles: set[str] | None = None) -> None:
 		)
 
 
+def _school_branch_candidate(branch: str | None = None) -> str | None:
+	return branch or (get_current_school_branch() or {}).get("name") or get_context_branch()
+
+
 def _resolve_school_branch(branch: str | None = None) -> str:
-	resolved = branch or (get_current_school_branch() or {}).get("name") or get_context_branch()
+	resolved = _school_branch_candidate(branch)
 	if not resolved:
 		frappe.throw(_("Select a School Branch / Campus first."), frappe.ValidationError)
 	assert_branch_access(resolved)
@@ -96,80 +100,89 @@ def get_cbt_operations_context(
 
 	resolved_branch = None
 	if exam_scope == SCHOOL_EXAM:
-		resolved_branch = _resolve_school_branch(branch)
+		candidate = _school_branch_candidate(branch)
+		if candidate:
+			assert_branch_access(candidate)
+			resolved_branch = candidate
 	else:
 		_require_platform_manager(roles)
 
-	centre_filters = {
-		"centre_type": SCHOOL_CENTRE if exam_scope == SCHOOL_EXAM else PLATFORM_CENTRE,
-	}
-	template_filters = {"exam_scope": exam_scope}
-	question_filters = {
-		"ownership_scope": SCHOOL_BANK if exam_scope == SCHOOL_EXAM else PLATFORM_BANK,
-	}
-	if resolved_branch:
-		centre_filters["school_branch"] = resolved_branch
-		template_filters["school_branch"] = resolved_branch
-		question_filters["school_branch"] = resolved_branch
-
-	centres = frappe.get_list(
-		"EduEdge Examination Centre",
-		filters=centre_filters,
-		fields=[
-			"name",
-			"centre_name",
-			"centre_code",
-			"centre_type",
-			"school_branch",
-			"enabled",
-			"allow_public_registration",
-			"allow_paid_exams",
-			"capacity",
-			"location",
-		],
-		order_by="enabled desc, centre_name asc",
-		page_length=200,
-	)
-	templates = frappe.get_list(
-		"EduEdge CBT Exam Template",
-		filters=template_filters,
-		fields=[
-			"name",
-			"template_title",
-			"template_code",
-			"exam_scope",
-			"school_branch",
-			"course",
-			"exam_body",
-			"duration_minutes",
-			"question_count",
-			"total_marks",
-			"status",
-			"modified",
-		],
-		order_by="modified desc",
-		page_length=200,
-	)
-
 	can_author_questions = frappe.session.user == "Administrator" or bool(roles.intersection(CBT_AUTHOR_ROLES))
+	centres = []
+	templates = []
 	questions = []
-	if can_author_questions:
-		questions = frappe.get_list(
-			"EduEdge CBT Question",
-			filters=question_filters,
+
+	# A school scope without a selected branch deliberately returns empty
+	# operational collections so the page can render the branch selector without
+	# falling back to cross-branch data.
+	if exam_scope == PUBLIC_EXAM or resolved_branch:
+		centre_filters = {
+			"centre_type": SCHOOL_CENTRE if exam_scope == SCHOOL_EXAM else PLATFORM_CENTRE,
+		}
+		template_filters = {"exam_scope": exam_scope}
+		question_filters = {
+			"ownership_scope": SCHOOL_BANK if exam_scope == SCHOOL_EXAM else PLATFORM_BANK,
+		}
+		if resolved_branch:
+			centre_filters["school_branch"] = resolved_branch
+			template_filters["school_branch"] = resolved_branch
+			question_filters["school_branch"] = resolved_branch
+
+		centres = frappe.get_list(
+			"EduEdge Examination Centre",
+			filters=centre_filters,
 			fields=[
 				"name",
-				"question_code",
+				"centre_name",
+				"centre_code",
+				"centre_type",
+				"school_branch",
+				"enabled",
+				"allow_public_registration",
+				"allow_paid_exams",
+				"capacity",
+				"location",
+			],
+			order_by="enabled desc, centre_name asc",
+			page_length=200,
+		)
+		templates = frappe.get_list(
+			"EduEdge CBT Exam Template",
+			filters=template_filters,
+			fields=[
+				"name",
+				"template_title",
+				"template_code",
+				"exam_scope",
+				"school_branch",
 				"course",
-				"topic",
-				"question_type",
-				"difficulty",
+				"exam_body",
+				"duration_minutes",
+				"question_count",
+				"total_marks",
 				"status",
 				"modified",
 			],
 			order_by="modified desc",
-			page_length=500,
+			page_length=200,
 		)
+		if can_author_questions:
+			questions = frappe.get_list(
+				"EduEdge CBT Question",
+				filters=question_filters,
+				fields=[
+					"name",
+					"question_code",
+					"course",
+					"topic",
+					"question_type",
+					"difficulty",
+					"status",
+					"modified",
+				],
+				order_by="modified desc",
+				page_length=500,
+			)
 
 	current_branch = get_current_school_branch()
 	full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
