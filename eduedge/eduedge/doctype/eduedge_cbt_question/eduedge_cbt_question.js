@@ -43,6 +43,19 @@ async function applyQuestionBankGovernance(frm) {
 	}
 }
 
+function normaliseAnswerOptions(frm) {
+	for (const [index, row] of (frm.doc.options || []).entries()) {
+		row.option_key = (row.option_key || "").trim().toUpperCase();
+		if (!String(row.option_text || "").trim() && row.option_key) {
+			row.option_text = row.option_key;
+		}
+		if (!Number(row.display_order)) {
+			row.display_order = index + 1;
+		}
+	}
+	frm.refresh_field("options");
+}
+
 frappe.ui.form.on("EduEdge CBT Question", {
 	setup(frm) {
 		frm.set_query("school_branch", () => ({
@@ -55,6 +68,10 @@ frappe.ui.form.on("EduEdge CBT Question", {
 		applyQuestionBankGovernance(frm).catch((error) => {
 			console.error("Failed to resolve EduEdge public question bank access", error);
 		});
+	},
+
+	validate(frm) {
+		normaliseAnswerOptions(frm);
 	},
 
 	async ownership_scope(frm) {
@@ -70,5 +87,18 @@ frappe.ui.form.on("EduEdge CBT Question", {
 
 	async course(frm) {
 		await frm.set_value("supersedes_question", null);
+	},
+
+	async supersedes_question(frm) {
+		if (!frm.doc.supersedes_question) return;
+		const response = await frappe.db.get_value(
+			"EduEdge CBT Question",
+			frm.doc.supersedes_question,
+			"version_number"
+		);
+		const previousVersion = Number(response?.message?.version_number || 0);
+		if (previousVersion) {
+			await frm.set_value("version_number", previousVersion + 1);
+		}
 	},
 });
