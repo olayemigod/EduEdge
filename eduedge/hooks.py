@@ -87,6 +87,16 @@ doc_events = {
 	"Assessment Result": {
 		"before_validate": "eduedge.education.assessment_operations.before_validate_assessment_result",
 	},
+	"EduEdge CBT Question": {
+		"validate": "eduedge.cbt.master_lifecycle.validate_master_docstatus",
+		"before_submit": "eduedge.cbt.master_lifecycle.block_master_submit",
+		"before_cancel": "eduedge.cbt.master_lifecycle.block_master_cancel",
+	},
+	"EduEdge CBT Exam Template": {
+		"validate": "eduedge.cbt.master_lifecycle.validate_master_docstatus",
+		"before_submit": "eduedge.cbt.master_lifecycle.block_master_submit",
+		"before_cancel": "eduedge.cbt.master_lifecycle.block_master_cancel",
+	},
 }
 
 permission_query_conditions = {
