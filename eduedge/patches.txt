@@ -2,3 +2,4 @@
 
 [post_model_sync]
 eduedge.patches.v0_8.backfill_examination_centre_status
+eduedge.patches.v0_8.enforce_examination_centre_master_lifecycle
