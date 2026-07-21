@@ -146,6 +146,7 @@ fixtures = [
 				"in",
 				[
 					"EduEdge Super Administrator",
+					"EduEdge Public Exam Administrator",
 					"EduEdge Administrator",
 					"School Administrator",
 					"Academic Administrator",
