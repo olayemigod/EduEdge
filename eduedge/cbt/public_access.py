@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from eduedge.platform.access import get_eduedge_access_decision
+from eduedge.platform.access import get_eduedge_capability_decision
 from eduedge.platform.config import get_platform_config, parse_bool
 
 PUBLIC_EXAM_FEATURE = "cbt_public_exam"
@@ -57,7 +57,7 @@ def get_public_exam_access_decision(
 
 	config = get_platform_config()
 	if config.remote_enabled:
-		decision = get_eduedge_access_decision(
+		decision = get_eduedge_capability_decision(
 			user=resolved_user,
 			feature_key=PUBLIC_EXAM_FEATURE,
 			action=action,
