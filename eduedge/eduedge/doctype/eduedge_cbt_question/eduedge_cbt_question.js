@@ -1,5 +1,18 @@
 const SCHOOL_BANK = "School Question Bank";
 const PUBLIC_BANK = "EduEdge Examination Bank";
+const BINARY_OPTION_PRESETS = {
+	"True/False": [
+		{ option_key: "TRUE", option_text: "True" },
+		{ option_key: "FALSE", option_text: "False" },
+	],
+	"Yes/No": [
+		{ option_key: "YES", option_text: "Yes" },
+		{ option_key: "NO", option_text: "No" },
+	],
+};
+const CHOICE_TYPES = new Set(["Single Choice", "Multiple Choice"]);
+const MINIMUM_CHOICE_KEYS = ["A", "B"];
+const GENERATED_BINARY_KEYS = new Set(["TRUE", "FALSE", "YES", "NO"]);
 
 function getPublicExamAccess() {
 	if (!window.__eduedgePublicExamAccessPromise) {
@@ -56,6 +69,82 @@ function normaliseAnswerOptions(frm) {
 	frm.refresh_field("options");
 }
 
+function addPreparedOption(frm, option, displayOrder = 0) {
+	const row = frm.add_child("options");
+	row.option_key = option.option_key;
+	row.option_text = option.option_text || "";
+	row.display_order = displayOrder;
+	return row;
+}
+
+function matchesPreset(rows, preset) {
+	if (rows.length !== preset.length) return false;
+	return rows.every((row, index) => {
+		const expected = preset[index];
+		return (row.option_key || "").trim().toUpperCase() === expected.option_key;
+	});
+}
+
+function canReplaceWithBinaryPreset(rows) {
+	if (!rows.length) return true;
+	return rows.every((row) => {
+		const key = (row.option_key || "").trim().toUpperCase();
+		return GENERATED_BINARY_KEYS.has(key) && !Number(row.is_correct || 0);
+	});
+}
+
+function applyBinaryPreset(frm, preset) {
+	frm.clear_table("options");
+	for (const [index, option] of preset.entries()) {
+		addPreparedOption(frm, option, index + 1);
+	}
+	frm.refresh_field("options");
+}
+
+function ensureMinimumChoiceOptions(frm) {
+	const rows = frm.doc.options || [];
+	if (rows.length >= 2) return;
+
+	const existingKeys = new Set(
+		rows.map((row) => (row.option_key || "").trim().toUpperCase()).filter(Boolean)
+	);
+	for (const optionKey of MINIMUM_CHOICE_KEYS) {
+		if ((frm.doc.options || []).length >= 2) break;
+		if (existingKeys.has(optionKey)) continue;
+		addPreparedOption(frm, { option_key: optionKey, option_text: "" });
+		existingKeys.add(optionKey);
+	}
+	frm.refresh_field("options");
+}
+
+function prepareAnswerOptions(frm) {
+	const questionType = frm.doc.question_type;
+	const preset = BINARY_OPTION_PRESETS[questionType];
+	const rows = frm.doc.options || [];
+
+	if (preset) {
+		if (matchesPreset(rows, preset)) return;
+		if (canReplaceWithBinaryPreset(rows)) {
+			applyBinaryPreset(frm, preset);
+			return;
+		}
+		frappe.show_alert(
+			{
+				message: __(
+					"Existing answer options were kept. Clear them before applying the {0} preset."
+				).replace("{0}", questionType),
+				indicator: "orange",
+			},
+			7
+		);
+		return;
+	}
+
+	if (CHOICE_TYPES.has(questionType)) {
+		ensureMinimumChoiceOptions(frm);
+	}
+}
+
 frappe.ui.form.on("EduEdge CBT Question", {
 	setup(frm) {
 		frm.set_query("school_branch", () => ({
@@ -72,6 +161,10 @@ frappe.ui.form.on("EduEdge CBT Question", {
 
 	validate(frm) {
 		normaliseAnswerOptions(frm);
+	},
+
+	question_type(frm) {
+		prepareAnswerOptions(frm);
 	},
 
 	async ownership_scope(frm) {
