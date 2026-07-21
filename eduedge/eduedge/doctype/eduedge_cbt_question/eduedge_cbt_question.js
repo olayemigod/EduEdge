@@ -135,6 +135,9 @@ function prepareAnswerOptions(frm) {
 		return;
 	}
 
+	// A fresh question defaults to Single Choice without preloading answers.
+	// These minimum rows are prepared only after the user explicitly changes
+	// the Question Type to Single Choice or Multiple Choice.
 	if (CHOICE_TYPES.has(questionType)) {
 		ensureMinimumChoiceAnswers(frm);
 	}
@@ -144,6 +147,11 @@ frappe.ui.form.on("EduEdge CBT Question", {
 	setup(frm) {
 		frm.set_query("school_branch", () => ({
 			query: "eduedge.api.education.school_branch_query",
+		}));
+		frm.set_query("topic", () => ({
+			query:
+				"eduedge.eduedge.doctype.eduedge_cbt_question.eduedge_cbt_question.course_topic_query",
+			filters: { course: frm.doc.course },
 		}));
 		frm.set_query("supersedes_question", () => ({ filters: supersededQuestionFilters(frm) }));
 	},
@@ -174,6 +182,7 @@ frappe.ui.form.on("EduEdge CBT Question", {
 	},
 
 	async course(frm) {
+		await frm.set_value("topic", null);
 		await frm.set_value("supersedes_question", null);
 	},
 
