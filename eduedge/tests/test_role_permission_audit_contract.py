@@ -65,7 +65,7 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertIn("ensure_eduedge_page_role_baseline", patch)
 		after_migrate = install.split("def after_migrate", 1)[1].split("def ensure_roles", 1)[0]
 		self.assertNotIn("apply_default_permission_baseline", after_migrate)
-		self.assertNotIn("ensure_eduedge_page_role_baseline", after_migrate)
+		self.assertIn("ensure_eduedge_page_role_baseline", after_migrate)
 
 	def test_installed_role_audit_classifies_custom_and_native_roles(self):
 		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
