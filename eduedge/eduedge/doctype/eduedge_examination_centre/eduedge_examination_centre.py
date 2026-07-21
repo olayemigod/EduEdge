@@ -93,10 +93,11 @@ class EduEdgeExaminationCentre(Document):
 			if self.public_hosting_status != "Not Requested" or self.public_centre_reference:
 				require_public_exam_authoring()
 			return
-		if (
-			before.public_hosting_status != self.public_hosting_status
-			or before.public_centre_reference != self.public_centre_reference
-		):
+
+		previous_hosting_status = before.public_hosting_status or "Not Requested"
+		previous_reference = (before.public_centre_reference or "").strip()
+		current_reference = (self.public_centre_reference or "").strip()
+		if previous_hosting_status != self.public_hosting_status or previous_reference != current_reference:
 			# A future signed CoreEdge centre-verification sync may set this flag
 			# after validating its payload. Ordinary local form/API writes must use
 			# the same ProcessEdge authorisation gate.
