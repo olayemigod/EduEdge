@@ -139,17 +139,18 @@ def guardian_query(user: str | None = None) -> str:
 	"""
 
 
-def has_education_branch_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_education_branch_permission(doc, user=None, permission_type=None) -> bool:
+	"""Allow Role Permission Manager decisions unless branch isolation denies the record."""
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
-		return None
+		return True
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return None
+		return True
 
 	if doc.doctype == "Guardian":
 		if doc.is_new():
-			return None
+			return True
 		student_names = [row.student for row in (doc.get("students") or []) if row.student]
 		if not student_names:
 			return False
@@ -160,40 +161,40 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 				pluck=BRANCH_FIELD,
 			)
 		)
-		return None if branches.intersection(allowed) else False
+		return bool(branches.intersection(allowed))
 
 	if not _branch_field_exists(doc.doctype):
-		return None
+		return True
 	branch = doc.get(BRANCH_FIELD)
-	return None if branch in allowed else False
+	return branch in allowed
 
 
-def has_school_branch_record_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_school_branch_record_permission(doc, user=None, permission_type=None) -> bool:
 	if not is_branch_access_enforced():
-		return None
+		return True
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
-		return None
+		return True
 	if not doc:
-		return None
+		return True
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return None
+		return True
 	name = doc if isinstance(doc, str) else doc.name
-	return None if name in allowed else False
+	return name in allowed
 
 
-def has_school_branch_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
-		return None
+		return True
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return None
-	return None if doc.get("school_branch") in allowed else False
+		return True
+	return doc.get("school_branch") in allowed
 
 
-def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool:
 	publication = frappe.db.get_value(
 		"EduEdge Result Publication", doc.get("result_publication"), "school_branch"
 	)
@@ -201,11 +202,11 @@ def has_result_publication_log_permission(doc, user=None, permission_type=None) 
 		return False
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
-		return None
+		return True
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return None
-	return None if publication in allowed else False
+		return True
+	return publication in allowed
 
 
 def _branch_condition(
