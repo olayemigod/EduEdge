@@ -39,11 +39,10 @@ def get_branch_governance_context(
 	*,
 	company: str | None = None,
 	include_assignment_details: bool = False,
+	include_all_branches: bool = False,
 ) -> dict:
-	roles = set(frappe.get_roles(frappe.session.user))
-	privileged = bool({"System Manager", "EduEdge Administrator"}.intersection(roles))
 	allowed_branch_names = None
-	if not privileged:
+	if not include_all_branches:
 		allowed_branch_names = {row["name"] for row in get_allowed_school_branches()}
 
 	branches = _get_branch_rows(company=company, allowed_branch_names=allowed_branch_names)
@@ -122,7 +121,7 @@ def get_branch_governance_context(
 			"full_name": frappe.db.get_value("User", frappe.session.user, "full_name")
 			or frappe.session.user,
 		},
-		"companies": _get_companies(branches=branches, privileged=privileged),
+		"companies": _get_companies(branches=branches, include_all=include_all_branches),
 		"selected_company": company,
 		"branches": branches,
 		"assignments": assignments if include_assignment_details else [],
@@ -172,12 +171,16 @@ def set_branch_access_enabled(name: str, enabled: int | str) -> dict:
 
 
 def set_branch_enforcement(enabled: int | str, *, confirmed: int | str = 0) -> dict:
+	settings = frappe.get_single("EduEdge Settings")
+	if not settings.has_permission("write"):
+		frappe.throw(_("You are not permitted to change EduEdge branch enforcement."), frappe.PermissionError)
+
 	target = bool(cint(enabled))
 	if not cint(confirmed):
 		frappe.throw(_("Confirm this branch-enforcement change before continuing."), frappe.ValidationError)
 
 	if target:
-		context = get_branch_governance_context()
+		context = get_branch_governance_context(include_all_branches=True)
 		failures = [
 			row["label"]
 			for row in context["activation_checks"]
@@ -191,16 +194,13 @@ def set_branch_enforcement(enabled: int | str, *, confirmed: int | str = 0) -> d
 				frappe.ValidationError,
 			)
 
-	settings = frappe.get_single("EduEdge Settings")
-	if not settings.has_permission("write"):
-		frappe.throw(_("You are not permitted to change EduEdge branch enforcement."), frappe.PermissionError)
 	settings.enable_user_branch_access_enforcement = int(target)
 	settings.save()
-	return get_branch_governance_context()
+	return get_branch_governance_context(include_all_branches=True)
 
 
-def _get_companies(*, branches: list[dict], privileged: bool) -> list[dict]:
-	if privileged:
+def _get_companies(*, branches: list[dict], include_all: bool) -> list[dict]:
+	if include_all:
 		return frappe.get_all(
 			"Company",
 			filters={"is_group": 0},
@@ -259,7 +259,7 @@ def _get_access_rows(
 	allowed_branch_names: set[str] | None = None,
 	allowed_companies: set[str] | None = None,
 ) -> list[dict]:
-	if not frappe.db.exists("DocType", "EduEdge User Branch Access"):
+	if allowed_branch_names is not None and not allowed_branch_names and not allowed_companies:
 		return []
 	filters = {"company": company} if company else {}
 	rows = frappe.get_all(
