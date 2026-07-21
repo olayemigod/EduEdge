@@ -15,8 +15,8 @@
 					eyebrow="Computer-Based Testing"
 					title="CBT Operations"
 					subtitle="Govern school CBT locally and review centrally activated EduEdge Exams access for this site."
-					:action-label="context.can_manage_templates ? 'New Exam Template' : null"
-					@action="openRoute('/app/eduedge-cbt-exam-template/new-eduedge-cbt-exam-template')"
+					:action-label="hasAnyCreatePermission ? 'Create New' : null"
+					@action="openPreferredCreateRoute"
 				/>
 			</template>
 
@@ -56,7 +56,7 @@
 				</EdgeFilterBar>
 
 				<div v-if="isSchoolScope && !filters.branch" class="eduedge-cbt-scope-note">
-					Select a School Branch / Campus to view its CBT centres, question bank, and templates.
+					Select a School Branch / Campus to view the CBT records allowed by your role permissions.
 				</div>
 
 				<section class="eduedge-cbt-panel eduedge-cbt-access-panel">
@@ -91,20 +91,20 @@
 				</section>
 
 				<EdgeDashboardLayout min-column-width="12rem">
-					<EdgeStatCard label="Examination Centres" :value="context.counts.centres || 0" helper="Centres in the selected scope" />
-					<EdgeStatCard label="Active Centres" :value="context.counts.enabled_centres || 0" helper="Available for future schedules" />
-					<EdgeStatCard label="Exam Templates" :value="context.counts.templates || 0" helper="Reusable examination definitions" />
-					<EdgeStatCard label="Approved Templates" :value="context.counts.approved_templates || 0" helper="Ready for scheduling" />
+					<EdgeStatCard v-if="canReadCentres" label="Examination Centres" :value="context.counts.centres || 0" helper="Centres in the selected scope" />
+					<EdgeStatCard v-if="canReadCentres" label="Active Centres" :value="context.counts.enabled_centres || 0" helper="Available for future schedules" />
+					<EdgeStatCard v-if="canReadTemplates" label="Exam Templates" :value="context.counts.templates || 0" helper="Reusable examination definitions" />
+					<EdgeStatCard v-if="canReadTemplates" label="Approved Templates" :value="context.counts.approved_templates || 0" helper="Ready for scheduling" />
 					<EdgeStatCard
-						v-if="context.can_author_questions"
+						v-if="canReadQuestions"
 						label="Approved Questions"
 						:value="context.counts.approved_questions || 0"
 						helper="Eligible for exam templates"
 					/>
 				</EdgeDashboardLayout>
 
-				<section class="eduedge-cbt-grid">
-					<article class="eduedge-cbt-panel">
+				<section v-if="canReadCentres || canReadTemplates" class="eduedge-cbt-grid">
+					<article v-if="canReadCentres" class="eduedge-cbt-panel">
 						<div class="eduedge-cbt-panel-heading">
 							<div>
 								<p class="edge-eyebrow">Centre readiness</p>
@@ -117,8 +117,8 @@
 						<EdgeEmptyState
 							v-if="!context.centres.length"
 							title="No examination centres found"
-							description="Create a centre that matches the selected school or ProcessEdge public-authoring scope."
-							:action-label="context.can_manage_templates ? 'Create examination centre' : null"
+							description="No active centre matches the selected branch and your current record access."
+							:action-label="canCreateCentres ? 'Create examination centre' : null"
 							@action="openRoute('/app/eduedge-examination-centre/new-eduedge-examination-centre')"
 						/>
 						<div v-else class="eduedge-cbt-list">
@@ -145,7 +145,7 @@
 						</div>
 					</article>
 
-					<article class="eduedge-cbt-panel">
+					<article v-if="canReadTemplates" class="eduedge-cbt-panel">
 						<div class="eduedge-cbt-panel-heading">
 							<div>
 								<p class="edge-eyebrow">Reusable definitions</p>
@@ -158,8 +158,8 @@
 						<EdgeEmptyState
 							v-if="!context.templates.length"
 							title="No exam templates found"
-							description="Create a reusable exam definition and select only approved questions from the matching bank."
-							:action-label="context.can_manage_templates ? 'Create exam template' : null"
+							description="No template matches the selected branch and your current record access."
+							:action-label="canCreateTemplates ? 'Create exam template' : null"
 							@action="openRoute('/app/eduedge-cbt-exam-template/new-eduedge-cbt-exam-template')"
 						/>
 						<div v-else class="eduedge-cbt-list">
@@ -188,28 +188,20 @@
 				</section>
 
 				<section class="eduedge-cbt-grid">
-					<article class="eduedge-cbt-panel">
+					<article v-if="canReadQuestions" class="eduedge-cbt-panel">
 						<div class="eduedge-cbt-panel-heading">
 							<div>
 								<p class="edge-eyebrow">Question governance</p>
 								<h2>Question bank readiness</h2>
 							</div>
-							<button
-								v-if="context.can_author_questions"
-								type="button"
-								class="edge-button"
-								@click="openRoute('/app/eduedge-cbt-question')"
-							>
+							<button type="button" class="edge-button" @click="openRoute('/app/eduedge-cbt-question')">
 								Open question bank
 							</button>
 						</div>
-						<div v-if="context.can_author_questions" class="eduedge-cbt-readiness">
+						<div class="eduedge-cbt-readiness">
 							<div><span>Approved questions</span><strong>{{ context.counts.approved_questions || 0 }}</strong></div>
 							<div><span>Draft or under review</span><strong>{{ context.counts.draft_questions || 0 }}</strong></div>
 							<p>Only approved questions from the matching ownership scope, branch, and course can be selected in a template.</p>
-						</div>
-						<div v-else class="eduedge-cbt-scope-note">
-							Question content and answer governance are restricted to authorised academic staff. Invigilators can view approved exam templates without direct Question Bank access.
 						</div>
 					</article>
 
@@ -265,9 +257,12 @@ export default {
 				centres: [],
 				templates: [],
 				questions: [],
+				permissions: {
+					examination_centre: {},
+					cbt_question: {},
+					cbt_template: {},
+				},
 				can_manage_public: false,
-				can_author_questions: false,
-				can_manage_templates: false,
 				public_exam_access: { authority_site: false, platform_mode: "standalone", capabilities: {} },
 			},
 		};
@@ -275,6 +270,27 @@ export default {
 	computed: {
 		isSchoolScope() {
 			return this.filters.exam_scope === "School Examination";
+		},
+		canReadCentres() {
+			return Boolean(this.context.permissions?.examination_centre?.read);
+		},
+		canCreateCentres() {
+			return Boolean(this.context.permissions?.examination_centre?.create);
+		},
+		canReadQuestions() {
+			return Boolean(this.context.permissions?.cbt_question?.read);
+		},
+		canCreateQuestions() {
+			return Boolean(this.context.permissions?.cbt_question?.create);
+		},
+		canReadTemplates() {
+			return Boolean(this.context.permissions?.cbt_template?.read);
+		},
+		canCreateTemplates() {
+			return Boolean(this.context.permissions?.cbt_template?.create);
+		},
+		hasAnyCreatePermission() {
+			return this.canCreateCentres || this.canCreateQuestions || this.canCreateTemplates;
 		},
 		publicCapabilityRows() {
 			const capabilities = this.context.public_exam_access?.capabilities || {};
@@ -311,6 +327,19 @@ export default {
 	},
 	methods: {
 		openRoute: openEduEdgeRoute,
+		openPreferredCreateRoute() {
+			if (this.canCreateTemplates) {
+				this.openRoute("/app/eduedge-cbt-exam-template/new-eduedge-cbt-exam-template");
+				return;
+			}
+			if (this.canCreateQuestions) {
+				this.openRoute("/app/eduedge-question-builder");
+				return;
+			}
+			if (this.canCreateCentres) {
+				this.openRoute("/app/eduedge-examination-centre/new-eduedge-examination-centre");
+			}
+		},
 		statusTone(status) {
 			if (status === "Approved") return "success";
 			if (status === "Under Review") return "warning";
