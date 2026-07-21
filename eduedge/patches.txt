@@ -6,3 +6,4 @@ eduedge.patches.v0_8.enforce_examination_centre_master_lifecycle
 eduedge.patches.v0_8.enforce_cbt_master_lifecycle
 eduedge.patches.v0_8.backfill_cbt_question_topics
 eduedge.patches.v0_8.apply_role_permission_baseline
+eduedge.patches.v0_8.normalize_training_progress_permissions
