@@ -16,6 +16,11 @@ CBT_OPERATIONAL_ROLES = {
 	"Academic Administrator",
 	"CBT Invigilator",
 }
+PLATFORM_MANAGER_ROLES = {
+	"System Manager",
+	"EduEdge Super Administrator",
+	"EduEdge Administrator",
+}
 
 
 def examination_centre_query(user: str | None = None) -> str:
@@ -28,22 +33,36 @@ def cbt_question_query(user: str | None = None) -> str:
 
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool | None:
 	resolved_user = user or frappe.session.user
-	if not is_branch_access_enforced() or not _should_apply_branch_scope(resolved_user):
+	if _is_platform_manager(resolved_user) or not _is_cbt_operational_user(resolved_user):
 		return None
+
+	branch = doc.get("school_branch") if doc else None
+	if not branch:
+		# Platform-level centres and questions must never be exposed through
+		# ordinary school-role DocPerms, even before strict branch enforcement.
+		return False
+	if not is_branch_access_enforced():
+		return None
+
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
 		return None
-	branch = doc.get("school_branch") if doc else None
-	return None if branch and branch in allowed else False
+	return None if branch in allowed else False
 
 
 def _school_branch_condition(doctype: str, user: str | None) -> str:
 	resolved_user = user or frappe.session.user
-	if not is_branch_access_enforced() or not _should_apply_branch_scope(resolved_user):
+	if _is_platform_manager(resolved_user) or not _is_cbt_operational_user(resolved_user):
 		return ""
+
+	# Keep platform-owned records hidden from school roles even when the site
+	# is still using the legacy branch-access fallback.
+	if not is_branch_access_enforced():
+		return f"`tab{doctype}`.`school_branch` is not null"
+
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return ""
+		return f"`tab{doctype}`.`school_branch` is not null"
 	if not allowed:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
@@ -56,12 +75,15 @@ def _allowed_branch_names(user: str) -> set[str] | None:
 	return {row["name"] for row in get_allowed_school_branches(user=user)}
 
 
-def _should_apply_branch_scope(user: str) -> bool:
+def _is_platform_manager(user: str) -> bool:
+	if user == "Administrator":
+		return True
+	if not user or user == "Guest":
+		return False
+	return bool(set(frappe.get_roles(user)).intersection(PLATFORM_MANAGER_ROLES))
+
+
+def _is_cbt_operational_user(user: str) -> bool:
 	if not user or user in {"Guest", "Administrator"}:
 		return False
-	roles = set(frappe.get_roles(user))
-	if roles.intersection(
-		{"System Manager", "EduEdge Super Administrator", "EduEdge Administrator"}
-	):
-		return False
-	return bool(roles.intersection(CBT_OPERATIONAL_ROLES))
+	return bool(set(frappe.get_roles(user)).intersection(CBT_OPERATIONAL_ROLES))
