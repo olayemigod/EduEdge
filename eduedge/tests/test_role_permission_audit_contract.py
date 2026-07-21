@@ -68,7 +68,7 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertNotIn("apply_default_permission_baseline", after_migrate)
 		self.assertIn("ensure_eduedge_page_role_baseline", after_migrate)
 
-	def test_installed_role_audit_classifies_custom_and_native_roles(self):
+	def test_installed_role_audit_classifies_and_flags_sensitive_access(self):
 		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
 		for marker in (
 			"def get_role_permission_audit",
@@ -80,6 +80,9 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 			"unclassified_desk_roles",
 			"remaining_page_role_gates",
 			"audited_permissions",
+			"missing_doctypes",
+			"sensitive_permission_warnings",
+			"portal_roles_with_desk_access",
 		):
 			self.assertIn(marker, baseline)
 		for role in (
@@ -93,11 +96,13 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		):
 			self.assertIn(f'"{role}"', baseline)
 
-	def test_school_managers_receive_safe_defaults_without_global_security_grants(self):
+	def test_school_managers_and_hr_receive_report_based_training_oversight(self):
 		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
 		self.assertIn('SCHOOL_MANAGERS = (', baseline)
-		self.assertIn('_grant(matrix, "EduEdge Training Course", managers, MANAGE)', baseline)
-		self.assertIn('_grant(matrix, "EduEdge Training Progress", managers, MANAGE)', baseline)
+		self.assertIn('SELF_PROGRESS = ("read", "create", "write")', baseline)
+		self.assertIn('TRAINING_OVERSIGHT = SELF_PROGRESS + ("report", "export", "print")', baseline)
+		self.assertIn('managers + ("School HR Officer",)', baseline)
+		self.assertNotIn('"EduEdge Training Course"', baseline)
 		self.assertNotIn('"Role Permission Manager"', baseline)
 		self.assertNotIn('"Custom DocPerm", managers', baseline)
 
@@ -132,10 +137,11 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertIn('user_has_role_permission("EduEdge CBT Exam Template", "delete", user)', template)
 		self.assertNotIn("REVIEW_ROLES", question)
 		self.assertNotIn("REVIEW_ROLES", template)
-		self.assertIn('user_has_role_permission(TRAINING_PROGRESS_DOCTYPE, "delete", user)', training)
+		self.assertIn("TRAINING_OVERSIGHT_PERMISSION = \"report\"", training)
+		self.assertIn("user_has_role_permission(TRAINING_PROGRESS_DOCTYPE, TRAINING_OVERSIGHT_PERMISSION, user)", training)
 		self.assertNotIn("frappe.has_permission", training)
 
-	def test_training_progress_controller_internal_imports_exist_and_portal_roles_are_excluded(self):
+	def test_training_progress_controller_internal_imports_and_audit_safety(self):
 		controller_path = (
 			EDUEDGE
 			/ "eduedge"
@@ -146,7 +152,9 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		controller_text = controller_path.read_text()
 		controller_tree = ast.parse(controller_text)
 		self.assertNotIn("TRAINING_OVERSIGHT_ROLES", controller_text)
-		self.assertIn("user_has_role_permission", controller_text)
+		self.assertIn("TRAINING_OVERSIGHT_PERMISSION = \"report\"", controller_text)
+		self.assertIn("def on_trash", controller_text)
+		self.assertIn("Training progress records cannot be deleted", controller_text)
 
 		for node in ast.walk(controller_tree):
 			if not isinstance(node, ast.ImportFrom) or not (node.module or "").startswith("eduedge."):
@@ -166,11 +174,34 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 
 		metadata = json.loads(controller_path.with_suffix(".json").read_text())
 		permissions = {row["role"]: row for row in metadata["permissions"]}
-		for role in ("Student", "Guardian", "EduEdge Parent"):
+		for role in ("Student", "Guardian", "EduEdge Parent", "HR User", "Purchase User", "Stock User"):
 			self.assertNotIn(role, permissions)
-		for role in ("School Administrator", "Academic Administrator", "Education Manager"):
-			self.assertEqual(permissions[role].get("delete"), 1)
+		for role in (
+			"System Manager",
+			"School Administrator",
+			"Academic Administrator",
+			"Education Manager",
+			"School HR Officer",
+		):
+			self.assertEqual(permissions[role].get("report"), 1)
+			self.assertFalse(permissions[role].get("delete", 0))
+		self.assertFalse(permissions["Teacher"].get("report", 0))
 		self.assertFalse(permissions["Teacher"].get("delete", 0))
+
+	def test_training_permission_patch_normalises_only_known_roles(self):
+		patches = (EDUEDGE / "patches.txt").read_text()
+		patch = (
+			EDUEDGE
+			/ "patches"
+			/ "v0_8"
+			/ "normalize_training_progress_permissions.py"
+		).read_text()
+		self.assertIn("normalize_training_progress_permissions", patches)
+		self.assertIn("get_default_permission_matrix", patch)
+		self.assertIn("LEGACY_NO_DEFAULT_RIGHTS", patch)
+		self.assertIn("Custom roles are deliberately untouched", patch)
+		self.assertIn("_set_exact_permission_row", patch)
+		self.assertIn("_remove_known_legacy_row", patch)
 
 
 if __name__ == "__main__":
