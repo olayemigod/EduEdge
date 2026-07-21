@@ -11,17 +11,7 @@
  "name": "eduedge-setup-center",
  "owner": "Administrator",
  "page_name": "eduedge-setup-center",
- "roles": [
-  {
-   "role": "System Manager"
-  },
-  {
-   "role": "EduEdge Administrator"
-  },
-  {
-   "role": "School Administrator"
-  }
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,
