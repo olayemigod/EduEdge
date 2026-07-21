@@ -3,7 +3,9 @@ from __future__ import annotations
 import frappe
 from frappe.model.document import Document
 
-from eduedge.training.permissions import TRAINING_OVERSIGHT_ROLES
+from eduedge.access_control import user_has_role_permission
+
+TRAINING_PROGRESS_DOCTYPE = "EduEdge Training Progress"
 
 
 class EduEdgeTrainingProgress(Document):
@@ -15,9 +17,11 @@ class EduEdgeTrainingProgress(Document):
 		user = frappe.session.user
 		if user == "Administrator":
 			return
-		roles = set(frappe.get_roles(user))
-		if self.user != user and not TRAINING_OVERSIGHT_ROLES.intersection(roles):
-			frappe.throw(
-				"You can update only your own training progress.",
-				frappe.PermissionError,
-			)
+		if self.user == user:
+			return
+		if user_has_role_permission(TRAINING_PROGRESS_DOCTYPE, "delete", user):
+			return
+		frappe.throw(
+			"You can update only your own training progress.",
+			frappe.PermissionError,
+		)
