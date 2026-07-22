@@ -46,6 +46,23 @@ async function applyOffering(frm) {
 	setEnrollmentQueries(frm);
 }
 
+function addEnrollmentLifecycleActions(frm) {
+	if (frm.doc.docstatus !== 1) return;
+	if (frappe.model.can_create('EduEdge Enrollment Status Log')) {
+		frm.add_custom_button(__('Change Enrollment Status'), () => {
+			frappe.new_doc('EduEdge Enrollment Status Log', {
+				program_enrollment: frm.doc.name,
+				effective_date: frappe.datetime.get_today(),
+			});
+		}, __('Enrollment'));
+	}
+	frm.add_custom_button(__('View Status History'), () => {
+		frappe.set_route('List', 'EduEdge Enrollment Status Log', {
+			program_enrollment: frm.doc.name,
+		});
+	}, __('Enrollment'));
+}
+
 frappe.ui.form.on('Program Enrollment', {
 	setup(frm) {
 		setEnrollmentQueries(frm);
@@ -55,6 +72,7 @@ frappe.ui.form.on('Program Enrollment', {
 		frm.set_df_property('eduedge_program_offering', 'label', frappe.eduedge?.term?.('programme_offering', { fallback: __('Programme Offering') }) || __('Programme Offering'));
 		frm.set_df_property('program', 'label', frappe.eduedge?.term?.('programme', { fallback: __('Program') }) || __('Program'));
 		frm.set_df_property('eduedge_academic_level', 'label', frappe.eduedge?.term?.('academic_level', { fallback: __('Academic Level') }) || __('Academic Level'));
+		addEnrollmentLifecycleActions(frm);
 	},
 
 	async student(frm) {
