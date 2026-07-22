@@ -67,7 +67,7 @@ def has_academic_institution_permission(doc, user=None, permission_type=None) ->
 		return None
 	institution = doc.get(fieldname)
 	if not institution:
-		return None
+		return None if doc.is_new() else False
 	return None if institution in _allowed_institutions(resolved_user) else False
 
 
@@ -81,7 +81,7 @@ def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
 	if not institutions:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
-	return f"(`tab{doctype}`.`{fieldname}` in ({values}) or coalesce(`tab{doctype}`.`{fieldname}`, '') = '')"
+	return f"`tab{doctype}`.`{fieldname}` in ({values})"
 
 
 def _allowed_institutions(user: str) -> set[str]:
