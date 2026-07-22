@@ -8,6 +8,14 @@ PUBLIC_JS = ROOT / "eduedge" / "public" / "js"
 EDITOR_JS = PUBLIC_JS / "eduedge_question_builder" / "rich_text_editor.js"
 EDITOR_CSS = PUBLIC_JS / "eduedge_question_builder" / "rich_text_editor.css"
 BUNDLE = PUBLIC_JS / "eduedge_question_builder.bundle.js"
+PAGE_LOADER = (
+	ROOT
+	/ "eduedge"
+	/ "eduedge"
+	/ "page"
+	/ "eduedge_question_builder"
+	/ "eduedge_question_builder.js"
+)
 QUESTION_META = (
 	ROOT
 	/ "eduedge"
@@ -24,23 +32,26 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		fields = {field["fieldname"]: field for field in metadata["fields"]}
 		self.assertEqual(fields["question_text"]["fieldtype"], "Text Editor")
 
-	def test_bundle_installs_native_toolbar_from_actual_mount_root(self):
+	def test_bundle_keeps_native_edgesuite_mount_and_loads_toolbar_styles(self):
 		bundle = BUNDLE.read_text()
 		self.assertIn('import "./eduedge_question_builder/rich_text_editor.css"', bundle)
-		self.assertIn("resolveMountRoot", bundle)
-		self.assertIn("installNativeQuestionToolbar", bundle)
-		self.assertIn("MutationObserver", bundle)
-		self.assertIn("app.mount =", bundle)
-		self.assertIn("app.unmount =", bundle)
-		self.assertIn("window.requestAnimationFrame(ensureToolbar)", bundle)
-		self.assertIn('root.querySelector(".eduedge-question-editor")', bundle)
-		self.assertIn('editor.setAttribute("dir", "ltr")', bundle)
-		self.assertIn('editor.dispatchEvent(new Event("input", { bubbles: true }))', bundle)
-		self.assertNotIn("installQuestionRichTextEditor", bundle)
-		self.assertNotIn("viewModel.$options", bundle)
+		self.assertIn("return createEduEdgeApp(EduEdgeQuestionBuilder, rootProps)", bundle)
+		self.assertNotIn("app.mount =", bundle)
+		self.assertNotIn("MutationObserver", bundle)
 
-	def test_native_toolbar_supports_required_formatting_and_symbols(self):
-		bundle = BUNDLE.read_text()
+	def test_page_loader_installs_toolbar_on_the_actual_question_root(self):
+		loader = PAGE_LOADER.read_text()
+		self.assertIn("installQuestionToolbar", loader)
+		self.assertIn('root.querySelector(".eduedge-question-editor")', loader)
+		self.assertIn("MutationObserver", loader)
+		self.assertIn("window.setInterval(ensureToolbar, 500)", loader)
+		self.assertIn("wrapper.question_toolbar = installQuestionToolbar(root[0])", loader)
+		self.assertIn("wrapper.question_toolbar?.destroy()", loader)
+		self.assertIn('editor.setAttribute("dir", "ltr")', loader)
+		self.assertIn('editor.dispatchEvent(new Event("input", { bubbles: true }))', loader)
+
+	def test_page_toolbar_supports_required_formatting_and_symbols(self):
+		loader = PAGE_LOADER.read_text()
 		for command in (
 			'command: "bold"',
 			'command: "italic"',
@@ -50,11 +61,11 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 			'command: "insertUnorderedList"',
 			'command: "insertOrderedList"',
 		):
-			self.assertIn(command, bundle)
+			self.assertIn(command, loader)
 		for symbol in ("²", "³", "₁", "₂", "√", "π", "θ", "Δ", "∑", "∞", "×", "÷", "±", "≤", "≥", "≠", "°"):
-			self.assertIn(symbol, bundle)
-		self.assertIn("setRangeText", bundle)
-		self.assertIn("last focused answer field", bundle)
+			self.assertIn(symbol, loader)
+		self.assertIn("setRangeText", loader)
+		self.assertIn("last focused answer, answer-key or marking-guide field", loader)
 
 	def test_legacy_enhancer_avoids_caret_rewriting(self):
 		source = EDITOR_JS.read_text()
