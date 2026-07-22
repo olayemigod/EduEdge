@@ -11,11 +11,21 @@ from eduedge.services.branch_context import (
 	get_current_school_branch as _get_current_school_branch,
 	switch_school_branch as _switch_school_branch,
 )
+from eduedge.services.institution_context import get_effective_institution_context
 
 
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
 		frappe.throw("Authentication required.", frappe.PermissionError)
+
+
+def _institution_context_for_branch(branch: dict | None) -> dict:
+	row = dict(branch or {})
+	is_all_branches = bool(row.get("is_all_branches"))
+	return get_effective_institution_context(
+		company=row.get("company"),
+		branch=None if is_all_branches else row.get("name"),
+	)
 
 
 @frappe.whitelist()
@@ -33,7 +43,9 @@ def get_current_school_branch() -> dict | None:
 @frappe.whitelist()
 def get_active_branch_context() -> dict:
 	_require_login()
-	return _get_active_branch_context()
+	payload = dict(_get_active_branch_context() or {})
+	payload["institution_context"] = _institution_context_for_branch(payload.get("current_branch"))
+	return payload
 
 
 @frappe.whitelist()
@@ -46,7 +58,9 @@ def get_branch_access_profile() -> dict:
 @guard_eduedge_action("school_branch", action="switch_school_branch")
 def switch_school_branch(branch: str, company: str | None = None) -> dict:
 	_require_login()
-	return _switch_school_branch(branch, company=company)
+	selected = dict(_switch_school_branch(branch, company=company) or {})
+	selected["institution_context"] = _institution_context_for_branch(selected)
+	return selected
 
 
 @frappe.whitelist()
