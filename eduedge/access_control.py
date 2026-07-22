@@ -51,13 +51,13 @@ RESOURCE_DOCTYPES = {
 
 # Each route is available when any listed resource/permission pair is allowed.
 # Record-level branch and user permissions continue to filter the records shown.
+# Operational pages intentionally require an operational right rather than a
+# broad Read right, because their interfaces expose create/update actions.
 ROUTE_REQUIREMENTS = {
 	"/app/eduedge-home": (),
 	"/app/eduedge-academic-operations": (
-		("student_group", "read"),
-		("course_schedule", "read"),
-		("student_attendance", "read"),
-		("room", "read"),
+		("student_attendance", "create"),
+		("student_attendance", "write"),
 	),
 	"/app/eduedge-admissions": (("student_admission", "read"),),
 	"/app/eduedge-applicants": (("student_applicant", "read"),),
@@ -76,8 +76,10 @@ ROUTE_REQUIREMENTS = {
 	),
 	"/app/eduedge-question-batch": (("cbt_question", "create"),),
 	"/app/eduedge-assessment-operations": (
-		("assessment_plan", "read"),
-		("assessment_result", "read"),
+		("assessment_plan", "create"),
+		("assessment_plan", "write"),
+		("assessment_result", "create"),
+		("assessment_result", "write"),
 	),
 	"/app/eduedge-report-cards": (
 		("result_publication", "read"),
@@ -90,12 +92,7 @@ ROUTE_REQUIREMENTS = {
 		("instructor_branch_assignment", "read"),
 		("school_branch", "write"),
 	),
-	"/app/eduedge-setup-center": (
-		("school_branch", "read"),
-		("program", "read"),
-		("course", "read"),
-		("eduedge_settings", "read"),
-	),
+	"/app/eduedge-setup-center": (("eduedge_settings", "read"),),
 	"/app/eduedge-settings-center": (("eduedge_settings", "read"),),
 	"/app/eduedge-training-centre": (
 		("training_course", "read"),
