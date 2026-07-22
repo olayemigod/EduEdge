@@ -13,6 +13,8 @@ from eduedge.education.academic_fields import (
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access
 
+CONTEXT_FIELDS = (OFFERING_FIELD, INSTITUTION_FIELD, BRANCH_FIELD, ACADEMIC_LEVEL_FIELD)
+
 
 def get_offering(name: str | None, *, purpose: str | None = None) -> frappe._dict | None:
 	if not name:
@@ -93,16 +95,17 @@ def apply_offering_context(doc, offering: frappe._dict) -> None:
 		"academic_year": "academic_year",
 		"academic_term": "academic_term",
 		"student_batch": "student_batch",
+		"student_batch_name": "student_batch",
 		"batch": "student_batch",
 		ACADEMIC_LEVEL_FIELD: "academic_level",
 	}
 	for target, source in mapping.items():
-		if doc.meta.has_field(target) and offering.get(source):
-			doc.set(target, offering.get(source))
+		if doc.meta.has_field(target):
+			doc.set(target, offering.get(source) or None)
 
 
 def before_validate_program(doc, method=None) -> None:
-	validate_master_institution(doc)
+	validate_master_institution(doc, required=doc.is_new())
 	section = doc.get(ACADEMIC_SECTION_FIELD) if doc.meta.has_field(ACADEMIC_SECTION_FIELD) else None
 	if section:
 		section_institution = frappe.db.get_value("EduEdge Academic Section", section, "institution")
@@ -111,7 +114,11 @@ def before_validate_program(doc, method=None) -> None:
 
 
 def before_validate_course(doc, method=None) -> None:
-	validate_master_institution(doc)
+	validate_master_institution(doc, required=doc.is_new())
+
+
+def before_validate_institution_owned_master(doc, method=None) -> None:
+	validate_master_institution(doc, required=doc.is_new())
 
 
 def before_validate_student_applicant_context(doc, method=None) -> None:
@@ -127,21 +134,34 @@ def before_validate_student_group_context(doc, method=None) -> None:
 
 
 def before_validate_fee_structure(doc, method=None) -> None:
-	if doc.meta.has_field(OFFERING_FIELD) and doc.get(OFFERING_FIELD):
-		apply_offering_context(doc, get_offering(doc.get(OFFERING_FIELD)) or frappe._dict())
-	validate_master_institution(doc, required=False)
+	offering = get_offering(doc.get(OFFERING_FIELD)) if doc.meta.has_field(OFFERING_FIELD) and doc.get(OFFERING_FIELD) else None
+	if offering:
+		_assert_context_compatible(doc, offering, label=_("Programme Offering"))
+		apply_offering_context(doc, offering)
+	validate_master_institution(doc, required=doc.is_new())
+	_validate_branch_institution(doc)
+	_validate_level_institution(doc)
 
 
 def before_validate_fee_schedule(doc, method=None) -> None:
-	source_from_link(doc, "fee_structure", "Fee Structure")
-	if doc.meta.has_field(OFFERING_FIELD) and doc.get(OFFERING_FIELD):
-		apply_offering_context(doc, get_offering(doc.get(OFFERING_FIELD)) or frappe._dict())
+	structure_context = linked_context("Fee Structure", doc.get("fee_structure"))
+	offering = get_offering(doc.get(OFFERING_FIELD)) if doc.meta.has_field(OFFERING_FIELD) and doc.get(OFFERING_FIELD) else None
+	if offering and structure_context:
+		_assert_context_dicts_match(structure_context, offering, _("Fee Structure"), _("Programme Offering"))
+	clear_context(doc)
+	if structure_context:
+		apply_context(doc, structure_context)
+	if offering:
+		apply_offering_context(doc, offering)
 
 
 def before_validate_fees(doc, method=None) -> None:
-	source_from_link(doc, "program_enrollment", "Program Enrollment")
-	if doc.meta.has_field(INSTITUTION_FIELD) and not doc.get(INSTITUTION_FIELD):
-		source_from_link(doc, "fee_structure", "Fee Structure")
+	enrollment_context = linked_context("Program Enrollment", doc.get("program_enrollment"))
+	structure_context = linked_context("Fee Structure", doc.get("fee_structure"))
+	if enrollment_context and structure_context:
+		_assert_context_dicts_match(enrollment_context, structure_context, _("Program Enrollment"), _("Fee Structure"))
+	clear_context(doc)
+	apply_context(doc, enrollment_context or structure_context or {})
 
 
 def before_validate_student_leave(doc, method=None) -> None:
@@ -160,28 +180,32 @@ def before_validate_student_log(doc, method=None) -> None:
 	set_branch_and_institution(doc, branch)
 
 
-def source_from_link(doc, fieldname: str, doctype: str) -> None:
-	name = doc.get(fieldname)
+def linked_context(doctype: str, name: str | None) -> frappe._dict:
 	if not name or not frappe.db.exists(doctype, name):
-		return
+		return frappe._dict()
 	meta = frappe.get_meta(doctype)
-	fields = [field for field in (OFFERING_FIELD, INSTITUTION_FIELD, BRANCH_FIELD, ACADEMIC_LEVEL_FIELD) if meta.has_field(field)]
-	if not fields:
-		return
-	row = frappe.db.get_value(doctype, name, fields, as_dict=True) or {}
-	for field in fields:
-		if doc.meta.has_field(field) and row.get(field):
-			doc.set(field, row.get(field))
+	fields = [field for field in CONTEXT_FIELDS if meta.has_field(field)]
+	return frappe.db.get_value(doctype, name, fields, as_dict=True) or frappe._dict()
+
+
+def clear_context(doc) -> None:
+	for field in CONTEXT_FIELDS:
+		if doc.meta.has_field(field):
+			doc.set(field, None)
+
+
+def apply_context(doc, context: dict) -> None:
+	for field in CONTEXT_FIELDS:
+		if doc.meta.has_field(field):
+			doc.set(field, context.get(field) or None)
 
 
 def set_branch_and_institution(doc, branch: str | None) -> None:
-	if not branch:
-		return
 	if doc.meta.has_field(BRANCH_FIELD):
-		doc.set(BRANCH_FIELD, branch)
-	institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
-	if doc.meta.has_field(INSTITUTION_FIELD) and institution:
-		doc.set(INSTITUTION_FIELD, institution)
+		doc.set(BRANCH_FIELD, branch or None)
+	institution = frappe.db.get_value("EduEdge School Branch", branch, "institution") if branch else None
+	if doc.meta.has_field(INSTITUTION_FIELD):
+		doc.set(INSTITUTION_FIELD, institution or None)
 
 
 def validate_master_institution(doc, *, required: bool = False) -> None:
@@ -194,3 +218,36 @@ def validate_master_institution(doc, *, required: bool = False) -> None:
 		return
 	if not frappe.db.exists("EduEdge Institution", {"name": institution, "enabled": 1}):
 		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+
+
+def _validate_branch_institution(doc) -> None:
+	branch = doc.get(BRANCH_FIELD) if doc.meta.has_field(BRANCH_FIELD) else None
+	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
+	if branch and institution:
+		branch_institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
+		if branch_institution != institution:
+			frappe.throw(_("School Branch / Campus must belong to the selected Institution."), frappe.ValidationError)
+
+
+def _validate_level_institution(doc) -> None:
+	level = doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None
+	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
+	if level and institution:
+		level_institution = frappe.db.get_value("EduEdge Academic Level", level, "institution")
+		if level_institution != institution:
+			frappe.throw(_("Academic Level must belong to the selected Institution."), frappe.ValidationError)
+
+
+def _assert_context_compatible(doc, context: dict, *, label: str) -> None:
+	for field in (INSTITUTION_FIELD, BRANCH_FIELD, ACADEMIC_LEVEL_FIELD):
+		if doc.meta.has_field(field) and doc.get(field) and context.get(field) and doc.get(field) != context.get(field):
+			frappe.throw(_("{0} conflicts with the selected academic context.").format(label), frappe.ValidationError)
+
+
+def _assert_context_dicts_match(left: dict, right: dict, left_label: str, right_label: str) -> None:
+	for field in (INSTITUTION_FIELD, BRANCH_FIELD, OFFERING_FIELD):
+		if left.get(field) and right.get(field) and left.get(field) != right.get(field):
+			frappe.throw(
+				_("{0} and {1} belong to different academic contexts.").format(left_label, right_label),
+				frappe.ValidationError,
+			)
