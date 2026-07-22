@@ -1,7 +1,10 @@
 function setEnrollmentQueries(frm) {
 	frm.set_query('student', () => ({
 		query: 'eduedge.api.education.student_query',
-		filters: { eduedge_school_branch: frm.doc.eduedge_school_branch },
+		filters: {
+			eduedge_school_branch: frm.doc.eduedge_school_branch,
+			allow_cross_branch: 1,
+		},
 	}));
 	frm.set_query('program', () => ({
 		query: 'eduedge.api.education.program_query',
@@ -26,17 +29,18 @@ function setEnrollmentQueries(frm) {
 
 async function applyOffering(frm) {
 	if (!frm.doc.eduedge_program_offering) return;
+	const selectedOffering = frm.doc.eduedge_program_offering;
 	const { message } = await frappe.call('eduedge.api.academic_context.get_programme_offering_context', {
-		offering: frm.doc.eduedge_program_offering,
+		offering: selectedOffering,
 	});
-	if (!message) return;
+	if (!message || frm.doc.eduedge_program_offering !== selectedOffering) return;
 	await frappe.model.set_value(frm.doctype, frm.docname, {
 		eduedge_school_branch: message.school_branch || null,
 		eduedge_institution: message.institution || null,
 		program: message.program || null,
 		academic_year: message.academic_year || null,
 		academic_term: message.academic_term || null,
-		student_batch: message.student_batch || null,
+		student_batch_name: message.student_batch || null,
 		eduedge_academic_level: message.academic_level || null,
 	});
 	setEnrollmentQueries(frm);
@@ -55,13 +59,12 @@ frappe.ui.form.on('Program Enrollment', {
 
 	async student(frm) {
 		if (!frm.doc.student) {
-			if (!frm.doc.eduedge_program_offering) await frm.set_value('eduedge_school_branch', null);
 			setEnrollmentQueries(frm);
 			return;
 		}
-		const { message } = await frappe.db.get_value('Student', frm.doc.student, 'eduedge_school_branch');
-		if (!frm.doc.eduedge_program_offering && message?.eduedge_school_branch) {
-			await frm.set_value('eduedge_school_branch', message.eduedge_school_branch);
+		if (!frm.doc.eduedge_program_offering && !frm.doc.eduedge_school_branch) {
+			const { message } = await frappe.db.get_value('Student', frm.doc.student, 'eduedge_school_branch');
+			if (message?.eduedge_school_branch) await frm.set_value('eduedge_school_branch', message.eduedge_school_branch);
 		}
 		setEnrollmentQueries(frm);
 	},
