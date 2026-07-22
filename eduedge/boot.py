@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import frappe
 
-from eduedge.access_control import build_access_manifest
 from eduedge.platform.runtime_context import get_product_identity
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
@@ -62,7 +61,11 @@ def _get_user_identity() -> dict:
 
 
 def extend_bootinfo(bootinfo) -> None:
-	"""Expose permission-safe identity, access, and institution terminology for EdgeSuite UI."""
+	"""Expose permission-safe identity and terminology for EdgeSuite UI.
+
+	Product identity remains managed by CoreEdge through the cached runtime context.
+	Institution terminology remains local to EduEdge and follows Company/Institution/Branch context.
+	"""
 	if frappe.session.user == "Guest":
 		return
 
@@ -72,6 +75,7 @@ def extend_bootinfo(bootinfo) -> None:
 		allowed_branches = get_allowed_school_branches()
 		current_branch = get_current_school_branch()
 	except Exception:
+		# Boot must remain available even while a site is being configured or migrated.
 		allowed_branches = []
 		current_branch = None
 
@@ -146,12 +150,3 @@ def extend_bootinfo(bootinfo) -> None:
 	shared = bootinfo.get("edgesuite_ui_identity") or {}
 	shared["eduedge"] = identity
 	bootinfo["edgesuite_ui_identity"] = shared
-
-	try:
-		bootinfo["eduedge_access_manifest"] = build_access_manifest(frappe.session.user)
-	except Exception:
-		bootinfo["eduedge_access_manifest"] = {
-			"resources": {},
-			"routes": {},
-			"can_access_eduedge": False,
-		}
