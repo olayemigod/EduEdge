@@ -132,6 +132,14 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - EdgeSuite Academic Foundation page and Institution-aware Program/Offering quick editors
 - unambiguous-only migration backfill; ambiguous legacy records remain reviewable
 
+## Partner implementation status
+
+The maintained partner-facing source of truth is:
+
+- [EduEdge Partner Implementation Status](docs/partner/eduedge_implementation_status.md)
+
+It separates implemented capabilities, acceptance-QA items, known limitations, and planned work. Material EduEdge deliveries must update both the technical version note and the partner implementation status.
+
 ## Development installation
 
 ```bash
