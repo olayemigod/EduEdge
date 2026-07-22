@@ -30,6 +30,7 @@ override_whitelisted_methods = {
 	"eduedge.api.resource_center.save_resource_record": "eduedge.api.resource_center_safe.save_resource_record",
 	"eduedge.api.resource_center.delete_resource_record": "eduedge.api.resource_center_safe.delete_resource_record",
 	"eduedge.api.modal_records.save_modal_record": "eduedge.api.modal_records_safe.save_modal_record",
+	"eduedge.api.academic_operations.get_operations_context": "eduedge.api.academic_operations_safe.get_operations_context",
 }
 
 add_to_apps_screen = [
