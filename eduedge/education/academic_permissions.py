@@ -6,10 +6,33 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.services.branch_context import get_allowed_school_branches, is_branch_access_enforced
 
 PRIVILEGED_ROLES = {"System Manager", "EduEdge Administrator"}
+SCOPED_ROLES = {
+	"School Administrator",
+	"Academic Administrator",
+	"Education Manager",
+	"Academics User",
+	"Registrar",
+	"Admission Officer",
+	"Bursar",
+	"Accounts User",
+	"Accounts Manager",
+	"Instructor",
+	"Teacher",
+}
 DIRECT_INSTITUTION_DOCTYPES = {
 	"EduEdge Academic Section",
 	"EduEdge Academic Level",
 	"EduEdge Institution Academic Calendar",
+}
+LEGACY_OPTIONAL_DOCTYPES = {
+	"Program",
+	"Course",
+	"Student Batch Name",
+	"Student House",
+	"Instructor",
+	"Assessment Group",
+	"Grading Scale",
+	"Fee Structure",
 }
 
 
@@ -67,7 +90,7 @@ def has_academic_institution_permission(doc, user=None, permission_type=None) ->
 		return None
 	institution = doc.get(fieldname)
 	if not institution:
-		return None if doc.is_new() else False
+		return None if doc.doctype in LEGACY_OPTIONAL_DOCTYPES else False
 	return None if institution in _allowed_institutions(resolved_user) else False
 
 
@@ -81,7 +104,10 @@ def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
 	if not institutions:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
-	return f"`tab{doctype}`.`{fieldname}` in ({values})"
+	condition = f"`tab{doctype}`.`{fieldname}` in ({values})"
+	if doctype in LEGACY_OPTIONAL_DOCTYPES:
+		condition = f"({condition} or coalesce(`tab{doctype}`.`{fieldname}`, '') = '')"
+	return condition
 
 
 def _allowed_institutions(user: str) -> set[str]:
@@ -95,4 +121,7 @@ def _allowed_institutions(user: str) -> set[str]:
 def _should_scope(user: str) -> bool:
 	if not is_branch_access_enforced() or not user or user in {"Guest", "Administrator"}:
 		return False
-	return not bool(set(frappe.get_roles(user)).intersection(PRIVILEGED_ROLES))
+	roles = set(frappe.get_roles(user))
+	if roles.intersection(PRIVILEGED_ROLES):
+		return False
+	return bool(roles.intersection(SCOPED_ROLES))
