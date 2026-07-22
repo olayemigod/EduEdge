@@ -26,6 +26,7 @@ export function buildEduEdgeMenuItems() {
 	const academicYear = term("academic_year", { fallback: __("Academic Year") });
 	const sectionPlural = term("academic_section", { plural: true, fallback: __("Academic Sections") });
 	const levelPlural = term("academic_level", { plural: true, fallback: __("Academic Levels") });
+	const assessmentPlural = term("assessment", { plural: true, fallback: __("Assessments") });
 
 	const items = [
 		{ section: __("Overview"), sectionIcon: "home", label: __("Home"), route: "/app/eduedge-home", icon: "home", description: __("Education command centre") },
@@ -37,7 +38,7 @@ export function buildEduEdgeMenuItems() {
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: offeringPlural, route: "/app/eduedge-program-offerings", icon: "layers", description: __(`${programmePlural} by campus and ${academicYear}`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Academic Foundation"), route: "/app/eduedge-academic-foundation", icon: "book", description: __(`${sectionPlural}, ${levelPlural}, and calendars`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("CBT Operations"), route: "/app/eduedge-cbt-operations", icon: "assessment", description: __("Centres, question banks, and exam templates") },
-		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Assessments & Results"), route: "/app/eduedge-assessment-operations", icon: "assessment", description: __("Plan, review, approve, and publish") },
+		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __(`${assessmentPlural} & Results`), route: "/app/eduedge-assessment-operations", icon: "assessment", description: __(`Plan, review, approve, and publish ${assessmentPlural.toLowerCase()}`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Report Cards"), route: "/app/eduedge-report-cards", icon: "report", description: __("Comments, progression, and printing") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("School Branches"), route: "/app/eduedge-school-branches", icon: "building", description: __("Campus identity and operational defaults") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("Institution Structure"), route: "/app/eduedge-institution-structure", icon: "building", description: __("Institution types and academic terminology") },
