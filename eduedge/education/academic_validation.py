@@ -94,6 +94,7 @@ def apply_offering_context(doc, offering: frappe._dict) -> None:
 		"academic_year": "academic_year",
 		"academic_term": "academic_term",
 		"student_batch": "student_batch",
+		"batch": "student_batch",
 		ACADEMIC_LEVEL_FIELD: "academic_level",
 	}
 	for target, source in mapping.items():
