@@ -118,7 +118,7 @@ doc_events = {
 		"before_validate": "eduedge.education.academic_validation.before_validate_fee_structure",
 	},
 	"Fee Schedule": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_fee_schedule",
+		"before_validate": "eduedge.education.academic_fee_context.before_validate_fee_schedule",
 	},
 	"Fees": {
 		"before_validate": "eduedge.education.academic_validation.before_validate_fees",
