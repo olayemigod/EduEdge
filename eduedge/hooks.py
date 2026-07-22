@@ -66,6 +66,21 @@ doc_events = {
 	"Course": {
 		"before_validate": "eduedge.education.academic_validation.before_validate_course",
 	},
+	"Student Batch Name": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
+	},
+	"Student House": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
+	},
+	"Instructor": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
+	},
+	"Assessment Group": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
+	},
+	"Grading Scale": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
+	},
 	"Student Admission": {
 		"before_naming": "eduedge.education.branching.before_naming_student_admission",
 		"before_validate": "eduedge.education.branching.before_validate_student_admission",
@@ -127,10 +142,6 @@ permission_query_conditions = {
 	"Assessment Group": "eduedge.education.academic_permissions.assessment_group_query",
 	"Grading Scale": "eduedge.education.academic_permissions.grading_scale_query",
 	"Fee Structure": "eduedge.education.academic_permissions.fee_structure_query",
-	"Fee Schedule": "eduedge.education.academic_branch_permissions.fee_schedule_query",
-	"Fees": "eduedge.education.academic_branch_permissions.fees_query",
-	"Student Leave Application": "eduedge.education.academic_branch_permissions.student_leave_query",
-	"Student Log": "eduedge.education.academic_branch_permissions.student_log_query",
 	"EduEdge Enrollment Status Log": "eduedge.education.academic_branch_permissions.enrollment_status_log_query",
 	"EduEdge School Branch": "eduedge.education.permissions.school_branch_query",
 	"Student Admission": "eduedge.education.permissions.student_admission_query",
@@ -165,10 +176,6 @@ has_permission = {
 	"Assessment Group": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"Grading Scale": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"Fee Structure": "eduedge.education.academic_permissions.has_academic_institution_permission",
-	"Fee Schedule": "eduedge.education.academic_branch_permissions.has_branch_context_permission",
-	"Fees": "eduedge.education.academic_branch_permissions.has_branch_context_permission",
-	"Student Leave Application": "eduedge.education.academic_branch_permissions.has_branch_context_permission",
-	"Student Log": "eduedge.education.academic_branch_permissions.has_branch_context_permission",
 	"EduEdge Enrollment Status Log": "eduedge.education.academic_branch_permissions.has_enrollment_status_log_permission",
 	"EduEdge School Branch": "eduedge.education.permissions.has_school_branch_record_permission",
 	"Student Admission": "eduedge.education.permissions.has_education_branch_permission",
