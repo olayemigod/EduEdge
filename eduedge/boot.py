@@ -43,7 +43,11 @@ def _get_user_identity() -> dict:
 
 
 def extend_bootinfo(bootinfo) -> None:
-	"""Expose permission-safe identity and institution terminology for EdgeSuite UI."""
+	"""Expose permission-safe identity and terminology for EdgeSuite UI.
+
+	Product identity remains managed by CoreEdge through the cached runtime context.
+	Institution terminology remains local to EduEdge and follows Company/Branch context.
+	"""
 	if frappe.session.user == "Guest":
 		return
 
