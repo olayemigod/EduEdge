@@ -19,6 +19,8 @@ jobs:
         run: python -c "import json, pathlib; [json.loads(p.read_text()) for p in pathlib.Path('.').rglob('*.json')]"
       - name: Validate frontend entry scripts
         run: |
+          node --check eduedge/public/js/education/program.js
+          node --check eduedge/public/js/education/course.js
           node --check eduedge/public/js/education/student_admission.js
           node --check eduedge/public/js/education/student_applicant.js
           node --check eduedge/public/js/education/program_enrollment.js
@@ -38,6 +40,7 @@ jobs:
           node --check eduedge/public/js/eduedge_ui/resource_modal.js
           node --check eduedge/public/js/eduedge_terminology.bundle.js
           node --check eduedge/public/js/eduedge_institution_structure.bundle.js
+          node --check eduedge/public/js/eduedge_academic_foundation.bundle.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
           node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
           node --check eduedge/public/js/eduedge_resource_center.bundle.js
@@ -55,6 +58,7 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_branch_governance/eduedge_branch_governance.js
           node --check eduedge/eduedge/page/eduedge_settings_center/eduedge_settings_center.js
           node --check eduedge/eduedge/page/eduedge_institution_structure/eduedge_institution_structure.js
+          node --check eduedge/eduedge/page/eduedge_academic_foundation/eduedge_academic_foundation.js
       - name: Run pure contract tests
         id: contract-tests
         shell: bash
