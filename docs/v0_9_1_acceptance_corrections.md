@@ -2,10 +2,11 @@
 
 ## Business goal
 
-Close two acceptance issues found after the unified CBT and Institution/Academic Context branch migrated successfully on `eduedge.local`:
+Close acceptance issues found after the unified CBT and Institution/Academic Context branch migrated successfully on `eduedge.local`:
 
 1. Current Institution and Branch were not displayed consistently on every EduEdge page.
 2. Primary and Secondary school interfaces still showed generic **Assessment** wording where operational users expect **Examination**.
+3. After switching from a Primary/Secondary Branch to a Tertiary or Training Centre Branch, already-rendered terminology did not reverse until the browser was manually refreshed.
 
 The correction preserves all standard Frappe Education DocType names and database identities.
 
@@ -51,6 +52,21 @@ Primary and Secondary surfaces therefore display labels such as:
 
 Internal Frappe names such as `Assessment Plan`, `Assessment Result`, and `Assessment Group` remain unchanged.
 
+### Live terminology reversal
+
+The visible terminology layer now treats **Assessment**, **Examination**, and **Evaluation** as one reversible label family.
+
+When the active Institution Type changes, already-rendered content can move in either direction without a manual refresh, including:
+
+- Examination → Assessment
+- Examination → Evaluation
+- Assessment → Examination
+- Assessment → Evaluation
+- Evaluation → Assessment
+- Evaluation → Examination
+
+The same reversible handling applies to Group, Plan, Result, Operations, and “& Results” labels. Longest phrases are transformed before shorter words to prevent partial replacements.
+
 ## Files changed
 
 - `eduedge/api/branch_context.py`
@@ -69,28 +85,41 @@ Internal Frappe names such as `Assessment Plan`, `Assessment Result`, and `Asses
 - Branch switching remains permission-aware and server-authoritative.
 - The browser terminology layer changes visible wording only; routes, API method names, fieldnames, and database values remain stable.
 - Institution context is resolved by Branch → Institution → Company fallback.
+- The correction does not force a full browser reload or discard in-page state.
 
 ## Automated validation
 
-EduEdge CI run **1180** passed on the correction head:
+EduEdge CI run **1188** passed on the live terminology refresh correction:
 
 - Python compilation
 - JSON validation
-- frontend syntax checks, including the shared shell identity bundle
+- frontend syntax checks, including the shared shell identity and terminology bundles
 - complete pure contract suite
+- regression contracts for reversible Assessment/Examination/Evaluation labels
 
-## Local retest required
+## Local acceptance completed
 
-After pulling and rebuilding, verify:
+The following checks passed before the final live-reversal correction:
 
-1. Institution and Branch appear side by side on every EduEdge-owned page.
+1. Institution and Branch appear side by side on every EduEdge page.
 2. The pair refreshes immediately after Branch switching.
 3. Primary and Secondary interfaces display Examination terminology.
-4. Tertiary interfaces retain Assessment terminology.
-5. Training Centre interfaces display Evaluation terminology.
-6. Native Frappe Assessment Plan/Result/Group routes retain their internal routes while showing the resolved EduEdge wording.
-7. CBT Operations, Question Builder, Academic Foundation, Institution Structure, and other previously passed pages still open normally.
+4. The menu displays Examinations & Results.
+5. Examination Operations, Examination Group, and Examination Plan display correctly.
+6. Tertiary displays Assessment after a manual refresh.
+7. Training Centre displays Evaluation.
+8. CBT Operations and Academic Foundation remain operational.
+
+## Final local retest required
+
+After pulling and rebuilding, switch directly between Institution Types without refreshing the browser and verify:
+
+1. Secondary or Primary **Examination** labels change immediately to Tertiary **Assessment** labels.
+2. Tertiary **Assessment** labels change immediately to Training Centre **Evaluation** labels.
+3. Switching back to Secondary or Primary restores **Examination** immediately.
+4. Menu labels, page headings, filter labels, cards, empty states, placeholders, and accessible labels all update.
+5. Institution and Branch remain correct throughout the switches.
 
 ## Status
 
-Implemented with automated validation passed. Browser acceptance retest remains required before the unified branch is merged to `main`.
+Implemented with automated validation passed. All earlier browser checks passed; only the bidirectional live terminology-switch retest remains before this correction is accepted.
