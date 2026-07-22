@@ -5,7 +5,7 @@
 **Audience:** ProcessEdge partners, implementation collaborators, pilot institutions, advisers, and authorised stakeholders  
 **Current implementation stage:** Foundation, core school operations, and CBT definition foundation  
 **Last updated:** 22 July 2026  
-**Repository status:** Unified CBT and Institution/Academic Context branch built and migrated successfully on the development site. Institution/Branch display, Examination/Assessment/Evaluation switching, and previously implemented CBT/Foundation pages passed browser acceptance. A final learner-label correction for Primary Pupil/Pupils has passed automated validation and awaits one focused local retest before merge or production rollout.
+**Repository status:** Unified CBT and Institution/Academic Context branch built and migrated successfully on the development site. Institution/Branch display, Examination/Assessment/Evaluation switching, and previously implemented CBT/Foundation pages passed browser acceptance. A final learner-label correction for Primary Pupil/Pupils passed automated validation in CI run 1202 and awaits one focused local retest before merge or production rollout.
 
 ## 1. Purpose of this document
 
@@ -277,7 +277,7 @@ This does **not** yet mean the Offline-Resilient CBT attempt engine is complete.
 
 ### Automated validation
 
-EduEdge CI run **1200** passed for the final learner-label documentation head, including:
+EduEdge CI run **1202** passed for the final learner-label documentation head, including:
 
 - Python compilation;
 - JSON validation;
