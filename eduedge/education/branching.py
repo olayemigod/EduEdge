@@ -7,8 +7,14 @@ from eduedge.education.academic_operations import (
 	before_validate_course_schedule,
 	before_validate_room,
 	before_validate_student_attendance,
-	before_validate_student_group,
+	before_validate_student_group as _before_validate_student_group,
 )
+from eduedge.education.academic_validation import (
+	before_validate_program_enrollment_context,
+	before_validate_student_applicant_context,
+	before_validate_student_group_context,
+)
+from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import (
 	get_context_branch,
@@ -36,6 +42,7 @@ def before_validate_student_admission(doc, method=None) -> None:
 
 
 def before_validate_student_applicant(doc, method=None) -> None:
+	before_validate_student_applicant_context(doc)
 	admission_branch = _linked_value(
 		"Student Admission", getattr(doc, "student_admission", None), BRANCH_FIELD
 	)
@@ -64,15 +71,19 @@ def before_validate_student(doc, method=None) -> None:
 
 
 def before_validate_program_enrollment(doc, method=None) -> None:
+	before_validate_program_enrollment_context(doc)
 	student_branch = _linked_value("Student", getattr(doc, "student", None), BRANCH_FIELD)
-	_assign_branch(doc, preferred_branch=student_branch)
+	# The exact Programme Offering owns the enrollment Branch. The Student's current
+	# Branch is only a legacy fallback when no Offering has been selected yet.
+	if not doc.get(OFFERING_FIELD):
+		_assign_branch(doc, preferred_branch=student_branch)
 	_validate_branch(doc)
-	if student_branch and doc.get(BRANCH_FIELD) != student_branch:
-		frappe.throw(
-			_("Program Enrollment Branch must match the selected Student Branch."),
-			frappe.ValidationError,
-		)
 	validate_program_enrollment(doc)
+
+
+def before_validate_student_group(doc, method=None) -> None:
+	before_validate_student_group_context(doc)
+	_before_validate_student_group(doc, method)
 
 
 def _assign_branch(doc, preferred_branch: str | None = None) -> None:
