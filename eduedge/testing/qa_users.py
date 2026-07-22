@@ -9,6 +9,20 @@ DEFAULT_PASSWORD = "EduEdgeQA#2026"
 CUSTOM_ROLE = "Subject Coordinator"
 QUESTION_DOCTYPE = "EduEdge CBT Question"
 BRANCH_ACCESS_DOCTYPE = "EduEdge User Branch Access"
+QUESTION_RIGHTS = {"read", "create", "write", "report", "print"}
+QUESTION_SUPPORT_DOCTYPES = ("Course", "Topic")
+MANAGED_PERMISSION_TYPES = {
+	"read",
+	"create",
+	"write",
+	"delete",
+	"report",
+	"import",
+	"export",
+	"print",
+	"email",
+	"share",
+}
 
 QA_USERS = (
 	{
@@ -98,6 +112,33 @@ def _resolve_branch(branch: str | None = None) -> dict:
 	return branches[0]
 
 
+def _set_exact_role_permissions(doctype: str, desired_rights: set[str]) -> None:
+	if not frappe.db.exists("DocType", doctype):
+		frappe.throw(f"Required DocType {doctype} does not exist.", frappe.DoesNotExistError)
+
+	setup_custom_perms(doctype)
+	filters = {
+		"parent": doctype,
+		"role": CUSTOM_ROLE,
+		"permlevel": 0,
+		"if_owner": 0,
+	}
+	if not frappe.db.exists("Custom DocPerm", filters):
+		initial = "read" if "read" in desired_rights else sorted(desired_rights)[0]
+		add_permission(doctype, CUSTOM_ROLE, permlevel=0, ptype=initial)
+
+	for permission_type in sorted(MANAGED_PERMISSION_TYPES):
+		update_permission_property(
+			doctype,
+			CUSTOM_ROLE,
+			0,
+			permission_type,
+			int(permission_type in desired_rights),
+			validate=False,
+		)
+	frappe.clear_cache(doctype=doctype)
+
+
 def _ensure_subject_coordinator_role() -> None:
 	if not frappe.db.exists("Role", CUSTOM_ROLE):
 		frappe.get_doc(
@@ -110,39 +151,9 @@ def _ensure_subject_coordinator_role() -> None:
 	else:
 		frappe.db.set_value("Role", CUSTOM_ROLE, "desk_access", 1, update_modified=False)
 
-	setup_custom_perms(QUESTION_DOCTYPE)
-	filters = {
-		"parent": QUESTION_DOCTYPE,
-		"role": CUSTOM_ROLE,
-		"permlevel": 0,
-		"if_owner": 0,
-	}
-	if not frappe.db.exists("Custom DocPerm", filters):
-		add_permission(QUESTION_DOCTYPE, CUSTOM_ROLE, permlevel=0, ptype="read")
-
-	desired_rights = {"read", "create", "write", "report", "print"}
-	managed_rights = {
-		"read",
-		"create",
-		"write",
-		"delete",
-		"report",
-		"import",
-		"export",
-		"print",
-		"email",
-		"share",
-	}
-	for permission_type in sorted(managed_rights):
-		update_permission_property(
-			QUESTION_DOCTYPE,
-			CUSTOM_ROLE,
-			0,
-			permission_type,
-			int(permission_type in desired_rights),
-			validate=False,
-		)
-	frappe.clear_cache(doctype=QUESTION_DOCTYPE)
+	_set_exact_role_permissions(QUESTION_DOCTYPE, QUESTION_RIGHTS)
+	for doctype in QUESTION_SUPPORT_DOCTYPES:
+		_set_exact_role_permissions(doctype, {"read"})
 
 
 def _ensure_required_roles(roles: tuple[str, ...]) -> None:
