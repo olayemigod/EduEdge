@@ -1,0 +1,25 @@
+{
+ "actions": [],
+ "creation": "2026-07-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["academic_term", "start_date", "end_date", "sequence", "result_publication_date"],
+ "fields": [
+  {"fieldname":"academic_term","fieldtype":"Link","in_list_view":1,"label":"Academic Term","options":"Academic Term","reqd":1},
+  {"fieldname":"start_date","fieldtype":"Date","in_list_view":1,"label":"Start Date","reqd":1},
+  {"fieldname":"end_date","fieldtype":"Date","in_list_view":1,"label":"End Date","reqd":1},
+  {"default":"10","fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence"},
+  {"fieldname":"result_publication_date","fieldtype":"Date","label":"Result Publication Date"}
+ ],
+ "istable": 1,
+ "modified": "2026-07-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Academic Calendar Period",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "sequence",
+ "sort_order": "ASC",
+ "states": []
+}

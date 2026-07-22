@@ -51,75 +51,62 @@ function setMark(mark, logo, fallbackMarkup, altText) {
 	mark.innerHTML = fallbackMarkup;
 }
 
-function companyEntries(identity) {
-	return Object.entries(identity.companies || {}).map(([key, value]) => ({
-		key,
-		label: normalizedText(value?.label || value?.name || key),
-		logo: value?.logo || "",
-	}));
+function ensureContextStyles() {
+	if (document.getElementById("eduedge-active-context-style")) return;
+	const style = document.createElement("style");
+	style.id = "eduedge-active-context-style";
+	style.textContent = `
+		.eduedge-active-context { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
+		.eduedge-active-context__item { display:grid; gap:.05rem; min-width:0; padding:.32rem .55rem; border:1px solid var(--border-color); border-radius:.6rem; background:var(--control-bg); }
+		.eduedge-active-context__item small { color:var(--text-muted); font-size:.68rem; line-height:1; text-transform:uppercase; letter-spacing:.04em; }
+		.eduedge-active-context__item strong { max-width:15rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.78rem; }
+		@media (max-width: 720px) { .eduedge-active-context__item strong { max-width:9rem; } }
+	`;
+	document.head.appendChild(style);
 }
 
-function resolveCompany(identity, chipTexts) {
-	const entries = companyEntries(identity);
-	for (const chipText of chipTexts) {
-		const normalized = normalizedText(chipText);
-		const match = entries.find(
-			(entry) => normalizedText(entry.key) === normalized || entry.label === normalized
-		);
-		if (match) return match;
+function ensureActiveContext(topbar, identity) {
+	const context = identity.institution_context || globalThis.frappe?.boot?.eduedge_institution_context || {};
+	let strip = topbar.querySelector(".eduedge-active-context");
+	if (!strip) {
+		strip = document.createElement("div");
+		strip.className = "eduedge-active-context";
+		strip.innerHTML = `
+			<div class="eduedge-active-context__item" data-eduedge-context="institution"><small>Institution</small><strong></strong></div>
+			<div class="eduedge-active-context__item" data-eduedge-context="branch"><small>Branch</small><strong></strong></div>
+		`;
+		const host = topbar.querySelector(".edge-topbar-context") || topbar;
+		host.appendChild(strip);
 	}
-
-	const activeName = normalizedText(identity.tenant_name);
-	if (activeName) {
-		return (
-			entries.find(
-				(entry) => normalizedText(entry.key) === activeName || entry.label === activeName
-			) || {
-				key: activeName,
-				label: activeName,
-				logo: identity.tenant_logo || "",
-			}
-		);
-	}
-	return null;
+	setText(strip.querySelector('[data-eduedge-context="institution"] strong'), context.institution_name || "Not selected");
+	setText(strip.querySelector('[data-eduedge-context="branch"] strong'), context.branch_name || "Not selected");
 }
 
 function enhanceTopbar(shell, identity) {
 	const topbar = shell.querySelector(".edge-app-shell__topbar.edge-topbar");
 	if (!topbar) return;
-
-	const chips = Array.from(topbar.querySelectorAll(".edge-topbar-context .edge-context-chip"));
-	const chipTexts = chips.map((chip) => normalizedText(chip.textContent));
-	const company = resolveCompany(identity, chipTexts);
-	const companyName = company?.label || company?.key || "School";
+	const context = identity.institution_context || {};
+	const tenantName = normalizedText(context.institution_name || identity.tenant_name) || "EduEdge Institution";
+	const subtitle = normalizedText(context.institution_type_name || identity.tenant_subtitle) || "Education workspace";
 
 	const brand = topbar.querySelector(".edge-topbar__brand");
 	if (brand) {
 		setMark(
 			brand.querySelector(".edge-topbar__mark"),
-			company?.logo || identity.tenant_logo || "",
+			identity.tenant_logo || "",
 			SCHOOL_FALLBACK_ICON,
-			companyName
+			tenantName
 		);
 		const copy = brand.querySelector(".edge-topbar__title-copy");
-		setText(copy?.querySelector("strong"), companyName);
-		setText(copy?.querySelector("small"), "School workspace");
+		setText(copy?.querySelector("strong"), tenantName);
+		setText(copy?.querySelector("small"), subtitle);
 	}
-
-	for (const chip of chips) {
-		const text = normalizedText(chip.textContent);
-		const isTenant = Boolean(
-			company && (text === normalizedText(company.key) || text === normalizedText(company.label))
-		);
-		if (isTenant) chip.dataset.eduedgeTenantChip = "1";
-		else delete chip.dataset.eduedgeTenantChip;
-	}
+	ensureActiveContext(topbar, identity);
 }
 
 function enhanceSidebar(shell, identity) {
 	const brand = shell.querySelector(".edge-sidebar__brand");
 	if (!brand) return;
-
 	const productName = normalizedText(identity.product_name) || "EduEdge";
 	setMark(
 		brand.querySelector(".edge-sidebar__mark"),
@@ -134,6 +121,7 @@ function enhanceSidebar(shell, identity) {
 
 function applyIdentity() {
 	scheduled = false;
+	ensureContextStyles();
 	const identity = getIdentity();
 	for (const shell of document.querySelectorAll('.edge-app-shell[data-edge-product="eduedge"]')) {
 		enhanceTopbar(shell, identity);
@@ -153,6 +141,7 @@ function startIdentityEnhancer() {
 	observer.observe(document.body, { childList: true, subtree: true });
 	document.addEventListener("page-change", scheduleIdentity);
 	globalThis.frappe?.router?.on?.("change", scheduleIdentity);
+	window.addEventListener("eduedge:institution-context-changed", scheduleIdentity);
 	scheduleIdentity();
 }
 

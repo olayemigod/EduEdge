@@ -1,0 +1,36 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-07-22 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["level_name", "level_code", "institution", "academic_section", "sequence", "next_level", "enabled", "description"],
+ "fields": [
+  {"fieldname":"level_name","fieldtype":"Data","in_list_view":1,"label":"Academic Level Name","reqd":1},
+  {"fieldname":"level_code","fieldtype":"Data","in_list_view":1,"label":"Academic Level Code","reqd":1},
+  {"fieldname":"institution","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Institution","options":"EduEdge Institution","reqd":1},
+  {"fieldname":"academic_section","fieldtype":"Link","in_standard_filter":1,"label":"Academic Section","options":"EduEdge Academic Section"},
+  {"default":"10","fieldname":"sequence","fieldtype":"Int","label":"Sequence"},
+  {"fieldname":"next_level","fieldtype":"Link","label":"Next Academic Level","options":"EduEdge Academic Level"},
+  {"default":"1","fieldname":"enabled","fieldtype":"Check","in_list_view":1,"label":"Enabled"},
+  {"fieldname":"description","fieldtype":"Small Text","label":"Description"}
+ ],
+ "modified": "2026-07-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Academic Level",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1},
+  {"create":1,"delete":1,"read":1,"report":1,"role":"EduEdge Administrator","write":1},
+  {"create":1,"read":1,"report":1,"role":"School Administrator","write":1},
+  {"create":1,"read":1,"report":1,"role":"Academic Administrator","write":1},
+  {"read":1,"role":"Teacher"}
+ ],
+ "search_fields": "level_name,level_code,institution,academic_section",
+ "sort_field": "sequence",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "level_name",
+ "track_changes": 1
+}
