@@ -112,6 +112,14 @@ export async function handleResourceFieldChange(modal, { field, values } = {}) {
 	modal.fieldErrors = { ...(modal.fieldErrors || {}), [field?.fieldname]: "" };
 	modal.error = "";
 
+	for (const fieldname of field?.clear_fields || []) {
+		if (fieldname === field?.fieldname) continue;
+		if (!emptyValue(modal.values?.[fieldname])) {
+			modal.values = { ...modal.values, [fieldname]: "" };
+		}
+		modal.fieldErrors = { ...(modal.fieldErrors || {}), [fieldname]: "" };
+	}
+
 	for (const fieldname of field?.refresh_fields || []) {
 		const target = (modal.fields || []).find((item) => item.fieldname === fieldname);
 		if (!target) continue;
