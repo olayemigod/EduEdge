@@ -107,6 +107,18 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - consistent page padding, section gaps, card gaps, content width, focus states, and native Frappe sidebar styling
 - menu visibility remains a usability layer; backend roles and branch permissions remain authoritative
 
+### V0.8
+
+- server-seeded Primary, Secondary, Tertiary, and Training Centre institution types
+- explicit Company → Institution → Branch/Campus hierarchy
+- Institution Type owned by EduEdge Institution and inherited by its Branches
+- optional Company institution-type fallback with Secondary School default
+- migration-safe creation of reviewable Institutions from existing Company/type branch groups
+- Institution-first context resolver exposed through boot and permission-aware APIs
+- global EduEdge terminology helper for EdgeSuite UI
+- dedicated EdgeSuite UI Institution Structure page for Institution creation, Branch assignment, hierarchy review, and terminology preview
+- no branch-name guessing and no mutation of submitted academic or accounting records
+
 ### V0.8A.1
 
 - separate School Examination Centre and EduEdge Exam Centre ownership
@@ -128,13 +140,34 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - CBT entry points in the EduEdge sidebar, product menu, and native Workspace
 - no schedule, candidate attempt, answer sync, CBT result, payment, or accounting execution yet
 
+### V0.9
+
+- Institution-owned Academic Sections and Academic Levels with safe progression rules
+- Institution-specific Academic Calendars and period resolution in Academic Operations
+- Programme Offering upgraded into the exact intake/delivery identity for admission, enrollment, groups, levels, cohorts, study mode, delivery mode, and capacity
+- Student Branch retained as home responsibility context while Enrollment, Group, Schedule, and Attendance use the operational Offering/Branch
+- controlled cross-campus enrollment inside one Institution with cross-Institution blocking
+- append-only Enrollment Status Log without mutating submitted Program Enrollment
+- lifecycle-aware seat capacity, concurrent submission protection, and immutable used Offering identity
+- Institution/Branch/Offering context on fee, leave, and student-log flows without mutating submitted accounting documents
+- EdgeSuite Academic Foundation page and Institution-aware Program/Offering quick editors
+- unambiguous-only migration backfill; ambiguous legacy records remain reviewable
+
+## Partner implementation status
+
+The maintained partner-facing source of truth is:
+
+- [EduEdge Partner Implementation Status](docs/partner/eduedge_implementation_status.md)
+
+It separates implemented capabilities, acceptance-QA items, known limitations, and planned work. Material EduEdge deliveries must update both the technical version note and the partner implementation status.
+
 ## Development installation
 
 ```bash
 cd ~/frappe-bench
 bench get-app https://github.com/frappe/education --branch version-16
 bench get-app https://github.com/olayemigod/processedge-edge-suite-ui.git --branch agent/fix-waffle-product-menu
-bench get-app https://github.com/olayemigod/EduEdge.git --branch agent/eduedge-v0-8a-cbt-foundation
+bench get-app https://github.com/olayemigod/EduEdge.git --branch agent/eduedge-integrated-foundation
 
 bench --site eduedge.local install-app erpnext
 bench --site eduedge.local install-app education
