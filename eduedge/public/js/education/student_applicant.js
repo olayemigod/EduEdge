@@ -33,19 +33,25 @@ function setApplicantQueries(frm) {
 
 async function applyApplicantOffering(frm) {
 	if (!frm.doc.eduedge_program_offering) return;
-	const { message } = await frappe.call('eduedge.api.academic_context.get_programme_offering_context', {
-		offering: frm.doc.eduedge_program_offering,
-	});
-	if (!message) return;
-	await frappe.model.set_value(frm.doctype, frm.docname, {
-		eduedge_school_branch: message.school_branch || null,
-		eduedge_institution: message.institution || null,
-		program: message.program || null,
-		academic_year: message.academic_year || null,
-		academic_term: message.academic_term || null,
-		eduedge_academic_level: message.academic_level || null,
-	});
-	setApplicantQueries(frm);
+	const selectedOffering = frm.doc.eduedge_program_offering;
+	frm.__eduedge_applying_offering = true;
+	try {
+		const { message } = await frappe.call('eduedge.api.academic_context.get_programme_offering_context', {
+			offering: selectedOffering,
+		});
+		if (!message || frm.doc.eduedge_program_offering !== selectedOffering) return;
+		await frappe.model.set_value(frm.doctype, frm.docname, {
+			eduedge_school_branch: message.school_branch || null,
+			eduedge_institution: message.institution || null,
+			program: message.program || null,
+			academic_year: message.academic_year || null,
+			academic_term: message.academic_term || null,
+			eduedge_academic_level: message.academic_level || null,
+		});
+		setApplicantQueries(frm);
+	} finally {
+		frm.__eduedge_applying_offering = false;
+	}
 }
 
 frappe.ui.form.on('Student Applicant', {
@@ -70,6 +76,7 @@ frappe.ui.form.on('Student Applicant', {
 	},
 
 	eduedge_school_branch(frm) {
+		if (frm.__eduedge_applying_offering) return;
 		if (frm.doc.eduedge_program_offering) frm.set_value('eduedge_program_offering', null);
 		frm.set_value('program', null);
 		frm.set_value('student_admission', null);
@@ -77,17 +84,20 @@ frappe.ui.form.on('Student Applicant', {
 	},
 
 	academic_year(frm) {
+		if (frm.__eduedge_applying_offering) return;
 		if (!frm.doc.eduedge_program_offering) frm.set_value('academic_term', null);
 		frm.set_value('student_admission', null);
 		setApplicantQueries(frm);
 	},
 
 	academic_term(frm) {
+		if (frm.__eduedge_applying_offering) return;
 		frm.set_value('student_admission', null);
 		setApplicantQueries(frm);
 	},
 
 	program(frm) {
+		if (frm.__eduedge_applying_offering) return;
 		frm.set_value('student_admission', null);
 		setApplicantQueries(frm);
 	},
