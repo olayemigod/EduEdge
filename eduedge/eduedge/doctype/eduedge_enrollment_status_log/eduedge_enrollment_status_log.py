@@ -5,8 +5,9 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate, nowdate
 
-from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
+from eduedge.education.academic_fields import ACADEMIC_LEVEL_FIELD, INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_validation import get_offering
+from eduedge.services.enrollment_lifecycle import get_current_enrollment_status
 
 ALLOWED_TRANSITIONS = {
 	"Active": {"Completed", "Promoted", "Withdrawn", "Suspended", "Transferred", "Graduated", "Cancelled"},
@@ -25,7 +26,7 @@ class EduEdgeEnrollmentStatusLog(Document):
 		self.effective_date = self.effective_date or nowdate()
 		self.approved_by = frappe.session.user
 		self._load_enrollment()
-		self.previous_status = self._current_status()
+		self.previous_status = get_current_enrollment_status(self.program_enrollment)
 		self._validate_chronology()
 		self._validate_transition()
 		self._derive_target_context()
@@ -40,6 +41,12 @@ class EduEdgeEnrollmentStatusLog(Document):
 		frappe.throw(_("Enrollment Status Logs are append-only and cannot be deleted."), frappe.PermissionError)
 
 	def _load_enrollment(self) -> None:
+		# Serialize lifecycle changes for the same enrollment. Without this lock,
+		# two simultaneous status logs could both validate against the same prior state.
+		frappe.db.sql(
+			"select name from `tabProgram Enrollment` where name = %s for update",
+			(self.program_enrollment,),
+		)
 		self._enrollment = frappe.get_doc("Program Enrollment", self.program_enrollment)
 		self._enrollment.check_permission("read")
 		if self._enrollment.docstatus != 1:
@@ -54,10 +61,6 @@ class EduEdgeEnrollmentStatusLog(Document):
 			limit=1,
 		)
 		return rows[0] if rows else None
-
-	def _current_status(self) -> str:
-		latest = self._latest_log()
-		return latest.new_status if latest else "Active"
 
 	def _validate_chronology(self) -> None:
 		if getdate(self.effective_date) > getdate(nowdate()):
@@ -89,8 +92,17 @@ class EduEdgeEnrollmentStatusLog(Document):
 			self.target_branch = None
 			return
 		offering = get_offering(self.target_program_offering, purpose="enrollment")
-		if self.new_status == "Promoted" and self._enrollment.meta.has_field(INSTITUTION_FIELD):
-			source_institution = self._enrollment.get(INSTITUTION_FIELD)
-			if source_institution and offering.institution != source_institution:
-				frappe.throw(_("Promotion must remain within the same Institution. Use Transfer for another Institution."), frappe.ValidationError)
+		if self.new_status == "Promoted":
+			if self._enrollment.meta.has_field(INSTITUTION_FIELD):
+				source_institution = self._enrollment.get(INSTITUTION_FIELD)
+				if source_institution and offering.institution != source_institution:
+					frappe.throw(_("Promotion must remain within the same Institution. Use Transfer for another Institution."), frappe.ValidationError)
+			if self._enrollment.meta.has_field(ACADEMIC_LEVEL_FIELD):
+				source_level = self._enrollment.get(ACADEMIC_LEVEL_FIELD)
+				next_level = frappe.db.get_value("EduEdge Academic Level", source_level, "next_level") if source_level else None
+				if next_level and offering.academic_level != next_level:
+					frappe.throw(
+						_("Promotion target must use the configured next Academic Level {0}.").format(next_level),
+						frappe.ValidationError,
+					)
 		self.target_branch = offering.school_branch
