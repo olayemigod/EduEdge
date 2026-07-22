@@ -24,32 +24,23 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		fields = {field["fieldname"]: field for field in metadata["fields"]}
 		self.assertEqual(fields["question_text"]["fieldtype"], "Text Editor")
 
-	def test_bundle_installs_editor_from_the_actual_mount_root(self):
+	def test_bundle_installs_native_toolbar_from_actual_mount_root(self):
 		bundle = BUNDLE.read_text()
-		self.assertIn("installQuestionRichTextEditor", bundle)
 		self.assertIn('import "./eduedge_question_builder/rich_text_editor.css"', bundle)
 		self.assertIn("resolveMountRoot", bundle)
-		self.assertIn("installEditorObserver", bundle)
+		self.assertIn("installNativeQuestionToolbar", bundle)
 		self.assertIn("MutationObserver", bundle)
 		self.assertIn("app.mount =", bundle)
 		self.assertIn("app.unmount =", bundle)
-		self.assertIn("window.requestAnimationFrame(ensureEditor)", bundle)
-		self.assertIn("editorController.refresh()", bundle)
-		self.assertIn("editorController?.destroy()", bundle)
+		self.assertIn("window.requestAnimationFrame(ensureToolbar)", bundle)
+		self.assertIn('root.querySelector(".eduedge-question-editor")', bundle)
+		self.assertIn('editor.setAttribute("dir", "ltr")', bundle)
+		self.assertIn('editor.dispatchEvent(new Event("input", { bubbles: true }))', bundle)
+		self.assertNotIn("installQuestionRichTextEditor", bundle)
 		self.assertNotIn("viewModel.$options", bundle)
 
-	def test_editor_fixes_direction_and_avoids_caret_rewriting(self):
-		source = EDITOR_JS.read_text()
-		self.assertIn('editor.setAttribute("dir", "ltr")', source)
-		self.assertIn('editor.contentEditable = readOnly ? "false" : "true"', source)
-		self.assertIn('source.style.display = "none"', source)
-		self.assertIn('source.dispatchEvent(new Event("input", { bubbles: true }))', source)
-		self.assertIn("MutationObserver", source)
-		self.assertIn("document.activeElement !== editor", source)
-		self.assertNotIn("editor.innerHTML = form.question_text", source)
-
-	def test_editor_supports_required_formatting_and_symbols(self):
-		source = EDITOR_JS.read_text()
+	def test_native_toolbar_supports_required_formatting_and_symbols(self):
+		bundle = BUNDLE.read_text()
 		for command in (
 			'command: "bold"',
 			'command: "italic"',
@@ -59,10 +50,21 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 			'command: "insertUnorderedList"',
 			'command: "insertOrderedList"',
 		):
-			self.assertIn(command, source)
+			self.assertIn(command, bundle)
 		for symbol in ("²", "³", "₁", "₂", "√", "π", "θ", "Δ", "∑", "∞", "×", "÷", "±", "≤", "≥", "≠", "°"):
-			self.assertIn(symbol, source)
-		self.assertIn("last focused answer or answer-key field", source)
+			self.assertIn(symbol, bundle)
+		self.assertIn("setRangeText", bundle)
+		self.assertIn("last focused answer field", bundle)
+
+	def test_legacy_enhancer_avoids_caret_rewriting(self):
+		source = EDITOR_JS.read_text()
+		self.assertIn('editor.setAttribute("dir", "ltr")', source)
+		self.assertIn('editor.contentEditable = readOnly ? "false" : "true"', source)
+		self.assertIn('source.style.display = "none"', source)
+		self.assertIn('source.dispatchEvent(new Event("input", { bubbles: true }))', source)
+		self.assertIn("MutationObserver", source)
+		self.assertIn("document.activeElement !== editor", source)
+		self.assertNotIn("editor.innerHTML = form.question_text", source)
 
 	def test_styles_force_left_to_right_readable_editor(self):
 		styles = EDITOR_CSS.read_text()
