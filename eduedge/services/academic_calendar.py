@@ -38,8 +38,14 @@ def resolve_academic_defaults(branch: str, reference_date: str | None = None) ->
 			)
 			period = periods[0] if periods else None
 
-	academic_year = calendar.academic_year if calendar else frappe.db.get_single_value("Education Settings", "current_academic_year")
-	academic_term = period.academic_term if period else frappe.db.get_single_value("Education Settings", "current_academic_term")
+	if calendar:
+		academic_year = calendar.academic_year
+		# A gap between configured periods is intentional. Do not leak a site-wide
+		# Education Settings term into this Institution's calendar context.
+		academic_term = period.academic_term if period else None
+	else:
+		academic_year = frappe.db.get_single_value("Education Settings", "current_academic_year")
+		academic_term = frappe.db.get_single_value("Education Settings", "current_academic_term")
 	return {
 		"institution": institution,
 		"calendar": calendar.name if calendar else None,
