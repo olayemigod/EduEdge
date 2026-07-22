@@ -129,16 +129,6 @@ doc_events = {
 	"Student Log": {
 		"before_validate": "eduedge.education.academic_validation.before_validate_student_log",
 	},
-	"EduEdge CBT Question": {
-		"validate": "eduedge.cbt.master_lifecycle.validate_master_docstatus",
-		"before_submit": "eduedge.cbt.master_lifecycle.block_master_submit",
-		"before_cancel": "eduedge.cbt.master_lifecycle.block_master_cancel",
-	},
-	"EduEdge CBT Exam Template": {
-		"validate": "eduedge.cbt.master_lifecycle.validate_master_docstatus",
-		"before_submit": "eduedge.cbt.master_lifecycle.block_master_submit",
-		"before_cancel": "eduedge.cbt.master_lifecycle.block_master_cancel",
-	},
 }
 
 permission_query_conditions = {
@@ -173,9 +163,6 @@ permission_query_conditions = {
 	"EduEdge Result Publication Log": "eduedge.education.permissions.result_publication_log_query",
 	"EduEdge Report Card Review": "eduedge.education.permissions.report_card_review_query",
 	"EduEdge Training Progress": "eduedge.training.permissions.training_progress_query",
-	"EduEdge Examination Centre": "eduedge.cbt.permissions.examination_centre_query",
-	"EduEdge CBT Question": "eduedge.cbt.permissions.cbt_question_query",
-	"EduEdge CBT Exam Template": "eduedge.cbt.permissions.cbt_exam_template_query",
 }
 
 has_permission = {
@@ -210,9 +197,6 @@ has_permission = {
 	"EduEdge Result Publication Log": "eduedge.education.permissions.has_result_publication_log_permission",
 	"EduEdge Report Card Review": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Training Progress": "eduedge.training.permissions.has_training_progress_permission",
-	"EduEdge Examination Centre": "eduedge.cbt.permissions.has_school_branch_permission",
-	"EduEdge CBT Question": "eduedge.cbt.permissions.has_school_branch_permission",
-	"EduEdge CBT Exam Template": "eduedge.cbt.permissions.has_school_branch_permission",
 }
 
 fixtures = [
@@ -224,7 +208,6 @@ fixtures = [
 				"in",
 				[
 					"EduEdge Super Administrator",
-					"EduEdge Public Exam Administrator",
 					"EduEdge Administrator",
 					"School Administrator",
 					"Academic Administrator",
