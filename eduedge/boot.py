@@ -26,6 +26,24 @@ def _get_company_identity(company: str) -> dict:
 	}
 
 
+def _get_institution_identity(institution: str) -> dict:
+	if not institution or not frappe.db.exists("EduEdge Institution", institution):
+		return {"name": institution or "", "label": institution or "", "logo": ""}
+	row = frappe.db.get_value(
+		"EduEdge Institution",
+		institution,
+		["name", "institution_name", "logo", "company", "institution_type"],
+		as_dict=True,
+	) or {}
+	return {
+		"name": row.get("name") or institution,
+		"label": row.get("institution_name") or row.get("name") or institution,
+		"logo": row.get("logo") or "",
+		"company": row.get("company") or "",
+		"institution_type": row.get("institution_type") or "",
+	}
+
+
 def _get_user_identity() -> dict:
 	user = frappe.session.user
 	row = frappe.db.get_value(
@@ -74,7 +92,7 @@ def extend_bootinfo(bootinfo) -> None:
 		for company in sorted(company_names)
 	}
 	active_company = (current_branch or {}).get("company")
-	active_identity = companies.get(active_company) or {
+	active_company_identity = companies.get(active_company) or {
 		"name": active_company or "",
 		"label": active_company or "",
 		"logo": "",
@@ -99,6 +117,16 @@ def extend_bootinfo(bootinfo) -> None:
 			"uses_secondary_fallback": 1,
 		}
 
+	active_institution_identity = _get_institution_identity(institution_context.get("institution"))
+	institution_label = (
+		active_institution_identity.get("label")
+		or institution_context.get("institution_name")
+		or active_company_identity.get("label")
+		or active_company_identity.get("name")
+		or ""
+	)
+	institution_logo = active_institution_identity.get("logo") or active_company_identity.get("logo") or ""
+
 	identity = {
 		"product_code": product_identity["product_code"],
 		"product_name": product_identity["product_name"],
@@ -106,10 +134,12 @@ def extend_bootinfo(bootinfo) -> None:
 		"product_identity_source": product_identity["source"],
 		"product_icon": "graduation",
 		"product_subtitle": "Education Management",
-		"tenant_name": active_identity.get("label") or active_identity.get("name") or "",
-		"tenant_logo": active_identity.get("logo") or "",
+		"tenant_name": institution_label,
+		"tenant_logo": institution_logo,
 		"tenant_icon": "building",
-		"tenant_subtitle": institution_context.get("institution_name") or institution_context.get("institution_type_name") or "School workspace",
+		"tenant_subtitle": institution_context.get("institution_type_name") or "Education workspace",
+		"owner_company_name": active_company_identity.get("label") or active_company_identity.get("name") or "",
+		"branch_name": institution_context.get("branch_name") or "",
 		"companies": companies,
 		"user": _get_user_identity(),
 		"institution_context": institution_context,
