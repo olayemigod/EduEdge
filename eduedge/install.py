@@ -11,14 +11,9 @@ from eduedge.education.custom_fields import (
 from eduedge.education.enrollment_field_setup import ensure_program_enrollment_branch_selector
 from eduedge.education.institution_type_defaults import apply_institution_type_defaults
 from eduedge.education.institution_types import ensure_institution_type_foundation
-from eduedge.permissions_baseline import (
-	apply_default_permission_baseline,
-	ensure_eduedge_page_role_baseline,
-)
 
 ROLE_DESK_ACCESS = {
 	"EduEdge Super Administrator": 1,
-	"EduEdge Public Exam Administrator": 1,
 	"EduEdge Administrator": 1,
 	"School Administrator": 1,
 	"Academic Administrator": 1,
@@ -93,13 +88,10 @@ def after_install() -> None:
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
 	ensure_training_page_roles()
-	apply_default_permission_baseline()
-	ensure_eduedge_page_role_baseline()
 	backfill_education_branch_context()
 
 
 def after_migrate() -> None:
-	"""Maintain combined schema/runtime foundations without overwriting role permissions."""
 	ensure_institution_type_foundation()
 	apply_institution_type_defaults()
 	ensure_roles()
@@ -109,9 +101,6 @@ def after_migrate() -> None:
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
 	ensure_training_page_roles()
-	# Standard Page JSON may reintroduce legacy role rows during model sync.
-	# Keep EdgeSuite shells neutral; menus, APIs and DocTypes remain authoritative.
-	ensure_eduedge_page_role_baseline()
 	backfill_education_branch_context()
 
 
