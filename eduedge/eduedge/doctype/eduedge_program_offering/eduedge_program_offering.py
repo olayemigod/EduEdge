@@ -8,7 +8,19 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate
 
+from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.offerings import assert_branch_access
+
+IDENTITY_FIELDS = (
+	"school_branch",
+	"program",
+	"academic_year",
+	"academic_term",
+	"student_batch",
+	"study_mode",
+	"delivery_mode",
+	"academic_level",
+)
 
 
 class EduEdgeProgramOffering(Document):
@@ -32,6 +44,7 @@ class EduEdgeProgramOffering(Document):
 		assert_branch_access(self.school_branch)
 		if not self.is_new() and self.has_value_changed("offering_code"):
 			frappe.throw(_("Offering Code cannot change after creation."), frappe.ValidationError)
+		self._validate_identity_changes()
 		self._validate_term()
 		self._validate_institution_context()
 		self._validate_capacity()
@@ -75,6 +88,29 @@ class EduEdgeProgramOffering(Document):
 		)
 		return f"OFR-{hashlib.sha1(seed.encode()).hexdigest()[:12].upper()}"
 
+	def _validate_identity_changes(self) -> None:
+		if self.is_new() or not any(self.has_value_changed(fieldname) for fieldname in IDENTITY_FIELDS):
+			return
+		if self._has_operational_references():
+			frappe.throw(
+				_("Programme Offering identity cannot change after applicants, groups, or submitted enrollments reference it. Create a new Offering instead."),
+				frappe.ValidationError,
+			)
+
+	def _has_operational_references(self) -> bool:
+		for doctype in ("Student Applicant", "Student Group"):
+			if frappe.db.exists("DocType", doctype) and frappe.get_meta(doctype).has_field(OFFERING_FIELD):
+				if frappe.db.exists(doctype, {OFFERING_FIELD: self.name}):
+					return True
+		if frappe.db.exists("DocType", "Program Enrollment") and frappe.get_meta("Program Enrollment").has_field(OFFERING_FIELD):
+			return bool(
+				frappe.db.exists(
+					"Program Enrollment",
+					{OFFERING_FIELD: self.name, "docstatus": 1},
+				)
+			)
+		return False
+
 	def _validate_term(self) -> None:
 		if not self.academic_term:
 			return
@@ -114,6 +150,17 @@ class EduEdgeProgramOffering(Document):
 	def _validate_capacity(self) -> None:
 		if (self.capacity or 0) < 0:
 			frappe.throw(_("Capacity cannot be negative."), frappe.ValidationError)
+		if self.is_new() or not self.capacity:
+			return
+		enrolled = frappe.db.count(
+			"Program Enrollment",
+			{OFFERING_FIELD: self.name, "docstatus": 1},
+		) if frappe.get_meta("Program Enrollment").has_field(OFFERING_FIELD) else 0
+		if enrolled > int(self.capacity):
+			frappe.throw(
+				_("Capacity cannot be lower than the {0} submitted enrollments already linked to this Offering.").format(enrolled),
+				frappe.ValidationError,
+			)
 
 	def _validate_dates(self) -> None:
 		for start_field, end_field, label in (
