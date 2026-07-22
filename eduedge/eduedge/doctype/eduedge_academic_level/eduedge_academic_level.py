@@ -33,6 +33,16 @@ class EduEdgeAcademicLevel(Document):
 			next_institution = frappe.db.get_value("EduEdge Academic Level", self.next_level, "institution")
 			if next_institution != self.institution:
 				frappe.throw(_("Next Academic Level must belong to the same Institution."), frappe.ValidationError)
+			self._validate_progression_cycle()
+
+	def _validate_progression_cycle(self) -> None:
+		visited = {self.name} if self.name else set()
+		current = self.next_level
+		while current:
+			if current in visited:
+				frappe.throw(_("Academic Level progression cannot contain a cycle."), frappe.ValidationError)
+			visited.add(current)
+			current = frappe.db.get_value("EduEdge Academic Level", current, "next_level")
 
 
 def _normalize_code(value: str | None) -> str:
