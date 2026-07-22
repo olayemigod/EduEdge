@@ -119,13 +119,26 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - dedicated EdgeSuite UI Institution Structure page for Institution creation, Branch assignment, hierarchy review, and terminology preview
 - no branch-name guessing and no mutation of submitted academic or accounting records
 
+### V0.9
+
+- Institution-owned Academic Sections and Academic Levels with safe progression rules
+- Institution-specific Academic Calendars and period resolution in Academic Operations
+- Programme Offering upgraded into the exact intake/delivery identity for admission, enrollment, groups, levels, cohorts, study mode, delivery mode, and capacity
+- Student Branch retained as home responsibility context while Enrollment, Group, Schedule, and Attendance use the operational Offering/Branch
+- controlled cross-campus enrollment inside one Institution with cross-Institution blocking
+- append-only Enrollment Status Log without mutating submitted Program Enrollment
+- lifecycle-aware seat capacity, concurrent submission protection, and immutable used Offering identity
+- Institution/Branch/Offering context on fee, leave, and student-log flows without mutating submitted accounting documents
+- EdgeSuite Academic Foundation page and Institution-aware Program/Offering quick editors
+- unambiguous-only migration backfill; ambiguous legacy records remain reviewable
+
 ## Development installation
 
 ```bash
 cd ~/frappe-bench
 bench get-app https://github.com/frappe/education --branch version-16
 bench get-app https://github.com/olayemigod/processedge-edge-suite-ui.git --branch agent/fix-waffle-product-menu
-bench get-app https://github.com/olayemigod/EduEdge.git --branch agent/eduedge-v0-1-foundation
+bench get-app https://github.com/olayemigod/EduEdge.git --branch main
 
 bench --site eduedge.local install-app erpnext
 bench --site eduedge.local install-app education
