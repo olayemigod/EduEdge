@@ -74,7 +74,15 @@ def get_home_context() -> dict:
 	return {
 		"product": "EduEdge",
 		"user": {"name": frappe.session.user, "full_name": full_name},
-		"tenant_name": active_company or readiness.get("school", {}).get("default_company"),
+		"tenant_name": institution_context.get("institution_name")
+		or active_company
+		or readiness.get("school", {}).get("default_company"),
+		"current_institution": {
+			"name": institution_context.get("institution") or "",
+			"institution_name": institution_context.get("institution_name") or "",
+			"institution_type": institution_context.get("institution_type") or "",
+			"institution_type_name": institution_context.get("institution_type_name") or "",
+		},
 		"current_branch": current_branch,
 		"allowed_branches": allowed_branches,
 		"active_scope": branch_context["active_scope"],
