@@ -17,6 +17,10 @@ class EduEdgeAcademicLevel(Document):
 	def validate(self) -> None:
 		if not frappe.db.exists("EduEdge Institution", {"name": self.institution, "enabled": 1}):
 			frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+		frappe.db.sql(
+			"select name from `tabEduEdge Institution` where name = %s for update",
+			(self.institution,),
+		)
 		if not self.is_new():
 			if self.has_value_changed("level_code"):
 				frappe.throw(_("Academic Level Code cannot change after creation."), frappe.ValidationError)
