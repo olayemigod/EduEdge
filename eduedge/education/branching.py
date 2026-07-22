@@ -77,11 +77,24 @@ def before_validate_program_enrollment(doc, method=None) -> None:
 		_assign_branch(doc, preferred_branch=student_branch)
 	before_validate_program_enrollment_context(doc)
 	_validate_branch(doc)
+	_validate_student_enrollment_institution(doc, student_branch)
 	validate_program_enrollment(doc)
 
 
 def before_validate_student_group(doc, method=None) -> None:
 	_before_validate_student_group(doc, method)
+
+
+def _validate_student_enrollment_institution(doc, student_branch: str | None) -> None:
+	if not student_branch or not doc.get(BRANCH_FIELD):
+		return
+	student_institution = frappe.db.get_value("EduEdge School Branch", student_branch, "institution")
+	target_institution = frappe.db.get_value("EduEdge School Branch", doc.get(BRANCH_FIELD), "institution")
+	if student_institution and target_institution and student_institution != target_institution:
+		frappe.throw(
+			_("A Student may enroll across Campuses within the same Institution, but not into another Institution."),
+			frappe.ValidationError,
+		)
 
 
 def _assign_branch(doc, preferred_branch: str | None = None) -> None:
