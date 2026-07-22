@@ -6,6 +6,11 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.services.branch_context import get_allowed_school_branches, is_branch_access_enforced
 
 PRIVILEGED_ROLES = {"System Manager", "EduEdge Administrator"}
+DIRECT_INSTITUTION_DOCTYPES = {
+	"EduEdge Academic Section",
+	"EduEdge Academic Level",
+	"EduEdge Institution Academic Calendar",
+}
 
 
 def academic_section_query(user: str | None = None) -> str:
@@ -16,6 +21,10 @@ def academic_level_query(user: str | None = None) -> str:
 	return _institution_query("EduEdge Academic Level", "institution", user)
 
 
+def academic_calendar_query(user: str | None = None) -> str:
+	return _institution_query("EduEdge Institution Academic Calendar", "institution", user)
+
+
 def program_query(user: str | None = None) -> str:
 	return _institution_query("Program", INSTITUTION_FIELD, user)
 
@@ -24,12 +33,37 @@ def course_query(user: str | None = None) -> str:
 	return _institution_query("Course", INSTITUTION_FIELD, user)
 
 
+def student_batch_query(user: str | None = None) -> str:
+	return _institution_query("Student Batch Name", INSTITUTION_FIELD, user)
+
+
+def student_house_query(user: str | None = None) -> str:
+	return _institution_query("Student House", INSTITUTION_FIELD, user)
+
+
+def instructor_query(user: str | None = None) -> str:
+	return _institution_query("Instructor", INSTITUTION_FIELD, user)
+
+
+def assessment_group_query(user: str | None = None) -> str:
+	return _institution_query("Assessment Group", INSTITUTION_FIELD, user)
+
+
+def grading_scale_query(user: str | None = None) -> str:
+	return _institution_query("Grading Scale", INSTITUTION_FIELD, user)
+
+
+def fee_structure_query(user: str | None = None) -> str:
+	return _institution_query("Fee Structure", INSTITUTION_FIELD, user)
+
+
 def has_academic_institution_permission(doc, user=None, permission_type=None) -> bool | None:
 	resolved_user = user or frappe.session.user
 	if not _should_scope(resolved_user) or not doc:
 		return None
-	fieldname = "institution" if doc.doctype in {"EduEdge Academic Section", "EduEdge Academic Level"} else INSTITUTION_FIELD
-	if not frappe.get_meta(doc.doctype).has_field(fieldname):
+	meta = frappe.get_meta(doc.doctype)
+	fieldname = "institution" if doc.doctype in DIRECT_INSTITUTION_DOCTYPES else INSTITUTION_FIELD
+	if not meta.has_field(fieldname):
 		return None
 	institution = doc.get(fieldname)
 	if not institution:
