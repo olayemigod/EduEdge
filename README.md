@@ -119,27 +119,6 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - dedicated EdgeSuite UI Institution Structure page for Institution creation, Branch assignment, hierarchy review, and terminology preview
 - no branch-name guessing and no mutation of submitted academic or accounting records
 
-### V0.8A.1
-
-- separate School Examination Centre and EduEdge Exam Centre ownership
-- school and platform question-bank separation
-- governed CBT questions, answer options, marks, negative marking, review, versioning, and retirement
-- approved-question immutability and answer-key protection
-- branch-safe permission queries that keep platform records hidden from school roles
-- no Student, Parent, or CBT Invigilator access to Question Bank content
-
-### V0.8A.2
-
-- governed School Examination and EduEdge Public Examination templates
-- branch, academic year, term, programme, class, course, assessment-group, and exam-body context
-- duration, attempt, pass, navigation, timeout, resume, randomisation, marking, and result-release definitions
-- permission-aware selection of only Approved questions from the matching scope, branch, and course
-- scoring snapshots, calculated totals, template review, versioning, immutability, and retirement safety
-- cascading smart-form queries and backend validation
-- EdgeSuite UI CBT Operations page with branch-safe centre, question, and template readiness
-- CBT entry points in the EduEdge sidebar, product menu, and native Workspace
-- no schedule, candidate attempt, answer sync, CBT result, payment, or accounting execution yet
-
 ### V0.9
 
 - Institution-owned Academic Sections and Academic Levels with safe progression rules
@@ -167,7 +146,7 @@ It separates implemented capabilities, acceptance-QA items, known limitations, a
 cd ~/frappe-bench
 bench get-app https://github.com/frappe/education --branch version-16
 bench get-app https://github.com/olayemigod/processedge-edge-suite-ui.git --branch agent/fix-waffle-product-menu
-bench get-app https://github.com/olayemigod/EduEdge.git --branch agent/eduedge-integrated-foundation
+bench get-app https://github.com/olayemigod/EduEdge.git --branch main
 
 bench --site eduedge.local install-app erpnext
 bench --site eduedge.local install-app education
