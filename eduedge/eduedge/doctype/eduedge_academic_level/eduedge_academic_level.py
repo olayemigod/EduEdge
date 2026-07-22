@@ -17,6 +17,12 @@ class EduEdgeAcademicLevel(Document):
 	def validate(self) -> None:
 		if not frappe.db.exists("EduEdge Institution", {"name": self.institution, "enabled": 1}):
 			frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+		duplicate = frappe.db.exists(
+			"EduEdge Academic Level",
+			{"institution": self.institution, "level_code": self.level_code, "name": ["!=", self.name or ""]},
+		)
+		if duplicate:
+			frappe.throw(_("Academic Level Code must be unique within the Institution."), frappe.DuplicateEntryError)
 		if self.academic_section:
 			section_institution = frappe.db.get_value("EduEdge Academic Section", self.academic_section, "institution")
 			if section_institution != self.institution:
