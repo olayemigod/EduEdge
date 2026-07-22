@@ -16,6 +16,11 @@ function getIdentity() {
 	return globalThis.frappe?.boot?.eduedge_ui_identity || {};
 }
 
+function isEduEdgeSurface() {
+	const path = window.location.pathname.replace(/\/+$/, "");
+	return /\/(?:app|desk)\/eduedge-/.test(path) || /\/app\/(?:assessment-plan|assessment-result|assessment-group|program-enrollment|student-group|course-schedule|student-attendance|student-applicant|student|program|course)(?:\/|$)/.test(path);
+}
+
 function normalizedText(value) {
 	return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -60,32 +65,56 @@ function ensureContextStyles() {
 		.eduedge-active-context__item { display:grid; gap:.05rem; min-width:0; padding:.32rem .55rem; border:1px solid var(--border-color); border-radius:.6rem; background:var(--control-bg); }
 		.eduedge-active-context__item small { color:var(--text-muted); font-size:.68rem; line-height:1; text-transform:uppercase; letter-spacing:.04em; }
 		.eduedge-active-context__item strong { max-width:15rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.78rem; }
+		.eduedge-page-context-fallback { margin:.75rem 0 1rem; padding:.6rem; border:1px solid var(--border-color); border-radius:.75rem; background:var(--card-bg); }
 		@media (max-width: 720px) { .eduedge-active-context__item strong { max-width:9rem; } }
 	`;
 	document.head.appendChild(style);
 }
 
-function ensureActiveContext(topbar, identity) {
+function contextMarkup() {
+	return `
+		<div class="eduedge-active-context__item" data-eduedge-context="institution"><small>Institution</small><strong></strong></div>
+		<div class="eduedge-active-context__item" data-eduedge-context="branch"><small>Branch</small><strong></strong></div>
+	`;
+}
+
+function populateContext(strip, identity) {
 	const context = identity.institution_context || globalThis.frappe?.boot?.eduedge_institution_context || {};
+	setText(strip.querySelector('[data-eduedge-context="institution"] strong'), context.institution_name || identity.tenant_name || "Not selected");
+	setText(strip.querySelector('[data-eduedge-context="branch"] strong'), context.branch_name || identity.branch_name || "Not selected");
+}
+
+function ensureActiveContext(topbar, identity) {
 	let strip = topbar.querySelector(".eduedge-active-context");
 	if (!strip) {
 		strip = document.createElement("div");
 		strip.className = "eduedge-active-context";
-		strip.innerHTML = `
-			<div class="eduedge-active-context__item" data-eduedge-context="institution"><small>Institution</small><strong></strong></div>
-			<div class="eduedge-active-context__item" data-eduedge-context="branch"><small>Branch</small><strong></strong></div>
-		`;
-		const host = topbar.querySelector(".edge-topbar-context") || topbar;
+		strip.innerHTML = contextMarkup();
+		const host = topbar.querySelector(".edge-topbar-context, .edge-topbar__context, .edge-topbar__actions") || topbar;
 		host.appendChild(strip);
 	}
-	setText(strip.querySelector('[data-eduedge-context="institution"] strong'), context.institution_name || "Not selected");
-	setText(strip.querySelector('[data-eduedge-context="branch"] strong'), context.branch_name || "Not selected");
+	populateContext(strip, identity);
 }
 
-function enhanceTopbar(shell, identity) {
-	const topbar = shell.querySelector(".edge-app-shell__topbar.edge-topbar");
-	if (!topbar) return;
-	const context = identity.institution_context || {};
+function ensureFallbackContext(identity, hasTopbar) {
+	const existing = document.querySelector(".eduedge-page-context-fallback");
+	if (hasTopbar) {
+		existing?.remove();
+		return;
+	}
+	const host = document.querySelector(".layout-main-section, .page-content, main");
+	if (!host) return;
+	const fallback = existing || document.createElement("div");
+	if (!existing) {
+		fallback.className = "eduedge-page-context-fallback eduedge-active-context";
+		fallback.innerHTML = contextMarkup();
+		host.prepend(fallback);
+	}
+	populateContext(fallback, identity);
+}
+
+function enhanceTopbar(topbar, identity) {
+	const context = identity.institution_context || globalThis.frappe?.boot?.eduedge_institution_context || {};
 	const tenantName = normalizedText(context.institution_name || identity.tenant_name) || "EduEdge Institution";
 	const subtitle = normalizedText(context.institution_type_name || identity.tenant_subtitle) || "Education workspace";
 
@@ -121,12 +150,15 @@ function enhanceSidebar(shell, identity) {
 
 function applyIdentity() {
 	scheduled = false;
+	if (!isEduEdgeSurface()) return;
 	ensureContextStyles();
 	const identity = getIdentity();
-	for (const shell of document.querySelectorAll('.edge-app-shell[data-edge-product="eduedge"]')) {
-		enhanceTopbar(shell, identity);
-		enhanceSidebar(shell, identity);
-	}
+	const shells = [...document.querySelectorAll(".edge-app-shell")];
+	for (const shell of shells) enhanceSidebar(shell, identity);
+
+	const topbars = [...new Set(document.querySelectorAll(".edge-topbar, .edge-app-shell__topbar"))];
+	for (const topbar of topbars) enhanceTopbar(topbar, identity);
+	ensureFallbackContext(identity, Boolean(topbars.length));
 }
 
 function scheduleIdentity() {
@@ -142,6 +174,7 @@ function startIdentityEnhancer() {
 	document.addEventListener("page-change", scheduleIdentity);
 	globalThis.frappe?.router?.on?.("change", scheduleIdentity);
 	window.addEventListener("eduedge:institution-context-changed", scheduleIdentity);
+	globalThis.frappe?.eduedge?.syncInstitutionContext?.({ force: true });
 	scheduleIdentity();
 }
 
