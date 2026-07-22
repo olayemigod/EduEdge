@@ -24,16 +24,19 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		fields = {field["fieldname"]: field for field in metadata["fields"]}
 		self.assertEqual(fields["question_text"]["fieldtype"], "Text Editor")
 
-	def test_bundle_installs_and_cleans_up_rich_text_enhancer(self):
+	def test_bundle_installs_editor_from_the_actual_mount_root(self):
 		bundle = BUNDLE.read_text()
 		self.assertIn("installQuestionRichTextEditor", bundle)
 		self.assertIn('import "./eduedge_question_builder/rich_text_editor.css"', bundle)
-		self.assertIn('viewModel.$options?.name !== "EduEdgeQuestionBuilder"', bundle)
-		self.assertIn("mounted()", bundle)
-		self.assertIn("updated()", bundle)
-		self.assertIn("beforeUnmount()", bundle)
-		self.assertIn(".refresh()", bundle)
-		self.assertIn(".destroy()", bundle)
+		self.assertIn("resolveMountRoot", bundle)
+		self.assertIn("installEditorObserver", bundle)
+		self.assertIn("MutationObserver", bundle)
+		self.assertIn("app.mount =", bundle)
+		self.assertIn("app.unmount =", bundle)
+		self.assertIn("window.requestAnimationFrame(ensureEditor)", bundle)
+		self.assertIn("editorController.refresh()", bundle)
+		self.assertIn("editorController?.destroy()", bundle)
+		self.assertNotIn("viewModel.$options", bundle)
 
 	def test_editor_fixes_direction_and_avoids_caret_rewriting(self):
 		source = EDITOR_JS.read_text()
