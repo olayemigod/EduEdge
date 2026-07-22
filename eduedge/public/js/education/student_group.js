@@ -13,7 +13,7 @@ function setStudentGroupQueries(frm) {
 		},
 	}));
 	frm.set_query('student', 'students', () => ({
-		query: 'eduedge.api.academic_operations.student_group_student_query',
+		query: 'eduedge.api.academic_group_context.student_group_student_query',
 		filters: {
 			eduedge_school_branch: frm.doc.eduedge_school_branch,
 			eduedge_program_offering: frm.doc.eduedge_program_offering,
