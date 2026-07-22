@@ -48,7 +48,7 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		self.assertIn("wrapper.question_toolbar = installQuestionToolbar(root[0])", loader)
 		self.assertIn("wrapper.question_toolbar?.destroy()", loader)
 		self.assertIn('editor.setAttribute("dir", "ltr")', loader)
-		self.assertIn('editor.dispatchEvent(new Event("input", { bubbles: true }))', loader)
+		self.assertIn('editor?.dispatchEvent(new Event("input", { bubbles: true }))', loader)
 
 	def test_page_toolbar_supports_required_formatting_and_symbols(self):
 		loader = PAGE_LOADER.read_text()
