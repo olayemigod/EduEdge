@@ -86,7 +86,7 @@ function installBranchSwitchContextBridge() {
 
 function isEduEdgeTerminologySurface() {
 	const path = window.location.pathname.replace(/\/+$/, "");
-	return /\/(?:app|desk)\/eduedge-/.test(path) || /\/app\/assessment-(?:plan|result|group)(?:\/|$)/.test(path);
+	return /\/(?:app|desk)\/eduedge-/.test(path) || /\/app\/(?:assessment-(?:plan|result|group)|student(?:\/|$)|student-)/.test(path);
 }
 
 function terminologyFamilyPairs(variants, target) {
@@ -104,6 +104,12 @@ function visibleTerminologyPairs() {
 	const assessmentPlans = getEduEdgeTerm("assessment_plan", { plural: true, fallback: "Assessment Plans" });
 	const assessmentResult = getEduEdgeTerm("assessment_result", { fallback: "Assessment Result" });
 	const assessmentResults = getEduEdgeTerm("assessment_result", { plural: true, fallback: "Assessment Results" });
+	const student = getEduEdgeTerm("student", { fallback: "Student" });
+	const students = getEduEdgeTerm("student", { plural: true, fallback: "Students" });
+	const studentGroup = getEduEdgeTerm("student_group", { fallback: "Student Group" });
+	const studentGroups = getEduEdgeTerm("student_group", { plural: true, fallback: "Student Groups" });
+	const studentBatch = getEduEdgeTerm("student_batch", { fallback: "Student Batch" });
+	const studentBatches = getEduEdgeTerm("student_batch", { plural: true, fallback: "Student Batches" });
 
 	const pairs = [
 		...terminologyFamilyPairs(
@@ -188,6 +194,42 @@ function visibleTerminologyPairs() {
 			["assessment", "examination", "evaluation"],
 			assessment.toLowerCase()
 		),
+		...terminologyFamilyPairs(
+			["Student Groups", "Pupil Groups", "Trainee Groups", "Lecture Groups", "Class Arms"],
+			studentGroups
+		),
+		...terminologyFamilyPairs(
+			["Student Group", "Pupil Group", "Trainee Group", "Lecture Group", "Class Arm"],
+			studentGroup
+		),
+		...terminologyFamilyPairs(
+			["student groups", "pupil groups", "trainee groups", "lecture groups", "class arms"],
+			studentGroups.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["student group", "pupil group", "trainee group", "lecture group", "class arm"],
+			studentGroup.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["Student Batches", "Pupil Batches", "Trainee Batches", "Admission Sets", "Entry Cohorts"],
+			studentBatches
+		),
+		...terminologyFamilyPairs(
+			["Student Batch", "Pupil Batch", "Trainee Batch", "Admission Set", "Entry Cohort"],
+			studentBatch
+		),
+		...terminologyFamilyPairs(
+			["student batches", "pupil batches", "trainee batches", "admission sets", "entry cohorts"],
+			studentBatches.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["student batch", "pupil batch", "trainee batch", "admission set", "entry cohort"],
+			studentBatch.toLowerCase()
+		),
+		...terminologyFamilyPairs(["Students", "Pupils", "Trainees"], students),
+		...terminologyFamilyPairs(["Student", "Pupil", "Trainee"], student),
+		...terminologyFamilyPairs(["students", "pupils", "trainees"], students.toLowerCase()),
+		...terminologyFamilyPairs(["student", "pupil", "trainee"], student.toLowerCase()),
 	];
 
 	return pairs.sort((left, right) => right[0].length - left[0].length);
