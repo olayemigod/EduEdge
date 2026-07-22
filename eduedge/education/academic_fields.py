@@ -12,7 +12,6 @@ INSTITUTION_FIELD = "eduedge_institution"
 OFFERING_FIELD = "eduedge_program_offering"
 ACADEMIC_SECTION_FIELD = "eduedge_academic_section"
 ACADEMIC_LEVEL_FIELD = "eduedge_academic_level"
-ENROLLMENT_STATUS_FIELD = "eduedge_enrollment_status"
 
 
 def institution_field(description: str, *, read_only: bool = False) -> dict:
@@ -93,17 +92,6 @@ ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 		},
 		institution_field("Derived from the selected Programme Offering.", read_only=True),
 		level_field(read_only=True),
-		{
-			"fieldname": ENROLLMENT_STATUS_FIELD,
-			"fieldtype": "Select",
-			"label": "Enrollment Status",
-			"options": "Active\nCompleted\nPromoted\nWithdrawn\nSuspended\nTransferred\nGraduated\nCancelled",
-			"default": "Active",
-			"read_only": 1,
-			"in_list_view": 1,
-			"in_standard_filter": 1,
-			"description": "Current lifecycle state. Use EduEdge Enrollment Status Log for controlled changes.",
-		},
 		branch_field("Derived from the selected Programme Offering; not from the Student's current profile.", read_only=True),
 	],
 	"Student Group": [
