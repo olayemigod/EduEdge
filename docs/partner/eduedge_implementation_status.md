@@ -5,7 +5,7 @@
 **Audience:** ProcessEdge partners, implementation collaborators, pilot institutions, advisers, and authorised stakeholders  
 **Current implementation stage:** Foundation, core school operations, and CBT definition foundation  
 **Last updated:** 22 July 2026  
-**Repository status:** Unified CBT and Institution/Academic Context branch built and migrated successfully on the development site. Institution/Branch display, Primary/Secondary Examination wording, Training Centre Evaluation wording, and previously implemented CBT/Foundation pages passed browser acceptance. A final correction for live bidirectional Examination/Assessment/Evaluation switching has passed automated validation and awaits one focused local retest before merge or production rollout.
+**Repository status:** Unified CBT and Institution/Academic Context branch built and migrated successfully on the development site. Institution/Branch display, Examination/Assessment/Evaluation switching, and previously implemented CBT/Foundation pages passed browser acceptance. A final learner-label correction for Primary Pupil/Pupils has passed automated validation and awaits one focused local retest before merge or production rollout.
 
 ## 1. Purpose of this document
 
@@ -32,12 +32,11 @@ The unified development branch has:
 - migrated successfully on `eduedge.local` without removing CBT or Institution records as orphans;
 - passed smoke tests for EduEdge Home, CBT Operations, Question Builder, and Academic Foundation;
 - passed browser acceptance for persistent Institution/Branch display;
-- passed Primary and Secondary Examination wording;
-- passed Training Centre Evaluation wording;
-- confirmed Tertiary Assessment wording after a refresh; and
-- received a final code correction so already-rendered terminology can change immediately between Examination, Assessment, and Evaluation without a manual refresh.
+- passed live Primary/Secondary Examination, Tertiary Assessment, and Training Centre Evaluation switching;
+- passed all earlier terminology and page checks; and
+- received a final correction so Primary learner labels display Pupil/Pupils instead of Student/Students while Secondary and Tertiary retain Student and Training Centre uses Trainee.
 
-The product remains **Acceptance QA pending** until that final live-switch retest, restricted-role testing, and realistic business-workflow testing are accepted.
+The product remains **Acceptance QA pending** until that final learner-label retest, restricted-role testing, and realistic business-workflow testing are accepted.
 
 ## 4. Implemented capabilities
 
@@ -65,7 +64,7 @@ The product remains **Acceptance QA pending** until that final live-switch retes
 - Migration does not guess Institution identity from Branch names or addresses.
 - Dedicated Institution Structure interface for Institution creation, Branch assignment, hierarchy review, and terminology preview.
 
-### 4.3 Institution-aware terminology — Implemented; final live-switch retest pending
+### 4.3 Institution-aware terminology — Implemented; final learner-label retest pending
 
 EduEdge presents education terminology according to the resolved Institution and Branch context while preserving stable Frappe DocType and database identities.
 
@@ -86,7 +85,9 @@ Primary and Secondary interfaces show labels such as:
 
 The internal Frappe records remain `Assessment Group`, `Assessment Plan`, and `Assessment Result` for upgrade safety.
 
-The visible terminology layer now treats Assessment, Examination, and Evaluation as a reversible family. When users change to another Institution Type, already-rendered menu labels, headings, cards, filters, placeholders, and accessible labels are recalculated without requiring a manual browser refresh.
+The visible terminology layer treats Assessment, Examination, and Evaluation as a reversible family. It also treats Student, Pupil, and Trainee as a reversible learner family. When users change Institution Type, already-rendered menu labels, headings, cards, filters, placeholders, and accessible labels are recalculated without requiring a manual browser refresh.
+
+Special phrases such as Student Group and Student Batch are resolved through their own approved terms first. This prevents incorrect wording such as “Pupil Group” where Primary should display **Class Arm**, or “Pupil Batch” where Primary should display **Admission Set**.
 
 ### 4.4 Persistent Institution and Branch context — Implemented; browser accepted
 
@@ -276,13 +277,15 @@ This does **not** yet mean the Offline-Resilient CBT attempt engine is complete.
 
 ### Automated validation
 
-EduEdge CI run **1188** passed for the live terminology refresh correction, including:
+EduEdge CI run **1198** passed for the final learner-label documentation head, including:
 
 - Python compilation;
 - JSON validation;
 - frontend entry-script syntax checks, including shared shell identity and terminology bundles;
-- the complete pure contract test suite; and
-- regression contracts for reversible Examination, Assessment, and Evaluation labels.
+- the complete pure contract test suite;
+- regression contracts for reversible Examination, Assessment, and Evaluation labels;
+- regression contracts for reversible Student, Pupil, and Trainee labels; and
+- Student Group and Student Batch terminology-precedence protection.
 
 ### Target-site validation completed
 
@@ -296,18 +299,19 @@ EduEdge CI run **1188** passed for the live terminology refresh correction, incl
 - Primary and Secondary displayed Examination wording.
 - The menu displayed Examinations & Results.
 - Examination Operations, Examination Group, and Examination Plan displayed correctly.
+- Tertiary displayed Assessment without requiring a refresh.
 - Training Centre displayed Evaluation wording.
-- Tertiary displayed Assessment wording after a manual refresh.
 - CBT Operations opened successfully.
 - Question Builder opened successfully.
 - Academic Foundation opened successfully.
 
 ### Final focused browser retest still required
 
-- Switch directly from Primary/Secondary to Tertiary and confirm Examination changes immediately to Assessment without refresh.
-- Switch directly from Tertiary to Training Centre and confirm Assessment changes immediately to Evaluation without refresh.
-- Switch back and confirm the reverse transformation also occurs immediately.
-- Confirm menu labels, page headings, filters, cards, placeholders, and accessible labels all update.
+- Confirm Primary displays Pupil/Pupils instead of Student/Students.
+- Confirm Secondary and Tertiary retain Student/Students.
+- Confirm Training Centre displays Trainee/Trainees.
+- Confirm Primary Student Group-family labels resolve to Class Arm, not Pupil Group.
+- Confirm Primary Student Batch-family labels resolve to Admission Set, not Pupil Batch.
 - Continue role, permission, and realistic workflow testing.
 
 Automated success and browser smoke tests do not replace full target-site acceptance.
@@ -325,7 +329,7 @@ Automated success and browser smoke tests do not replace full target-site accept
 
 The next delivery stages should build on this foundation rather than bypass it. Approved future work includes:
 
-- completing the final live terminology-switch, role, and workflow acceptance for the unified branch;
+- completing the final learner-label, role, and workflow acceptance for the unified branch;
 - expanding fee, billing, payment, and receivables workflows safely;
 - implementing Offline-Resilient CBT;
 - extending student, parent, teacher, and management operational experiences;
