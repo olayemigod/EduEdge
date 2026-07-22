@@ -29,9 +29,6 @@ override_whitelisted_methods = {
 	"eduedge.api.resource_center.save_resource_record": "eduedge.api.resource_center_safe.save_resource_record",
 	"eduedge.api.resource_center.delete_resource_record": "eduedge.api.resource_center_safe.delete_resource_record",
 	"eduedge.api.modal_records.save_modal_record": "eduedge.api.modal_records_safe.save_modal_record",
-	"eduedge.api.question_batch.save_question_batch": "eduedge.api.question_batch_safe.save_question_batch",
-	"eduedge.api.question_batch.preview_question_upload": "eduedge.api.question_batch_safe.preview_question_upload",
-	"eduedge.api.question_upload.import_question_upload": "eduedge.api.question_batch_safe.import_question_upload",
 }
 
 add_to_apps_screen = [
