@@ -7,7 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import nowdate
 
-from eduedge.api import admission_resource
+from eduedge.api import academic_resource_contract, admission_resource
 from eduedge.api import resource_center as base
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.platform.access import require_eduedge_access
@@ -33,6 +33,8 @@ FIELD_TERM_KEYS = {
 	"program_name": "programme",
 	"academic_year": "academic_year",
 	"academic_term": "academic_term",
+	"academic_level": "academic_level",
+	"student_batch": "student_batch",
 	"course": "course",
 	"student_group": "student_group",
 	"class_level": "class_level",
@@ -48,7 +50,6 @@ def _ensure_school_branch_editor_contract() -> None:
 	config = base.RESOURCE_CONFIG.get(SCHOOL_BRANCH_RESOURCE)
 	if not config:
 		return
-
 	fields = config.setdefault("editor_fields", [])
 	if not any(field.get("fieldname") == "institution" for field in fields):
 		company_index = next(
@@ -69,7 +70,6 @@ def _ensure_school_branch_editor_contract() -> None:
 				"description": _("Academic institution that owns this Branch or Campus."),
 			},
 		)
-
 	columns = config.setdefault("columns", [])
 	if not any(column.get("fieldname") == "institution" for column in columns):
 		company_index = next(
@@ -77,11 +77,9 @@ def _ensure_school_branch_editor_contract() -> None:
 			len(columns) - 1,
 		)
 		columns.insert(company_index + 1, {"fieldname": "institution", "label": _("Institution")})
-
 	search_fields = config.setdefault("search_fields", [])
 	if "institution" not in search_fields:
 		search_fields.append("institution")
-
 	filters = config.setdefault("filters", [])
 	if not any(field.get("fieldname") == "institution" for field in filters):
 		filters.insert(
@@ -93,13 +91,17 @@ def _ensure_school_branch_editor_contract() -> None:
 				"options_doctype": "EduEdge Institution",
 			},
 		)
-
 	config["advanced_note"] = _(
 		"Select Company first, then the Institution that owns this Branch. Accounting defaults and stock settings remain in the full School Branch form."
 	)
 
 
-_ensure_school_branch_editor_contract()
+def _ensure_resource_contracts() -> None:
+	_ensure_school_branch_editor_contract()
+	academic_resource_contract.ensure_contract(base)
+
+
+_ensure_resource_contracts()
 
 
 def _is_branch_scoped(config: dict) -> bool:
@@ -127,10 +129,7 @@ def _empty_page(resource: str, config: dict, page_length: int | str = 20) -> dic
 	columns = [
 		column
 		for column in config.get("columns", [])
-		if column.get("fieldname") in base._available_fields(
-			doctype,
-			[column.get("fieldname")],
-		)
+		if column.get("fieldname") in base._available_fields(doctype, [column.get("fieldname")])
 	]
 	result = {
 		"resource": resource,
@@ -160,9 +159,7 @@ def _empty_page(resource: str, config: dict, page_length: int | str = 20) -> dic
 
 
 def _institution_options(*, company: str | None, txt: str = "") -> list[dict]:
-	if not frappe.db.exists("DocType", "EduEdge Institution") or not frappe.has_permission(
-		"EduEdge Institution", "read"
-	):
+	if not frappe.db.exists("DocType", "EduEdge Institution") or not frappe.has_permission("EduEdge Institution", "read"):
 		return []
 	filters: dict[str, Any] = {"enabled": 1}
 	if company:
@@ -209,7 +206,6 @@ def _apply_terminology(result: dict, resource: str, context: dict) -> dict:
 	if resource in RESOURCE_TITLE_TERMS:
 		key, plural = RESOURCE_TITLE_TERMS[resource]
 		result["title"] = _term_label(context, key, plural=plural)
-
 	for collection_name in ("columns", "filters", "fields"):
 		for field in result.get(collection_name) or []:
 			key = FIELD_TERM_KEYS.get(field.get("fieldname"))
@@ -226,7 +222,7 @@ def get_resource_page(
 	start: int | str = 0,
 	page_length: int | str = 20,
 ) -> dict:
-	_ensure_school_branch_editor_contract()
+	_ensure_resource_contracts()
 	config = base._config(resource)
 	allowed_branches = get_allowed_school_branches() if _is_branch_scoped(config) else []
 	parsed_filters = base._parse_json(filters)
@@ -247,10 +243,7 @@ def get_resource_page(
 
 
 def _resolve_today(values: dict[str, Any]) -> dict[str, Any]:
-	return {
-		key: nowdate() if value == "Today" else value
-		for key, value in values.items()
-	}
+	return {key: nowdate() if value == "Today" else value for key, value in values.items()}
 
 
 def _enrich_school_branch_editor(result: dict) -> dict:
@@ -265,14 +258,16 @@ def _enrich_school_branch_editor(result: dict) -> dict:
 
 @frappe.whitelist()
 def get_resource_editor(resource: str, name: str | None = None, context: str | dict | None = None) -> dict:
-	_ensure_school_branch_editor_contract()
+	_ensure_resource_contracts()
+	resource_key = str(resource or "").strip()
 	result = base.get_resource_editor(resource=resource, name=name, context=context)
 	result["values"] = _resolve_today(result.get("values") or {})
-	if str(resource or "").strip() == "admissions":
+	if resource_key == "admissions":
 		result = admission_resource.enrich_editor(result, name=name)
-	if str(resource or "").strip() == SCHOOL_BRANCH_RESOURCE:
+	if resource_key == SCHOOL_BRANCH_RESOURCE:
 		result = _enrich_school_branch_editor(result)
-	return _apply_terminology(result, str(resource or "").strip(), _context_from_payload(result.get("values")))
+	result = academic_resource_contract.enrich_editor(base, result, resource_key)
+	return _apply_terminology(result, resource_key, _context_from_payload(result.get("values")))
 
 
 @frappe.whitelist()
@@ -282,14 +277,15 @@ def search_resource_options(
 	txt: str = "",
 	values: str | dict | None = None,
 ) -> list[dict]:
-	_ensure_school_branch_editor_contract()
+	_ensure_resource_contracts()
+	resource_key = str(resource or "").strip()
 	parsed_values = base._parse_json(values)
-	if str(resource or "").strip() == SCHOOL_BRANCH_RESOURCE and str(fieldname or "").strip() == "institution":
+	academic_options = academic_resource_contract.search_options(base, resource_key, str(fieldname or "").strip(), txt, parsed_values)
+	if academic_options is not None:
+		return academic_options
+	if resource_key == SCHOOL_BRANCH_RESOURCE and str(fieldname or "").strip() == "institution":
 		return _institution_options(company=parsed_values.get("company"), txt=txt)
-	if (
-		str(resource or "").strip() == "admissions"
-		and str(fieldname or "").strip() == admission_resource.PROGRAMS_FIELD
-	):
+	if resource_key == "admissions" and str(fieldname or "").strip() == admission_resource.PROGRAMS_FIELD:
 		return admission_resource.search_program_options(values=values, txt=txt)
 	return base.search_resource_options(
 		resource=resource,
@@ -301,7 +297,7 @@ def search_resource_options(
 
 @frappe.whitelist()
 def save_resource_record(resource: str, values: str | dict, name: str | None = None) -> dict:
-	_ensure_school_branch_editor_contract()
+	_ensure_resource_contracts()
 	require_eduedge_access(
 		feature_key=_feature_key(resource),
 		action="update_resource_record" if name else "create_resource_record",
@@ -320,6 +316,7 @@ def save_resource_record(resource: str, values: str | dict, name: str | None = N
 
 @frappe.whitelist()
 def delete_resource_record(resource: str, name: str) -> dict:
+	_ensure_resource_contracts()
 	require_eduedge_access(
 		feature_key=_feature_key(resource),
 		action="delete_resource_record",
