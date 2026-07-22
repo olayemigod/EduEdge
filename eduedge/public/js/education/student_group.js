@@ -16,6 +16,7 @@ function setStudentGroupQueries(frm) {
 		query: 'eduedge.api.academic_operations.student_group_student_query',
 		filters: {
 			eduedge_school_branch: frm.doc.eduedge_school_branch,
+			eduedge_program_offering: frm.doc.eduedge_program_offering,
 			academic_year: frm.doc.academic_year,
 			academic_term: frm.doc.academic_term,
 			group_based_on: frm.doc.group_based_on,
@@ -42,20 +43,28 @@ function setStudentGroupQueries(frm) {
 
 async function applyStudentGroupOffering(frm) {
 	if (!frm.doc.eduedge_program_offering) return;
-	const { message } = await frappe.call('eduedge.api.academic_context.get_programme_offering_context', {
-		offering: frm.doc.eduedge_program_offering,
-	});
-	if (!message) return;
-	await frappe.model.set_value(frm.doctype, frm.docname, {
-		eduedge_school_branch: message.school_branch || null,
-		eduedge_institution: message.institution || null,
-		program: message.program || null,
-		academic_year: message.academic_year || null,
-		academic_term: message.academic_term || null,
-		batch: message.student_batch || null,
-		eduedge_academic_level: message.academic_level || null,
-	});
-	setStudentGroupQueries(frm);
+	const selectedOffering = frm.doc.eduedge_program_offering;
+	frm.__eduedge_applying_offering = true;
+	try {
+		const { message } = await frappe.call('eduedge.api.academic_context.get_programme_offering_context', {
+			offering: selectedOffering,
+		});
+		if (!message || frm.doc.eduedge_program_offering !== selectedOffering) return;
+		await frappe.model.set_value(frm.doctype, frm.docname, {
+			eduedge_school_branch: message.school_branch || null,
+			eduedge_institution: message.institution || null,
+			program: message.program || null,
+			academic_year: message.academic_year || null,
+			academic_term: message.academic_term || null,
+			batch: message.student_batch || null,
+			eduedge_academic_level: message.academic_level || null,
+		});
+		frm.clear_table('students');
+		frm.refresh_field('students');
+		setStudentGroupQueries(frm);
+	} finally {
+		frm.__eduedge_applying_offering = false;
+	}
 }
 
 frappe.ui.form.on('Student Group', {
@@ -80,6 +89,7 @@ frappe.ui.form.on('Student Group', {
 	},
 
 	eduedge_school_branch(frm) {
+		if (frm.__eduedge_applying_offering) return;
 		if (frm.doc.eduedge_program_offering) frm.set_value('eduedge_program_offering', null);
 		frm.set_value('program', null);
 		frm.clear_table('students');
