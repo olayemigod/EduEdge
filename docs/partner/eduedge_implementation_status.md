@@ -5,7 +5,7 @@
 **Audience:** ProcessEdge partners, implementation collaborators, pilot institutions, advisers, and authorised stakeholders  
 **Current implementation stage:** Foundation, core school operations, and CBT definition foundation  
 **Last updated:** 22 July 2026  
-**Repository status:** Unified CBT and Institution/Academic Context branch built and migrated successfully on the development site. Institution/Branch display, Examination/Assessment/Evaluation switching, and previously implemented CBT/Foundation pages passed browser acceptance. A final learner-label correction for Primary Pupil/Pupils passed automated validation and awaits one focused local retest before merge or production rollout.
+**Repository status:** Unified CBT and Institution/Academic Context branch built and migrated successfully on the development site. Institution/Branch display and all approved Primary, Secondary, Tertiary, and Training Centre terminology passed focused browser acceptance. The branch remains under acceptance QA for restricted roles, Branch permissions, and realistic business workflows before merge or production rollout.
 
 ## 1. Purpose of this document
 
@@ -33,10 +33,11 @@ The unified development branch has:
 - passed smoke tests for EduEdge Home, CBT Operations, Question Builder, and Academic Foundation;
 - passed browser acceptance for persistent Institution/Branch display;
 - passed live Primary/Secondary Examination, Tertiary Assessment, and Training Centre Evaluation switching;
-- passed all earlier terminology and page checks; and
-- received a final correction so Primary learner labels display Pupil/Pupils instead of Student/Students while Secondary and Tertiary retain Student and Training Centre uses Trainee.
+- passed Primary Pupil/Pupils, Secondary and Tertiary Student/Students, and Training Centre Trainee/Trainees terminology;
+- passed Primary Class Arm and Admission Set terminology-precedence checks; and
+- retained correct Institution and Branch context throughout Institution Type switching.
 
-The product remains **Acceptance QA pending** until that final learner-label retest, restricted-role testing, and realistic business-workflow testing are accepted.
+The product remains **Acceptance QA pending** until restricted-role testing, Branch-permission testing, and realistic business-workflow testing are accepted.
 
 ## 4. Implemented capabilities
 
@@ -64,7 +65,7 @@ The product remains **Acceptance QA pending** until that final learner-label ret
 - Migration does not guess Institution identity from Branch names or addresses.
 - Dedicated Institution Structure interface for Institution creation, Branch assignment, hierarchy review, and terminology preview.
 
-### 4.3 Institution-aware terminology — Implemented; final learner-label retest pending
+### 4.3 Institution-aware terminology — Implemented; browser accepted
 
 EduEdge presents education terminology according to the resolved Institution and Branch context while preserving stable Frappe DocType and database identities.
 
@@ -87,7 +88,7 @@ The internal Frappe records remain `Assessment Group`, `Assessment Plan`, and `A
 
 The visible terminology layer treats Assessment, Examination, and Evaluation as a reversible family. It also treats Student, Pupil, and Trainee as a reversible learner family. When users change Institution Type, already-rendered menu labels, headings, cards, filters, placeholders, and accessible labels are recalculated without requiring a manual browser refresh.
 
-Special phrases such as Student Group and Student Batch are resolved through their own approved terms first. This prevents incorrect wording such as “Pupil Group” where Primary should display **Class Arm**, or “Pupil Batch” where Primary should display **Admission Set**.
+Special phrases such as Student Group and Student Batch are resolved through their own approved terms first. This prevents incorrect wording such as “Pupil Group” where Primary displays **Class Arm**, or “Pupil Batch” where Primary displays **Admission Set**.
 
 ### 4.4 Persistent Institution and Branch context — Implemented; browser accepted
 
@@ -277,7 +278,7 @@ This does **not** yet mean the Offline-Resilient CBT attempt engine is complete.
 
 ### Automated validation
 
-EduEdge CI run **1204** passed for the final learner-label documentation head, including:
+EduEdge CI run **1204** passed for the completed terminology correction, including:
 
 - Python compilation;
 - JSON validation;
@@ -300,21 +301,26 @@ EduEdge CI run **1204** passed for the final learner-label documentation head, i
 - The menu displayed Examinations & Results.
 - Examination Operations, Examination Group, and Examination Plan displayed correctly.
 - Tertiary displayed Assessment without requiring a refresh.
-- Training Centre displayed Evaluation wording.
+- Training Centre displayed Evaluation wording without requiring a refresh.
+- Primary displayed Pupil and Pupils.
+- Secondary and Tertiary retained Student and Students.
+- Training Centre displayed Trainee and Trainees.
+- Primary displayed Class Arm rather than Pupil Group.
+- Primary displayed Admission Set rather than Pupil Batch.
+- Institution and Branch remained correct throughout Institution Type switching.
 - CBT Operations opened successfully.
 - Question Builder opened successfully.
 - Academic Foundation opened successfully.
 
-### Final focused browser retest still required
+### Remaining acceptance QA
 
-- Confirm Primary displays Pupil/Pupils instead of Student/Students.
-- Confirm Secondary and Tertiary retain Student/Students.
-- Confirm Training Centre displays Trainee/Trainees.
-- Confirm Primary Student Group-family labels resolve to Class Arm, not Pupil Group.
-- Confirm Primary Student Batch-family labels resolve to Admission Set, not Pupil Batch.
-- Continue role, permission, and realistic workflow testing.
+- Test restricted users against Institution and Branch permission boundaries.
+- Test realistic admissions, enrollment, class, attendance, examination, result-publication, and report-card workflows.
+- Test Programme Offering duplicate protection, capacity, and lifecycle transitions with realistic records.
+- Verify fee context and submitted-accounting safety on the target site.
+- Complete final merge-readiness review.
 
-Automated success and browser smoke tests do not replace full target-site acceptance.
+Automated success and focused browser acceptance do not replace full target-site operational acceptance.
 
 ## 7. Known current limitations
 
@@ -329,7 +335,7 @@ Automated success and browser smoke tests do not replace full target-site accept
 
 The next delivery stages should build on this foundation rather than bypass it. Approved future work includes:
 
-- completing the final learner-label, role, and workflow acceptance for the unified branch;
+- completing restricted-role, Branch-permission, and realistic workflow acceptance for the unified branch;
 - expanding fee, billing, payment, and receivables workflows safely;
 - implementing Offline-Resilient CBT;
 - extending student, parent, teacher, and management operational experiences;
