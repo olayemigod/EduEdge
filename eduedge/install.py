@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe.permissions import add_permission, update_permission_property
 
+from eduedge.education.academic_fields import ensure_academic_context_foundation
 from eduedge.education.custom_fields import (
 	backfill_education_branch_context,
 	ensure_education_custom_fields,
@@ -81,6 +82,7 @@ def after_install() -> None:
 	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
+	ensure_academic_context_foundation()
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
 	ensure_training_page_roles()
@@ -92,6 +94,7 @@ def after_migrate() -> None:
 	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
+	ensure_academic_context_foundation()
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
 	ensure_training_page_roles()
@@ -109,7 +112,6 @@ def ensure_roles() -> None:
 				}
 			).insert(ignore_permissions=True)
 		elif role_name == "EduEdge Parent":
-			# Parent access belongs to the website portal, not Desk administration.
 			frappe.db.set_value("Role", role_name, "desk_access", 0, update_modified=False)
 
 
@@ -117,7 +119,6 @@ def ensure_admission_manager_permissions() -> None:
 	"""Grant intended EduEdge administrators normal Frappe admission permissions."""
 	if not frappe.db.exists("DocType", "Student Admission"):
 		return
-
 	for role in ADMISSION_MANAGER_ROLES:
 		if not frappe.db.exists(
 			"Custom DocPerm",
@@ -138,7 +139,6 @@ def ensure_admission_manager_permissions() -> None:
 				1,
 				validate=False,
 			)
-
 	frappe.clear_cache(doctype="Student Admission")
 
 
@@ -146,7 +146,6 @@ def ensure_training_progress_permissions() -> None:
 	"""Allow supported role families to maintain only their own training progress."""
 	if not frappe.db.exists("DocType", "EduEdge Training Progress"):
 		return
-
 	for role in TRAINING_PROGRESS_ROLES:
 		if not frappe.db.exists("Role", role):
 			continue
@@ -169,7 +168,6 @@ def ensure_training_progress_permissions() -> None:
 				1,
 				validate=False,
 			)
-
 	frappe.clear_cache(doctype="EduEdge Training Progress")
 
 
