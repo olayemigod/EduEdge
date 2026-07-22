@@ -3,12 +3,14 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from eduedge.education.academic_fields import (
-	ACADEMIC_LEVEL_FIELD,
-	ACADEMIC_SECTION_FIELD,
-	INSTITUTION_FIELD,
-)
+from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access, parse_query_filters
+
+ALLOWED_SCOPED_QUERY_DOCTYPES = {
+	"EduEdge Institution",
+	"EduEdge Academic Section",
+	"EduEdge Academic Level",
+}
 
 
 def _require_login() -> None:
@@ -28,33 +30,59 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 	if not branch:
 		return []
 	assert_branch_access(branch)
-	query_filters = {
-		"school_branch": branch,
-		"is_active": 1,
-		PURPOSE_FIELD[purpose]: 1,
+	purpose_field = PURPOSE_FIELD[purpose]
+	params = {
+		"branch": branch,
+		"txt": f"%{txt or ''}%",
+		"start": int(start),
+		"page_len": int(page_len),
 	}
-	for fieldname in ("program", "academic_year", "academic_term"):
+	conditions = [
+		"offering.school_branch = %(branch)s",
+		"offering.is_active = 1",
+		f"offering.`{purpose_field}` = 1",
+	]
+	for fieldname in ("program", "academic_year"):
 		if filters.get(fieldname):
-			query_filters[fieldname] = filters[fieldname]
-	rows = frappe.get_list(
-		"EduEdge Program Offering",
-		filters=query_filters,
-		or_filters={
-			"name": ["like", f"%{txt}%"],
-			"offering_title": ["like", f"%{txt}%"],
-			"offering_code": ["like", f"%{txt}%"],
-		},
-		fields=["name", "offering_title", "offering_code", "program", "academic_year", "academic_term", "study_mode", "delivery_mode"],
-		start=int(start),
-		page_length=int(page_len),
-		order_by="offering_title asc",
+			conditions.append(f"offering.`{fieldname}` = %({fieldname})s")
+			params[fieldname] = filters[fieldname]
+	if filters.get("academic_term"):
+		conditions.append("(coalesce(offering.academic_term, '') = '' or offering.academic_term = %(academic_term)s)")
+		params["academic_term"] = filters["academic_term"]
+	rows = frappe.db.sql(
+		f"""
+		select offering.name, offering.offering_title, offering.offering_code,
+			offering.program, offering.academic_year, offering.academic_term,
+			offering.study_mode, offering.delivery_mode
+		from `tabEduEdge Program Offering` offering
+		where {' and '.join(conditions)}
+			and (
+				offering.name like %(txt)s
+				or coalesce(offering.offering_title, '') like %(txt)s
+				or coalesce(offering.offering_code, '') like %(txt)s
+			)
+		order by offering.offering_title asc, offering.modified desc
+		limit %(start)s, %(page_len)s
+		""",
+		params,
+		as_dict=True,
 	)
 	return [
 		[
 			row.name,
 			row.offering_title or row.name,
 			row.offering_code,
-			" · ".join(value for value in (row.program, row.academic_year, row.academic_term, row.study_mode, row.delivery_mode) if value),
+			" · ".join(
+				value
+				for value in (
+					row.program,
+					row.academic_year,
+					row.academic_term,
+					row.study_mode,
+					row.delivery_mode,
+				)
+				if value
+			),
 		]
 		for row in rows
 	]
@@ -64,13 +92,17 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 @frappe.validate_and_sanitize_search_inputs
 def institution_scoped_query(doctype, txt, searchfield, start, page_len, filters):
 	_require_login()
+	if doctype not in ALLOWED_SCOPED_QUERY_DOCTYPES:
+		frappe.throw(_("This academic lookup is not permitted."), frappe.PermissionError)
+	if not frappe.has_permission(doctype, "read"):
+		frappe.throw(_("You are not permitted to read {0}.").format(doctype), frappe.PermissionError)
 	filters = parse_query_filters(filters)
 	institution = filters.get(INSTITUTION_FIELD) or filters.get("institution")
-	query_filters = {"enabled": 1} if frappe.get_meta(doctype).has_field("enabled") else {}
-	if institution and frappe.get_meta(doctype).has_field("institution"):
+	meta = frappe.get_meta(doctype)
+	query_filters = {"enabled": 1} if meta.has_field("enabled") else {}
+	if institution and meta.has_field("institution"):
 		query_filters["institution"] = institution
 	fields = ["name"]
-	meta = frappe.get_meta(doctype)
 	for candidate in ("section_name", "level_name", "institution_name", "title"):
 		if meta.has_field(candidate):
 			fields.append(candidate)
@@ -89,16 +121,19 @@ def institution_scoped_query(doctype, txt, searchfield, start, page_len, filters
 @frappe.whitelist()
 def get_programme_offering_context(offering: str) -> dict:
 	_require_login()
-	row = frappe.db.get_value(
-		"EduEdge Program Offering",
-		offering,
-		[
-			"name", "school_branch", "institution", "program", "academic_year", "academic_term",
-			"academic_section", "academic_level", "student_batch", "study_mode", "delivery_mode",
-		],
-		as_dict=True,
-	)
-	if not row:
-		frappe.throw(_("Programme Offering not found."), frappe.DoesNotExistError)
-	assert_branch_access(row.school_branch)
-	return dict(row)
+	doc = frappe.get_doc("EduEdge Program Offering", offering)
+	doc.check_permission("read")
+	assert_branch_access(doc.school_branch)
+	return {
+		"name": doc.name,
+		"school_branch": doc.school_branch,
+		"institution": doc.institution,
+		"program": doc.program,
+		"academic_year": doc.academic_year,
+		"academic_term": doc.academic_term,
+		"academic_section": doc.academic_section,
+		"academic_level": doc.academic_level,
+		"student_batch": doc.student_batch,
+		"study_mode": doc.study_mode,
+		"delivery_mode": doc.delivery_mode,
+	}
