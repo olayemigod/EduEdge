@@ -15,7 +15,7 @@ The correction preserves all standard Frappe Education DocType names and databas
 
 ### Persistent Institution and Branch context
 
-- Branch-switch responses now include the resolved Institution context.
+- Branch-switch responses include the resolved Institution context.
 - The global EduEdge terminology bundle intercepts successful Branch switches and refreshes boot identity immediately.
 - Route changes can refresh active Institution context from the server.
 - The shared shell identity renderer no longer depends on one exact EdgeAppShell selector.
@@ -43,7 +43,7 @@ Approved visible defaults are:
 | Tertiary Institution | Assessment | Programme Enrollment | Student |
 | Training Centre | Evaluation | Trainee Enrollment | Trainee |
 
-Primary and Secondary surfaces therefore display labels such as:
+Primary and Secondary surfaces display labels such as:
 
 - Examinations & Results
 - Examination Operations
@@ -57,7 +57,7 @@ Internal Frappe names such as `Assessment Plan`, `Assessment Result`, and `Asses
 
 The visible terminology layer treats **Assessment**, **Examination**, and **Evaluation** as one reversible label family.
 
-When the active Institution Type changes, already-rendered content can move in either direction without a manual refresh, including:
+When the active Institution Type changes, already-rendered content moves in either direction without a manual refresh, including:
 
 - Examination → Assessment
 - Examination → Evaluation
@@ -70,7 +70,7 @@ The same reversible handling applies to Group, Plan, Result, Operations, and “
 
 ### Live learner terminology reversal
 
-The visible terminology layer now also treats **Student**, **Pupil**, and **Trainee** as one reversible learner family.
+The visible terminology layer also treats **Student**, **Pupil**, and **Trainee** as one reversible learner family.
 
 This applies to singular and plural labels across:
 
@@ -104,7 +104,7 @@ This applies to singular and plural labels across:
 
 ## Automated validation
 
-EduEdge CI run **1196** passed on the learner terminology correction:
+EduEdge CI run **1204** passed on the completed terminology correction:
 
 - Python compilation
 - JSON validation
@@ -114,30 +114,36 @@ EduEdge CI run **1196** passed on the learner terminology correction:
 - regression contracts for reversible Student/Pupil/Trainee labels
 - protection for Student Group and Student Batch terminology precedence
 
-## Local acceptance completed
+## Browser acceptance completed
 
-The following checks passed before the learner-label correction:
+The following checks passed on `eduedge.local`:
 
-1. Institution and Branch appear side by side on every EduEdge page.
-2. The pair refreshes immediately after Branch switching.
-3. Primary and Secondary interfaces display Examination terminology.
+1. Institution and Branch appear side by side on every tested EduEdge page.
+2. Both values refresh immediately after Branch switching.
+3. Primary and Secondary display Examination terminology.
 4. The menu displays Examinations & Results.
 5. Examination Operations, Examination Group, and Examination Plan display correctly.
-6. Tertiary displays Assessment without requiring a refresh after the live reversal fix.
-7. Training Centre displays Evaluation.
-8. CBT Operations and Academic Foundation remain operational.
+6. Tertiary displays Assessment without requiring a browser refresh.
+7. Training Centre displays Evaluation without requiring a browser refresh.
+8. Switching back restores the appropriate terminology immediately.
+9. Primary displays Pupil and Pupils instead of Student and Students.
+10. Secondary and Tertiary retain Student and Students.
+11. Training Centre displays Trainee and Trainees.
+12. Primary Student Group-family labels resolve to Class Arm rather than Pupil Group.
+13. Primary Student Batch-family labels resolve to Admission Set rather than Pupil Batch.
+14. Institution and Branch remain correct throughout Institution Type switching.
+15. CBT Operations, Question Builder, and Academic Foundation remain operational.
 
-## Final local retest required
+## Remaining acceptance work
 
-After pulling and rebuilding, switch directly between Institution Types without refreshing the browser and verify:
+The Institution context and terminology browser acceptance slice is complete. The unified branch still requires:
 
-1. Primary displays **Pupil** and **Pupils** instead of Student/Students.
-2. Secondary and Tertiary display **Student** and **Students**.
-3. Training Centre displays **Trainee** and **Trainees**.
-4. Primary `Student Group`-family labels resolve to **Class Arm**, not Pupil Group.
-5. Primary `Student Batch`-family labels resolve to **Admission Set**, not Pupil Batch.
-6. Institution and Branch remain correct throughout the switches.
+- restricted-role and Branch-permission testing;
+- realistic admissions, enrollment, class, attendance, examination, result-publication, and report-card workflow QA;
+- Programme Offering capacity and lifecycle QA;
+- fee-context and submitted-accounting safety verification; and
+- final merge readiness review.
 
 ## Status
 
-Implemented with automated validation passed. All previous browser checks passed; only the learner terminology retest remains before this correction is accepted.
+**Accepted for Institution context and terminology behaviour.** Automated validation and the focused browser acceptance checks passed. The PR remains draft until the wider restricted-role and realistic workflow QA is completed.
