@@ -29,6 +29,8 @@ def has_academic_institution_permission(doc, user=None, permission_type=None) ->
 	if not _should_scope(resolved_user) or not doc:
 		return None
 	fieldname = "institution" if doc.doctype in {"EduEdge Academic Section", "EduEdge Academic Level"} else INSTITUTION_FIELD
+	if not frappe.get_meta(doc.doctype).has_field(fieldname):
+		return None
 	institution = doc.get(fieldname)
 	if not institution:
 		return None
@@ -38,6 +40,8 @@ def has_academic_institution_permission(doc, user=None, permission_type=None) ->
 def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
 	resolved_user = user or frappe.session.user
 	if not _should_scope(resolved_user):
+		return ""
+	if not frappe.db.exists("DocType", doctype) or not frappe.get_meta(doctype).has_field(fieldname):
 		return ""
 	institutions = _allowed_institutions(resolved_user)
 	if not institutions:
