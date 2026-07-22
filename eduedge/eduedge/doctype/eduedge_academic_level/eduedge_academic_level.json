@@ -1,13 +1,13 @@
 {
  "actions": [],
- "autoname": "field:level_code",
+ "autoname": "hash",
  "creation": "2026-07-22 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": ["level_name", "level_code", "institution", "academic_section", "sequence", "next_level", "enabled", "description"],
  "fields": [
   {"fieldname":"level_name","fieldtype":"Data","in_list_view":1,"label":"Academic Level Name","reqd":1},
-  {"fieldname":"level_code","fieldtype":"Data","in_list_view":1,"label":"Academic Level Code","reqd":1,"unique":1},
+  {"fieldname":"level_code","fieldtype":"Data","in_list_view":1,"label":"Academic Level Code","reqd":1},
   {"fieldname":"institution","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Institution","options":"EduEdge Institution","reqd":1},
   {"fieldname":"academic_section","fieldtype":"Link","in_standard_filter":1,"label":"Academic Section","options":"EduEdge Academic Section"},
   {"default":"10","fieldname":"sequence","fieldtype":"Int","label":"Sequence"},
@@ -19,7 +19,6 @@
  "modified_by": "Administrator",
  "module": "EduEdge",
  "name": "EduEdge Academic Level",
- "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1},
