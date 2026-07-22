@@ -47,6 +47,7 @@ jobs:
           node --check eduedge/public/js/eduedge_academic_operations.bundle.js
           node --check eduedge/public/js/eduedge_cbt_operations.bundle.js
           node --check eduedge/public/js/eduedge_question_builder.bundle.js
+          node --check eduedge/public/js/eduedge_question_builder/rich_text_editor.js
           node --check eduedge/public/js/eduedge_question_batch.bundle.js
           node --check eduedge/public/js/eduedge_assessment_operations.bundle.js
           node --check eduedge/public/js/eduedge_report_cards.bundle.js
