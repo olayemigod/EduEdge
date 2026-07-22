@@ -8,6 +8,8 @@ CAPACITY_CONSUMING_STATUSES = {"Active", "Suspended"}
 
 
 def get_current_enrollment_status(program_enrollment: str) -> str:
+	if not frappe.db.exists("DocType", "EduEdge Enrollment Status Log"):
+		return "Active"
 	status = frappe.db.sql(
 		"""
 		select new_status
@@ -26,6 +28,15 @@ def count_capacity_consuming_enrollments(
 	*,
 	exclude_enrollment: str | None = None,
 ) -> int:
+	if not frappe.db.exists("DocType", "EduEdge Enrollment Status Log"):
+		return frappe.db.count(
+			"Program Enrollment",
+			{
+				OFFERING_FIELD: program_offering,
+				"docstatus": 1,
+				"name": ["!=", exclude_enrollment or ""],
+			},
+		)
 	params = {
 		"offering": program_offering,
 		"exclude_enrollment": exclude_enrollment or "",
