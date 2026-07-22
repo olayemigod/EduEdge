@@ -73,6 +73,8 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		self.assertGreaterEqual(defaults.count('"assessment": ("Examination", "Examinations")'), 2)
 		self.assertIn('"assessment_plan": ("Examination Plan", "Examination Plans")', defaults)
 		self.assertIn('"program_enrollment": ("Class Enrollment", "Class Enrollments")', defaults)
+		self.assertIn('"student": ("Pupil", "Pupils")', defaults)
+		self.assertIn('"student": ("Trainee", "Trainees")', defaults)
 		self.assertGreaterEqual(install.count("apply_institution_type_defaults()"), 2)
 		self.assertIn("term('class_session'", home)
 		self.assertIn("_apply_terminology", resource_api)
@@ -114,6 +116,11 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		self.assertIn("terminologyFamilyPairs", bundle)
 		self.assertIn('"Examination Operations"', bundle)
 		self.assertIn('"Evaluation Operations"', bundle)
+		self.assertIn('getEduEdgeTerm("student"', bundle)
+		self.assertIn('["Students", "Pupils", "Trainees"]', bundle)
+		self.assertIn('["Student", "Pupil", "Trainee"]', bundle)
+		self.assertIn('getEduEdgeTerm("student_group"', bundle)
+		self.assertIn('getEduEdgeTerm("student_batch"', bundle)
 		self.assertIn("pairs.sort", bundle)
 
 	def test_edgesuite_institution_structure_owns_hierarchy_configuration(self):
