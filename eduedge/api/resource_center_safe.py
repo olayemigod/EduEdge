@@ -66,7 +66,7 @@ def _ensure_school_branch_editor_contract() -> None:
 				"type": "Link",
 				"options_doctype": "EduEdge Institution",
 				"required": True,
-				description": _("Academic institution that owns this Branch or Campus."),
+				"description": _("Academic institution that owns this Branch or Campus."),
 			},
 		)
 
