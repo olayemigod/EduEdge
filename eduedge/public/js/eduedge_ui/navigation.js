@@ -2,6 +2,22 @@ function term(key, { plural = false, fallback = "" } = {}) {
 	return frappe.eduedge?.term?.(key, { plural, fallback }) || fallback;
 }
 
+function normalizedPath(route) {
+	try {
+		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+	} catch (_error) {
+		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
+	}
+}
+
+export function hasEduEdgeRouteAccess(route) {
+	if (frappe.session.user === "Administrator") return true;
+	const path = normalizedPath(route);
+	const routes = frappe.boot?.eduedge_access_manifest?.routes;
+	if (!routes || !Object.prototype.hasOwnProperty.call(routes, path)) return true;
+	return Boolean(routes[path]);
+}
+
 export function buildEduEdgeMenuItems() {
 	const programmePlural = term("programme", { plural: true, fallback: __("Programmes") });
 	const offeringPlural = term("programme_offering", { plural: true, fallback: __("Programme Offerings") });
@@ -11,7 +27,7 @@ export function buildEduEdgeMenuItems() {
 	const sectionPlural = term("academic_section", { plural: true, fallback: __("Academic Sections") });
 	const levelPlural = term("academic_level", { plural: true, fallback: __("Academic Levels") });
 
-	return Object.freeze([
+	const items = [
 		{ section: __("Overview"), sectionIcon: "home", label: __("Home"), route: "/app/eduedge-home", icon: "home", description: __("Education command centre") },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Academic Operations"), route: "/app/eduedge-academic-operations", icon: "book", description: __(`${groupPlural}, ${sessionPlural}, and attendance`) },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Admissions"), route: "/app/eduedge-admissions", icon: "clipboard", description: __("Admission windows and availability") },
@@ -20,6 +36,7 @@ export function buildEduEdgeMenuItems() {
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: programmePlural, route: "/app/eduedge-programs", icon: "book", description: __(`${programmePlural} catalogue`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: offeringPlural, route: "/app/eduedge-program-offerings", icon: "layers", description: __(`${programmePlural} by campus and ${academicYear}`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Academic Foundation"), route: "/app/eduedge-academic-foundation", icon: "book", description: __(`${sectionPlural}, ${levelPlural}, and calendars`) },
+		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("CBT Operations"), route: "/app/eduedge-cbt-operations", icon: "assessment", description: __("Centres, question banks, and exam templates") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Assessments & Results"), route: "/app/eduedge-assessment-operations", icon: "assessment", description: __("Plan, review, approve, and publish") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Report Cards"), route: "/app/eduedge-report-cards", icon: "report", description: __("Comments, progression, and printing") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("School Branches"), route: "/app/eduedge-school-branches", icon: "building", description: __("Campus identity and operational defaults") },
@@ -28,7 +45,9 @@ export function buildEduEdgeMenuItems() {
 		{ section: __("Administration"), sectionIcon: "settings", label: __("Setup Center"), route: "/app/eduedge-setup-center", icon: "settings", description: __("Foundation readiness and configuration") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("EduEdge Settings"), route: "/app/eduedge-settings-center", icon: "settings", description: __("Defaults, controls, and features") },
 		{ section: __("Help & Training"), sectionIcon: "book", label: __("Training Centre"), route: "/app/eduedge-training-centre", icon: "book", description: __("Role-based guided learning") },
-	]);
+	];
+
+	return Object.freeze(items.filter((item) => hasEduEdgeRouteAccess(item.route)));
 }
 
 export const EDUEDGE_MENU_ITEMS = buildEduEdgeMenuItems();
@@ -42,6 +61,9 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-programs",
 	"/app/eduedge-program-offerings",
 	"/app/eduedge-academic-foundation",
+	"/app/eduedge-cbt-operations",
+	"/app/eduedge-question-builder",
+	"/app/eduedge-question-batch",
 	"/app/eduedge-assessment-operations",
 	"/app/eduedge-report-cards",
 	"/app/eduedge-school-branches",
@@ -52,14 +74,6 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-training-centre",
 ]);
 
-function normalizedPath(route) {
-	try {
-		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
-	} catch (_error) {
-		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
-	}
-}
-
 export function isEduEdgeUIRoute(route) {
 	return EDUEDGE_UI_ROUTES.includes(normalizedPath(route));
 }
@@ -67,9 +81,18 @@ export function isEduEdgeUIRoute(route) {
 export function openEduEdgeRoute(route) {
 	if (!route) return;
 	if (isEduEdgeUIRoute(route)) {
+		if (!hasEduEdgeRouteAccess(route)) {
+			frappe.msgprint({
+				title: __("Access not available"),
+				message: __("Your current role permissions do not provide access to this EduEdge area."),
+				indicator: "orange",
+			});
+			return;
+		}
 		window.location.href = route;
 		return;
 	}
+
 	const opened = window.open(route, "_blank", "noopener,noreferrer");
 	if (opened) opened.opener = null;
 }
