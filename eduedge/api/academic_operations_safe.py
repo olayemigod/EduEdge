@@ -26,8 +26,6 @@ def get_operations_context(
 	group_filters: dict = {BRANCH_FIELD: resolved_branch, "disabled": 0}
 	if academic_year:
 		group_filters["academic_year"] = academic_year
-	if academic_term:
-		group_filters["academic_term"] = academic_term
 	groups = frappe.get_list(
 		"Student Group",
 		filters=group_filters,
@@ -44,6 +42,9 @@ def get_operations_context(
 		order_by="student_group_name asc",
 		page_length=100,
 	)
+	if academic_term:
+		# Year-wide groups with no term remain operational in every period.
+		groups = [row for row in groups if not row.academic_term or row.academic_term == academic_term]
 	group_names = [row.name for row in groups]
 	group_strength = base._get_group_strength(group_names)
 	for row in groups:
