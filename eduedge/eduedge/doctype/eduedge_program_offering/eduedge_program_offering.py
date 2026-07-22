@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import re
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -9,12 +12,64 @@ from eduedge.education.offerings import assert_branch_access
 
 
 class EduEdgeProgramOffering(Document):
+	def before_validate(self) -> None:
+		self._derive_context()
+		self.offering_code = self._normalize_or_generate_code()
+		if not self.offering_title:
+			self.offering_title = " · ".join(
+				value
+				for value in (
+					self.program,
+					self.academic_year,
+					self.academic_term,
+					self.study_mode,
+					self.school_branch,
+				)
+				if value
+			)
+
 	def validate(self) -> None:
 		assert_branch_access(self.school_branch)
+		if not self.is_new() and self.has_value_changed("offering_code"):
+			frappe.throw(_("Offering Code cannot change after creation."), frappe.ValidationError)
 		self._validate_term()
+		self._validate_institution_context()
 		self._validate_capacity()
 		self._validate_dates()
 		self._validate_duplicate()
+
+	def _derive_context(self) -> None:
+		branch = frappe.db.get_value(
+			"EduEdge School Branch",
+			self.school_branch,
+			["institution", "enabled"],
+			as_dict=True,
+		) if self.school_branch else None
+		if not branch or not branch.enabled:
+			frappe.throw(_("Select an enabled School Branch / Campus."), frappe.ValidationError)
+		self.institution = branch.institution
+		program_meta = frappe.get_meta("Program")
+		if self.program and program_meta.has_field("eduedge_academic_section"):
+			self.academic_section = frappe.db.get_value("Program", self.program, "eduedge_academic_section")
+
+	def _normalize_or_generate_code(self) -> str:
+		code = re.sub(r"[^A-Z0-9]+", "-", str(self.offering_code or "").strip().upper()).strip("-")
+		if code:
+			return code
+		seed = "::".join(
+			str(value or "")
+			for value in (
+				self.name,
+				self.school_branch,
+				self.program,
+				self.academic_year,
+				self.academic_term,
+				self.student_batch,
+				self.study_mode,
+				self.delivery_mode,
+			)
+		)
+		return f"OFR-{hashlib.sha1(seed.encode()).hexdigest()[:12].upper()}"
 
 	def _validate_term(self) -> None:
 		if not self.academic_term:
@@ -28,41 +83,51 @@ class EduEdgeProgramOffering(Document):
 				frappe.ValidationError,
 			)
 
+	def _validate_institution_context(self) -> None:
+		if not self.institution:
+			frappe.throw(_("The selected Branch must belong to an Institution."), frappe.ValidationError)
+		program_meta = frappe.get_meta("Program")
+		if self.program and program_meta.has_field("eduedge_institution"):
+			program_institution = frappe.db.get_value("Program", self.program, "eduedge_institution")
+			if program_institution and program_institution != self.institution:
+				frappe.throw(_("Program must belong to the same Institution as the selected Branch."), frappe.ValidationError)
+		if self.academic_section:
+			section_institution = frappe.db.get_value("EduEdge Academic Section", self.academic_section, "institution")
+			if section_institution != self.institution:
+				frappe.throw(_("Academic Section must belong to the selected Institution."), frappe.ValidationError)
+		if self.academic_level:
+			level_institution = frappe.db.get_value("EduEdge Academic Level", self.academic_level, "institution")
+			if level_institution != self.institution:
+				frappe.throw(_("Academic Level must belong to the selected Institution."), frappe.ValidationError)
+
 	def _validate_capacity(self) -> None:
 		if (self.capacity or 0) < 0:
 			frappe.throw(_("Capacity cannot be negative."), frappe.ValidationError)
 
 	def _validate_dates(self) -> None:
-		if self.application_start_date and self.application_end_date:
-			if getdate(self.application_end_date) < getdate(self.application_start_date):
-				frappe.throw(
-					_("Application End Date cannot be earlier than Application Start Date."),
-					frappe.ValidationError,
-				)
+		for start_field, end_field, label in (
+			("start_date", "end_date", _("Offering")),
+			("application_start_date", "application_end_date", _("Application")),
+		):
+			start_date = self.get(start_field)
+			end_date = self.get(end_field)
+			if start_date and end_date and getdate(end_date) < getdate(start_date):
+				frappe.throw(_("{0} End Date cannot be earlier than Start Date.").format(label), frappe.ValidationError)
 
 	def _validate_duplicate(self) -> None:
-		term = self.academic_term or ""
-		duplicate = frappe.db.sql(
-			"""
-			select name
-			from `tabEduEdge Program Offering`
-			where school_branch = %s
-				and program = %s
-				and academic_year = %s
-				and coalesce(academic_term, '') = %s
-				and name != %s
-			limit 1
-			""",
-			(
-				self.school_branch,
-				self.program,
-				self.academic_year,
-				term,
-				self.name or "",
-			),
-		)
+		filters = {
+			"school_branch": self.school_branch,
+			"program": self.program,
+			"academic_year": self.academic_year,
+			"academic_term": self.academic_term or "",
+			"student_batch": self.student_batch or "",
+			"study_mode": self.study_mode or "",
+			"delivery_mode": self.delivery_mode or "",
+			"name": ["!=", self.name or ""],
+		}
+		duplicate = frappe.db.exists("EduEdge Program Offering", filters)
 		if duplicate:
 			frappe.throw(
-				_("An EduEdge Program Offering already exists for this Branch, Program, Academic Year, and Academic Term."),
+				_("A matching Programme Offering already exists for this Branch, Program, period, cohort, and delivery mode."),
 				frappe.DuplicateEntryError,
 			)
