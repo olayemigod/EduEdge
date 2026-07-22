@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 
 from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.services.enrollment_lifecycle import count_capacity_consuming_enrollments
 
 
 def before_submit_program_enrollment(doc, method=None) -> None:
@@ -32,13 +33,9 @@ def before_submit_program_enrollment(doc, method=None) -> None:
 	capacity = frappe.db.get_value("EduEdge Program Offering", doc.get(OFFERING_FIELD), "capacity") or 0
 	if int(capacity) <= 0:
 		return
-	enrolled = frappe.db.count(
-		"Program Enrollment",
-		{
-			OFFERING_FIELD: doc.get(OFFERING_FIELD),
-			"docstatus": 1,
-			"name": ["!=", doc.name],
-		},
+	enrolled = count_capacity_consuming_enrollments(
+		doc.get(OFFERING_FIELD),
+		exclude_enrollment=doc.name,
 	)
 	if enrolled >= int(capacity):
 		frappe.throw(
