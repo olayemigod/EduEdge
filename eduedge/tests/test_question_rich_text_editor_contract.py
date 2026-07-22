@@ -38,7 +38,7 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 	def test_editor_fixes_direction_and_avoids_caret_rewriting(self):
 		source = EDITOR_JS.read_text()
 		self.assertIn('editor.setAttribute("dir", "ltr")', source)
-		self.assertIn('editor.setAttribute("contenteditable"', source)
+		self.assertIn('editor.contentEditable = readOnly ? "false" : "true"', source)
 		self.assertIn('source.style.display = "none"', source)
 		self.assertIn('source.dispatchEvent(new Event("input", { bubbles: true }))', source)
 		self.assertIn("MutationObserver", source)
