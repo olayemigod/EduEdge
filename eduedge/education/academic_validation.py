@@ -7,7 +7,6 @@ from frappe.utils import getdate, nowdate
 from eduedge.education.academic_fields import (
 	ACADEMIC_LEVEL_FIELD,
 	ACADEMIC_SECTION_FIELD,
-	ENROLLMENT_STATUS_FIELD,
 	INSTITUTION_FIELD,
 	OFFERING_FIELD,
 )
@@ -121,8 +120,6 @@ def before_validate_student_applicant_context(doc, method=None) -> None:
 
 def before_validate_program_enrollment_context(doc, method=None) -> None:
 	resolve_exact_offering(doc, purpose="enrollment")
-	if doc.meta.has_field(ENROLLMENT_STATUS_FIELD) and not doc.get(ENROLLMENT_STATUS_FIELD):
-		doc.set(ENROLLMENT_STATUS_FIELD, "Active")
 
 
 def before_validate_student_group_context(doc, method=None) -> None:
