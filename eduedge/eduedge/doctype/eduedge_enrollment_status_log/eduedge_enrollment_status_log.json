@@ -1,0 +1,36 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-07-22 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["program_enrollment", "previous_status", "new_status", "effective_date", "reason", "target_branch", "target_program_offering", "approved_by"],
+ "fields": [
+  {"fieldname":"program_enrollment","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Program Enrollment","options":"Program Enrollment","reqd":1},
+  {"fieldname":"previous_status","fieldtype":"Data","in_list_view":1,"label":"Previous Status","read_only":1},
+  {"fieldname":"new_status","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"New Status","options":"Active\nCompleted\nPromoted\nWithdrawn\nSuspended\nTransferred\nGraduated\nCancelled","reqd":1},
+  {"fieldname":"effective_date","fieldtype":"Date","in_list_view":1,"label":"Effective Date","reqd":1},
+  {"fieldname":"reason","fieldtype":"Small Text","label":"Reason","reqd":1},
+  {"fieldname":"target_branch","fieldtype":"Link","label":"Target Branch / Campus","options":"EduEdge School Branch","read_only":1},
+  {"fieldname":"target_program_offering","fieldtype":"Link","label":"Target Programme Offering","options":"EduEdge Program Offering"},
+  {"fieldname":"approved_by","fieldtype":"Link","label":"Approved By","options":"User","read_only":1}
+ ],
+ "modified": "2026-07-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Enrollment Status Log",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"read":1,"report":1,"role":"System Manager"},
+  {"create":1,"read":1,"report":1,"role":"EduEdge Administrator"},
+  {"create":1,"read":1,"report":1,"role":"School Administrator"},
+  {"create":1,"read":1,"report":1,"role":"Academic Administrator"},
+  {"create":1,"read":1,"report":1,"role":"Registrar"},
+  {"read":1,"report":1,"role":"Teacher"}
+ ],
+ "search_fields": "program_enrollment,new_status,reason",
+ "sort_field": "effective_date",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
