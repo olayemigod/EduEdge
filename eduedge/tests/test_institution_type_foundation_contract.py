@@ -111,6 +111,10 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		self.assertIn('document.querySelectorAll(".edge-topbar, .edge-app-shell__topbar")', shell_identity)
 		self.assertIn('term("assessment", { plural: true', navigation)
 		self.assertIn("applyVisibleTerminology", bundle)
+		self.assertIn("terminologyFamilyPairs", bundle)
+		self.assertIn('"Examination Operations"', bundle)
+		self.assertIn('"Evaluation Operations"', bundle)
+		self.assertIn("pairs.sort", bundle)
 
 	def test_edgesuite_institution_structure_owns_hierarchy_configuration(self):
 		institution_api = (APP / "api" / "institution_types.py").read_text()
