@@ -58,7 +58,7 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		self.assertNotIn("Program Enrollment Branch must match the selected Student Branch", branching)
 		self.assertIn("matching this Programme Offering and Branch", operations)
 		self.assertIn("enrollment.docstatus = 1", group_query)
-		self.assertIn("eduedge_program_offering", group_query)
+		self.assertIn("filters.get(OFFERING_FIELD)", group_query)
 
 	def test_cross_branch_student_lookup_is_controlled_and_institution_bound(self):
 		api = (APP / "api" / "education.py").read_text()
