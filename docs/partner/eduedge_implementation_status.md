@@ -3,17 +3,17 @@
 **Product:** EduEdge Education Management and School Intelligence Platform  
 **Publisher:** ProcessEdge Solutions Limited  
 **Audience:** ProcessEdge partners, implementation collaborators, pilot institutions, advisers, and authorised stakeholders  
-**Current implementation stage:** Foundation and core school operations  
+**Current implementation stage:** Foundation, core school operations, and CBT definition foundation  
 **Last updated:** 22 July 2026  
-**Repository status:** V0.9 implemented on the active development branch; bench migration and browser acceptance remain required before merge or production rollout.
+**Repository status:** Unified CBT and Institution/Academic Context branch migrated successfully on the development site. Automated validation passed. Two browser acceptance corrections—persistent Institution/Branch display and institution-aware Examination wording—are implemented and awaiting local retest before merge or production rollout.
 
 ## 1. Purpose of this document
 
 This is the partner-facing record of what has actually been implemented in EduEdge.
 
-It is intentionally different from the detailed engineering notes. It explains delivered business capabilities, current validation status, known limitations, and the next areas of work without exposing unnecessary source-code detail.
+It is intentionally different from detailed engineering notes. It explains delivered business capabilities, current validation status, known limitations, and next work without exposing unnecessary source-code detail.
 
-The document must be updated whenever a material EduEdge feature is completed, materially changed, deferred, or removed.
+This document must be updated whenever a material EduEdge capability is completed, materially changed, deferred, or removed.
 
 ## 2. Status definitions
 
@@ -23,9 +23,17 @@ The document must be updated whenever a material EduEdge feature is completed, m
 
 ## 3. Current overall position
 
-EduEdge has moved beyond a basic Frappe Education extension. The implemented foundation now supports multi-institution and multi-campus education operations, branch-aware access, admissions, enrollment, classes, schedules, attendance, assessments, controlled result publication, report cards, progression review, institutional terminology, and academic context governance.
+EduEdge has moved beyond a basic Frappe Education extension. The implemented foundation now supports multi-institution and multi-campus operations, branch-aware access, admissions, enrollment, classes, schedules, attendance, examinations or assessments, controlled result publication, report cards, progression review, academic-context governance, and governed CBT question and examination-template preparation.
 
-The current V0.9 work is **implemented with automated CI passed**, but remains **Acceptance QA pending** until the target bench is built, migrated, and tested in the browser with realistic users and data.
+The unified development branch has:
+
+- passed EduEdge automated validation;
+- built successfully on the target bench;
+- migrated successfully on `eduedge.local` without removing CBT or Institution records as orphans;
+- passed smoke tests for EduEdge Home, CBT Operations, Question Builder, and Academic Foundation;
+- produced two browser acceptance findings that have now been corrected in code and require retest.
+
+The product remains **Acceptance QA pending** until the corrected browser behaviour, role permissions, and realistic business workflows are accepted.
 
 ## 4. Implemented capabilities
 
@@ -53,29 +61,46 @@ The current V0.9 work is **implemented with automated CI passed**, but remains *
 - Migration does not guess Institution identity from Branch names or addresses.
 - Dedicated Institution Structure interface for Institution creation, Branch assignment, hierarchy review, and terminology preview.
 
-### 4.3 Institution-aware terminology — Implemented
+### 4.3 Institution-aware terminology — Implemented; browser retest pending
 
-EduEdge can present appropriate education terminology according to the resolved Institution and Branch context.
+EduEdge presents education terminology according to the resolved Institution and Branch context while preserving stable Frappe DocType and database identities.
 
-Examples include:
+Approved examples include:
 
-- Primary and Secondary contexts using Class, Subject, Teacher, Classroom, and Period.
-- Tertiary contexts using Programme, Course, Lecturer, Lecture Hall, Level, and Semester.
-- Training Centre contexts using Programme, Module, Trainer, Training Room, Training Level, and Intake.
+- Primary School: Pupil, Class, Subject, Teacher, Classroom, Period, Examination, and Class Enrollment.
+- Secondary School: Student, Class, Subject, Teacher, Classroom, Period, Examination, and Class Enrollment.
+- Tertiary Institution: Student, Programme, Course, Lecturer, Lecture Hall, Level, Semester, Assessment, and Programme Enrollment.
+- Training Centre: Trainee, Programme, Module, Trainer, Training Room, Training Level, Evaluation, and Trainee Enrollment.
 
-The underlying Frappe Education DocType and database identities remain stable. EduEdge changes visible product wording rather than performing unsafe global renames.
+Primary and Secondary interfaces should therefore show labels such as:
 
-### 4.4 Branch access and governance — Implemented
+- Examinations & Results
+- Examination Operations
+- Examination Group
+- Examination Plan
+- Examination Result
+
+The internal Frappe records remain `Assessment Group`, `Assessment Plan`, and `Assessment Result` for upgrade safety.
+
+### 4.4 Persistent Institution and Branch context — Implemented; browser retest pending
+
+- Current Institution and Branch are displayed side by side in the EduEdge product context.
+- Branch switches return the newly resolved Institution context from the server.
+- Shared browser context updates after Branch switching without requiring a full page reload.
+- EduEdge EdgeSuite pages use a common top-bar context display.
+- Supported native Education forms receive a fallback context display where an EdgeSuite top bar is absent.
+- Context resolution follows Branch → Institution → Company fallback.
+
+### 4.5 Branch access and governance — Implemented
 
 - Explicit user-to-Branch access assignments.
 - Settings-controlled backend Branch enforcement.
 - Company-level headquarters or all-Branch access where authorised.
 - Branch-scoped lists, Link-field queries, reports, operational APIs, and permissions.
-- Active Branch context displayed in the EduEdge product shell.
 - Branch Governance and Accounting Center for coverage, assignments, and setup readiness.
 - Enforcement cannot be enabled until all enabled Branches have valid access coverage.
 
-### 4.5 Admissions and programme intake — Implemented
+### 4.6 Admissions and programme intake — Implemented
 
 - Branch-aware Student Admission.
 - Branch-aware Student Applicant processing.
@@ -85,9 +110,9 @@ The underlying Frappe Education DocType and database identities remain stable. E
 - Admission and enrollment availability controls.
 - Backend validation prevents invalid Branch, Programme, year, term, and Offering combinations.
 
-### 4.6 Programme Offering as the delivery identity — Implemented
+### 4.7 Programme Offering as the delivery identity — Implemented
 
-Programme Offering now represents the exact academic intake or delivery instance, rather than only a loose Programme and year combination.
+Programme Offering represents the exact academic intake or delivery instance rather than only a loose Programme and year combination.
 
 It supports:
 
@@ -102,9 +127,9 @@ It supports:
 - Capacity control.
 - Stable Offering title and code.
 
-An Offering that is already used by Applicants, Student Groups, or submitted Enrollments cannot be silently repurposed into another Branch, Programme, period, Level, Cohort, or delivery mode.
+An Offering already used by Applicants, Student Groups, or submitted Enrollments cannot be silently repurposed into another Branch, Programme, period, Level, Cohort, or delivery mode.
 
-### 4.7 Student and enrollment context — Implemented
+### 4.8 Student and enrollment context — Implemented
 
 - Student Branch represents the learner's primary or home responsibility Branch.
 - Operational Enrollment, Student Group, Schedule, Attendance, and fee context follow the selected Programme Offering and operational Branch.
@@ -113,7 +138,7 @@ An Offering that is already used by Applicants, Student Groups, or submitted Enr
 - Duplicate Enrollment for the same Student and Programme Offering is blocked.
 - Final capacity checks are protected against simultaneous submissions.
 
-### 4.8 Enrollment lifecycle — Implemented
+### 4.9 Enrollment lifecycle — Implemented
 
 EduEdge provides an append-only Enrollment Status Log supporting:
 
@@ -130,29 +155,29 @@ Lifecycle changes do not mutate the submitted Program Enrollment document.
 
 Additional controls include:
 
-- Chronological status changes.
-- No future-dated lifecycle changes.
-- Valid transition enforcement.
-- Promotion remaining inside the same Institution.
-- Next Academic Level validation where progression is configured.
-- Transfer to another valid Programme Offering.
-- Status history visibility from submitted Enrollment.
+- chronological status changes;
+- no future-dated lifecycle changes;
+- valid transition enforcement;
+- Promotion remaining inside the same Institution;
+- Next Academic Level validation where progression is configured;
+- Transfer to another valid Programme Offering; and
+- status history visibility from submitted Enrollment.
 
 Only Active and Suspended Enrollments consume Offering capacity. Terminal statuses release the seat.
 
-### 4.9 Academic structure and calendar — Implemented
+### 4.10 Academic structure and calendar — Implemented
 
 - Institution-owned Academic Sections, such as Primary Section, Junior Secondary, Faculty, School, or Training Category.
 - Institution-owned Academic Levels, such as Class, Year, Level, or Training Level.
 - Ordered progression between Levels.
 - Prevention of invalid progression cycles.
 - Institution-specific Academic Calendars.
-- Academic period rows with start dates, end dates, ordering, and result publication dates.
+- Academic period rows with start dates, end dates, ordering, and result-publication dates.
 - Prevention of overlapping academic periods.
-- Academic Operations resolves the year and period from the selected Institution calendar.
+- Academic Operations resolves year and period from the selected Institution calendar.
 - Year-wide Student Groups remain usable during a particular term or semester.
 
-### 4.10 Daily academic operations — Implemented
+### 4.11 Daily academic operations — Implemented
 
 - EdgeSuite Academic Operations page.
 - Branch-aware Student Groups or Classes.
@@ -163,21 +188,41 @@ Only Active and Suspended Enrollments consume Offering capacity. Terminal status
 - Class register and Student Attendance workflow.
 - Draft attendance saving.
 - Submitted attendance protection; submitted records are not silently changed.
-- Cross-campus Students can be included where their submitted Enrollment matches the operational Programme Offering and Student Group.
+- Cross-campus Students can be included where submitted Enrollment matches the operational Programme Offering and Student Group.
 
-### 4.11 Assessment and results — Implemented
+### 4.12 Examinations, assessments, and results — Implemented
 
-- Branch-aware Assessment Plans.
-- Branch-aware Assessment Results.
+- Branch-aware Frappe Assessment Plans, displayed as Examination Plans for Primary and Secondary institutions.
+- Branch-aware Frappe Assessment Results, displayed as Examination Results for Primary and Secondary institutions.
 - Smart filtering for examiner, supervisor, room, class, and student selection.
-- Assessment Operations page.
-- Result completeness calculation by class and assessment group.
+- Institution-aware Examination/Assessment Operations page.
+- Result completeness calculation by class and examination or assessment group.
 - Result approval and rejection workflow.
 - Controlled publication workflow.
 - Append-only result publication audit logs.
-- Report-card readiness blocked until the required results are approved and published.
+- Report-card readiness blocked until required results are approved and published.
 
-### 4.12 Report cards and progression review — Implemented
+### 4.13 CBT examination-definition foundation — Implemented
+
+EduEdge V0.8A provides governed preparation of CBT examination content and templates.
+
+Implemented capabilities include:
+
+- School Examination Centres and centrally governed EduEdge Exam Centres.
+- School Question Bank and protected EduEdge Examination Bank ownership models.
+- Question types, answer options, marks, optional negative marking, topic, curriculum, exam body, and difficulty classification.
+- Draft, Under Review, Approved, and Retired question governance.
+- Approved-question immutability and versioning.
+- Question Builder and batch question-intake interfaces.
+- School Examination and EduEdge Public Examination templates.
+- Duration, attempt, pass, navigation, timeout, resume, randomisation, marking, and result-release definitions.
+- Selection of only approved questions from valid scope, Branch, and Course.
+- CBT Operations readiness page.
+- Permission controls protecting answer banks from Students, Parents, and Invigilators.
+
+This does **not** yet mean the Offline-Resilient CBT attempt engine is complete. Candidate scheduling, browser answer saving, network sync, server-side timing, pending-sync control, invigilator live monitoring, scoring execution, and result approval blocking remain separate planned work.
+
+### 4.14 Report cards and progression review — Implemented
 
 - Report Cards and Progression page.
 - Report cards generated from published result records.
@@ -187,16 +232,16 @@ Only Active and Suspended Enrollments consume Offering capacity. Terminal status
 - Manual progression recommendation and approval.
 - No automatic class movement, enrollment creation, or submitted-result mutation.
 
-### 4.13 Fee and operational context foundation — Implemented
+### 4.15 Fee and operational context foundation — Implemented
 
 - Institution, Branch, Programme Offering, and Academic Level context added to Fee Structure, Fee Schedule, and Fees workflows.
-- Context can be derived from the selected Offering, Enrollment, or Fee Structure.
+- Context can be derived from selected Offering, Enrollment, or Fee Structure.
 - Conflicting Institution, Branch, and Offering combinations are rejected.
 - Leave and Student Log records derive relevant academic context.
 - Submitted accounting documents are not changed by this foundation work.
-- No claim is made that the complete EduEdge billing and EdgePay integration is finished.
+- Complete EduEdge billing and EdgePay integration are not represented as finished.
 
-### 4.14 EdgeSuite user experience — Implemented
+### 4.16 EdgeSuite user experience — Implemented
 
 - Professional EduEdge product shell.
 - Grouped product navigation.
@@ -211,6 +256,7 @@ Only Active and Suspended Enrollments consume Offering capacity. Terminal status
 ## 5. Engineering and data-safety commitments already enforced
 
 - Standard Frappe Education DocType identities remain unchanged.
+- Visible terminology does not rename routes, APIs, fieldnames, or database records.
 - Submitted Program Enrollment is not mutated to store lifecycle status.
 - Submitted Attendance is protected from silent editing.
 - Submitted result and accounting documents are not rewritten by the academic foundation.
@@ -218,59 +264,65 @@ Only Active and Suspended Enrollments consume Offering capacity. Terminal status
 - Branch and Institution access is enforced on the backend, not only in the browser.
 - Dependent fields are filtered and also validated server-side.
 - Concurrent Enrollment capacity and lifecycle changes use transactional protection.
+- Approved CBT questions and templates cannot be edited in place.
 
-## 6. Automated validation status
+## 6. Validation status
 
-The reviewed V0.9 development head passed EduEdge GitHub CI run 1140, including:
+### Automated validation
 
-- Python compilation.
-- JSON validation.
-- Frontend entry-script syntax checks.
-- The complete pure contract test suite.
+EduEdge CI run **1180** passed for the V0.9.1 acceptance correction, including:
 
-Automated success does not replace target-site migration, browser acceptance, permission testing, or real operational workflow QA.
+- Python compilation;
+- JSON validation;
+- frontend entry-script syntax checks, including the shared shell identity bundle; and
+- the complete pure contract test suite.
 
-## 7. Acceptance QA still required
+### Target-site validation completed
 
-Before V0.9 is merged or represented as production-ready, ProcessEdge must complete:
+- EduEdge assets built successfully.
+- Unified branch migrated successfully on `eduedge.local`.
+- Migration did not report CBT or Institution DocTypes or Pages as orphans.
+- No blank page was found during the first smoke test.
+- No Page Not Found error was found during the first smoke test.
+- CBT Operations opened successfully.
+- Question Builder opened successfully.
+- Academic Foundation opened successfully.
 
-- EduEdge and EdgeSuite UI build on the target bench.
-- Site migration and cache clearing.
-- Institution and Branch hierarchy tests.
-- Institution terminology tests for all four seeded types.
-- Academic Section, Level, progression, and calendar tests.
-- Programme Offering and capacity tests.
-- Same-Institution cross-campus Enrollment tests.
-- Cross-Institution rejection tests.
-- Student Group membership and Attendance tests.
-- Enrollment lifecycle and append-only protection tests.
-- Fee-context and submitted-accounting safety tests.
-- Restricted-role and Branch-permission tests.
-- Browser acceptance for EduEdge-owned EdgeSuite pages.
+### Browser retest still required
 
-## 8. Known current limitations
+- Verify Institution and Branch appear side by side on every EduEdge page.
+- Verify the pair updates immediately after Branch switching.
+- Verify Primary and Secondary use Examination terminology throughout.
+- Verify Tertiary retains Assessment terminology.
+- Verify Training Centre uses Evaluation terminology.
+- Continue role, permission, and realistic workflow testing.
 
-- Promotion and Transfer can record the approved destination Programme Offering, but do not automatically create the destination Enrollment.
+Automated success and smoke tests do not replace full target-site acceptance.
+
+## 7. Known current limitations
+
+- Promotion and Transfer can record the approved destination Programme Offering but do not automatically create the destination Enrollment.
 - Legacy submitted Enrollments without exact Programme Offering linkage remain supported through controlled contextual fallback and require gradual review.
 - Complete EduEdge billing, collections, payment allocation, EdgePay integration, parent billing experience, and debt management are not represented as complete.
-- Offline-Resilient CBT, Student Pickup Management, broader parent/student portals, LMS expansion, Examination Bank commerce, and EdgeFinder publication remain separate planned workstreams unless a later implementation note marks them delivered.
+- The CBT question and template foundation is implemented, but the Offline-Resilient CBT attempt and answer-sync engine is still planned.
+- Student Pickup Management, broader parent/student portals, LMS expansion, Examination Bank commerce, and EdgeFinder publication remain separate planned workstreams unless a later implementation note marks them delivered.
 - Production readiness depends on the remaining target-site QA.
 
-## 9. Approved next implementation direction
+## 8. Approved next implementation direction
 
 The next delivery stages should build on this foundation rather than bypass it. Approved future work includes:
 
-- completing bench and browser acceptance for V0.9;
+- completing browser and role acceptance for the unified branch;
 - expanding fee, billing, payment, and receivables workflows safely;
 - implementing Offline-Resilient CBT;
 - extending student, parent, teacher, and management operational experiences;
 - implementing Student Pickup Management, including School Bus release flows;
-- preparing EdgeFinder publication and inquiry data;
+- preparing EdgeFinder publication and inquiry data; and
 - connecting appropriate services to CoreEdge and EdgePay through stable service APIs.
 
 These items remain **Planned** until implemented and recorded in this document.
 
-## 10. Maintenance rule
+## 9. Maintenance rule
 
 For every material EduEdge implementation:
 
@@ -279,6 +331,6 @@ For every material EduEdge implementation:
 3. Record what was implemented, what remains QA pending, and what is still planned.
 4. Do not describe partially implemented or planned work as delivered.
 5. Keep known limitations and migration requirements visible.
-6. Reference the automated and manual validation completed for the release.
+6. Reference automated and manual validation completed for the release.
 
 This document is the primary partner-facing source of truth for EduEdge implementation status.
