@@ -5,7 +5,6 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import nowdate
 
-from eduedge.education.academic_fields import ENROLLMENT_STATUS_FIELD
 from eduedge.education.academic_validation import get_offering
 
 ALLOWED_TRANSITIONS = {
@@ -34,18 +33,6 @@ class EduEdgeEnrollmentStatusLog(Document):
 		if not frappe.db.exists("Program Enrollment", self.program_enrollment):
 			frappe.throw(_("Select a valid Program Enrollment."), frappe.ValidationError)
 
-	def after_insert(self) -> None:
-		meta = frappe.get_meta("Program Enrollment")
-		if meta.has_field(ENROLLMENT_STATUS_FIELD):
-			# This is a read-only cached projection. The append-only log remains the audit truth.
-			frappe.db.set_value(
-				"Program Enrollment",
-				self.program_enrollment,
-				ENROLLMENT_STATUS_FIELD,
-				self.new_status,
-				update_modified=False,
-			)
-
 	def on_trash(self) -> None:
 		frappe.throw(_("Enrollment Status Logs are append-only and cannot be deleted."), frappe.PermissionError)
 
@@ -57,12 +44,7 @@ class EduEdgeEnrollmentStatusLog(Document):
 			order_by="effective_date desc, creation desc",
 			limit=1,
 		)
-		if latest:
-			return latest[0].new_status
-		meta = frappe.get_meta("Program Enrollment")
-		if meta.has_field(ENROLLMENT_STATUS_FIELD):
-			return frappe.db.get_value("Program Enrollment", self.program_enrollment, ENROLLMENT_STATUS_FIELD) or "Active"
-		return "Active"
+		return latest[0].new_status if latest else "Active"
 
 	def _validate_transition(self) -> None:
 		if self.new_status == self.previous_status:
