@@ -42,6 +42,7 @@ jobs:
           node --check eduedge/public/js/eduedge_ui/navigation.js
           node --check eduedge/public/js/eduedge_ui/resource_modal.js
           node --check eduedge/public/js/eduedge_terminology.bundle.js
+          node --check eduedge/public/js/eduedge_shell_identity.bundle.js
           node --check eduedge/public/js/eduedge_institution_structure.bundle.js
           node --check eduedge/public/js/eduedge_academic_foundation.bundle.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
