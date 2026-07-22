@@ -45,6 +45,19 @@ def get_offering(name: str | None, *, purpose: str | None = None) -> frappe._dic
 	return row
 
 
+def offering_context(offering: frappe._dict | None) -> frappe._dict:
+	if not offering:
+		return frappe._dict()
+	return frappe._dict(
+		{
+			OFFERING_FIELD: offering.name,
+			INSTITUTION_FIELD: offering.institution,
+			BRANCH_FIELD: offering.school_branch,
+			ACADEMIC_LEVEL_FIELD: offering.academic_level,
+		}
+	)
+
+
 def resolve_exact_offering(doc, *, purpose: str) -> frappe._dict | None:
 	if not doc.meta.has_field(OFFERING_FIELD):
 		return None
@@ -135,8 +148,9 @@ def before_validate_student_group_context(doc, method=None) -> None:
 
 def before_validate_fee_structure(doc, method=None) -> None:
 	offering = get_offering(doc.get(OFFERING_FIELD)) if doc.meta.has_field(OFFERING_FIELD) and doc.get(OFFERING_FIELD) else None
+	context = offering_context(offering)
 	if offering:
-		_assert_context_compatible(doc, offering, label=_("Programme Offering"))
+		_assert_context_compatible(doc, context, label=_("Programme Offering"))
 		apply_offering_context(doc, offering)
 	validate_master_institution(doc, required=doc.is_new())
 	_validate_branch_institution(doc)
@@ -146,8 +160,9 @@ def before_validate_fee_structure(doc, method=None) -> None:
 def before_validate_fee_schedule(doc, method=None) -> None:
 	structure_context = linked_context("Fee Structure", doc.get("fee_structure"))
 	offering = get_offering(doc.get(OFFERING_FIELD)) if doc.meta.has_field(OFFERING_FIELD) and doc.get(OFFERING_FIELD) else None
-	if offering and structure_context:
-		_assert_context_dicts_match(structure_context, offering, _("Fee Structure"), _("Programme Offering"))
+	offering_ctx = offering_context(offering)
+	if offering_ctx and structure_context:
+		_assert_context_dicts_match(structure_context, offering_ctx, _("Fee Structure"), _("Programme Offering"))
 	clear_context(doc)
 	if structure_context:
 		apply_context(doc, structure_context)
