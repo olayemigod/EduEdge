@@ -7,6 +7,7 @@ from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	get_current_school_branch,
 )
+from eduedge.services.institution_context import get_effective_institution_context
 
 
 def _get_company_identity(company: str) -> dict:
@@ -42,13 +43,7 @@ def _get_user_identity() -> dict:
 
 
 def extend_bootinfo(bootinfo) -> None:
-	"""Expose permission-safe identity metadata for the shared EdgeSuite shell.
-
-	School identity remains on ERPNext Company. EduEdge product identity is
-	centrally managed by CoreEdge and inherited through the cached runtime
-	context; standalone sites use the packaged EduEdge mark. Tenants cannot
-	override the product logo from EduEdge Settings.
-	"""
+	"""Expose permission-safe identity and institution terminology for EdgeSuite UI."""
 	if frappe.session.user == "Guest":
 		return
 
@@ -81,6 +76,22 @@ def extend_bootinfo(bootinfo) -> None:
 		"logo": "",
 	}
 	product_identity = get_product_identity()
+	try:
+		institution_context = get_effective_institution_context(
+			company=active_company,
+			branch=(current_branch or {}).get("name"),
+		)
+	except Exception:
+		institution_context = {
+			"institution_type": "SECONDARY",
+			"institution_type_name": "Secondary School",
+			"source": "system_fallback",
+			"company": active_company or "",
+			"branch": (current_branch or {}).get("name") or "",
+			"branch_name": (current_branch or {}).get("branch_name") or "",
+			"terms": {},
+			"uses_secondary_fallback": 1,
+		}
 
 	identity = {
 		"product_code": product_identity["product_code"],
@@ -92,13 +103,13 @@ def extend_bootinfo(bootinfo) -> None:
 		"tenant_name": active_identity.get("label") or active_identity.get("name") or "",
 		"tenant_logo": active_identity.get("logo") or "",
 		"tenant_icon": "building",
-		"tenant_subtitle": "School workspace",
+		"tenant_subtitle": institution_context.get("institution_type_name") or "School workspace",
 		"companies": companies,
 		"user": _get_user_identity(),
+		"institution_context": institution_context,
 	}
 
-	# Retain the legacy key while making the shared EdgeSuite contract
-	# authoritative for identity, notifications, and context switching.
+	bootinfo["eduedge_institution_context"] = institution_context
 	bootinfo["eduedge_ui_identity"] = identity
 	shared = bootinfo.get("edgesuite_ui_identity") or {}
 	shared["eduedge"] = identity

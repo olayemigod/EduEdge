@@ -27,6 +27,7 @@ const EDGEDGE_BRANCH_ACCOUNT_QUERIES = {
 
 frappe.ui.form.on("EduEdge School Branch", {
 	setup(frm) {
+		frm.set_query("institution_type", () => ({ filters: { enabled: 1 } }));
 		for (const fieldname of EDGEDGE_BRANCH_COST_CENTERS) {
 			frm.set_query(fieldname, () => ({
 				filters: { company: frm.doc.company, is_group: 0, disabled: 0 },

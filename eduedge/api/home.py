@@ -6,6 +6,7 @@ from frappe.utils import nowdate
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.branch_context import get_active_branch_context
+from eduedge.services.institution_context import get_effective_institution_context
 from eduedge.services.setup_readiness import get_setup_readiness
 
 
@@ -55,6 +56,10 @@ def get_home_context() -> dict:
 	else:
 		branch_names = [current_branch["name"]] if current_branch and current_branch.get("name") else []
 
+	institution_context = get_effective_institution_context(
+		company=active_company,
+		branch=(current_branch or {}).get("name"),
+	)
 	readiness = get_setup_readiness()
 	full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
 	all_branch_options = [
@@ -75,6 +80,7 @@ def get_home_context() -> dict:
 		"active_scope": branch_context["active_scope"],
 		"active_company": active_company,
 		"active_label": branch_context["active_label"],
+		"institution_context": institution_context,
 		"all_branches_key": branch_context["all_branches_key"],
 		"all_branch_options": all_branch_options,
 		"can_switch_branch": branch_context["can_switch_branch"],

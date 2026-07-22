@@ -7,6 +7,7 @@ from eduedge.education.custom_fields import (
 	backfill_education_branch_context,
 	ensure_education_custom_fields,
 )
+from eduedge.education.institution_types import ensure_institution_type_foundation
 
 ROLE_DESK_ACCESS = {
 	"EduEdge Super Administrator": 1,
@@ -75,6 +76,7 @@ TRAINING_PROGRESS_ROLES = (
 
 
 def after_install() -> None:
+	ensure_institution_type_foundation()
 	ensure_roles()
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()
@@ -84,6 +86,7 @@ def after_install() -> None:
 
 
 def after_migrate() -> None:
+	ensure_institution_type_foundation()
 	ensure_roles()
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()

@@ -36,6 +36,8 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_report_card_review/eduedge_report_card_review.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
           node --check eduedge/public/js/eduedge_ui/resource_modal.js
+          node --check eduedge/public/js/eduedge_terminology.bundle.js
+          node --check eduedge/public/js/eduedge_institution_structure.bundle.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
           node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
           node --check eduedge/public/js/eduedge_resource_center.bundle.js
@@ -52,6 +54,7 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_report_cards/eduedge_report_cards.js
           node --check eduedge/eduedge/page/eduedge_branch_governance/eduedge_branch_governance.js
           node --check eduedge/eduedge/page/eduedge_settings_center/eduedge_settings_center.js
+          node --check eduedge/eduedge/page/eduedge_institution_structure/eduedge_institution_structure.js
       - name: Run pure contract tests
         id: contract-tests
         shell: bash

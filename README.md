@@ -107,6 +107,17 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 - consistent page padding, section gaps, card gaps, content width, focus states, and native Frappe sidebar styling
 - menu visibility remains a usability layer; backend roles and branch permissions remain authoritative
 
+### V0.8
+
+- server-seeded Primary, Secondary, Tertiary, and Training Centre institution types
+- stable canonical terminology keys with controlled institution-specific labels
+- optional Company institution-type fallback with Secondary School default
+- required institution type on every EduEdge School Branch
+- document/branch-first institution-context resolver exposed through boot and APIs
+- global EduEdge terminology helper for EdgeSuite UI
+- dedicated EdgeSuite UI Institution Structure setup and terminology preview
+- boot and API institution context ready for branch-aware EduEdge pages
+
 ## Development installation
 
 ```bash

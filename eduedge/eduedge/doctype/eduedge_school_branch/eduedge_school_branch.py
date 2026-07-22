@@ -60,6 +60,7 @@ class EduEdgeSchoolBranch(Document):
 	def validate(self) -> None:
 		self._validate_company()
 		self._validate_company_change()
+		self._validate_institution_type()
 		self._validate_contact_details()
 		self._validate_cost_centers()
 		self._validate_accounts()
@@ -88,6 +89,22 @@ class EduEdgeSchoolBranch(Document):
 	def _validate_company_change(self) -> None:
 		if self.is_new() or not self.has_value_changed("company"):
 			return
+		if self._has_linked_records():
+			frappe.throw(
+				_("Company cannot change after branch-linked education or access records exist."),
+				frappe.ValidationError,
+			)
+
+	def _validate_institution_type(self) -> None:
+		if not self.institution_type:
+			frappe.throw(_("Institution Type is required for every EduEdge School Branch."), frappe.ValidationError)
+		if not frappe.db.exists(
+			"EduEdge Institution Type",
+			{"name": self.institution_type, "enabled": 1},
+		):
+			frappe.throw(_("Select an enabled EduEdge Institution Type."), frappe.ValidationError)
+
+	def _has_linked_records(self) -> bool:
 		for doctype, fieldname in LINKED_BRANCH_DOCTYPES:
 			if not frappe.db.exists("DocType", doctype):
 				continue
@@ -97,10 +114,8 @@ class EduEdgeSchoolBranch(Document):
 			except frappe.DoesNotExistError:
 				continue
 			if frappe.db.exists(doctype, {fieldname: self.name}):
-				frappe.throw(
-					_("Company cannot change after branch-linked education or access records exist."),
-					frappe.ValidationError,
-				)
+				return True
+		return False
 
 	def _validate_contact_details(self) -> None:
 		if self.email and not validate_email_address(self.email):

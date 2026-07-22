@@ -8,6 +8,7 @@ app_license = "mit"
 required_apps = ["erpnext", "education", "edgesuite_ui"]
 app_include_css = []
 app_include_js = [
+	"eduedge_terminology.bundle.js",
 	"eduedge_product_menu.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 ]
@@ -56,6 +57,9 @@ doctype_js = {
 }
 
 doc_events = {
+	"Company": {
+		"before_validate": "eduedge.education.institution_types.before_validate_company",
+	},
 	"Student Admission": {
 		"before_naming": "eduedge.education.branching.before_naming_student_admission",
 		"before_validate": "eduedge.education.branching.before_validate_student_admission",
