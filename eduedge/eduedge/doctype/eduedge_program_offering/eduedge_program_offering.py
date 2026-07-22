@@ -10,6 +10,7 @@ from frappe.utils import getdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.offerings import assert_branch_access
+from eduedge.services.enrollment_lifecycle import count_capacity_consuming_enrollments
 
 IDENTITY_FIELDS = (
 	"school_branch",
@@ -152,13 +153,10 @@ class EduEdgeProgramOffering(Document):
 			frappe.throw(_("Capacity cannot be negative."), frappe.ValidationError)
 		if self.is_new() or not self.capacity:
 			return
-		enrolled = frappe.db.count(
-			"Program Enrollment",
-			{OFFERING_FIELD: self.name, "docstatus": 1},
-		) if frappe.get_meta("Program Enrollment").has_field(OFFERING_FIELD) else 0
+		enrolled = count_capacity_consuming_enrollments(self.name)
 		if enrolled > int(self.capacity):
 			frappe.throw(
-				_("Capacity cannot be lower than the {0} submitted enrollments already linked to this Offering.").format(enrolled),
+				_("Capacity cannot be lower than the {0} active or suspended enrollments already linked to this Offering.").format(enrolled),
 				frappe.ValidationError,
 			)
 
@@ -171,10 +169,13 @@ class EduEdgeProgramOffering(Document):
 			end_date = self.get(end_field)
 			if start_date and end_date and getdate(end_date) < getdate(start_date):
 				frappe.throw(_("{0} End Date cannot be earlier than Start Date.").format(label), frappe.ValidationError)
-		if self.start_date and self.application_end_date and getdate(self.application_end_date) > getdate(self.start_date):
-			frappe.throw(_("Application End Date cannot be later than the Offering Start Date."), frappe.ValidationError)
 
 	def _validate_duplicate(self) -> None:
+		# Serialize identity checks for a Branch to prevent concurrent duplicate Offerings.
+		frappe.db.sql(
+			"select name from `tabEduEdge School Branch` where name = %s for update",
+			(self.school_branch,),
+		)
 		duplicate = frappe.db.sql(
 			"""
 			select name
