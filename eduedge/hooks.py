@@ -94,6 +94,7 @@ doc_events = {
 	},
 	"Program Enrollment": {
 		"before_validate": "eduedge.education.branching.before_validate_program_enrollment",
+		"before_submit": "eduedge.education.enrollment_capacity.before_submit_program_enrollment",
 	},
 	"Student Group": {
 		"before_validate": "eduedge.education.branching.before_validate_student_group",
