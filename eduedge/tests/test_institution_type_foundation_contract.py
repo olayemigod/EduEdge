@@ -47,6 +47,26 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		self.assertEqual(branch_fields["institution_type"]["read_only"], 1)
 		self.assertEqual(branch_fields["institution_type"]["fetch_from"], "institution.institution_type")
 
+	def test_branch_quick_editor_exposes_company_filtered_institution(self):
+		resource_api = (APP / "api" / "resource_center_safe.py").read_text()
+		resource_modal = (APP / "public" / "js" / "eduedge_ui" / "resource_modal.js").read_text()
+		self.assertIn('"fieldname": "institution"', resource_api)
+		self.assertIn('"options_doctype": "EduEdge Institution"', resource_api)
+		self.assertIn('_institution_options(company=parsed_values.get("company")', resource_api)
+		self.assertIn('company_field["refresh_fields"]', resource_api)
+		self.assertIn("field?.clear_fields", resource_modal)
+
+	def test_school_period_and_visible_terminology_defaults(self):
+		defaults = (APP / "education" / "institution_type_defaults.py").read_text()
+		install = (APP / "install.py").read_text()
+		home = (APP / "public" / "js" / "eduedge_home" / "EduEdgeHome.vue").read_text()
+		resource_api = (APP / "api" / "resource_center_safe.py").read_text()
+		self.assertIn('"class_session": ("Period", "Periods")', defaults)
+		self.assertGreaterEqual(defaults.count('"class_session": ("Period", "Periods")'), 2)
+		self.assertGreaterEqual(install.count("apply_institution_type_defaults()"), 2)
+		self.assertIn("term('class_session'", home)
+		self.assertIn("_apply_terminology", resource_api)
+
 	def test_migration_groups_without_guessing_from_branch_names(self):
 		seed = (APP / "education" / "institution_types.py").read_text()
 		self.assertIn("backfill_institutions_and_branches", seed)
@@ -60,12 +80,17 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		boot = (APP / "boot.py").read_text()
 		hooks = (APP / "hooks.py").read_text()
 		bundle = (APP / "public" / "js" / "eduedge_terminology.bundle.js").read_text()
+		shell_identity = (APP / "public" / "js" / "eduedge_shell_identity.bundle.js").read_text()
 		self.assertLess(service.index("institution_type = normalize_institution_type_code"), service.index("company_type ="))
 		self.assertIn('"institution": (institution_row or {}).get("name")', service)
 		self.assertIn('bootinfo["eduedge_institution_context"]', boot)
 		self.assertIn('"eduedge_terminology.bundle.js"', hooks)
 		self.assertIn("frappe.eduedge.term", bundle)
 		self.assertIn("applyInstitutionContext", bundle)
+		self.assertIn("eduedge:institution-context-changed", bundle)
+		self.assertIn("Institution", shell_identity)
+		self.assertIn("Branch", shell_identity)
+		self.assertIn("eduedge-active-context", shell_identity)
 
 	def test_edgesuite_institution_structure_owns_hierarchy_configuration(self):
 		institution_api = (APP / "api" / "institution_types.py").read_text()
