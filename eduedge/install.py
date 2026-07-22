@@ -7,6 +7,7 @@ from eduedge.education.custom_fields import (
 	backfill_education_branch_context,
 	ensure_education_custom_fields,
 )
+from eduedge.education.institution_type_defaults import apply_institution_type_defaults
 from eduedge.education.institution_types import ensure_institution_type_foundation
 
 ROLE_DESK_ACCESS = {
@@ -77,6 +78,7 @@ TRAINING_PROGRESS_ROLES = (
 
 def after_install() -> None:
 	ensure_institution_type_foundation()
+	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()
@@ -87,6 +89,7 @@ def after_install() -> None:
 
 def after_migrate() -> None:
 	ensure_institution_type_foundation()
+	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
 	ensure_admission_manager_permissions()
