@@ -174,6 +174,7 @@ def ensure_academic_context_foundation() -> None:
 		create_custom_fields(available, update=True)
 	ensure_academic_terminology()
 	backfill_program_offering_identity()
+	backfill_unambiguous_academic_master_context()
 
 
 def ensure_academic_terminology() -> None:
@@ -220,7 +221,10 @@ def backfill_program_offering_identity() -> None:
 		return
 	rows = frappe.get_all(
 		"EduEdge Program Offering",
-		fields=["name", "school_branch", "program", "academic_year", "academic_term", "offering_code", "offering_title"],
+		fields=[
+			"name", "school_branch", "program", "academic_year", "academic_term",
+			"offering_code", "offering_title", "institution", "academic_section",
+		],
 	)
 	for row in rows:
 		updates = {}
@@ -229,5 +233,81 @@ def backfill_program_offering_identity() -> None:
 			updates["offering_code"] = f"OFR-{hashlib.sha1(seed.encode()).hexdigest()[:12].upper()}"
 		if not row.offering_title:
 			updates["offering_title"] = " · ".join(value for value in (row.program, row.academic_year, row.academic_term, row.school_branch) if value) or row.name
+		if not row.institution and row.school_branch:
+			updates["institution"] = frappe.db.get_value("EduEdge School Branch", row.school_branch, "institution")
+		if not row.academic_section and row.program and frappe.get_meta("Program").has_field(ACADEMIC_SECTION_FIELD):
+			updates["academic_section"] = frappe.db.get_value("Program", row.program, ACADEMIC_SECTION_FIELD)
+		updates = {key: value for key, value in updates.items() if value not in (None, "")}
 		if updates:
 			frappe.db.set_value("EduEdge Program Offering", row.name, updates, update_modified=False)
+
+
+def backfill_unambiguous_academic_master_context() -> None:
+	if frappe.get_meta("Program").has_field(INSTITUTION_FIELD):
+		frappe.db.sql(
+			f"""
+			update `tabProgram` program
+			inner join (
+				select offering.program, min(offering.institution) as institution,
+					count(distinct offering.institution) as institution_count
+				from `tabEduEdge Program Offering` offering
+				where coalesce(offering.institution, '') != ''
+				group by offering.program
+				having institution_count = 1
+			) resolved on resolved.program = program.name
+			set program.`{INSTITUTION_FIELD}` = resolved.institution
+			where coalesce(program.`{INSTITUTION_FIELD}`, '') = ''
+			"""
+		)
+	if frappe.db.exists("DocType", "Program Course") and frappe.get_meta("Course").has_field(INSTITUTION_FIELD):
+		frappe.db.sql(
+			f"""
+			update `tabCourse` course
+			inner join (
+				select program_course.course, min(program.`{INSTITUTION_FIELD}`) as institution,
+					count(distinct program.`{INSTITUTION_FIELD}`) as institution_count
+				from `tabProgram Course` program_course
+				inner join `tabProgram` program on program.name = program_course.parent
+				where program_course.parenttype = 'Program'
+					and coalesce(program.`{INSTITUTION_FIELD}`, '') != ''
+				group by program_course.course
+				having institution_count = 1
+			) resolved on resolved.course = course.name
+			set course.`{INSTITUTION_FIELD}` = resolved.institution
+			where coalesce(course.`{INSTITUTION_FIELD}`, '') = ''
+			"""
+		)
+	if frappe.get_meta("Student Batch Name").has_field(INSTITUTION_FIELD):
+		frappe.db.sql(
+			f"""
+			update `tabStudent Batch Name` batch
+			inner join (
+				select offering.student_batch, min(offering.institution) as institution,
+					count(distinct offering.institution) as institution_count
+				from `tabEduEdge Program Offering` offering
+				where coalesce(offering.student_batch, '') != ''
+					and coalesce(offering.institution, '') != ''
+				group by offering.student_batch
+				having institution_count = 1
+			) resolved on resolved.student_batch = batch.name
+			set batch.`{INSTITUTION_FIELD}` = resolved.institution
+			where coalesce(batch.`{INSTITUTION_FIELD}`, '') = ''
+			"""
+		)
+	if frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD) and frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
+		frappe.db.sql(
+			f"""
+			update `tabInstructor` instructor
+			inner join (
+				select assignment.instructor, min(branch.institution) as institution,
+					count(distinct branch.institution) as institution_count
+				from `tabEduEdge Instructor Branch Assignment` assignment
+				inner join `tabEduEdge School Branch` branch on branch.name = assignment.school_branch
+				where assignment.enabled = 1 and coalesce(branch.institution, '') != ''
+				group by assignment.instructor
+				having institution_count = 1
+			) resolved on resolved.instructor = instructor.name
+			set instructor.`{INSTITUTION_FIELD}` = resolved.institution
+			where coalesce(instructor.`{INSTITUTION_FIELD}`, '') = ''
+			"""
+		)
