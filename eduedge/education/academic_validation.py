@@ -16,7 +16,12 @@ from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access
 CONTEXT_FIELDS = (OFFERING_FIELD, INSTITUTION_FIELD, BRANCH_FIELD, ACADEMIC_LEVEL_FIELD)
 
 
-def get_offering(name: str | None, *, purpose: str | None = None) -> frappe._dict | None:
+def get_offering(
+	name: str | None,
+	*,
+	purpose: str | None = None,
+	reference_date: str | None = None,
+) -> frappe._dict | None:
 	if not name:
 		return None
 	row = frappe.db.get_value(
@@ -25,7 +30,8 @@ def get_offering(name: str | None, *, purpose: str | None = None) -> frappe._dic
 		[
 			"name", "offering_title", "offering_code", "school_branch", "institution", "program",
 			"academic_section", "academic_level", "academic_year", "academic_term", "student_batch",
-			"is_active", "admission_enabled", "enrollment_enabled", "application_start_date", "application_end_date",
+			"capacity", "is_active", "admission_enabled", "enrollment_enabled",
+			"application_start_date", "application_end_date",
 		],
 		as_dict=True,
 	)
@@ -36,10 +42,10 @@ def get_offering(name: str | None, *, purpose: str | None = None) -> frappe._dic
 		if not row.get(fieldname):
 			frappe.throw(_("The selected Programme Offering is not enabled for {0}.").format(purpose), frappe.ValidationError)
 		if purpose == "admission":
-			today = getdate(nowdate())
-			if row.application_start_date and getdate(row.application_start_date) > today:
+			target_date = getdate(reference_date or nowdate())
+			if row.application_start_date and getdate(row.application_start_date) > target_date:
 				frappe.throw(_("Applications for the selected Programme Offering have not opened."), frappe.ValidationError)
-			if row.application_end_date and getdate(row.application_end_date) < today:
+			if row.application_end_date and getdate(row.application_end_date) < target_date:
 				frappe.throw(_("Applications for the selected Programme Offering have closed."), frappe.ValidationError)
 	assert_branch_access(row.school_branch)
 	return row
@@ -61,12 +67,21 @@ def offering_context(offering: frappe._dict | None) -> frappe._dict:
 def resolve_exact_offering(doc, *, purpose: str) -> frappe._dict | None:
 	if not doc.meta.has_field(OFFERING_FIELD):
 		return None
-	offering = get_offering(doc.get(OFFERING_FIELD), purpose=purpose)
+	reference_date = doc.get("application_date") if purpose == "admission" else None
+	offering = get_offering(
+		doc.get(OFFERING_FIELD),
+		purpose=purpose,
+		reference_date=reference_date,
+	)
 	if not offering:
 		matches = _matching_offerings(doc, purpose=purpose)
 		if len(matches) == 1:
 			doc.set(OFFERING_FIELD, matches[0].name)
-			offering = get_offering(matches[0].name, purpose=purpose)
+			offering = get_offering(
+				matches[0].name,
+				purpose=purpose,
+				reference_date=reference_date,
+			)
 		elif len(matches) > 1:
 			frappe.throw(
 				_("More than one Programme Offering matches this record. Select the exact Offering before saving."),
@@ -124,14 +139,21 @@ def before_validate_program(doc, method=None) -> None:
 		section_institution = frappe.db.get_value("EduEdge Academic Section", section, "institution")
 		if section_institution != doc.get(INSTITUTION_FIELD):
 			frappe.throw(_("Academic Section must belong to the selected Institution."), frappe.ValidationError)
+	if not doc.is_new() and frappe.db.exists("EduEdge Program Offering", {"program": doc.name}):
+		_block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
+		_block_reassignment(doc, ACADEMIC_SECTION_FIELD, _("Academic Section"))
 
 
 def before_validate_course(doc, method=None) -> None:
 	validate_master_institution(doc, required=doc.is_new())
+	if not doc.is_new():
+		_block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
 
 
 def before_validate_institution_owned_master(doc, method=None) -> None:
 	validate_master_institution(doc, required=doc.is_new())
+	if not doc.is_new():
+		_block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
 
 
 def before_validate_student_applicant_context(doc, method=None) -> None:
@@ -139,7 +161,39 @@ def before_validate_student_applicant_context(doc, method=None) -> None:
 
 
 def before_validate_program_enrollment_context(doc, method=None) -> None:
-	resolve_exact_offering(doc, purpose="enrollment")
+	offering = resolve_exact_offering(doc, purpose="enrollment")
+	if not offering or not doc.get("student"):
+		return
+	_duplicate = frappe.db.exists(
+		"Program Enrollment",
+		{
+			"student": doc.student,
+			OFFERING_FIELD: offering.name,
+			"docstatus": ["!=", 2],
+			"name": ["!=", doc.name or ""],
+		},
+	)
+	if _duplicate:
+		frappe.throw(
+			_("Student {0} already has an enrollment for Programme Offering {1}.").format(doc.student, offering.name),
+			frappe.DuplicateEntryError,
+		)
+	if doc.docstatus == 1 and int(offering.capacity or 0) > 0:
+		current_count = frappe.db.count(
+			"Program Enrollment",
+			{
+				OFFERING_FIELD: offering.name,
+				"docstatus": 1,
+				"name": ["!=", doc.name or ""],
+			},
+		)
+		if current_count >= int(offering.capacity):
+			frappe.throw(
+				_("Programme Offering {0} has reached its capacity of {1}.").format(
+					offering.name, offering.capacity
+				),
+				frappe.ValidationError,
+			)
 
 
 def before_validate_student_group_context(doc, method=None) -> None:
@@ -233,6 +287,17 @@ def validate_master_institution(doc, *, required: bool = False) -> None:
 		return
 	if not frappe.db.exists("EduEdge Institution", {"name": institution, "enabled": 1}):
 		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+
+
+def _block_reassignment(doc, fieldname: str, label: str) -> None:
+	if not doc.meta.has_field(fieldname) or not doc.has_value_changed(fieldname):
+		return
+	old_value = doc.get_db_value(fieldname)
+	new_value = doc.get(fieldname)
+	# Initial classification of a legacy blank master is allowed. Once classified,
+	# the record cannot be moved silently to another Institution or structure.
+	if old_value and old_value != new_value:
+		frappe.throw(_("{0} cannot be changed after this record has been classified.").format(label), frappe.ValidationError)
 
 
 def _validate_branch_institution(doc) -> None:
