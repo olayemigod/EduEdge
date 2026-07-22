@@ -37,13 +37,13 @@ add_to_apps_screen = [
 		"name": "eduedge",
 		"logo": "/assets/eduedge/images/eduedge-mark.svg",
 		"title": "EduEdge",
-		# Frappe v16 recognises /desk routes as internal Desk apps. Using the
-		# legacy /app alias makes the launcher treat EduEdge as an external app.
 		"route": "/desk/eduedge-home",
 	}
 ]
 
 doctype_js = {
+	"Program": "public/js/education/program.js",
+	"Course": "public/js/education/course.js",
 	"Student Admission": "public/js/education/student_admission.js",
 	"Student Applicant": "public/js/education/student_applicant.js",
 	"Student": "public/js/education/student.js",
@@ -59,6 +59,12 @@ doctype_js = {
 doc_events = {
 	"Company": {
 		"before_validate": "eduedge.education.institution_types.before_validate_company",
+	},
+	"Program": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_program",
+	},
+	"Course": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_course",
 	},
 	"Student Admission": {
 		"before_naming": "eduedge.education.branching.before_naming_student_admission",
@@ -91,10 +97,29 @@ doc_events = {
 	"Assessment Result": {
 		"before_validate": "eduedge.education.assessment_operations.before_validate_assessment_result",
 	},
+	"Fee Structure": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_fee_structure",
+	},
+	"Fee Schedule": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_fee_schedule",
+	},
+	"Fees": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_fees",
+	},
+	"Student Leave Application": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_student_leave",
+	},
+	"Student Log": {
+		"before_validate": "eduedge.education.academic_validation.before_validate_student_log",
+	},
 }
 
 permission_query_conditions = {
 	"EduEdge Institution": "eduedge.education.institution_permissions.institution_query",
+	"EduEdge Academic Section": "eduedge.education.academic_permissions.academic_section_query",
+	"EduEdge Academic Level": "eduedge.education.academic_permissions.academic_level_query",
+	"Program": "eduedge.education.academic_permissions.program_query",
+	"Course": "eduedge.education.academic_permissions.course_query",
 	"EduEdge School Branch": "eduedge.education.permissions.school_branch_query",
 	"Student Admission": "eduedge.education.permissions.student_admission_query",
 	"Student Applicant": "eduedge.education.permissions.student_applicant_query",
@@ -117,6 +142,10 @@ permission_query_conditions = {
 
 has_permission = {
 	"EduEdge Institution": "eduedge.education.institution_permissions.has_institution_permission",
+	"EduEdge Academic Section": "eduedge.education.academic_permissions.has_academic_institution_permission",
+	"EduEdge Academic Level": "eduedge.education.academic_permissions.has_academic_institution_permission",
+	"Program": "eduedge.education.academic_permissions.has_academic_institution_permission",
+	"Course": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"EduEdge School Branch": "eduedge.education.permissions.has_school_branch_record_permission",
 	"Student Admission": "eduedge.education.permissions.has_education_branch_permission",
 	"Student Applicant": "eduedge.education.permissions.has_education_branch_permission",
