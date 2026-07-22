@@ -12,7 +12,6 @@ from eduedge.education.academic_operations import (
 from eduedge.education.academic_validation import (
 	before_validate_program_enrollment_context,
 	before_validate_student_applicant_context,
-	before_validate_student_group_context,
 )
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -42,11 +41,12 @@ def before_validate_student_admission(doc, method=None) -> None:
 
 
 def before_validate_student_applicant(doc, method=None) -> None:
-	before_validate_student_applicant_context(doc)
 	admission_branch = _linked_value(
 		"Student Admission", getattr(doc, "student_admission", None), BRANCH_FIELD
 	)
-	_assign_branch(doc, preferred_branch=admission_branch)
+	if not doc.get(OFFERING_FIELD):
+		_assign_branch(doc, preferred_branch=admission_branch)
+	before_validate_student_applicant_context(doc)
 	_validate_branch(doc)
 	if admission_branch and doc.get(BRANCH_FIELD) != admission_branch:
 		frappe.throw(
@@ -64,25 +64,23 @@ def before_validate_student(doc, method=None) -> None:
 	_validate_branch(doc)
 	if applicant_branch and doc.get(BRANCH_FIELD) != applicant_branch:
 		frappe.throw(
-			_("Student Branch must match the originating Student Applicant Branch."),
+			_("Student Primary Branch must match the originating Student Applicant Branch."),
 			frappe.ValidationError,
 		)
-	_validate_student_branch_change(doc)
+	# Student Branch is only a primary/home responsibility context. Submitted
+	# Programme Enrollments may legitimately belong to other Branches or Campuses.
 
 
 def before_validate_program_enrollment(doc, method=None) -> None:
-	before_validate_program_enrollment_context(doc)
 	student_branch = _linked_value("Student", getattr(doc, "student", None), BRANCH_FIELD)
-	# The exact Programme Offering owns the enrollment Branch. The Student's current
-	# Branch is only a legacy fallback when no Offering has been selected yet.
 	if not doc.get(OFFERING_FIELD):
 		_assign_branch(doc, preferred_branch=student_branch)
+	before_validate_program_enrollment_context(doc)
 	_validate_branch(doc)
 	validate_program_enrollment(doc)
 
 
 def before_validate_student_group(doc, method=None) -> None:
-	before_validate_student_group_context(doc)
 	_before_validate_student_group(doc, method)
 
 
@@ -124,28 +122,6 @@ def _validate_branch(doc) -> None:
 		frappe.throw(
 			_("You do not have access to School Branch / Campus {0}.").format(branch),
 			frappe.PermissionError,
-		)
-
-
-def _validate_student_branch_change(doc) -> None:
-	if doc.is_new() or not doc.has_value_changed(BRANCH_FIELD):
-		return
-	conflicting = frappe.get_all(
-		"Program Enrollment",
-		filters={
-			"student": doc.name,
-			"docstatus": 1,
-			BRANCH_FIELD: ["!=", doc.get(BRANCH_FIELD)],
-		},
-		pluck="name",
-		limit=1,
-	)
-	if conflicting:
-		frappe.throw(
-			_(
-				"Student Branch cannot be changed while submitted Program Enrollment {0} belongs to another branch."
-			).format(conflicting[0]),
-			frappe.ValidationError,
 		)
 
 
