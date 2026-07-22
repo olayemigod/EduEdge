@@ -20,6 +20,7 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		self.assertTrue(all(not permission.get("write") for permission in registry["permissions"]))
 
 		seed = (APP / "education" / "institution_types.py").read_text()
+		defaults = (APP / "education" / "institution_type_defaults.py").read_text()
 		for code in ("PRIMARY", "SECONDARY", "TERTIARY", "TRAINING_CENTRE"):
 			self.assertIn(f'"{code}"', seed)
 		for key in (
@@ -28,6 +29,11 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 			"class_session", "instructor", "room",
 		):
 			self.assertIn(f'"{key}"', seed)
+		for key in (
+			"program_enrollment", "student", "assessment", "assessment_group",
+			"assessment_plan", "assessment_result",
+		):
+			self.assertIn(f'"{key}"', defaults)
 
 	def test_company_institution_branch_hierarchy_is_explicit(self):
 		seed = (APP / "education" / "institution_types.py").read_text()
@@ -63,6 +69,10 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		resource_api = (APP / "api" / "resource_center_safe.py").read_text()
 		self.assertIn('"class_session": ("Period", "Periods")', defaults)
 		self.assertGreaterEqual(defaults.count('"class_session": ("Period", "Periods")'), 2)
+		self.assertIn('"assessment": ("Examination", "Examinations")', defaults)
+		self.assertGreaterEqual(defaults.count('"assessment": ("Examination", "Examinations")'), 2)
+		self.assertIn('"assessment_plan": ("Examination Plan", "Examination Plans")', defaults)
+		self.assertIn('"program_enrollment": ("Class Enrollment", "Class Enrollments")', defaults)
 		self.assertGreaterEqual(install.count("apply_institution_type_defaults()"), 2)
 		self.assertIn("term('class_session'", home)
 		self.assertIn("_apply_terminology", resource_api)
@@ -81,16 +91,26 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		hooks = (APP / "hooks.py").read_text()
 		bundle = (APP / "public" / "js" / "eduedge_terminology.bundle.js").read_text()
 		shell_identity = (APP / "public" / "js" / "eduedge_shell_identity.bundle.js").read_text()
+		branch_api = (APP / "api" / "branch_context.py").read_text()
+		navigation = (APP / "public" / "js" / "eduedge_ui" / "navigation.js").read_text()
 		self.assertLess(service.index("institution_type = normalize_institution_type_code"), service.index("company_type ="))
 		self.assertIn('"institution": (institution_row or {}).get("name")', service)
 		self.assertIn('bootinfo["eduedge_institution_context"]', boot)
 		self.assertIn('"eduedge_terminology.bundle.js"', hooks)
 		self.assertIn("frappe.eduedge.term", bundle)
 		self.assertIn("applyInstitutionContext", bundle)
+		self.assertIn("syncInstitutionContext", bundle)
+		self.assertIn("installBranchSwitchContextBridge", bundle)
 		self.assertIn("eduedge:institution-context-changed", bundle)
+		self.assertIn('selected["institution_context"]', branch_api)
+		self.assertIn('payload["institution_context"]', branch_api)
 		self.assertIn("Institution", shell_identity)
 		self.assertIn("Branch", shell_identity)
 		self.assertIn("eduedge-active-context", shell_identity)
+		self.assertIn("eduedge-page-context-fallback", shell_identity)
+		self.assertIn('document.querySelectorAll(".edge-topbar, .edge-app-shell__topbar")', shell_identity)
+		self.assertIn('term("assessment", { plural: true', navigation)
+		self.assertIn("applyVisibleTerminology", bundle)
 
 	def test_edgesuite_institution_structure_owns_hierarchy_configuration(self):
 		institution_api = (APP / "api" / "institution_types.py").read_text()
