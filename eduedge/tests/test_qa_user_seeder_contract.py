@@ -13,6 +13,15 @@ class TestQAUserSeederContract(unittest.TestCase):
 		cls.source = SEEDER_PATH.read_text()
 		cls.tree = ast.parse(cls.source)
 
+	@classmethod
+	def assignment(cls, name):
+		for node in cls.tree.body:
+			if not isinstance(node, ast.Assign):
+				continue
+			if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+				return ast.literal_eval(node.value)
+		raise AssertionError(f"Assignment {name} was not found")
+
 	def test_seeder_is_development_only_and_not_whitelisted(self):
 		self.assertIn('frappe.conf.get("developer_mode")', self.source)
 		self.assertIn('frappe.conf.get("allow_tests")', self.source)
@@ -26,16 +35,22 @@ class TestQAUserSeederContract(unittest.TestCase):
 		self.assertNotIn("frappe.db.sql", self.source)
 		self.assertNotIn("INSERT INTO", self.source.upper())
 
-	def test_subject_coordinator_permissions_are_exact_and_non_reviewer(self):
-		self.assertIn('CUSTOM_ROLE = "Subject Coordinator"', self.source)
-		self.assertIn(
-			'desired_rights = {"read", "create", "write", "report", "print"}',
-			self.source,
+	def test_subject_coordinator_question_permissions_are_exact_and_non_reviewer(self):
+		self.assertEqual(self.assignment("CUSTOM_ROLE"), "Subject Coordinator")
+		self.assertEqual(
+			self.assignment("QUESTION_RIGHTS"),
+			{"read", "create", "write", "report", "print"},
 		)
-		self.assertIn('int(permission_type in desired_rights)', self.source)
-		self.assertIn('"delete"', self.source)
-		self.assertIn('"import"', self.source)
-		self.assertIn('"share"', self.source)
+		self.assertIn('_set_exact_role_permissions(QUESTION_DOCTYPE, QUESTION_RIGHTS)', self.source)
+		for permission_type in ("delete", "import", "share"):
+			self.assertIn(permission_type, self.assignment("MANAGED_PERMISSION_TYPES"))
+			self.assertNotIn(permission_type, self.assignment("QUESTION_RIGHTS"))
+
+	def test_subject_coordinator_gets_only_read_on_question_link_dependencies(self):
+		self.assertEqual(self.assignment("QUESTION_SUPPORT_DOCTYPES"), ("Course", "Topic"))
+		self.assertIn("for doctype in QUESTION_SUPPORT_DOCTYPES", self.source)
+		self.assertIn('_set_exact_role_permissions(doctype, {"read"})', self.source)
+		self.assertNotIn("EduEdge School Branch", self.assignment("QUESTION_SUPPORT_DOCTYPES"))
 
 	def test_expected_qa_roles_and_users_are_present(self):
 		for role in (
