@@ -5,7 +5,7 @@
 **Audience:** ProcessEdge partners, implementation collaborators, pilot institutions, advisers, and authorised stakeholders  
 **Current implementation stage:** Foundation, core school operations, and CBT definition foundation  
 **Last updated:** 22 July 2026  
-**Repository status:** Unified CBT and Institution/Academic Context branch migrated successfully on the development site. Automated validation passed. Two browser acceptance corrections—persistent Institution/Branch display and institution-aware Examination wording—are implemented and awaiting local retest before merge or production rollout.
+**Repository status:** Unified CBT and Institution/Academic Context branch built and migrated successfully on the development site. Institution/Branch display, Primary/Secondary Examination wording, Training Centre Evaluation wording, and previously implemented CBT/Foundation pages passed browser acceptance. A final correction for live bidirectional Examination/Assessment/Evaluation switching has passed automated validation and awaits one focused local retest before merge or production rollout.
 
 ## 1. Purpose of this document
 
@@ -31,9 +31,13 @@ The unified development branch has:
 - built successfully on the target bench;
 - migrated successfully on `eduedge.local` without removing CBT or Institution records as orphans;
 - passed smoke tests for EduEdge Home, CBT Operations, Question Builder, and Academic Foundation;
-- produced two browser acceptance findings that have now been corrected in code and require retest.
+- passed browser acceptance for persistent Institution/Branch display;
+- passed Primary and Secondary Examination wording;
+- passed Training Centre Evaluation wording;
+- confirmed Tertiary Assessment wording after a refresh; and
+- received a final code correction so already-rendered terminology can change immediately between Examination, Assessment, and Evaluation without a manual refresh.
 
-The product remains **Acceptance QA pending** until the corrected browser behaviour, role permissions, and realistic business workflows are accepted.
+The product remains **Acceptance QA pending** until that final live-switch retest, restricted-role testing, and realistic business-workflow testing are accepted.
 
 ## 4. Implemented capabilities
 
@@ -61,7 +65,7 @@ The product remains **Acceptance QA pending** until the corrected browser behavi
 - Migration does not guess Institution identity from Branch names or addresses.
 - Dedicated Institution Structure interface for Institution creation, Branch assignment, hierarchy review, and terminology preview.
 
-### 4.3 Institution-aware terminology — Implemented; browser retest pending
+### 4.3 Institution-aware terminology — Implemented; final live-switch retest pending
 
 EduEdge presents education terminology according to the resolved Institution and Branch context while preserving stable Frappe DocType and database identities.
 
@@ -72,7 +76,7 @@ Approved examples include:
 - Tertiary Institution: Student, Programme, Course, Lecturer, Lecture Hall, Level, Semester, Assessment, and Programme Enrollment.
 - Training Centre: Trainee, Programme, Module, Trainer, Training Room, Training Level, Evaluation, and Trainee Enrollment.
 
-Primary and Secondary interfaces should therefore show labels such as:
+Primary and Secondary interfaces show labels such as:
 
 - Examinations & Results
 - Examination Operations
@@ -82,7 +86,9 @@ Primary and Secondary interfaces should therefore show labels such as:
 
 The internal Frappe records remain `Assessment Group`, `Assessment Plan`, and `Assessment Result` for upgrade safety.
 
-### 4.4 Persistent Institution and Branch context — Implemented; browser retest pending
+The visible terminology layer now treats Assessment, Examination, and Evaluation as a reversible family. When users change to another Institution Type, already-rendered menu labels, headings, cards, filters, placeholders, and accessible labels are recalculated without requiring a manual browser refresh.
+
+### 4.4 Persistent Institution and Branch context — Implemented; browser accepted
 
 - Current Institution and Branch are displayed side by side in the EduEdge product context.
 - Branch switches return the newly resolved Institution context from the server.
@@ -270,34 +276,41 @@ This does **not** yet mean the Offline-Resilient CBT attempt engine is complete.
 
 ### Automated validation
 
-EduEdge CI run **1180** passed for the V0.9.1 acceptance correction, including:
+EduEdge CI run **1188** passed for the live terminology refresh correction, including:
 
 - Python compilation;
 - JSON validation;
-- frontend entry-script syntax checks, including the shared shell identity bundle; and
-- the complete pure contract test suite.
+- frontend entry-script syntax checks, including shared shell identity and terminology bundles;
+- the complete pure contract test suite; and
+- regression contracts for reversible Examination, Assessment, and Evaluation labels.
 
 ### Target-site validation completed
 
 - EduEdge assets built successfully.
 - Unified branch migrated successfully on `eduedge.local`.
 - Migration did not report CBT or Institution DocTypes or Pages as orphans.
-- No blank page was found during the first smoke test.
-- No Page Not Found error was found during the first smoke test.
+- No blank page was found during the smoke test.
+- No Page Not Found error was found during the smoke test.
+- Institution and Branch appeared side by side on every tested EduEdge page.
+- Both values updated immediately after Branch switching.
+- Primary and Secondary displayed Examination wording.
+- The menu displayed Examinations & Results.
+- Examination Operations, Examination Group, and Examination Plan displayed correctly.
+- Training Centre displayed Evaluation wording.
+- Tertiary displayed Assessment wording after a manual refresh.
 - CBT Operations opened successfully.
 - Question Builder opened successfully.
 - Academic Foundation opened successfully.
 
-### Browser retest still required
+### Final focused browser retest still required
 
-- Verify Institution and Branch appear side by side on every EduEdge page.
-- Verify the pair updates immediately after Branch switching.
-- Verify Primary and Secondary use Examination terminology throughout.
-- Verify Tertiary retains Assessment terminology.
-- Verify Training Centre uses Evaluation terminology.
+- Switch directly from Primary/Secondary to Tertiary and confirm Examination changes immediately to Assessment without refresh.
+- Switch directly from Tertiary to Training Centre and confirm Assessment changes immediately to Evaluation without refresh.
+- Switch back and confirm the reverse transformation also occurs immediately.
+- Confirm menu labels, page headings, filters, cards, placeholders, and accessible labels all update.
 - Continue role, permission, and realistic workflow testing.
 
-Automated success and smoke tests do not replace full target-site acceptance.
+Automated success and browser smoke tests do not replace full target-site acceptance.
 
 ## 7. Known current limitations
 
@@ -312,7 +325,7 @@ Automated success and smoke tests do not replace full target-site acceptance.
 
 The next delivery stages should build on this foundation rather than bypass it. Approved future work includes:
 
-- completing browser and role acceptance for the unified branch;
+- completing the final live terminology-switch, role, and workflow acceptance for the unified branch;
 - expanding fee, billing, payment, and receivables workflows safely;
 - implementing Offline-Resilient CBT;
 - extending student, parent, teacher, and management operational experiences;
