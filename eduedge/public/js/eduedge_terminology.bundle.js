@@ -89,6 +89,12 @@ function isEduEdgeTerminologySurface() {
 	return /\/(?:app|desk)\/eduedge-/.test(path) || /\/app\/assessment-(?:plan|result|group)(?:\/|$)/.test(path);
 }
 
+function terminologyFamilyPairs(variants, target) {
+	return variants
+		.filter((variant) => variant && target && variant !== target)
+		.map((variant) => [variant, target]);
+}
+
 function visibleTerminologyPairs() {
 	const assessment = getEduEdgeTerm("assessment", { fallback: "Assessment" });
 	const assessments = getEduEdgeTerm("assessment", { plural: true, fallback: "Assessments" });
@@ -99,29 +105,92 @@ function visibleTerminologyPairs() {
 	const assessmentResult = getEduEdgeTerm("assessment_result", { fallback: "Assessment Result" });
 	const assessmentResults = getEduEdgeTerm("assessment_result", { plural: true, fallback: "Assessment Results" });
 
-	return [
-		["Assessments & Results", `${assessments} & Results`],
-		["Assessment and Results", `${assessments} and Results`],
-		["Assessment Operations", `${assessment} Operations`],
-		["Assessment operations", `${assessment} operations`],
-		["assessment operations", `${assessment.toLowerCase()} operations`],
-		["Assessment Results", assessmentResults],
-		["Assessment Result", assessmentResult],
-		["assessment results", assessmentResults.toLowerCase()],
-		["assessment result", assessmentResult.toLowerCase()],
-		["Assessment Plans", assessmentPlans],
-		["Assessment Plan", assessmentPlan],
-		["assessment plans", assessmentPlans.toLowerCase()],
-		["assessment plan", assessmentPlan.toLowerCase()],
-		["Assessment Groups", assessmentGroups],
-		["Assessment Group", assessmentGroup],
-		["assessment groups", assessmentGroups.toLowerCase()],
-		["assessment group", assessmentGroup.toLowerCase()],
-		["Assessments", assessments],
-		["Assessment", assessment],
-		["assessments", assessments.toLowerCase()],
-		["assessment", assessment.toLowerCase()],
-	].filter(([from, to]) => from && to && from !== to);
+	const pairs = [
+		...terminologyFamilyPairs(
+			["Assessments & Results", "Examinations & Results", "Evaluations & Results"],
+			`${assessments} & Results`
+		),
+		...terminologyFamilyPairs(
+			["Assessment and Results", "Examination and Results", "Evaluation and Results"],
+			`${assessments} and Results`
+		),
+		...terminologyFamilyPairs(
+			["assessment and results", "examination and results", "evaluation and results"],
+			`${assessments.toLowerCase()} and results`
+		),
+		...terminologyFamilyPairs(
+			["Assessment Operations", "Examination Operations", "Evaluation Operations"],
+			`${assessment} Operations`
+		),
+		...terminologyFamilyPairs(
+			["Assessment operations", "Examination operations", "Evaluation operations"],
+			`${assessment} operations`
+		),
+		...terminologyFamilyPairs(
+			["assessment operations", "examination operations", "evaluation operations"],
+			`${assessment.toLowerCase()} operations`
+		),
+		...terminologyFamilyPairs(
+			["Assessment Results", "Examination Results", "Evaluation Results"],
+			assessmentResults
+		),
+		...terminologyFamilyPairs(
+			["Assessment Result", "Examination Result", "Evaluation Result"],
+			assessmentResult
+		),
+		...terminologyFamilyPairs(
+			["assessment results", "examination results", "evaluation results"],
+			assessmentResults.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["assessment result", "examination result", "evaluation result"],
+			assessmentResult.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["Assessment Plans", "Examination Plans", "Evaluation Plans"],
+			assessmentPlans
+		),
+		...terminologyFamilyPairs(
+			["Assessment Plan", "Examination Plan", "Evaluation Plan"],
+			assessmentPlan
+		),
+		...terminologyFamilyPairs(
+			["assessment plans", "examination plans", "evaluation plans"],
+			assessmentPlans.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["assessment plan", "examination plan", "evaluation plan"],
+			assessmentPlan.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["Assessment Groups", "Examination Groups", "Evaluation Groups"],
+			assessmentGroups
+		),
+		...terminologyFamilyPairs(
+			["Assessment Group", "Examination Group", "Evaluation Group"],
+			assessmentGroup
+		),
+		...terminologyFamilyPairs(
+			["assessment groups", "examination groups", "evaluation groups"],
+			assessmentGroups.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["assessment group", "examination group", "evaluation group"],
+			assessmentGroup.toLowerCase()
+		),
+		...terminologyFamilyPairs(["Assessments", "Examinations", "Evaluations"], assessments),
+		...terminologyFamilyPairs(["Assessment", "Examination", "Evaluation"], assessment),
+		...terminologyFamilyPairs(
+			["assessments", "examinations", "evaluations"],
+			assessments.toLowerCase()
+		),
+		...terminologyFamilyPairs(
+			["assessment", "examination", "evaluation"],
+			assessment.toLowerCase()
+		),
+	];
+
+	return pairs.sort((left, right) => right[0].length - left[0].length);
 }
 
 function replaceVisibleValue(value, pairs) {
