@@ -277,7 +277,7 @@ This does **not** yet mean the Offline-Resilient CBT attempt engine is complete.
 
 ### Automated validation
 
-EduEdge CI run **1198** passed for the final learner-label documentation head, including:
+EduEdge CI run **1200** passed for the final learner-label documentation head, including:
 
 - Python compilation;
 - JSON validation;
