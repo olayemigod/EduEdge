@@ -1,14 +1,51 @@
 from __future__ import annotations
 
-from copy import deepcopy
-
 import frappe
 from frappe import _
 
+PROGRAM_RESOURCE = "programs"
 PROGRAM_OFFERING_RESOURCE = "program_offerings"
 
 
 def ensure_contract(base) -> None:
+	_ensure_program_contract(base)
+	_ensure_offering_contract(base)
+
+
+def _ensure_program_contract(base) -> None:
+	config = base.RESOURCE_CONFIG.get(PROGRAM_RESOURCE)
+	if not config:
+		return
+	for fieldname in ("eduedge_institution", "eduedge_academic_section"):
+		if fieldname not in config.setdefault("search_fields", []):
+			config["search_fields"].append(fieldname)
+	config["columns"] = [
+		{"fieldname": "program_name", "label": _("Program")},
+		{"fieldname": "program_abbreviation", "label": _("Abbreviation")},
+		{"fieldname": "eduedge_institution", "label": _("Institution")},
+		{"fieldname": "eduedge_academic_section", "label": _("Academic Section")},
+		{"fieldname": "department", "label": _("Department")},
+	]
+	config["filters"] = [
+		{"fieldname": "eduedge_institution", "label": _("Institution"), "type": "Link", "options_doctype": "EduEdge Institution"},
+		{"fieldname": "eduedge_academic_section", "label": _("Academic Section"), "type": "Link", "options_doctype": "EduEdge Academic Section"},
+		{"fieldname": "department", "label": _("Department"), "type": "Link", "options_doctype": "Department"},
+	]
+	config["editor_fields"] = [
+		{
+			"fieldname": "eduedge_institution", "label": _("Institution"), "type": "Link",
+			"options_doctype": "EduEdge Institution", "required": True,
+			"clear_fields": ["eduedge_academic_section"], "refresh_fields": ["eduedge_academic_section"],
+		},
+		{"fieldname": "eduedge_academic_section", "label": _("Academic Section"), "type": "Link", "options_doctype": "EduEdge Academic Section"},
+		{"fieldname": "program_name", "label": _("Program Name"), "type": "Data", "required": True},
+		{"fieldname": "program_abbreviation", "label": _("Program Abbreviation"), "type": "Data"},
+		{"fieldname": "department", "label": _("Department"), "type": "Link", "options_doctype": "Department"},
+	]
+	config["advanced_note"] = _("Select the Institution and optional Academic Section before defining the curriculum courses in the full Program form.")
+
+
+def _ensure_offering_contract(base) -> None:
 	config = base.RESOURCE_CONFIG.get(PROGRAM_OFFERING_RESOURCE)
 	if not config:
 		return
@@ -16,7 +53,6 @@ def ensure_contract(base) -> None:
 	for fieldname in ("offering_title", "offering_code", "study_mode", "delivery_mode", "student_batch", "academic_level"):
 		if fieldname not in config.setdefault("search_fields", []):
 			config["search_fields"].append(fieldname)
-
 	config["columns"] = [
 		{"fieldname": "offering_title", "label": _("Offering")},
 		{"fieldname": "offering_code", "label": _("Code")},
@@ -28,7 +64,6 @@ def ensure_contract(base) -> None:
 		{"fieldname": "delivery_mode", "label": _("Delivery Mode")},
 		{"fieldname": "is_active", "label": _("Active"), "type": "Check"},
 	]
-
 	config["editor_fields"] = [
 		{
 			"fieldname": "school_branch", "label": _("School Branch / Campus"), "type": "Link",
@@ -58,7 +93,7 @@ def ensure_contract(base) -> None:
 
 
 def enrich_editor(base, result: dict, resource: str) -> dict:
-	if resource != PROGRAM_OFFERING_RESOURCE:
+	if resource not in {PROGRAM_RESOURCE, PROGRAM_OFFERING_RESOURCE}:
 		return result
 	values = result.get("values") or {}
 	for field in result.get("fields") or []:
@@ -69,6 +104,13 @@ def enrich_editor(base, result: dict, resource: str) -> dict:
 
 
 def search_options(base, resource: str, fieldname: str, txt: str, values: dict) -> list[dict] | None:
+	if resource == PROGRAM_RESOURCE:
+		institution = values.get("eduedge_institution")
+		if fieldname == "eduedge_institution":
+			return _link_rows("EduEdge Institution", "institution_name", txt, {"enabled": 1})
+		if fieldname == "eduedge_academic_section":
+			return _link_rows("EduEdge Academic Section", "section_name", txt, {"institution": institution, "enabled": 1} if institution else {"enabled": 1})
+		return None
 	if resource != PROGRAM_OFFERING_RESOURCE:
 		return None
 	branch = values.get("school_branch")
