@@ -1,4 +1,7 @@
 function setEnrollmentQueries(frm) {
+	frm.set_query('eduedge_school_branch', () => ({
+		query: 'eduedge.api.education.school_branch_query',
+	}));
 	frm.set_query('student', () => ({
 		query: 'eduedge.api.education.student_query',
 		filters: {
@@ -27,23 +30,37 @@ function setEnrollmentQueries(frm) {
 	}));
 }
 
+function updateEnrollmentContextLocks(frm) {
+	const locked = Boolean(frm.doc.eduedge_program_offering) || frm.doc.docstatus !== 0;
+	frm.set_df_property('eduedge_school_branch', 'read_only', locked ? 1 : 0);
+}
+
 async function applyOffering(frm) {
-	if (!frm.doc.eduedge_program_offering) return;
+	if (!frm.doc.eduedge_program_offering) {
+		updateEnrollmentContextLocks(frm);
+		return;
+	}
 	const selectedOffering = frm.doc.eduedge_program_offering;
-	const { message } = await frappe.call('eduedge.api.academic_context.get_programme_offering_context', {
-		offering: selectedOffering,
-	});
-	if (!message || frm.doc.eduedge_program_offering !== selectedOffering) return;
-	await frappe.model.set_value(frm.doctype, frm.docname, {
-		eduedge_school_branch: message.school_branch || null,
-		eduedge_institution: message.institution || null,
-		program: message.program || null,
-		academic_year: message.academic_year || null,
-		academic_term: message.academic_term || null,
-		student_batch_name: message.student_batch || null,
-		eduedge_academic_level: message.academic_level || null,
-	});
-	setEnrollmentQueries(frm);
+	frm.__eduedge_applying_offering = true;
+	try {
+		const { message } = await frappe.call('eduedge.api.academic_context.get_programme_offering_context', {
+			offering: selectedOffering,
+		});
+		if (!message || frm.doc.eduedge_program_offering !== selectedOffering) return;
+		await frappe.model.set_value(frm.doctype, frm.docname, {
+			eduedge_school_branch: message.school_branch || null,
+			eduedge_institution: message.institution || null,
+			program: message.program || null,
+			academic_year: message.academic_year || null,
+			academic_term: message.academic_term || null,
+			student_batch_name: message.student_batch || null,
+			eduedge_academic_level: message.academic_level || null,
+		});
+		setEnrollmentQueries(frm);
+	} finally {
+		frm.__eduedge_applying_offering = false;
+		updateEnrollmentContextLocks(frm);
+	}
 }
 
 function addEnrollmentLifecycleActions(frm) {
@@ -68,10 +85,18 @@ frappe.ui.form.on('Program Enrollment', {
 		setEnrollmentQueries(frm);
 	},
 
+	onload(frm) {
+		if (!frm.is_new() || frm.doc.eduedge_school_branch) return;
+		frappe.call('eduedge.api.branch_context.get_current_school_branch').then(({ message }) => {
+			if (message?.name && !frm.doc.eduedge_school_branch) frm.set_value('eduedge_school_branch', message.name);
+		});
+	},
+
 	refresh(frm) {
 		frm.set_df_property('eduedge_program_offering', 'label', frappe.eduedge?.term?.('programme_offering', { fallback: __('Programme Offering') }) || __('Programme Offering'));
 		frm.set_df_property('program', 'label', frappe.eduedge?.term?.('programme', { fallback: __('Program') }) || __('Program'));
 		frm.set_df_property('eduedge_academic_level', 'label', frappe.eduedge?.term?.('academic_level', { fallback: __('Academic Level') }) || __('Academic Level'));
+		updateEnrollmentContextLocks(frm);
 		addEnrollmentLifecycleActions(frm);
 	},
 
@@ -92,7 +117,7 @@ frappe.ui.form.on('Program Enrollment', {
 	},
 
 	academic_year(frm) {
-		if (!frm.doc.eduedge_program_offering) frm.set_value('academic_term', null);
+		if (!frm.__eduedge_applying_offering && !frm.doc.eduedge_program_offering) frm.set_value('academic_term', null);
 		setEnrollmentQueries(frm);
 	},
 
@@ -105,6 +130,10 @@ frappe.ui.form.on('Program Enrollment', {
 	},
 
 	eduedge_school_branch(frm) {
+		if (frm.__eduedge_applying_offering) return;
+		if (frm.doc.eduedge_program_offering) frm.set_value('eduedge_program_offering', null);
+		frm.set_value('program', null);
 		setEnrollmentQueries(frm);
+		updateEnrollmentContextLocks(frm);
 	},
 });
