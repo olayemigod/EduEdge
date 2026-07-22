@@ -7,6 +7,7 @@ Close acceptance issues found after the unified CBT and Institution/Academic Con
 1. Current Institution and Branch were not displayed consistently on every EduEdge page.
 2. Primary and Secondary school interfaces still showed generic **Assessment** wording where operational users expect **Examination**.
 3. After switching from a Primary/Secondary Branch to a Tertiary or Training Centre Branch, already-rendered terminology did not reverse until the browser was manually refreshed.
+4. Primary School surfaces retained visible **Student** wording instead of the approved **Pupil** terminology.
 
 The correction preserves all standard Frappe Education DocType names and database identities.
 
@@ -24,7 +25,7 @@ The correction preserves all standard Frappe Education DocType names and databas
 
 ### Institution-aware examination terminology
 
-The terminology registry now includes:
+The terminology registry includes:
 
 - `assessment`
 - `assessment_group`
@@ -52,9 +53,9 @@ Primary and Secondary surfaces therefore display labels such as:
 
 Internal Frappe names such as `Assessment Plan`, `Assessment Result`, and `Assessment Group` remain unchanged.
 
-### Live terminology reversal
+### Live examination terminology reversal
 
-The visible terminology layer now treats **Assessment**, **Examination**, and **Evaluation** as one reversible label family.
+The visible terminology layer treats **Assessment**, **Examination**, and **Evaluation** as one reversible label family.
 
 When the active Institution Type changes, already-rendered content can move in either direction without a manual refresh, including:
 
@@ -66,6 +67,20 @@ When the active Institution Type changes, already-rendered content can move in e
 - Evaluation → Examination
 
 The same reversible handling applies to Group, Plan, Result, Operations, and “& Results” labels. Longest phrases are transformed before shorter words to prevent partial replacements.
+
+### Live learner terminology reversal
+
+The visible terminology layer now also treats **Student**, **Pupil**, and **Trainee** as one reversible learner family.
+
+This applies to singular and plural labels across:
+
+- menu items;
+- page headings and descriptions;
+- Student/Pupil/Trainee records and profiles;
+- admission, attendance, applicant, and learner-selection labels;
+- cards, empty states, placeholders, titles, and accessible labels.
+
+`Student Group` and `Student Batch` phrases are resolved through their own canonical terminology first, preventing incorrect labels such as “Pupil Group” where the approved Primary term is **Class Arm**, or “Pupil Batch” where the approved term is **Admission Set**.
 
 ## Files changed
 
@@ -89,24 +104,26 @@ The same reversible handling applies to Group, Plan, Result, Operations, and “
 
 ## Automated validation
 
-EduEdge CI run **1188** passed on the live terminology refresh correction:
+EduEdge CI run **1196** passed on the learner terminology correction:
 
 - Python compilation
 - JSON validation
 - frontend syntax checks, including the shared shell identity and terminology bundles
 - complete pure contract suite
 - regression contracts for reversible Assessment/Examination/Evaluation labels
+- regression contracts for reversible Student/Pupil/Trainee labels
+- protection for Student Group and Student Batch terminology precedence
 
 ## Local acceptance completed
 
-The following checks passed before the final live-reversal correction:
+The following checks passed before the learner-label correction:
 
 1. Institution and Branch appear side by side on every EduEdge page.
 2. The pair refreshes immediately after Branch switching.
 3. Primary and Secondary interfaces display Examination terminology.
 4. The menu displays Examinations & Results.
 5. Examination Operations, Examination Group, and Examination Plan display correctly.
-6. Tertiary displays Assessment after a manual refresh.
+6. Tertiary displays Assessment without requiring a refresh after the live reversal fix.
 7. Training Centre displays Evaluation.
 8. CBT Operations and Academic Foundation remain operational.
 
@@ -114,12 +131,13 @@ The following checks passed before the final live-reversal correction:
 
 After pulling and rebuilding, switch directly between Institution Types without refreshing the browser and verify:
 
-1. Secondary or Primary **Examination** labels change immediately to Tertiary **Assessment** labels.
-2. Tertiary **Assessment** labels change immediately to Training Centre **Evaluation** labels.
-3. Switching back to Secondary or Primary restores **Examination** immediately.
-4. Menu labels, page headings, filter labels, cards, empty states, placeholders, and accessible labels all update.
-5. Institution and Branch remain correct throughout the switches.
+1. Primary displays **Pupil** and **Pupils** instead of Student/Students.
+2. Secondary and Tertiary display **Student** and **Students**.
+3. Training Centre displays **Trainee** and **Trainees**.
+4. Primary `Student Group`-family labels resolve to **Class Arm**, not Pupil Group.
+5. Primary `Student Batch`-family labels resolve to **Admission Set**, not Pupil Batch.
+6. Institution and Branch remain correct throughout the switches.
 
 ## Status
 
-Implemented with automated validation passed. All earlier browser checks passed; only the bidirectional live terminology-switch retest remains before this correction is accepted.
+Implemented with automated validation passed. All previous browser checks passed; only the learner terminology retest remains before this correction is accepted.
