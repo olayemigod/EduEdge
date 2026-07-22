@@ -8,6 +8,8 @@ export function buildEduEdgeMenuItems() {
 	const groupPlural = term("student_group", { plural: true, fallback: __("Classes") });
 	const sessionPlural = term("class_session", { plural: true, fallback: __("Schedules") });
 	const academicYear = term("academic_year", { fallback: __("Academic Year") });
+	const sectionPlural = term("academic_section", { plural: true, fallback: __("Academic Sections") });
+	const levelPlural = term("academic_level", { plural: true, fallback: __("Academic Levels") });
 
 	return Object.freeze([
 		{ section: __("Overview"), sectionIcon: "home", label: __("Home"), route: "/app/eduedge-home", icon: "home", description: __("Education command centre") },
@@ -17,6 +19,7 @@ export function buildEduEdgeMenuItems() {
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Students"), route: "/app/eduedge-students", icon: "students", description: __("Student records and profiles") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: programmePlural, route: "/app/eduedge-programs", icon: "book", description: __(`${programmePlural} catalogue`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: offeringPlural, route: "/app/eduedge-program-offerings", icon: "layers", description: __(`${programmePlural} by campus and ${academicYear}`) },
+		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Academic Foundation"), route: "/app/eduedge-academic-foundation", icon: "book", description: __(`${sectionPlural}, ${levelPlural}, and calendars`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Assessments & Results"), route: "/app/eduedge-assessment-operations", icon: "assessment", description: __("Plan, review, approve, and publish") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Report Cards"), route: "/app/eduedge-report-cards", icon: "report", description: __("Comments, progression, and printing") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("School Branches"), route: "/app/eduedge-school-branches", icon: "building", description: __("Campus identity and operational defaults") },
@@ -38,6 +41,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-students",
 	"/app/eduedge-programs",
 	"/app/eduedge-program-offerings",
+	"/app/eduedge-academic-foundation",
 	"/app/eduedge-assessment-operations",
 	"/app/eduedge-report-cards",
 	"/app/eduedge-school-branches",
@@ -66,9 +70,6 @@ export function openEduEdgeRoute(route) {
 		window.location.href = route;
 		return;
 	}
-
-	// Native Frappe forms and specialist workflows remain available only as
-	// deliberate full-form fallbacks, preserving the current EduEdge workspace.
 	const opened = window.open(route, "_blank", "noopener,noreferrer");
 	if (opened) opened.opener = null;
 }
