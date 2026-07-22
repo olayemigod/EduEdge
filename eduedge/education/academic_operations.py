@@ -4,6 +4,8 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.education.academic_validation import resolve_exact_offering
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import (
 	assert_branch_access,
@@ -16,6 +18,7 @@ ASSIGNMENT_DOCTYPE = "EduEdge Instructor Branch Assignment"
 
 def before_validate_student_group(doc, method=None) -> None:
 	_assign_branch(doc)
+	resolve_exact_offering(doc, purpose="enrollment")
 	_validate_branch(doc)
 	_validate_term_year(doc.academic_year, doc.academic_term)
 
@@ -29,16 +32,9 @@ def before_validate_student_group(doc, method=None) -> None:
 		)
 
 	for row in doc.get("students") or []:
-		if not row.student:
+		if not row.student or not getattr(row, "active", 1):
 			continue
-		student_branch = frappe.db.get_value("Student", row.student, BRANCH_FIELD)
-		if student_branch != doc.get(BRANCH_FIELD):
-			frappe.throw(
-				_("Student {0} does not belong to School Branch / Campus {1}.").format(
-					row.student, doc.get(BRANCH_FIELD)
-				),
-				frappe.ValidationError,
-			)
+		_validate_student_group_enrollment(doc, row.student)
 
 	for row in doc.get("instructors") or []:
 		if row.instructor:
@@ -47,6 +43,34 @@ def before_validate_student_group(doc, method=None) -> None:
 				doc.get(BRANCH_FIELD),
 				reference_date=nowdate(),
 			)
+
+
+def _validate_student_group_enrollment(doc, student: str) -> None:
+	filters = {
+		"student": student,
+		"docstatus": 1,
+		BRANCH_FIELD: doc.get(BRANCH_FIELD),
+	}
+	offering = doc.get(OFFERING_FIELD) if doc.meta.has_field(OFFERING_FIELD) else None
+	if offering and frappe.get_meta("Program Enrollment").has_field(OFFERING_FIELD):
+		exact = frappe.db.exists("Program Enrollment", {**filters, OFFERING_FIELD: offering})
+		if exact:
+			return
+
+	# Compatibility fallback for historical enrollments created before exact Offering linkage.
+	if doc.program:
+		filters["program"] = doc.program
+	if doc.academic_year:
+		filters["academic_year"] = doc.academic_year
+	if doc.academic_term:
+		filters["academic_term"] = doc.academic_term
+	if doc.batch:
+		filters["student_batch_name"] = doc.batch
+	if not frappe.db.exists("Program Enrollment", filters):
+		frappe.throw(
+			_("Student {0} has no submitted enrollment matching this Programme Offering and Branch.").format(student),
+			frappe.ValidationError,
+		)
 
 
 def before_validate_room(doc, method=None) -> None:
@@ -88,18 +112,33 @@ def before_validate_student_attendance(doc, method=None) -> None:
 	if doc.course_schedule:
 		group_name = frappe.db.get_value("Course Schedule", doc.course_schedule, "student_group")
 	group_branch = _linked_branch("Student Group", group_name)
-	student_branch = _linked_branch("Student", doc.student)
+	student_home_branch = _linked_branch("Student", doc.student)
 
-	resolved_branch = schedule_branch or group_branch or student_branch
+	resolved_branch = schedule_branch or group_branch or student_home_branch
 	_assign_branch(doc, preferred_branch=resolved_branch)
 	_validate_branch(doc)
 
-	branches = {value for value in (schedule_branch, group_branch, student_branch) if value}
+	branches = {value for value in (schedule_branch, group_branch) if value}
 	if len(branches) > 1 or (branches and doc.get(BRANCH_FIELD) not in branches):
 		frappe.throw(
-			_("Student Attendance Branch must match the Student, Student Group, and Course Schedule."),
+			_("Student Attendance Branch must match the Student Group and Course Schedule."),
 			frappe.ValidationError,
 		)
+	if group_name and doc.student:
+		is_member = frappe.db.exists(
+			"Student Group Student",
+			{
+				"parent": group_name,
+				"parenttype": "Student Group",
+				"student": doc.student,
+				"active": 1,
+			},
+		)
+		if not is_member:
+			frappe.throw(
+				_("Student {0} is not an active member of Student Group {1}.").format(doc.student, group_name),
+				frappe.ValidationError,
+			)
 
 
 def assert_instructor_assignment(
