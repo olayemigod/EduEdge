@@ -10,6 +10,17 @@ class EduEdgeInstitutionAcademicCalendar(Document):
 	def validate(self) -> None:
 		if not frappe.db.exists("EduEdge Institution", {"name": self.institution, "enabled": 1}):
 			frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+		# Serialize calendar creation/current-calendar switching per Institution.
+		frappe.db.sql(
+			"select name from `tabEduEdge Institution` where name = %s for update",
+			(self.institution,),
+		)
+		if not self.is_new():
+			if self.has_value_changed("institution") or self.has_value_changed("academic_year"):
+				frappe.throw(
+					_("Calendar Institution and Academic Year cannot change after creation. Create a new calendar instead."),
+					frappe.ValidationError,
+				)
 		if getdate(self.end_date) < getdate(self.start_date):
 			frappe.throw(_("Calendar End Date cannot be earlier than Start Date."), frappe.ValidationError)
 		duplicate = frappe.db.exists(
@@ -22,7 +33,7 @@ class EduEdgeInstitutionAcademicCalendar(Document):
 			frappe.throw(_("The current academic calendar must be enabled."), frappe.ValidationError)
 		self._validate_periods()
 
-	def on_update(self) -> None:
+	def before_save(self) -> None:
 		if self.is_current:
 			frappe.db.sql(
 				"""
@@ -32,8 +43,10 @@ class EduEdgeInstitutionAcademicCalendar(Document):
 					and name != %s
 					and is_current = 1
 				""",
-				(self.institution, self.name),
+				(self.institution, self.name or ""),
 			)
+
+	def on_update(self) -> None:
 		frappe.clear_cache(doctype="EduEdge Institution Academic Calendar")
 
 	def _validate_periods(self) -> None:
