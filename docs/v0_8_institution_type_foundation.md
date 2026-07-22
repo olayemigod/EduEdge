@@ -1,68 +1,68 @@
-# EduEdge V0.8 Institution Type and Terminology Foundation
+# EduEdge V0.8 — Company, Institution, Branch, and Terminology Foundation
 
-## Decision
+## Business model
 
-EduEdge owns a controlled registry of institution types and their user-facing academic terminology. Tenants select from EduEdge-provided types; they do not create or edit the registry.
+EduEdge now uses a three-level education ownership model:
 
-Seeded types:
+```text
+ERPNext Company
+    └── EduEdge Institution
+            └── EduEdge School Branch / Campus
+```
 
-- Primary School (`PRIMARY`)
-- Secondary School (`SECONDARY`)
-- Tertiary Institution (`TERTIARY`)
-- Training Centre (`TRAINING_CENTRE`)
+- **Company** is the legal and accounting owner.
+- **Institution** is the identifiable school, university, polytechnic, college, or training centre.
+- **Branch / Campus** is an operational location belonging to one Institution.
 
-## Company and branch model
+One Company may own several Institutions of different types, and every Institution may own several Branches.
 
-ERPNext Company remains the legal and accounting institution owner. Its optional `eduedge_institution_type` field provides a Company-wide fallback. A blank Company value resolves to Secondary School.
+## Institution Type ownership
 
-`EduEdge School Branch` remains the operational campus and branch model. Every School Branch requires an Institution Type. Branch type overrides the Company fallback.
+Institution Type belongs to `EduEdge Institution`, not independently to a Branch. EduEdge seeds and protects these V0.8 types:
 
-Resolution order:
+- Primary School
+- Secondary School
+- Tertiary Institution
+- Training Centre
 
-1. Branch on the current document.
-2. Explicitly selected School Branch.
-3. Active user School Branch.
-4. Company fallback.
-5. Secondary School system fallback.
+A Branch stores a synchronized read-only Institution Type for filtering and reporting, but the linked Institution remains authoritative.
 
-Existing School Branches are backfilled deterministically from their Company value or Secondary School. The migration does not guess from branch names.
+## Runtime resolution
+
+EduEdge resolves terminology in this order:
+
+1. Document or explicitly selected Branch → linked Institution
+2. Active Branch → linked Institution
+3. Explicit Institution
+4. Company fallback Institution Type
+5. Secondary School system fallback
+
+Standard Frappe DocType names, routes, APIs, and database identities remain unchanged.
+
+## Migration
+
+Existing Branches are grouped only by their existing Company and Institution Type. EduEdge creates one reviewable migration Institution for each distinct Company/type pair, links the relevant Branches, and marks the generated Institution for administrator review.
+
+Migration does not infer institution identity from Branch names, addresses, academic records, or similar text. Administrators may rename generated Institutions or split Branches into additional Institutions after migration.
 
 ## EdgeSuite UI
 
-Institution configuration is available on the dedicated **Institution Structure** product page using the EdgeSuite UI shell. The page is linked from EduEdge Administration navigation.
+`/app/eduedge-institution-structure` is the primary administration surface. It supports:
 
-The page provides:
+- optional Company fallback;
+- Institution creation and maintenance;
+- seeded Institution Type selection;
+- Branch-to-Institution assignment;
+- hierarchy visibility;
+- migrated-record review indicators;
+- terminology preview.
 
-- Company fallback selection;
-- required branch institution-type assignment;
-- seeded terminology preview;
-- permission-aware Company and School Branch updates;
-- immediate client terminology-context refresh where the changed record is active.
-
-Native Company and School Branch forms remain administrative fallbacks. Product-owned setup and daily operations should consume the EdgeSuite UI terminology helper from the beginning.
-
-## Stable internal contracts
-
-Frappe DocType names, API field names, and database schemas remain canonical. Dynamic labels use stable keys such as:
-
-- `academic_year`
-- `academic_term`
-- `programme`
-- `programme_offering`
-- `course`
-- `student_batch`
-- `student_group`
-- `class_level`
-- `class_session`
-- `instructor`
-- `room`
-
-Client code uses `frappe.eduedge.term(key)` and server code uses `get_term(...)` or `get_effective_institution_context(...)`.
+Native Frappe forms remain available as administrative fallbacks.
 
 ## Safety
 
-- System-managed institution types cannot be manually created, changed, renamed, or deleted.
-- Branch institution type changes are permission-controlled and audited; they change terminology context without mutating academic records.
-- Company type remains optional and does not override an explicit Branch type.
-- No submitted academic, accounting, or assessment document is modified.
-- Existing branch and Company records are preserved.
+- No submitted academic, assessment, or accounting documents are mutated.
+- Tenants cannot create or edit seeded Institution Type definitions.
+- Branch Institution Type cannot diverge from its Institution.
+- Company changes are blocked after linked Branches exist.
+- Existing CoreEdge product identity ownership is unchanged.

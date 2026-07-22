@@ -14,17 +14,20 @@ from eduedge.education.institution_types import (
 from eduedge.services.branch_context import get_current_school_branch
 
 DOCUMENT_BRANCH_FIELDS = ("eduedge_school_branch", "school_branch")
+DOCUMENT_INSTITUTION_FIELDS = ("eduedge_institution", "institution")
 
 
 def get_effective_institution_context(
 	*,
 	company: str | None = None,
+	institution: str | None = None,
 	branch: str | None = None,
 	document: Any | None = None,
 	user: str | None = None,
 ) -> dict:
-	"""Resolve document/branch terminology before Company and system fallbacks."""
-	document_branch = _get_document_branch(document)
+	"""Resolve Branch → Institution → Company terminology without renaming Frappe metadata."""
+	document_branch = _get_document_value(document, DOCUMENT_BRANCH_FIELDS)
+	document_institution = _get_document_value(document, DOCUMENT_INSTITUTION_FIELDS)
 	resolved_branch = branch or document_branch
 	branch_source = "document_branch" if document_branch else "branch"
 	branch_row = _get_branch_row(resolved_branch) if resolved_branch else None
@@ -37,17 +40,38 @@ def get_effective_institution_context(
 		elif current_branch and current_branch.get("company"):
 			company = company or current_branch.get("company")
 
-	resolved_company = (branch_row or {}).get("company") or company or _get_default_company(user=user)
-	branch_type = normalize_institution_type_code((branch_row or {}).get("institution_type"))
-	company_type = _get_company_institution_type(resolved_company)
+	resolved_institution = (
+		(branch_row or {}).get("institution")
+		or institution
+		or document_institution
+	)
+	institution_source = "branch_institution" if (branch_row or {}).get("institution") else (
+		"document_institution" if document_institution else "institution"
+	)
+	institution_row = _get_institution_row(resolved_institution) if resolved_institution else None
+	resolved_company = (
+		(institution_row or {}).get("company")
+		or (branch_row or {}).get("company")
+		or company
+		or _get_default_company(user=user)
+	)
 
-	if branch_type:
-		institution_type = branch_type
-		source = branch_source
-	elif company_type:
+	institution_type = normalize_institution_type_code((institution_row or {}).get("institution_type"))
+	source = institution_source if institution_type else ""
+	if institution_type and (branch_row or {}).get("institution"):
+		source = f"{branch_source}_institution"
+
+	# Transitional compatibility for a branch saved before the Institution-layer migration.
+	if not institution_type:
+		institution_type = normalize_institution_type_code((branch_row or {}).get("institution_type"))
+		if institution_type:
+			source = f"{branch_source}_legacy_type"
+
+	company_type = _get_company_institution_type(resolved_company)
+	if not institution_type and company_type:
 		institution_type = company_type
 		source = "company"
-	else:
+	if not institution_type:
 		institution_type = DEFAULT_INSTITUTION_TYPE
 		source = "system_fallback"
 
@@ -63,6 +87,8 @@ def get_effective_institution_context(
 		"institution_type_name": (registry or {}).get("institution_type_name") or definition["name"],
 		"source": source,
 		"company": resolved_company or "",
+		"institution": (institution_row or {}).get("name") or "",
+		"institution_name": (institution_row or {}).get("institution_name") or "",
 		"branch": (branch_row or {}).get("name") or "",
 		"branch_name": (branch_row or {}).get("branch_name") or "",
 		"terms": get_terminology_map(institution_type),
@@ -113,11 +139,17 @@ def get_term(
 	*,
 	plural: bool = False,
 	company: str | None = None,
+	institution: str | None = None,
 	branch: str | None = None,
 	document: Any | None = None,
 	fallback: str | None = None,
 ) -> str:
-	context = get_effective_institution_context(company=company, branch=branch, document=document)
+	context = get_effective_institution_context(
+		company=company,
+		institution=institution,
+		branch=branch,
+		document=document,
+	)
 	term = context["terms"].get(canonical_key) or {}
 	return term.get("plural" if plural else "singular") or fallback or canonical_key.replace("_", " ").title()
 
@@ -151,10 +183,10 @@ def get_institution_type_options() -> list[dict]:
 	]
 
 
-def _get_document_branch(document: Any | None) -> str | None:
+def _get_document_value(document: Any | None, fields: tuple[str, ...]) -> str | None:
 	if not document:
 		return None
-	for fieldname in DOCUMENT_BRANCH_FIELDS:
+	for fieldname in fields:
 		value = document.get(fieldname) if hasattr(document, "get") else getattr(document, fieldname, None)
 		if value:
 			return value
@@ -165,9 +197,22 @@ def _get_branch_row(branch: str | None) -> frappe._dict | None:
 	if not branch or not frappe.db.exists("EduEdge School Branch", branch):
 		return None
 	fields = ["name", "branch_name", "company"]
-	if frappe.get_meta("EduEdge School Branch").has_field("institution_type"):
-		fields.append("institution_type")
+	meta = frappe.get_meta("EduEdge School Branch")
+	for fieldname in ("institution", "institution_type"):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
 	return frappe.db.get_value("EduEdge School Branch", branch, fields, as_dict=True)
+
+
+def _get_institution_row(institution: str | None) -> frappe._dict | None:
+	if not institution or not frappe.db.exists("EduEdge Institution", institution):
+		return None
+	return frappe.db.get_value(
+		"EduEdge Institution",
+		institution,
+		["name", "institution_name", "company", "institution_type", "enabled"],
+		as_dict=True,
+	)
 
 
 def _get_default_company(*, user: str | None = None) -> str | None:

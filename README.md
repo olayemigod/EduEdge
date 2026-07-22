@@ -110,13 +110,14 @@ Native Frappe forms remain available for upgrade-safe master-data and administra
 ### V0.8
 
 - server-seeded Primary, Secondary, Tertiary, and Training Centre institution types
-- stable canonical terminology keys with controlled institution-specific labels
+- explicit Company → Institution → Branch/Campus hierarchy
+- Institution Type owned by EduEdge Institution and inherited by its Branches
 - optional Company institution-type fallback with Secondary School default
-- required institution type on every EduEdge School Branch
-- document/branch-first institution-context resolver exposed through boot and APIs
+- migration-safe creation of reviewable Institutions from existing Company/type branch groups
+- Institution-first context resolver exposed through boot and permission-aware APIs
 - global EduEdge terminology helper for EdgeSuite UI
-- dedicated EdgeSuite UI Institution Structure setup and terminology preview
-- boot and API institution context ready for branch-aware EduEdge pages
+- dedicated EdgeSuite UI Institution Structure page for Institution creation, Branch assignment, hierarchy review, and terminology preview
+- no branch-name guessing and no mutation of submitted academic or accounting records
 
 ## Development installation
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from copy import deepcopy
 
@@ -109,7 +110,7 @@ COMPANY_CUSTOM_FIELDS = {
 			"insert_after": "company_name",
 			"default": DEFAULT_INSTITUTION_TYPE,
 			"in_standard_filter": 1,
-			"description": "Optional company-wide EduEdge fallback. Branch institution type takes precedence. Blank values resolve to Secondary School.",
+			"description": "Optional fallback used only when no EduEdge Institution or School Branch context is available. Blank values resolve to Secondary School.",
 		},
 	],
 }
@@ -120,12 +121,12 @@ def normalize_institution_type_code(value: str | None) -> str:
 
 
 def ensure_institution_type_foundation() -> None:
-	"""Create the controlled registry, Company field, and deterministic legacy backfill."""
+	"""Create the controlled registry, Company fallback, Institutions, and safe branch links."""
 	if not frappe.db.exists("DocType", "EduEdge Institution Type"):
 		return
 	ensure_institution_types()
 	ensure_company_institution_type_field()
-	backfill_school_branch_institution_types()
+	backfill_institutions_and_branches()
 
 
 def ensure_institution_types() -> None:
@@ -167,24 +168,106 @@ def ensure_company_institution_type_field() -> None:
 	create_custom_fields(COMPANY_CUSTOM_FIELDS, update=True)
 
 
-def backfill_school_branch_institution_types() -> None:
-	if not frappe.db.exists("DocType", "EduEdge School Branch"):
+def backfill_institutions_and_branches() -> None:
+	"""Create one reviewable Institution per Company/type group and link legacy branches.
+
+	The migration deliberately groups only by existing Company and Institution Type. It
+	does not infer institution identity from Branch names, addresses, or academic data.
+	"""
+	if not frappe.db.exists("DocType", "EduEdge Institution") or not frappe.db.exists(
+		"DocType", "EduEdge School Branch"
+	):
 		return
 	branch_meta = frappe.get_meta("EduEdge School Branch")
 	company_meta = frappe.get_meta("Company")
-	if not branch_meta.has_field("institution_type") or not company_meta.has_field(COMPANY_INSTITUTION_TYPE_FIELD):
+	if not branch_meta.has_field("institution") or not branch_meta.has_field("institution_type"):
 		return
-	frappe.db.sql(
-		f"""
-		update `tabEduEdge School Branch` branch
-		left join `tabCompany` company on company.name = branch.company
-		set branch.institution_type = coalesce(
-			nullif(company.`{COMPANY_INSTITUTION_TYPE_FIELD}`, ''),
-			%s
+	if not company_meta.has_field(COMPANY_INSTITUTION_TYPE_FIELD):
+		return
+
+	rows = frappe.get_all(
+		"EduEdge School Branch",
+		filters={"institution": ["is", "not set"]},
+		fields=["name", "company", "institution_type"],
+		order_by="company asc, name asc",
+	)
+	groups: dict[tuple[str, str], list[str]] = {}
+	for row in rows:
+		code = normalize_institution_type_code(row.institution_type)
+		if not code:
+			code = normalize_institution_type_code(
+				frappe.db.get_value("Company", row.company, COMPANY_INSTITUTION_TYPE_FIELD)
+			) or DEFAULT_INSTITUTION_TYPE
+		groups.setdefault((row.company, code), []).append(row.name)
+
+	company_group_counts: dict[str, int] = {}
+	for company, _code in groups:
+		company_group_counts[company] = company_group_counts.get(company, 0) + 1
+
+	for (company, code), branches in groups.items():
+		institution = _get_or_create_migrated_institution(
+			company=company,
+			institution_type=code,
+			is_default=company_group_counts.get(company) == 1,
 		)
-		where coalesce(branch.institution_type, '') = ''
-		""",
-		(DEFAULT_INSTITUTION_TYPE,),
+		frappe.db.sql(
+			"""
+			update `tabEduEdge School Branch`
+			set institution = %(institution)s, institution_type = %(institution_type)s
+			where name in %(branches)s and coalesce(institution, '') = ''
+			""",
+			{"branches": tuple(branches), "institution": institution, "institution_type": code},
+		)
+
+	_sync_branch_institution_types()
+	frappe.clear_cache(doctype="EduEdge Institution")
+	frappe.clear_cache(doctype="EduEdge School Branch")
+
+
+def _get_or_create_migrated_institution(*, company: str, institution_type: str, is_default: bool) -> str:
+	reference = f"{company}::{institution_type}"
+	existing = frappe.db.get_value("EduEdge Institution", {"migration_reference": reference}, "name")
+	if existing:
+		return existing
+	definition = get_seed_definition(institution_type)
+	code = _migration_institution_code(company, institution_type)
+	if frappe.db.exists("EduEdge Institution", code):
+		return code
+	name = f"{company} — {definition['name']}"
+	doc = frappe.get_doc(
+		{
+			"doctype": "EduEdge Institution",
+			"institution_name": name,
+			"official_name": name,
+			"institution_code": code,
+			"company": company,
+			"institution_type": institution_type,
+			"is_default": int(bool(is_default)),
+			"enabled": 1,
+			"generated_from_legacy": 1,
+			"requires_review": 1,
+			"migration_reference": reference,
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	return doc.name
+
+
+def _migration_institution_code(company: str, institution_type: str) -> str:
+	slug = re.sub(r"[^A-Z0-9]+", "-", company.upper()).strip("-")[:36] or "COMPANY"
+	digest = hashlib.sha1(f"{company}::{institution_type}".encode()).hexdigest()[:8].upper()
+	return f"LEGACY-{slug}-{institution_type[:16]}-{digest}"[:80]
+
+
+def _sync_branch_institution_types() -> None:
+	frappe.db.sql(
+		"""
+		update `tabEduEdge School Branch` branch
+		inner join `tabEduEdge Institution` institution on institution.name = branch.institution
+		set branch.institution_type = institution.institution_type
+		where branch.company = institution.company
+			and coalesce(branch.institution_type, '') != institution.institution_type
+		"""
 	)
 
 

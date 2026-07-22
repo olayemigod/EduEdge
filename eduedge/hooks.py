@@ -94,6 +94,7 @@ doc_events = {
 }
 
 permission_query_conditions = {
+	"EduEdge Institution": "eduedge.education.institution_permissions.institution_query",
 	"EduEdge School Branch": "eduedge.education.permissions.school_branch_query",
 	"Student Admission": "eduedge.education.permissions.student_admission_query",
 	"Student Applicant": "eduedge.education.permissions.student_applicant_query",
@@ -115,6 +116,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
+	"EduEdge Institution": "eduedge.education.institution_permissions.has_institution_permission",
 	"EduEdge School Branch": "eduedge.education.permissions.has_school_branch_record_permission",
 	"Student Admission": "eduedge.education.permissions.has_education_branch_permission",
 	"Student Applicant": "eduedge.education.permissions.has_education_branch_permission",

@@ -46,7 +46,7 @@ def extend_bootinfo(bootinfo) -> None:
 	"""Expose permission-safe identity and terminology for EdgeSuite UI.
 
 	Product identity remains managed by CoreEdge through the cached runtime context.
-	Institution terminology remains local to EduEdge and follows Company/Branch context.
+	Institution terminology remains local to EduEdge and follows Company/Institution/Branch context.
 	"""
 	if frappe.session.user == "Guest":
 		return
@@ -91,6 +91,8 @@ def extend_bootinfo(bootinfo) -> None:
 			"institution_type_name": "Secondary School",
 			"source": "system_fallback",
 			"company": active_company or "",
+			"institution": "",
+			"institution_name": "",
 			"branch": (current_branch or {}).get("name") or "",
 			"branch_name": (current_branch or {}).get("branch_name") or "",
 			"terms": {},
@@ -107,7 +109,7 @@ def extend_bootinfo(bootinfo) -> None:
 		"tenant_name": active_identity.get("label") or active_identity.get("name") or "",
 		"tenant_logo": active_identity.get("logo") or "",
 		"tenant_icon": "building",
-		"tenant_subtitle": institution_context.get("institution_type_name") or "School workspace",
+		"tenant_subtitle": institution_context.get("institution_name") or institution_context.get("institution_type_name") or "School workspace",
 		"companies": companies,
 		"user": _get_user_identity(),
 		"institution_context": institution_context,

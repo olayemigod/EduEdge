@@ -29,40 +29,59 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		):
 			self.assertIn(f'"{key}"', seed)
 
-	def test_company_fallback_and_required_branch_type(self):
+	def test_company_institution_branch_hierarchy_is_explicit(self):
 		seed = (APP / "education" / "institution_types.py").read_text()
+		institution = json.loads(
+			(APP / "eduedge" / "doctype" / "eduedge_institution" / "eduedge_institution.json").read_text()
+		)
 		branch = json.loads(
 			(APP / "eduedge" / "doctype" / "eduedge_school_branch" / "eduedge_school_branch.json").read_text()
 		)
-		fields = {field["fieldname"]: field for field in branch["fields"]}
+		institution_fields = {field["fieldname"]: field for field in institution["fields"]}
+		branch_fields = {field["fieldname"]: field for field in branch["fields"]}
 		self.assertIn('DEFAULT_INSTITUTION_TYPE = "SECONDARY"', seed)
-		self.assertIn('COMPANY_INSTITUTION_TYPE_FIELD = "eduedge_institution_type"', seed)
-		self.assertEqual(fields["institution_type"]["options"], "EduEdge Institution Type")
-		self.assertEqual(fields["institution_type"]["reqd"], 1)
+		self.assertEqual(institution_fields["company"]["options"], "Company")
+		self.assertEqual(institution_fields["institution_type"]["options"], "EduEdge Institution Type")
+		self.assertEqual(branch_fields["institution"]["options"], "EduEdge Institution")
+		self.assertEqual(branch_fields["institution"]["reqd"], 1)
+		self.assertEqual(branch_fields["institution_type"]["read_only"], 1)
+		self.assertEqual(branch_fields["institution_type"]["fetch_from"], "institution.institution_type")
 
-	def test_branch_first_runtime_context_is_available_to_edgeui(self):
+	def test_migration_groups_without_guessing_from_branch_names(self):
+		seed = (APP / "education" / "institution_types.py").read_text()
+		self.assertIn("backfill_institutions_and_branches", seed)
+		self.assertIn("groups.setdefault((row.company, code)", seed)
+		self.assertIn("generated_from_legacy", seed)
+		self.assertIn("requires_review", seed)
+		self.assertNotIn("branch_name", seed)
+
+	def test_institution_first_runtime_context_is_available_to_edgeui(self):
 		service = (APP / "services" / "institution_context.py").read_text()
 		boot = (APP / "boot.py").read_text()
 		hooks = (APP / "hooks.py").read_text()
 		bundle = (APP / "public" / "js" / "eduedge_terminology.bundle.js").read_text()
-		self.assertLess(service.index("branch_type"), service.index("company_type"))
+		self.assertLess(service.index("institution_type = normalize_institution_type_code"), service.index("company_type ="))
+		self.assertIn('"institution": (institution_row or {}).get("name")', service)
 		self.assertIn('bootinfo["eduedge_institution_context"]', boot)
 		self.assertIn('"eduedge_terminology.bundle.js"', hooks)
 		self.assertIn("frappe.eduedge.term", bundle)
 		self.assertIn("applyInstitutionContext", bundle)
 
-	def test_edgesuite_institution_structure_owns_configuration_ui(self):
+	def test_edgesuite_institution_structure_owns_hierarchy_configuration(self):
 		institution_api = (APP / "api" / "institution_types.py").read_text()
 		vue = (APP / "public" / "js" / "eduedge_institution_structure" / "EduEdgeInstitutionStructure.vue").read_text()
 		loader = (APP / "eduedge" / "page" / "eduedge_institution_structure" / "eduedge_institution_structure.js").read_text()
 		navigation = (APP / "public" / "js" / "eduedge_ui" / "navigation.js").read_text()
 		self.assertIn("save_company_institution_type", institution_api)
-		self.assertIn("save_branch_institution_type", institution_api)
+		self.assertIn("save_institution", institution_api)
+		self.assertIn("assign_branch_institution", institution_api)
+		self.assertNotIn("save_branch_institution_type", institution_api)
 		self.assertIn("edgeui.bundle.js", loader)
 		self.assertLess(loader.index("edgeui.bundle.js"), loader.index("eduedge_institution_structure.bundle.js"))
 		self.assertIn("<EdgeAppShell", vue)
+		self.assertIn("Company → Institution → Branch", vue)
 		self.assertIn("Terminology preview", vue)
-		self.assertIn("School Branch institution types", vue)
+		self.assertIn("Assign Branches to Institutions", vue)
 		self.assertIn("/app/eduedge-institution-structure", navigation)
 		self.assertNotIn("import coreedge", vue.lower())
 
