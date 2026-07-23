@@ -1,4 +1,10 @@
 import { createApp } from "vue";
+import EdgeFormDialogFallback from "./components/EdgeFormDialogFallback.vue";
+import EdgeModalFallback from "./components/EdgeModalFallback.vue";
+
+function registerFallbackComponent(app, name, component) {
+	if (!app.component(name)) app.component(name, component);
+}
 
 export function createEduEdgeApp(rootComponent, rootProps = null) {
 	if (!rootComponent) {
@@ -11,8 +17,11 @@ export function createEduEdgeApp(rootComponent, rootProps = null) {
 	}
 
 	// Product SFC render helpers and createApp must come from the same Vue bundle.
-	// EdgeSuite then contributes its shared component registry through install().
+	// EdgeSuite contributes its shared registry; EduEdge fills only components that
+	// are absent so older shared runtimes cannot silently break product dialogs.
 	const app = createApp(rootComponent, rootProps || {});
 	runtime.install(app);
+	registerFallbackComponent(app, "EdgeModal", EdgeModalFallback);
+	registerFallbackComponent(app, "EdgeFormDialog", EdgeFormDialogFallback);
 	return app;
 }
