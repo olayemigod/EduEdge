@@ -1,3 +1,5 @@
+import { openNativeSchemaDialog } from "./native_frappe_dialog";
+
 function emptyResourceModalState() {
 	return {
 		open: false,
@@ -94,6 +96,32 @@ export async function openResourceModal(modal, { resource, name = "", context = 
 	} finally {
 		modal.loading = false;
 	}
+}
+
+export async function openNativeResourceDialog({ resource, name = "", context = {}, onSaved } = {}) {
+	return openNativeSchemaDialog({
+		loadingTitle: name ? __("Loading record") : __("Loading new record"),
+		loadMethod: "eduedge.api.resource_center.get_resource_editor",
+		loadArgs: {
+			resource,
+			name: name || undefined,
+			context: JSON.stringify(context || {}),
+		},
+		saveMethod: "eduedge.api.resource_center.save_resource_record",
+		buildSaveArgs: (values) => ({
+			resource,
+			name: name || undefined,
+			values: JSON.stringify(values || {}),
+		}),
+		searchMethod: "eduedge.api.resource_center.search_resource_options",
+		buildSearchArgs: (field, query, values) => ({
+			resource,
+			fieldname: field.fieldname,
+			txt: query || "",
+			values: JSON.stringify(values || {}),
+		}),
+		onSaved,
+	});
 }
 
 export function closeResourceModal(modal) {
