@@ -38,8 +38,8 @@ export default {
 		busy: { type: Boolean, default: false },
 	},
 	emits: ["close"],
-	computed: {
-		titleId() { return `eduedge-modal-title-${this._uid}`; },
+	data() {
+		return { titleId: `eduedge-modal-title-${Math.random().toString(36).slice(2, 10)}` };
 	},
 	watch: {
 		open(value) {
