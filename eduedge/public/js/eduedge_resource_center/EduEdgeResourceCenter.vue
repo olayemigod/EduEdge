@@ -159,58 +159,12 @@
 				</section>
 			</template>
 		</EdgePageLayout>
-
-		<EdgeFormDialog
-			:open="modal.open"
-			:title="modal.title"
-			:subtitle="modalSubtitle"
-			:fields="modal.fields"
-			:model-value="modal.values"
-			:field-errors="modal.fieldErrors"
-			:error="modal.error"
-			:loading="modal.loading"
-			:busy="modal.busy"
-			:submit-label="modal.submitLabel"
-			:show-full-form="Boolean(modal.fullFormRoute)"
-			@close="closeModal"
-			@update:model-value="updateModalValues"
-			@field-change="onModalFieldChange"
-			@search-options="onSearchOptions"
-			@submit="saveModal"
-			@open-full-form="openModalFullForm"
-		/>
-
-		<EdgeModal
-			:open="deleteState.open"
-			title="Delete record?"
-			:subtitle="deleteState.label"
-			:busy="deleteState.busy"
-			@close="closeDelete"
-		>
-			<p>This action uses normal Frappe delete permission and linked-record validation. It cannot delete submitted records.</p>
-			<p v-if="deleteState.error" class="eduedge-resource-error">{{ deleteState.error }}</p>
-			<template #footer>
-				<button type="button" class="edge-button" :disabled="deleteState.busy" @click="closeDelete">Cancel</button>
-				<button type="button" class="edge-button edge-button--danger" :disabled="deleteState.busy" @click="confirmDelete">
-					{{ deleteState.busy ? 'Deleting...' : 'Delete' }}
-				</button>
-			</template>
-		</EdgeModal>
 	</EdgeAppShell>
 </template>
 
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
-import {
-	closeResourceModal,
-	createResourceModalState,
-	handleResourceFieldChange,
-	openResourceFullForm,
-	openResourceModal,
-	saveResourceModal,
-	searchResourceOptions,
-	updateResourceModalValues,
-} from "../eduedge_ui/resource_modal";
+import { openNativeResourceDialog } from "../eduedge_ui/resource_modal";
 
 export default {
 	name: "EduEdgeResourceCenter",
@@ -237,8 +191,6 @@ export default {
 				has_more: false,
 				permissions: { can_create: false, can_write: false, can_delete: false },
 			},
-			modal: createResourceModalState(),
-			deleteState: { open: false, busy: false, name: "", label: "", error: "" },
 		};
 	},
 	computed: {
@@ -259,9 +211,6 @@ export default {
 		},
 		schoolIdentity() {
 			return frappe.boot?.eduedge_ui_identity?.school || {};
-		},
-		modalSubtitle() {
-			return [this.modal.subtitle, this.modal.advancedNote].filter(Boolean).join(" ");
 		},
 	},
 	mounted() {
@@ -336,66 +285,51 @@ export default {
 			}
 			return context;
 		},
-		openCreate() {
-			openResourceModal(this.modal, { resource: this.resourceKey, context: this.modalContext() });
+		async openCreate() {
+			await openNativeResourceDialog({
+				resource: this.resourceKey,
+				context: this.modalContext(),
+				onSaved: async () => {
+					await this.loadPage(true);
+					frappe.show_alert({ message: __("Record saved"), indicator: "green" });
+				},
+			});
 		},
-		openEdit(row) {
-			openResourceModal(this.modal, { resource: this.resourceKey, name: row.name });
-		},
-		closeModal() {
-			closeResourceModal(this.modal);
-		},
-		updateModalValues(values) {
-			updateResourceModalValues(this.modal, values);
-		},
-		onModalFieldChange(payload) {
-			handleResourceFieldChange(this.modal, payload);
-		},
-		onSearchOptions(payload) {
-			searchResourceOptions(this.modal, payload);
-		},
-		async saveModal() {
-			const saved = await saveResourceModal(this.modal);
-			if (!saved) return;
-			closeResourceModal(this.modal);
-			await this.loadPage(true);
-			frappe.show_alert({ message: __("Record saved"), indicator: "green" });
-		},
-		openModalFullForm() {
-			openResourceFullForm(this.modal);
+		async openEdit(row) {
+			await openNativeResourceDialog({
+				resource: this.resourceKey,
+				name: row.name,
+				onSaved: async () => {
+					await this.loadPage(false);
+					frappe.show_alert({ message: __("Record saved"), indicator: "green" });
+				},
+			});
 		},
 		openFullForm(row) {
-			const route = `${this.page.full_form_route || ''}/${encodeURIComponent(row.name)}`;
+			const route = `${this.page.full_form_route || ""}/${encodeURIComponent(row.name)}`;
 			window.open(route, "_blank", "noopener,noreferrer");
 		},
 		requestDelete(row) {
-			this.deleteState = {
-				open: true,
-				busy: false,
-				name: row.name,
-				label: row[this.page.title_field] || row.name,
-				error: "",
-			};
-		},
-		closeDelete() {
-			if (this.deleteState.busy) return;
-			this.deleteState = { open: false, busy: false, name: "", label: "", error: "" };
-		},
-		async confirmDelete() {
-			this.deleteState.busy = true;
-			this.deleteState.error = "";
-			try {
-				await frappe.call("eduedge.api.resource_center.delete_resource_record", {
-					resource: this.resourceKey,
-					name: this.deleteState.name,
-				});
-				this.closeDelete();
-				await this.loadPage(false);
-				frappe.show_alert({ message: __("Record deleted"), indicator: "green" });
-			} catch (error) {
-				this.deleteState.error = error?.message || "The record could not be deleted.";
-				this.deleteState.busy = false;
-			}
+			const label = row[this.page.title_field] || row.name;
+			frappe.confirm(
+				__(`Delete ${label}? This uses normal Frappe permissions and linked-record validation.`),
+				async () => {
+					try {
+						await frappe.call("eduedge.api.resource_center.delete_resource_record", {
+							resource: this.resourceKey,
+							name: row.name,
+						});
+						await this.loadPage(false);
+						frappe.show_alert({ message: __("Record deleted"), indicator: "green" });
+					} catch (error) {
+						frappe.msgprint({
+							title: __("Record could not be deleted"),
+							message: error?.message || __("The record could not be deleted."),
+							indicator: "red",
+						});
+					}
+				}
+			);
 		},
 	},
 };
