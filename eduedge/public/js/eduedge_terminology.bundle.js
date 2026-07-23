@@ -1,5 +1,16 @@
 const BRANCH_SWITCH_METHOD = "eduedge.api.branch_context.switch_school_branch";
 const ACTIVE_CONTEXT_METHOD = "eduedge.api.branch_context.get_active_branch_context";
+const PROTECTED_TERMINOLOGY_SURFACE_SELECTOR = [
+	".edge-modal",
+	".modal",
+	".modal-backdrop",
+	".dropdown-menu",
+	".awesomplete",
+	".popover",
+	".tooltip",
+	"[role='dialog']",
+	"[data-eduedge-terminology-managed]",
+].join(", ");
 
 let contextSyncPromise = null;
 let terminologyObserver = null;
@@ -241,6 +252,14 @@ function replaceVisibleValue(value, pairs) {
 	return next;
 }
 
+function translateEduEdgeText(value) {
+	return replaceVisibleValue(value, visibleTerminologyPairs());
+}
+
+function isProtectedTerminologySurface(element) {
+	return Boolean(element?.closest?.(PROTECTED_TERMINOLOGY_SURFACE_SELECTOR));
+}
+
 function applyVisibleTerminology(root = document.body) {
 	if (!root || !isEduEdgeTerminologySurface()) return;
 	const pairs = visibleTerminologyPairs();
@@ -251,6 +270,7 @@ function applyVisibleTerminology(root = document.body) {
 			const parent = node.parentElement;
 			if (!parent || !node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
 			if (parent.closest("script, style, textarea, code, pre, [contenteditable='true']")) return NodeFilter.FILTER_REJECT;
+			if (isProtectedTerminologySurface(parent)) return NodeFilter.FILTER_REJECT;
 			return NodeFilter.FILTER_ACCEPT;
 		},
 	});
@@ -262,6 +282,7 @@ function applyVisibleTerminology(root = document.body) {
 	}
 
 	for (const element of root.querySelectorAll?.("[placeholder], [title], [aria-label]") || []) {
+		if (isProtectedTerminologySurface(element)) continue;
 		for (const attribute of ["placeholder", "title", "aria-label"]) {
 			if (!element.hasAttribute(attribute)) continue;
 			const current = element.getAttribute(attribute) || "";
@@ -303,6 +324,7 @@ function initialiseEduEdgeContext() {
 window.EduEdgeTerminology = {
 	context: getEduEdgeInstitutionContext,
 	term: getEduEdgeTerm,
+	translateText: translateEduEdgeText,
 	applyContext: applyEduEdgeInstitutionContext,
 	syncContext: syncEduEdgeInstitutionContext,
 	applyVisible: applyVisibleTerminology,
@@ -311,6 +333,7 @@ window.EduEdgeTerminology = {
 frappe.eduedge = frappe.eduedge || {};
 frappe.eduedge.institutionContext = getEduEdgeInstitutionContext;
 frappe.eduedge.term = getEduEdgeTerm;
+frappe.eduedge.translateText = translateEduEdgeText;
 frappe.eduedge.applyInstitutionContext = applyEduEdgeInstitutionContext;
 frappe.eduedge.syncInstitutionContext = syncEduEdgeInstitutionContext;
 frappe.eduedge.applyVisibleTerminology = applyVisibleTerminology;
