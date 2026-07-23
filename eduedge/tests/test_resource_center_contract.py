@@ -86,6 +86,20 @@ class TestResourceCenterContract(unittest.TestCase):
 		self.assertIn("eduedge_resource_center.bundle.js", loader)
 		self.assertNotIn("new frappe.ui.Dialog", component + client)
 
+	def test_product_runtime_registers_dialog_fallbacks_when_shared_runtime_is_older(self):
+		factory = (APP / "public/js/eduedge_ui/app_factory.js").read_text(encoding="utf-8")
+		modal = (APP / "public/js/eduedge_ui/components/EdgeModalFallback.vue").read_text(encoding="utf-8")
+		form = (APP / "public/js/eduedge_ui/components/EdgeFormDialogFallback.vue").read_text(encoding="utf-8")
+		self.assertIn('registerFallbackComponent(app, "EdgeModal"', factory)
+		self.assertIn('registerFallbackComponent(app, "EdgeFormDialog"', factory)
+		self.assertIn("if (!app.component(name))", factory)
+		self.assertIn('role="dialog"', modal)
+		self.assertIn('<Teleport to="body">', modal)
+		self.assertIn('emits: ["close", "update:model-value", "field-change", "search-options", "submit", "open-full-form"]', form)
+		self.assertIn("Loading form…", form)
+		self.assertIn("normalizedOptions", form)
+		self.assertIn("fieldErrors", form)
+
 	def test_quick_entry_mutations_are_platform_guarded(self):
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
 		safe_api = (APP / "api/modal_records_safe.py").read_text(encoding="utf-8")
