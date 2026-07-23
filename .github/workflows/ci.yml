@@ -40,6 +40,7 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_cbt_question/eduedge_cbt_question.js
           node --check eduedge/eduedge/doctype/eduedge_cbt_exam_template/eduedge_cbt_exam_template.js
           node --check eduedge/public/js/eduedge_ui/app_factory.js
+          node --check eduedge/public/js/eduedge_ui/native_frappe_dialog.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
           node --check eduedge/public/js/eduedge_ui/resource_modal.js
           node --check eduedge/public/js/eduedge_terminology.bundle.js
