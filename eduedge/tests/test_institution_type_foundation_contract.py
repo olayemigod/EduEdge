@@ -93,6 +93,7 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		hooks = (APP / "hooks.py").read_text()
 		bundle = (APP / "public" / "js" / "eduedge_terminology.bundle.js").read_text()
 		shell_identity = (APP / "public" / "js" / "eduedge_shell_identity.bundle.js").read_text()
+		modal_records = (APP / "public" / "js" / "eduedge_ui" / "modal_records.js").read_text()
 		branch_api = (APP / "api" / "branch_context.py").read_text()
 		navigation = (APP / "public" / "js" / "eduedge_ui" / "navigation.js").read_text()
 		self.assertLess(service.index("institution_type = normalize_institution_type_code"), service.index("company_type ="))
@@ -121,6 +122,14 @@ class InstitutionTypeFoundationContractTest(unittest.TestCase):
 		self.assertIn('["Student", "Pupil", "Trainee"]', bundle)
 		self.assertIn('getEduEdgeTerm("student_group"', bundle)
 		self.assertIn('getEduEdgeTerm("student_batch"', bundle)
+		self.assertIn("PROTECTED_TERMINOLOGY_SURFACE_SELECTOR", bundle)
+		self.assertIn("isProtectedTerminologySurface", bundle)
+		self.assertIn("[role='dialog']", bundle)
+		self.assertIn("translateText: translateEduEdgeText", bundle)
+		self.assertIn("translateModalSchema", modal_records)
+		self.assertIn("EduEdgeTerminology?.translateText", modal_records)
+		self.assertIn("response.message.map(translateModalOption)", modal_records)
+		self.assertIn('typeof option !== "object"', modal_records)
 		self.assertIn("pairs.sort", bundle)
 
 	def test_edgesuite_institution_structure_owns_hierarchy_configuration(self):
