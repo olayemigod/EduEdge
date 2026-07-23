@@ -8,8 +8,9 @@ Close acceptance issues found after the unified CBT and Institution/Academic Con
 2. Primary and Secondary school interfaces still showed generic **Assessment** wording where operational users expect **Examination**.
 3. After switching from a Primary/Secondary Branch to a Tertiary or Training Centre Branch, already-rendered terminology did not reverse until the browser was manually refreshed.
 4. Primary School surfaces retained visible **Student** wording instead of the approved **Pupil** terminology.
+5. EdgeSuite quick-editor and confirmation dialogs stopped rendering after the document-wide terminology observer began mutating Vue-managed modal content.
 
-The correction preserves all standard Frappe Education DocType names and database identities.
+The corrections preserve all standard Frappe Education DocType names and database identities.
 
 ## Implemented corrections
 
@@ -82,6 +83,26 @@ This applies to singular and plural labels across:
 
 `Student Group` and `Student Batch` phrases are resolved through their own canonical terminology first, preventing incorrect labels such as “Pupil Group” where the approved Primary term is **Class Arm**, or “Pupil Batch” where the approved term is **Admission Set**.
 
+### Dialog rendering safety
+
+The global visible-label observer now excludes interactive overlay surfaces, including:
+
+- EdgeSuite modals;
+- native Frappe dialogs;
+- elements with `role="dialog"`;
+- dropdown menus and autocomplete overlays;
+- popovers and tooltips.
+
+This prevents external DOM mutation from interfering with Vue's modal lifecycle and teleported dialog content.
+
+Quick-editor schemas are now translated before rendering:
+
+- dialog title, subtitle, and submit label;
+- field labels, descriptions, placeholders, and help text;
+- display labels for object-based Link/search options.
+
+Option values and raw Select values remain unchanged so terminology cannot alter stored business data or backend validation values.
+
 ## Files changed
 
 - `eduedge/api/branch_context.py`
@@ -89,6 +110,7 @@ This applies to singular and plural labels across:
 - `eduedge/public/js/eduedge_terminology.bundle.js`
 - `eduedge/public/js/eduedge_shell_identity.bundle.js`
 - `eduedge/public/js/eduedge_ui/navigation.js`
+- `eduedge/public/js/eduedge_ui/modal_records.js`
 - `.github/workflows/ci.yml`
 - `eduedge/tests/test_institution_type_foundation_contract.py`
 - partner implementation status documentation
@@ -98,25 +120,27 @@ This applies to singular and plural labels across:
 - No standard Frappe DocType is renamed.
 - No submitted academic or accounting document is changed.
 - Branch switching remains permission-aware and server-authoritative.
-- The browser terminology layer changes visible wording only; routes, API method names, fieldnames, and database values remain stable.
+- The browser terminology layer changes visible wording only; routes, API method names, fieldnames, option values, and database values remain stable.
 - Institution context is resolved by Branch → Institution → Company fallback.
 - The correction does not force a full browser reload or discard in-page state.
+- Vue- and Frappe-managed dialog DOM is not mutated by the global observer.
 
 ## Automated validation
 
-EduEdge CI run **1204** passed on the completed terminology correction:
+The dialog correction adds regression contracts for:
 
-- Python compilation
-- JSON validation
-- frontend syntax checks, including the shared shell identity and terminology bundles
-- complete pure contract suite
-- regression contracts for reversible Assessment/Examination/Evaluation labels
-- regression contracts for reversible Student/Pupil/Trainee labels
-- protection for Student Group and Student Batch terminology precedence
+- protected modal and interactive-overlay surfaces;
+- schema-level dialog terminology translation;
+- preservation of option values;
+- existing reversible Assessment/Examination/Evaluation labels;
+- existing reversible Student/Pupil/Trainee labels; and
+- Student Group and Student Batch terminology precedence.
+
+A fresh CI run is required on the final correction head before browser retest.
 
 ## Browser acceptance completed
 
-The following checks passed on `eduedge.local`:
+The following checks passed on `eduedge.local` before the dialog regression was reported:
 
 1. Institution and Branch appear side by side on every tested EduEdge page.
 2. Both values refresh immediately after Branch switching.
@@ -134,9 +158,21 @@ The following checks passed on `eduedge.local`:
 14. Institution and Branch remain correct throughout Institution Type switching.
 15. CBT Operations, Question Builder, and Academic Foundation remain operational.
 
+## Focused dialog retest required
+
+After pulling and rebuilding, verify:
+
+1. Add, Edit, Quick Edit, and confirmation dialogs open visibly.
+2. Loading state appears while modal schema data is requested.
+3. Dialog fields and Link/search options load.
+4. Save, Cancel, close, validation, and confirmation actions work.
+5. Primary dialog labels use Pupil/Class Arm/Admission Set where applicable.
+6. Tertiary and Training Centre dialog labels use their resolved terminology.
+7. Opening and closing dialogs does not break Institution/Branch display or page terminology.
+
 ## Remaining acceptance work
 
-The Institution context and terminology browser acceptance slice is complete. The unified branch still requires:
+After the focused dialog retest, the unified branch still requires:
 
 - restricted-role and Branch-permission testing;
 - realistic admissions, enrollment, class, attendance, examination, result-publication, and report-card workflow QA;
@@ -146,4 +182,4 @@ The Institution context and terminology browser acceptance slice is complete. Th
 
 ## Status
 
-**Accepted for Institution context and terminology behaviour.** Automated validation and the focused browser acceptance checks passed. The PR remains draft until the wider restricted-role and realistic workflow QA is completed.
+**Institution context and terminology behaviour remain accepted. Dialog rendering correction is implemented and awaiting automated validation and focused browser retest.** The PR remains draft until the wider operational QA is completed.
