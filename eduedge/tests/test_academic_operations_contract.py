@@ -56,7 +56,11 @@ class TestAcademicOperationsContract(unittest.TestCase):
 		).read_text()
 		self.assertIn("<EdgeAppShell", component)
 		self.assertIn("<EdgePageLayout", component)
-		self.assertLess(loader.index("edgeui.bundle.js"), loader.index("eduedge_academic_operations.bundle.js"))
+		self.assertLess(
+			loader.index("edgesuite_ui.bundle.js"),
+			loader.index("eduedge_academic_operations.bundle.js"),
+		)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 
 	def test_hooks_scope_academic_records_by_branch(self):
 		hooks = (ROOT / "eduedge" / "hooks.py").read_text()
