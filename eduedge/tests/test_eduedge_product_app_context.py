@@ -13,7 +13,8 @@ class TestEduEdgeProductAppContext(unittest.TestCase):
 		source = (APP / "api" / "product_context.py").read_text(encoding="utf-8")
 		for expected in (
 			"build_access_manifest",
-			'frappe.session.user == "Guest"',
+			'user = frappe.session.user',
+			'if not user or user == "Guest"',
 			'not manifest.get("can_access_eduedge")',
 			'"key": "eduedge"',
 			'"label": "EduEdge"',
