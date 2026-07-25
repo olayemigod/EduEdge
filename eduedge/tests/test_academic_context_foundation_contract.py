@@ -147,7 +147,11 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		self.assertIn("<EdgeAppShell", vue)
 		self.assertIn("save_academic_section", vue)
 		self.assertIn("save_academic_level", vue)
-		self.assertLess(loader.index("edgeui.bundle.js"), loader.index("eduedge_academic_foundation.bundle.js"))
+		self.assertLess(
+			loader.index("edgesuite_ui.bundle.js"),
+			loader.index("eduedge_academic_foundation.bundle.js"),
+		)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 		self.assertIn("/app/eduedge-academic-foundation", navigation)
 		for fieldname in ("study_mode", "delivery_mode", "academic_level", "student_batch"):
 			self.assertIn(f'"fieldname": "{fieldname}"', contract)
