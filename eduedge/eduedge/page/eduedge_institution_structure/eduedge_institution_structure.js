@@ -27,6 +27,8 @@ frappe.pages["eduedge-institution-structure"].on_page_show = function (wrapper) 
 		$(`<div class="alert alert-danger p-6 text-center"><strong>${__("Institution Structure failed to load")}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`).appendTo(page.body);
 	};
 
+	// The legacy `edgeui.bundle.js` manifest key is intentionally not loaded.
+	// Mixed-app sites must resolve the collision-safe standalone runtime instead.
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
