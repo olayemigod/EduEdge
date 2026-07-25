@@ -27,7 +27,7 @@ frappe.pages["eduedge-institution-structure"].on_page_show = function (wrapper) 
 		$(`<div class="alert alert-danger p-6 text-center"><strong>${__("Institution Structure failed to load")}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`).appendTo(page.body);
 	};
 
-	frappe.require("edgeui.bundle.js", () => {
+	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.install || !runtime?.components?.EdgeAppShell || !runtime?.components?.EdgePageLayout) {
