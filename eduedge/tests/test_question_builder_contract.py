@@ -20,7 +20,8 @@ class TestQuestionBuilderContract(unittest.TestCase):
 		self.assertIn('("cbt_question", "write")', access)
 
 		loader = (PAGE_ROOT / "eduedge_question_builder.js").read_text()
-		self.assertIn('frappe.require("edgeui.bundle.js"', loader)
+		self.assertIn('frappe.require("edgesuite_ui.bundle.js"', loader)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 		self.assertIn('frappe.require("eduedge_question_builder.bundle.js"', loader)
 		self.assertIn("window.createEduEdgeQuestionBuilderApp", loader)
 		self.assertIn('data-edge-product="eduedge"', loader)
