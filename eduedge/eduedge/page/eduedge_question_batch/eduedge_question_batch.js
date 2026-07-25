@@ -53,29 +53,32 @@ frappe.pages["eduedge-question-batch"].on_page_show = function (wrapper) {
 			return;
 		}
 
-		frappe.require("eduedge_question_batch.bundle.js", () => {
-			if (wrapper.current_visit_id !== visitId) return;
-			if (
-				!window.EduEdgeQuestionBatch ||
-				typeof window.createEduEdgeQuestionBatchApp !== "function"
-			) {
-				fail(__("The EduEdge Multiple Questions bundle is unavailable or incomplete."));
-				return;
+		frappe.require(
+			["eduedge_question_batch.bundle.css", "eduedge_question_batch.bundle.js"],
+			() => {
+				if (wrapper.current_visit_id !== visitId) return;
+				if (
+					!window.EduEdgeQuestionBatch ||
+					typeof window.createEduEdgeQuestionBatchApp !== "function"
+				) {
+					fail(__("The EduEdge Multiple Questions bundle is unavailable or incomplete."));
+					return;
+				}
+				$loading.remove();
+				const root = $(
+					'<div class="eduedge-question-batch-root" data-edge-product="eduedge"></div>'
+				).appendTo(page.body);
+				try {
+					wrapper.vue_app = window.createEduEdgeQuestionBatchApp({
+						pageName: "eduedge-question-batch",
+						initialMode: resolveBatchMode(),
+					});
+					wrapper.vue_app.mount(root[0]);
+				} catch (error) {
+					console.error("Failed to mount EduEdge Question Batch", error);
+					fail(error.message || String(error));
+				}
 			}
-			$loading.remove();
-			const root = $(
-				'<div class="eduedge-question-batch-root" data-edge-product="eduedge"></div>'
-			).appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeQuestionBatchApp({
-					pageName: "eduedge-question-batch",
-					initialMode: resolveBatchMode(),
-				});
-				wrapper.vue_app.mount(root[0]);
-			} catch (error) {
-				console.error("Failed to mount EduEdge Question Batch", error);
-				fail(error.message || String(error));
-			}
-		});
+		);
 	});
 };
