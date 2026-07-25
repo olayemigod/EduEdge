@@ -29,8 +29,9 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 				if not bundle_match:
 					continue
 				bundle_name = bundle_match.group(1)
-				self.assertIn("edgeui.bundle.js", source)
-				self.assertLess(source.index("edgeui.bundle.js"), source.index(bundle_name))
+				self.assertIn("edgesuite_ui.bundle.js", source)
+				self.assertNotIn('frappe.require("edgeui.bundle.js"', source)
+				self.assertLess(source.index("edgesuite_ui.bundle.js"), source.index(bundle_name))
 				self.assertIn("window.EdgeSuiteUI", source)
 				self.assertIn("runtime?.install", source)
 				self.assertIn("EdgeAppShell", source)
