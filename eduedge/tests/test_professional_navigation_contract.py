@@ -27,7 +27,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 	def test_global_product_menu_uses_shared_edgesuite_renderer_and_permissions(self):
 		bundle = (APP / "public/js/eduedge_product_menu.bundle.js").read_text()
 		for expected in (
-			'frappe.require("edgeui.bundle.js"',
+			'frappe.require("edgesuite_ui.bundle.js"',
 			"window.EdgeSuiteUI || window.EdgeUI",
 			"registerProductMenu",
 			"School Operations",
@@ -40,6 +40,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 			'permissions: ["read", "write"]',
 		):
 			self.assertIn(expected, bundle)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', bundle)
 		self.assertNotIn("GOVERNANCE_VIEW_ROLES", bundle)
 		self.assertNotIn("ADMIN_ROLES", bundle)
 		self.assertNotIn("import coreedge", bundle.lower())
@@ -62,9 +63,10 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertIn("EdgeSuite UI 0.3 or newer", loader)
 		self.assertIn("runtime.version", loader)
 		self.assertLess(
-			loader.index('frappe.require("edgeui.bundle.js"'),
+			loader.index('frappe.require("edgesuite_ui.bundle.js"'),
 			loader.index('frappe.require("eduedge_home.bundle.js"'),
 		)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 
 	def test_non_eduedge_desk_routes_open_in_new_tab(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
