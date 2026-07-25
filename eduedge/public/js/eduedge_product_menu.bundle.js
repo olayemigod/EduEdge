@@ -1,5 +1,12 @@
+const EDUEDGE_PRODUCT_KEY = "eduedge";
 const EDUEDGE_PRODUCT_MENU = Object.freeze({
+	product_key: EDUEDGE_PRODUCT_KEY,
 	product: "EduEdge",
+	label: "EduEdge",
+	icon: "graduation",
+	home_route: "/app/eduedge-home",
+	route_patterns: ["/app/eduedge*", "/app/query-report/EduEdge*"],
+	order: 30,
 	subtitle: "School operations and intelligence",
 	menu_source: "eduedge",
 	sections: [
@@ -204,13 +211,14 @@ function getProfile() {
 }
 
 function registerEduEdgeProductMenu() {
-	frappe.require("edgeui.bundle.js", () => {
+	frappe.require("edgesuite_ui.bundle.js", () => {
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.registerProductMenu) return;
 		runtime.registerProductMenu({
 			...permissionFilteredMenu(),
 			profile: getProfile(),
 		});
+		runtime.refreshProductMenu?.();
 	});
 }
 
