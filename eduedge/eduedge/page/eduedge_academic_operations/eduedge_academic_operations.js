@@ -35,7 +35,7 @@ frappe.pages["eduedge-academic-operations"].on_page_show = function (wrapper) {
 		).appendTo(page.body);
 	};
 
-	frappe.require("edgeui.bundle.js", () => {
+	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
