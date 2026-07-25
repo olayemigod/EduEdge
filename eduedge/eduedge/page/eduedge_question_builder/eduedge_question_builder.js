@@ -196,15 +196,15 @@ function installQuestionToolbar(root) {
 	return {
 		destroy() {
 			destroyed = true;
-		observer.disconnect();
-		window.clearInterval(interval);
-		root.removeEventListener("focusin", rememberTarget);
-		toolbar?.remove();
-		help?.remove();
-		editor?.classList.remove("eduedge-rich-editor__surface");
-		toolbar = null;
-		help = null;
-		editor = null;
+			observer.disconnect();
+			window.clearInterval(interval);
+			root.removeEventListener("focusin", rememberTarget);
+			toolbar?.remove();
+			help?.remove();
+			editor?.classList.remove("eduedge-rich-editor__surface");
+			toolbar = null;
+			help = null;
+			editor = null;
 		},
 	};
 }
@@ -250,7 +250,7 @@ frappe.pages["eduedge-question-builder"].on_page_show = function (wrapper) {
 		).appendTo(page.body);
 	};
 
-	frappe.require("edgeui.bundle.js", () => {
+	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
