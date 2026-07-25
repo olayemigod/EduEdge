@@ -17,7 +17,8 @@ class TestQuestionBatchContract(unittest.TestCase):
 		self.assertIn('"/app/eduedge-question-batch": (("cbt_question", "create"),)', access)
 
 		loader = (page_root / "eduedge_question_batch.js").read_text()
-		self.assertIn('frappe.require("edgeui.bundle.js"', loader)
+		self.assertIn('frappe.require("edgesuite_ui.bundle.js"', loader)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 		self.assertIn('frappe.require("eduedge_question_batch.bundle.js"', loader)
 		self.assertIn("window.createEduEdgeQuestionBatchApp", loader)
 		self.assertIn("resolveBatchMode", loader)
