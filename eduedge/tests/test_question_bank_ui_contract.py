@@ -79,6 +79,13 @@ class TestQuestionBankUIContract(unittest.TestCase):
 			self.assertIn("/app/eduedge-question-bank", source)
 		self.assertIn('"/app/eduedge-question-bank": (("cbt_question", "read"),)', access)
 
+	def test_cbt_operations_native_question_route_is_redirected_to_edgesuite_list(self):
+		bundle = (APP / "public/js/eduedge_cbt_operations.bundle.js").read_text(encoding="utf-8")
+		self.assertIn('route === "/app/eduedge-cbt-question"', bundle)
+		self.assertIn('"/app/eduedge-question-bank"', bundle)
+		self.assertIn("resolveCBTOperationsRoute", bundle)
+		self.assertIn("openEduEdgeRoute", bundle)
+
 	def test_ci_validates_question_bank_frontend_entries(self):
 		workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 		self.assertIn("node --check eduedge/public/js/eduedge_question_bank.bundle.js", workflow)
