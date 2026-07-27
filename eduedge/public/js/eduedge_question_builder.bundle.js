@@ -129,6 +129,7 @@ const EduEdgeQuestionBuilderPage = {
 					const actionResponse = await frappe.call("eduedge.api.question_governance.perform_action", {
 						question: this.form.name,
 						action,
+						expected_modified: this.context?.question_action_state?.modified || undefined,
 					});
 					await this.loadBuilder();
 					frappe.show_alert(
