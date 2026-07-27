@@ -6,19 +6,6 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.services.branch_context import get_allowed_school_branches, is_branch_access_enforced
 
 PRIVILEGED_ROLES = {"System Manager", "EduEdge Administrator"}
-SCOPED_ROLES = {
-	"School Administrator",
-	"Academic Administrator",
-	"Education Manager",
-	"Academics User",
-	"Registrar",
-	"Admission Officer",
-	"Bursar",
-	"Accounts User",
-	"Accounts Manager",
-	"Instructor",
-	"Teacher",
-}
 DIRECT_INSTITUTION_DOCTYPES = {
 	"EduEdge Academic Section",
 	"EduEdge Academic Level",
@@ -111,10 +98,28 @@ def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
 
 
 def _allowed_institutions(user: str) -> set[str]:
-	return {
-		row.get("institution")
+	"""Resolve institutions only through branches already allowed for the user.
+
+	The branch-context payload intentionally stays compact and may not expose the
+	Institution field on every caller. Re-read only the already-authorised Branch
+	names here so custom roles and standard roles receive the same academic scope.
+	"""
+	branch_names = {
+		row.get("name")
 		for row in get_allowed_school_branches(user=user)
-		if row.get("institution")
+		if row.get("name")
+	}
+	if not branch_names:
+		return set()
+	return {
+		institution
+		for institution in frappe.get_all(
+			"EduEdge School Branch",
+			filters={"name": ["in", sorted(branch_names)], "enabled": 1},
+			pluck="institution",
+			limit_page_length=0,
+		)
+		if institution
 	}
 
 
@@ -122,6 +127,4 @@ def _should_scope(user: str) -> bool:
 	if not is_branch_access_enforced() or not user or user in {"Guest", "Administrator"}:
 		return False
 	roles = set(frappe.get_roles(user))
-	if roles.intersection(PRIVILEGED_ROLES):
-		return False
-	return bool(roles.intersection(SCOPED_ROLES))
+	return not bool(roles.intersection(PRIVILEGED_ROLES))
