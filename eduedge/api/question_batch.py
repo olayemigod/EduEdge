@@ -79,6 +79,16 @@ def _require_create_permission() -> None:
 		frappe.throw(_("You are not permitted to create CBT questions."), frappe.PermissionError)
 
 
+def _has_import_permission() -> bool:
+	return bool(frappe.has_permission(QUESTION_DOCTYPE, "import"))
+
+
+def _require_import_permission() -> None:
+	_require_create_permission()
+	if not _has_import_permission():
+		frappe.throw(_("You are not permitted to import CBT questions."), frappe.PermissionError)
+
+
 def _scope_options(public_access: dict) -> list[dict]:
 	options = [{"value": SCHOOL_BANK, "label": _("School Question Bank")}]
 	if public_access.get("capabilities", {}).get("author", {}).get("allowed"):
@@ -120,6 +130,7 @@ def get_question_batch_context() -> dict:
 		"question_types": list(QUESTION_TYPES),
 		"difficulties": list(DIFFICULTIES),
 		"exam_bodies": list(EXAM_BODIES),
+		"can_upload": _has_import_permission(),
 		"defaults": _common_defaults(),
 		"limits": {
 			"manual_questions": MAX_MANUAL_QUESTIONS,
@@ -385,6 +396,8 @@ def _duplicate_codes(rows: list[dict]) -> tuple[set[str], set[str]]:
 @frappe.whitelist()
 def save_question_batch(common, questions, source: str | None = None) -> dict:
 	_require_create_permission()
+	if source == "upload":
+		_require_import_permission()
 	common_values = _normalise_common(_parse_payload(common))
 	question_rows = _parse_payload(questions)
 	if not isinstance(question_rows, list) or not question_rows:
@@ -435,7 +448,7 @@ def save_question_batch(common, questions, source: str | None = None) -> dict:
 
 @frappe.whitelist()
 def preview_question_upload(file_name: str, file_content: str, common) -> dict:
-	_require_create_permission()
+	_require_import_permission()
 	common_values = _normalise_common(_parse_payload(common))
 	raw_rows = _parse_upload(file_name, _decode_upload(file_content))
 	within_batch, existing = _duplicate_codes(raw_rows)
