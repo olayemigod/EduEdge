@@ -100,7 +100,7 @@ class TestInstitutionOperationsSettingsContract(unittest.TestCase):
 			"Institution Preference",
 			"Use Company Question Governance Defaults",
 			"Planned module settings",
-			"save_institution_operations_settings",
+			"saveSettings",
 		):
 			self.assertIn(expected, component)
 		self.assertIn("createEduEdgeInstitutionOperationsSettingsApp", bundle)
