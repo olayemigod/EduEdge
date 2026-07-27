@@ -6,7 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_JS = ROOT / "eduedge" / "public" / "js"
 EDITOR_JS = PUBLIC_JS / "eduedge_question_builder" / "rich_text_editor.js"
-EDITOR_CSS = PUBLIC_JS / "eduedge_question_builder" / "rich_text_editor.css"
+LEGACY_EDITOR_CSS = PUBLIC_JS / "eduedge_question_builder" / "rich_text_editor.css"
+EXPLICIT_EDITOR_CSS = ROOT / "eduedge" / "public" / "css" / "eduedge_question_builder.bundle.css"
 BUNDLE = PUBLIC_JS / "eduedge_question_builder.bundle.js"
 PAGE_LOADER = (
 	ROOT
@@ -32,26 +33,26 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		fields = {field["fieldname"]: field for field in metadata["fields"]}
 		self.assertEqual(fields["question_text"]["fieldtype"], "Text Editor")
 
-	def test_bundle_keeps_native_edgesuite_mount_and_loads_toolbar_styles(self):
+	def test_bundle_owns_editor_lifecycle_without_replacing_mount(self):
 		bundle = BUNDLE.read_text()
-		self.assertIn('import "./eduedge_question_builder/rich_text_editor.css"', bundle)
+		self.assertIn("installQuestionRichTextEditor", bundle)
+		self.assertIn("EduEdgeQuestionBuilder.mounted", bundle)
+		self.assertIn("EduEdgeQuestionBuilder.updated", bundle)
+		self.assertIn("EduEdgeQuestionBuilder.beforeUnmount", bundle)
 		self.assertIn("return createEduEdgeApp(EduEdgeQuestionBuilder, rootProps)", bundle)
 		self.assertNotIn("app.mount =", bundle)
-		self.assertNotIn("MutationObserver", bundle)
 
-	def test_page_loader_installs_toolbar_on_the_actual_question_root(self):
+	def test_page_loader_uses_explicit_css_and_no_duplicate_toolbar_runtime(self):
 		loader = PAGE_LOADER.read_text()
-		self.assertIn("installQuestionToolbar", loader)
-		self.assertIn('root.querySelector(".eduedge-question-editor")', loader)
-		self.assertIn("MutationObserver", loader)
-		self.assertIn("window.setInterval(ensureToolbar, 500)", loader)
-		self.assertIn("wrapper.question_toolbar = installQuestionToolbar(root[0])", loader)
-		self.assertIn("wrapper.question_toolbar?.destroy()", loader)
-		self.assertIn('editor.setAttribute("dir", "ltr")', loader)
-		self.assertIn('editor?.dispatchEvent(new Event("input", { bubbles: true }))', loader)
+		self.assertIn('"eduedge_question_builder.bundle.css"', loader)
+		self.assertIn('"eduedge_question_builder.bundle.js"', loader)
+		self.assertIn("wrapper.vue_app.mount(root[0])", loader)
+		self.assertNotIn("installQuestionToolbar", loader)
+		self.assertNotIn("MutationObserver", loader)
+		self.assertNotIn("setInterval", loader)
 
-	def test_page_toolbar_supports_required_formatting_and_symbols(self):
-		loader = PAGE_LOADER.read_text()
+	def test_editor_supports_required_formatting_and_symbols(self):
+		source = EDITOR_JS.read_text()
 		for command in (
 			'command: "bold"',
 			'command: "italic"',
@@ -61,13 +62,13 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 			'command: "insertUnorderedList"',
 			'command: "insertOrderedList"',
 		):
-			self.assertIn(command, loader)
+			self.assertIn(command, source)
 		for symbol in ("²", "³", "₁", "₂", "√", "π", "θ", "Δ", "∑", "∞", "×", "÷", "±", "≤", "≥", "≠", "°"):
-			self.assertIn(symbol, loader)
-		self.assertIn("setRangeText", loader)
-		self.assertIn("last focused answer, answer-key or marking-guide field", loader)
+			self.assertIn(symbol, source)
+		self.assertIn("setRangeText", source)
+		self.assertIn("last focused answer or answer-key field", source)
 
-	def test_legacy_enhancer_avoids_caret_rewriting(self):
+	def test_enhancer_avoids_caret_rewriting(self):
 		source = EDITOR_JS.read_text()
 		self.assertIn('editor.setAttribute("dir", "ltr")', source)
 		self.assertIn('editor.contentEditable = readOnly ? "false" : "true"', source)
@@ -77,13 +78,14 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		self.assertIn("document.activeElement !== editor", source)
 		self.assertNotIn("editor.innerHTML = form.question_text", source)
 
-	def test_styles_force_left_to_right_readable_editor(self):
-		styles = EDITOR_CSS.read_text()
+	def test_explicit_styles_force_left_to_right_readable_editor(self):
+		styles = EXPLICIT_EDITOR_CSS.read_text()
 		self.assertIn("direction: ltr", styles)
 		self.assertIn("text-align: left", styles)
 		self.assertIn("unicode-bidi: plaintext", styles)
 		self.assertIn(".eduedge-rich-editor__surface sup", styles)
 		self.assertIn(".eduedge-rich-editor__surface sub", styles)
+		self.assertEqual(LEGACY_EDITOR_CSS.read_text().strip(), styles.split("*/", 1)[1].strip())
 
 
 if __name__ == "__main__":
