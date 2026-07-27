@@ -7,54 +7,73 @@
 		:busy="busy"
 		@close="$emit('close')"
 	>
-		<div class="edge-form-dialog-fallback" data-eduedge-terminology-managed>
-			<div v-if="loading" class="edge-form-dialog-fallback__loading">
-				<span class="edge-form-dialog-fallback__spinner" aria-hidden="true"></span>
+		<form class="edge-form-dialog" data-eduedge-terminology-managed @submit.prevent="$emit('submit')">
+			<div v-if="loading" class="edge-modal-state">
+				<span class="eduedge-form-spinner" aria-hidden="true"></span>
 				<span>Loading form…</span>
 			</div>
-			<div v-else>
-				<p v-if="error" class="edge-form-dialog-fallback__error" role="alert">{{ error }}</p>
-				<div class="edge-form-dialog-fallback__grid">
-					<label v-for="field in visibleFields" :key="field.fieldname" class="edge-form-dialog-fallback__field" :class="{ 'edge-form-dialog-fallback__field--check': fieldType(field) === 'Check' }">
+			<template v-else>
+				<p v-if="error" class="edge-form-global-error" role="alert">{{ error }}</p>
+				<div class="edge-form-grid">
+					<label
+						v-for="field in visibleFields"
+						:key="field.fieldname"
+						class="edge-form-field"
+						:class="fieldClasses(field)"
+					>
 						<template v-if="fieldType(field) === 'Check'">
-							<input type="checkbox" :checked="truthy(localValues[field.fieldname])" :disabled="busy || field.read_only" @change="setCheckValue(field, $event)" />
-							<span>{{ field.label || field.fieldname }}<strong v-if="isRequired(field)"> *</strong></span>
+							<span class="edge-checkbox">
+								<input
+									type="checkbox"
+									:checked="truthy(localValues[field.fieldname])"
+									:disabled="busy || field.read_only"
+									@change="setCheckValue(field, $event)"
+								/>
+								<span>{{ field.label || field.fieldname }}<strong v-if="isRequired(field)" class="edge-form-required"> *</strong></span>
+							</span>
 						</template>
 						<template v-else>
-							<span>{{ field.label || field.fieldname }}<strong v-if="isRequired(field)"> *</strong></span>
+							<span class="edge-form-field__label">
+								{{ field.label || field.fieldname }}<strong v-if="isRequired(field)" class="edge-form-required"> *</strong>
+							</span>
 							<textarea
 								v-if="isTextArea(field)"
 								:value="localValues[field.fieldname] ?? ''"
 								:rows="field.rows || 3"
 								:placeholder="field.placeholder || ''"
 								:disabled="busy || field.read_only"
-								class="form-control"
+								class="edge-form-control"
+								:class="{ 'is-invalid': fieldErrors?.[field.fieldname] }"
 								@input="setValue(field, $event.target.value)"
 							></textarea>
 							<select
 								v-else-if="fieldType(field) === 'Select'"
 								:value="localValues[field.fieldname] ?? ''"
 								:disabled="busy || field.read_only"
-								class="form-control"
+								class="edge-form-control"
+								:class="{ 'is-invalid': fieldErrors?.[field.fieldname] }"
 								@change="setValue(field, $event.target.value)"
 							>
 								<option value="">{{ field.placeholder || 'Select' }}</option>
 								<option v-for="option in normalizedOptions(field.options)" :key="`${field.fieldname}-${option.value}`" :value="option.value">{{ option.label }}</option>
 							</select>
 							<template v-else-if="fieldType(field) === 'Link'">
-								<input
-									:value="localValues[field.fieldname] ?? ''"
-									:list="optionListId(field)"
-									:placeholder="field.placeholder || `Search ${field.label || ''}`"
-									:disabled="busy || field.read_only"
-									class="form-control"
-									@focus="requestOptions(field, $event.target.value)"
-									@input="setValue(field, $event.target.value); requestOptions(field, $event.target.value)"
-								/>
-								<datalist :id="optionListId(field)">
-									<option v-for="option in normalizedOptions(field.options)" :key="`${field.fieldname}-${option.value}`" :value="option.value">{{ option.label }}</option>
-								</datalist>
-								<small v-if="field.options_loading" class="edge-form-dialog-fallback__help">Loading options…</small>
+								<div class="edge-link-control">
+									<input
+										:value="localValues[field.fieldname] ?? ''"
+										:list="optionListId(field)"
+										:placeholder="field.placeholder || `Search ${field.label || ''}`"
+										:disabled="busy || field.read_only"
+										class="edge-form-control"
+										:class="{ 'is-invalid': fieldErrors?.[field.fieldname] }"
+										@focus="requestOptions(field, $event.target.value)"
+										@input="setValue(field, $event.target.value); requestOptions(field, $event.target.value)"
+									/>
+									<datalist :id="optionListId(field)">
+										<option v-for="option in normalizedOptions(field.options)" :key="`${field.fieldname}-${option.value}`" :value="option.value">{{ option.label }}</option>
+									</datalist>
+									<small v-if="field.options_loading" class="edge-link-control__loading">Loading…</small>
+								</div>
 							</template>
 							<input
 								v-else
@@ -63,19 +82,20 @@
 								:step="numberStep(field)"
 								:placeholder="field.placeholder || ''"
 								:disabled="busy || field.read_only"
-								class="form-control"
+								class="edge-form-control"
+								:class="{ 'is-invalid': fieldErrors?.[field.fieldname] }"
 								@input="setValue(field, $event.target.value)"
 							/>
 						</template>
-						<small v-if="field.description || field.help" class="edge-form-dialog-fallback__help">{{ field.description || field.help }}</small>
-						<small v-if="fieldErrors?.[field.fieldname]" class="edge-form-dialog-fallback__field-error">{{ fieldErrors[field.fieldname] }}</small>
+						<small v-if="field.description || field.help">{{ field.description || field.help }}</small>
+						<small v-if="fieldErrors?.[field.fieldname]" class="edge-form-error">{{ fieldErrors[field.fieldname] }}</small>
 					</label>
 				</div>
-			</div>
-		</div>
+			</template>
+		</form>
 		<template #footer>
-			<button v-if="showFullForm" type="button" class="edge-button" :disabled="busy" @click="$emit('open-full-form')">Open full form</button>
-			<span class="edge-form-dialog-fallback__spacer"></span>
+			<button v-if="showFullForm" type="button" class="edge-button edge-modal__full-form" :disabled="busy" @click="$emit('open-full-form')">Open full form</button>
+			<span class="edge-modal__footer-spacer"></span>
 			<button type="button" class="edge-button" :disabled="busy" @click="$emit('close')">Cancel</button>
 			<button type="button" class="edge-button edge-button--primary" :disabled="loading || busy" @click="$emit('submit')">{{ busy ? 'Saving…' : submitLabel }}</button>
 		</template>
@@ -111,6 +131,10 @@ export default {
 	},
 	methods: {
 		fieldType(field) { return String(field?.type || field?.fieldtype || "Data"); },
+		fieldClasses(field) {
+			const type = this.fieldType(field).toLowerCase().replace(/\s+/g, "-");
+			return [`edge-form-field--${type}`, { "edge-form-field--check": this.fieldType(field) === "Check" }];
+		},
 		conditionMatches(condition) {
 			if (!condition || !condition.field) return true;
 			const actual = this.localValues?.[condition.field];
@@ -148,18 +172,14 @@ export default {
 </script>
 
 <style scoped>
-.edge-form-dialog-fallback { min-height: 5rem; }
-.edge-form-dialog-fallback__loading { align-items: center; color: var(--text-muted, #667085); display: flex; gap: .65rem; justify-content: center; min-height: 8rem; }
-.edge-form-dialog-fallback__spinner { animation: edge-form-spin .8s linear infinite; border: 2px solid var(--border-color, #d8dee8); border-radius: 50%; border-top-color: var(--primary, #2563eb); height: 1.1rem; width: 1.1rem; }
-.edge-form-dialog-fallback__error { background: var(--red-50, #fff1f2); border: 1px solid var(--red-200, #fecdd3); border-radius: .65rem; color: var(--red-700, #b42318); margin: 0 0 1rem; padding: .75rem; }
-.edge-form-dialog-fallback__grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.edge-form-dialog-fallback__field { display: grid; gap: .35rem; min-width: 0; }
-.edge-form-dialog-fallback__field--check { align-items: center; display: grid; gap: .55rem; grid-template-columns: auto 1fr; }
-.edge-form-dialog-fallback__field--check small { grid-column: 1 / -1; }
-.edge-form-dialog-fallback__field strong { color: var(--red-600, #d92d20); }
-.edge-form-dialog-fallback__help { color: var(--text-muted, #667085); }
-.edge-form-dialog-fallback__field-error { color: var(--red-600, #d92d20); }
-.edge-form-dialog-fallback__spacer { flex: 1; }
-@keyframes edge-form-spin { to { transform: rotate(360deg); } }
-@media (max-width: 720px) { .edge-form-dialog-fallback__grid { grid-template-columns: 1fr; } }
+.eduedge-form-spinner {
+	animation: eduedge-form-spin .8s linear infinite;
+	border: 2px solid var(--edge-color-border, #dce5ef);
+	border-radius: 50%;
+	border-top-color: var(--edge-color-brand-600, #0f64ab);
+	height: 1.1rem;
+	margin-right: .65rem;
+	width: 1.1rem;
+}
+@keyframes eduedge-form-spin { to { transform: rotate(360deg); } }
 </style>
