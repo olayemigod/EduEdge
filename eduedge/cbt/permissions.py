@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 
 from eduedge.access_control import user_has_role_permission
-from eduedge.cbt.public_access import can_author_public_exams, has_public_exam_capability
+from eduedge.cbt.public_access import can_assign_public_exams, can_author_public_exams
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	is_branch_access_enforced,
@@ -89,7 +89,7 @@ def _school_branch_condition(doctype: str, user: str | None) -> str:
 
 def _has_public_record_access(doctype: str | None, user: str) -> bool:
 	if doctype in PUBLIC_ASSIGNMENT_DOCTYPES:
-		return has_public_exam_capability("assign", user=user)
+		return can_assign_public_exams(user)
 	return can_author_public_exams(user)
 
 
