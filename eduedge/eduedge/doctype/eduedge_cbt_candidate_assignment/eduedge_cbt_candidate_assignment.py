@@ -7,7 +7,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, get_datetime, now_datetime
 
-from eduedge.cbt.public_access import require_public_exam_capability
+from eduedge.cbt.public_access import require_public_exam_assignment
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
 
@@ -141,8 +141,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 			return
 
 		if self.exam_scope == PUBLIC_EXAM:
-			require_public_exam_capability(
-				"assign",
+			require_public_exam_assignment(
 				reference_doctype="EduEdge CBT Exam Schedule",
 				reference_name=self.exam_schedule,
 			)
