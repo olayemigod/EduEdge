@@ -12,6 +12,7 @@ from eduedge.cbt.result_readiness import assert_result_approval_ready
 SCHOOL_EXAM = "School Examination"
 OBJECTIVE_TYPES = {"Single Choice", "Multiple Choice", "True/False", "Yes/No"}
 SCOREABLE_ATTEMPT_STATUSES = {"Submitted", "Auto Submitted"}
+SCHEDULE_SCORING_STATUSES = SCOREABLE_ATTEMPT_STATUSES | {"Under Review", "Scored"}
 MARKER_ROLES = {
 	"System Manager",
 	"EduEdge Super Administrator",
@@ -19,8 +20,6 @@ MARKER_ROLES = {
 	"School Administrator",
 	"Academic Administrator",
 	"Education Manager",
-	"Teacher",
-	"Instructor",
 }
 APPROVER_ROLES = {
 	"System Manager",
@@ -78,7 +77,7 @@ def _require_attempt_access(attempt):
 
 
 def _require_result_access(result):
-	if not frappe.has_permission("EduEdge CBT Result", "read", doc=result):
+	if not frappe.has_permission("EduEdge CBT Result", "write", doc=result):
 		frappe.throw(_("You are not permitted to mark this CBT Result."), frappe.PermissionError)
 	return result
 
@@ -92,6 +91,7 @@ def _answer_is_empty(payload: dict) -> bool:
 
 
 def _score_objective(answer_payload: dict, scoring_key, marking_policy: str) -> float:
+	"""Use exact option-set matching; partial multiple-choice credit is deliberately excluded."""
 	if _answer_is_empty(answer_payload):
 		return 0.0
 	selected = {str(value) for value in answer_payload.get("selected_option_ids") or []}
@@ -151,10 +151,15 @@ def _recalculate_result(result) -> None:
 
 @frappe.whitelist()
 def score_objective_attempt(attempt_name: str) -> dict:
-	"""Create one immutable scoring result and auto-score objective questions."""
+	"""Create one governed result and auto-score objective questions idempotently."""
 	_require_role(APPROVER_ROLES, "score CBT attempts")
 	_lock("EduEdge CBT Attempt", attempt_name)
 	attempt = _require_attempt_access(frappe.get_doc("EduEdge CBT Attempt", attempt_name))
+
+	existing = frappe.db.get_value("EduEdge CBT Result", {"attempt": attempt.name}, "name")
+	if existing:
+		return _summary(_require_result_access(frappe.get_doc("EduEdge CBT Result", existing)))
+
 	if attempt.attempt_status not in SCOREABLE_ATTEMPT_STATUSES:
 		frappe.throw(
 			_("Only Submitted or Auto Submitted attempts can be scored."),
@@ -164,10 +169,6 @@ def score_objective_attempt(attempt_name: str) -> dict:
 		frappe.throw(_("Pending browser answers must be resolved before scoring."), frappe.ValidationError)
 	if cint(attempt.requires_review):
 		frappe.throw(_("Complete the integrity review before scoring this attempt."), frappe.ValidationError)
-
-	existing = frappe.db.get_value("EduEdge CBT Result", {"attempt": attempt.name}, "name")
-	if existing:
-		return _summary(frappe.get_doc("EduEdge CBT Result", existing))
 
 	answers = {
 		row.question_snapshot_key: _json(row.answer_payload_json, {})
@@ -297,7 +298,7 @@ def get_manual_marking_queue(
 	limit_page_length: int = 50,
 ) -> dict:
 	_require_role(MARKER_ROLES, "mark CBT responses")
-	filters = {"result_status": ["in", ["Manual Marking Required", "Ready for Review"]]}
+	filters = {"result_status": "Manual Marking Required"}
 	if exam_schedule:
 		filters["exam_schedule"] = exam_schedule
 	if school_branch:
@@ -313,7 +314,7 @@ def get_manual_marking_queue(
 	for result_name in result_names:
 		result = _require_result_access(frappe.get_doc("EduEdge CBT Result", result_name))
 		for item in result.items:
-			if item.scoring_method != "Manual" or item.marking_status not in {"Manual Required", "Manually Marked"}:
+			if item.scoring_method != "Manual" or item.marking_status != "Manual Required":
 				continue
 			queue.append(_manual_question_context(result, item))
 	queue.sort(key=lambda row: (row["candidate_name"] or "", row["question_code"] or ""))
@@ -348,12 +349,18 @@ def apply_manual_mark(
 			_("Awarded Mark must be between 0 and {0}.").format(flt(item.available_mark)),
 			frappe.ValidationError,
 		)
+	comment = (marker_comment or "").strip()
 	previous_mark = flt(item.awarded_mark)
+	if item.marking_status == "Manually Marked" and new_mark != previous_mark and not comment:
+		frappe.throw(
+			_("A Marker Comment is required when revising a completed manual mark."),
+			frappe.ValidationError,
+		)
 	item.awarded_mark = new_mark
 	item.marking_status = "Manually Marked"
 	item.marker = frappe.session.user
 	item.marked_on = now_datetime()
-	item.marker_comment = (marker_comment or "").strip()
+	item.marker_comment = comment
 	_recalculate_result(result)
 	with _result_service():
 		result.save(ignore_permissions=True)
@@ -391,7 +398,7 @@ def score_schedule_objective(exam_schedule: str) -> dict:
 		frappe.throw(_("You are not permitted to score this Examination Schedule."), frappe.PermissionError)
 	attempts = frappe.get_list(
 		"EduEdge CBT Attempt",
-		filters={"exam_schedule": exam_schedule, "attempt_status": ["in", sorted(SCOREABLE_ATTEMPT_STATUSES)]},
+		filters={"exam_schedule": exam_schedule, "attempt_status": ["in", sorted(SCHEDULE_SCORING_STATUSES)]},
 		pluck="name",
 		order_by="candidate_name asc",
 		limit_page_length=1000,
