@@ -44,7 +44,7 @@ class TestCBTCandidateGovernanceContract(unittest.TestCase):
 		for token in (
 			"Student Group Student",
 			"New candidates can be assigned only",
-			"require_public_exam_capability",
+			"require_public_exam_assignment",
 			"reference_doctype=\"EduEdge CBT Exam Schedule\"",
 			"This candidate is already assigned",
 			"An eligible candidate assignment is immutable",
@@ -73,13 +73,16 @@ class TestCBTCandidateGovernanceContract(unittest.TestCase):
 		):
 			self.assertIn(token, controller)
 
-	def test_public_capability_helper_accepts_record_context(self):
+	def test_public_capability_helper_accepts_record_context_and_authority_roles(self):
 		public_access = (APP / "cbt" / "public_access.py").read_text()
 		for token in (
 			"reference_doctype: str | None = None",
 			"reference_name: str | None = None",
 			"reference_doctype=reference_doctype",
 			"reference_name=reference_name",
+			"def can_assign_public_exams",
+			"def require_public_exam_assignment",
+			"Public Examination Assignment Restricted",
 		):
 			self.assertIn(token, public_access)
 
