@@ -53,6 +53,7 @@ jobs:
           node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
           node --check eduedge/public/js/eduedge_resource_center.bundle.js
           node --check eduedge/public/js/eduedge_settings_center.bundle.js
+          node --check eduedge/public/js/eduedge_institution_operations_settings.bundle.js
           node --check eduedge/public/js/eduedge_home.bundle.js
           node --check eduedge/public/js/eduedge_academic_operations.bundle.js
           node --check eduedge/public/js/eduedge_cbt_operations.bundle.js
@@ -74,6 +75,7 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_settings_center/eduedge_settings_center.js
           node --check eduedge/eduedge/page/eduedge_institution_structure/eduedge_institution_structure.js
           node --check eduedge/eduedge/page/eduedge_academic_foundation/eduedge_academic_foundation.js
+          node --check eduedge/eduedge/page/eduedge_institution_operations_settings/eduedge_institution_operations_settings.js
       - name: Run pure contract tests
         id: contract-tests
         shell: bash
