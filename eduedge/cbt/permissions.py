@@ -24,6 +24,7 @@ CBT_DOCTYPES = (
 	"EduEdge CBT Result",
 	"EduEdge CBT Result Item",
 	"EduEdge CBT Marking Log",
+	"EduEdge CBT Result Sync Log",
 )
 
 PUBLIC_ASSIGNMENT_DOCTYPES = {
@@ -86,6 +87,10 @@ def cbt_result_item_query(user: str | None = None) -> str:
 
 def cbt_marking_log_query(user: str | None = None) -> str:
 	return _school_branch_condition("EduEdge CBT Marking Log", user)
+
+
+def cbt_result_sync_log_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Result Sync Log", user)
 
 
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
