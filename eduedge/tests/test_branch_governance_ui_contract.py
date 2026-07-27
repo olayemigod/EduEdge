@@ -37,6 +37,25 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 		self.assertIn("EdgeAppShell", loader)
 		self.assertIn("failed to load", loader)
 
+	def test_loader_waits_for_branch_bundle_globals_before_failing(self):
+		loader = (
+			APP
+			/ "eduedge"
+			/ "page"
+			/ "eduedge_branch_governance"
+			/ "eduedge_branch_governance.js"
+		).read_text()
+		for token in (
+			"BRANCH_BUNDLE_READY_TIMEOUT_MS",
+			"waitForBranchGovernanceBundle",
+			"getBranchGovernanceBundle",
+			"setTimeout(",
+			"bundle.factory",
+			"wrapper.current_visit_id !== visitId",
+		):
+			self.assertIn(token, loader)
+		self.assertGreaterEqual(loader.index("waitForBranchGovernanceBundle(mount)"), loader.index("frappe.require(\"eduedge_branch_governance.bundle.js\""))
+
 	def test_governance_ui_is_guided_branch_safe_and_uses_edgesuite_dialogs(self):
 		vue = (
 			APP
