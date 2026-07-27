@@ -44,6 +44,9 @@ RESOURCE_DOCTYPES = {
 	"examination_centre": "EduEdge Examination Centre",
 	"cbt_question": "EduEdge CBT Question",
 	"cbt_template": "EduEdge CBT Exam Template",
+	"cbt_schedule": "EduEdge CBT Exam Schedule",
+	"cbt_candidate_assignment": "EduEdge CBT Candidate Assignment",
+	"cbt_attempt": "EduEdge CBT Attempt",
 	"eduedge_settings": "EduEdge Settings",
 	"training_course": "EduEdge Training Course",
 	"training_progress": "EduEdge Training Progress",
@@ -68,6 +71,11 @@ ROUTE_REQUIREMENTS = {
 		("examination_centre", "read"),
 		("cbt_question", "read"),
 		("cbt_template", "read"),
+	),
+	"/app/eduedge-cbt-invigilation": (
+		("cbt_schedule", "read"),
+		("cbt_candidate_assignment", "read"),
+		("cbt_attempt", "read"),
 	),
 	"/app/eduedge-question-builder": (
 		("cbt_question", "read"),
