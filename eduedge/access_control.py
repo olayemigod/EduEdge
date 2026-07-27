@@ -47,6 +47,7 @@ RESOURCE_DOCTYPES = {
 	"cbt_schedule": "EduEdge CBT Exam Schedule",
 	"cbt_candidate_assignment": "EduEdge CBT Candidate Assignment",
 	"cbt_attempt": "EduEdge CBT Attempt",
+	"cbt_result": "EduEdge CBT Result",
 	"eduedge_settings": "EduEdge Settings",
 	"training_course": "EduEdge Training Course",
 	"training_progress": "EduEdge Training Progress",
@@ -77,6 +78,7 @@ ROUTE_REQUIREMENTS = {
 		("cbt_candidate_assignment", "read"),
 		("cbt_attempt", "read"),
 	),
+	"/app/eduedge-cbt-marking": (("cbt_result", "write"),),
 	"/app/eduedge-question-builder": (
 		("cbt_question", "read"),
 		("cbt_question", "create"),
@@ -147,8 +149,6 @@ def _has_permission(doctype: str, permission_type: str, user: str) -> bool:
 	if not _doctype_exists(doctype):
 		return False
 	try:
-		# Frappe 16 accepts doctype, permission type, and user here. Avoid
-		# unsupported legacy keyword arguments such as print_logs.
 		return bool(frappe.has_permission(doctype, permission_type, user=user))
 	except (frappe.DoesNotExistError, frappe.PermissionError):
 		return False
