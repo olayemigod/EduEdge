@@ -60,6 +60,10 @@ class TestInstitutionOperationsSettingsContract(unittest.TestCase):
 			"require_eduedge_access",
 			"get_list(",
 			"MAX_BULK_QUESTIONS",
+			'COMPANY_SCOPE = "Company Default"',
+			'INSTITUTION_SCOPE = "Institution Preference"',
+			'_("Assessment and Results")',
+			'_("Attendance and Timetable")',
 		):
 			self.assertIn(expected, api)
 		for forbidden in (
@@ -93,12 +97,10 @@ class TestInstitutionOperationsSettingsContract(unittest.TestCase):
 			"<EdgeAppShell",
 			"<EdgePageLayout",
 			"<EdgeFilterBar",
-			"Company Default",
 			"Institution Preference",
 			"Use Company Question Governance Defaults",
 			"Planned module settings",
-			"Assessment and Results",
-			"Attendance and Timetable",
+			"save_institution_operations_settings",
 		):
 			self.assertIn(expected, component)
 		self.assertIn("createEduEdgeInstitutionOperationsSettingsApp", bundle)
