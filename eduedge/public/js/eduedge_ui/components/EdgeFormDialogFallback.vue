@@ -58,21 +58,24 @@
 								<option v-for="option in normalizedOptions(field.options)" :key="`${field.fieldname}-${option.value}`" :value="option.value">{{ option.label }}</option>
 							</select>
 							<template v-else-if="fieldType(field) === 'Link'">
-								<div class="edge-link-control">
-									<input
-										:value="localValues[field.fieldname] ?? ''"
-										:list="optionListId(field)"
+								<div class="eduedge-quick-link-control">
+									<EdgeLinkField
+										:model-value="localValues[field.fieldname] ?? ''"
+										:selected-label="linkSelectedLabel(field)"
+										:options="normalizedOptions(field.options)"
 										:placeholder="field.placeholder || `Search ${field.label || ''}`"
 										:disabled="busy || field.read_only"
-										class="edge-form-control"
-										:class="{ 'is-invalid': fieldErrors?.[field.fieldname] }"
-										@focus="requestOptions(field, $event.target.value)"
-										@input="setValue(field, $event.target.value); requestOptions(field, $event.target.value)"
+										:readonly="Boolean(field.read_only)"
+										:required="isRequired(field)"
+										:error="fieldErrors?.[field.fieldname] || ''"
+										:allow-clear="true"
+										:open-on-focus="true"
+										:debounce-ms="180"
+										class="eduedge-quick-link-field"
+										@update:model-value="setValue(field, $event)"
+										@query-change="requestOptions(field, $event)"
 									/>
-									<datalist :id="optionListId(field)">
-										<option v-for="option in normalizedOptions(field.options)" :key="`${field.fieldname}-${option.value}`" :value="option.value">{{ option.label }}</option>
-									</datalist>
-									<small v-if="field.options_loading" class="edge-link-control__loading">Loading…</small>
+									<small v-if="field.options_loading" class="eduedge-quick-link-loading">Loading options…</small>
 								</div>
 							</template>
 							<input
@@ -88,7 +91,7 @@
 							/>
 						</template>
 						<small v-if="field.description || field.help">{{ field.description || field.help }}</small>
-						<small v-if="fieldErrors?.[field.fieldname]" class="edge-form-error">{{ fieldErrors[field.fieldname] }}</small>
+						<small v-if="fieldErrors?.[field.fieldname] && fieldType(field) !== 'Link'" class="edge-form-error">{{ fieldErrors[field.fieldname] }}</small>
 					</label>
 				</div>
 			</template>
@@ -154,9 +157,14 @@ export default {
 		truthy(value) { return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "yes"; },
 		normalizedOptions(options) {
 			const source = Array.isArray(options) ? options : typeof options === "string" ? options.split("\n") : [];
-			return source.filter((option) => option !== undefined && option !== null && option !== "").map((option) => typeof option === "object" ? { value: String(option.value ?? option.name ?? ""), label: String(option.label ?? option.value ?? option.name ?? "") } : { value: String(option), label: String(option) });
+			return source.filter((option) => option !== undefined && option !== null && option !== "").map((option) => typeof option === "object" ? { value: String(option.value ?? option.name ?? ""), label: String(option.label ?? option.value ?? option.name ?? ""), description: String(option.description ?? "") } : { value: String(option), label: String(option), description: "" });
 		},
-		optionListId(field) { return `eduedge-options-${String(field.fieldname || '').replace(/[^a-zA-Z0-9_-]/g, '-')}`; },
+		linkSelectedLabel(field) {
+			const value = String(this.localValues?.[field.fieldname] ?? "");
+			if (!value) return "";
+			const selected = this.normalizedOptions(field.options).find((option) => option.value === value);
+			return selected?.label || value;
+		},
 		setCheckValue(field, event) { this.setValue(field, event.target.checked ? 1 : 0); },
 		setValue(field, value) {
 			this.localValues = { ...this.localValues, [field.fieldname]: value };
@@ -180,6 +188,14 @@ export default {
 	height: 1.1rem;
 	margin-right: .65rem;
 	width: 1.1rem;
+}
+.eduedge-quick-link-control,
+.eduedge-quick-link-field { min-width: 0; width: 100%; }
+.eduedge-quick-link-loading {
+	color: var(--edge-color-ink-500, #6b7d90);
+	display: block;
+	font-size: .68rem;
+	margin-top: .25rem;
 }
 @keyframes eduedge-form-spin { to { transform: rotate(360deg); } }
 </style>
