@@ -41,10 +41,12 @@ class TestQuestionGovernanceActionContract(unittest.TestCase):
 
 	def test_approval_audit_is_set_without_overwriting_it_on_retirement(self):
 		source = (APP / "cbt/question_governance.py").read_text(encoding="utf-8")
-		approve_block = source[source.index("elif action == ACTION_APPROVE") : source.index("doc.save()")]
-		self.assertIn("doc.reviewed_by = frappe.session.user", approve_block)
-		self.assertIn("doc.reviewed_on = now_datetime()", approve_block)
-		self.assertNotIn("ACTION_RETIRE", approve_block)
+		transition_start = source.index("with governance_action_context(action):")
+		transition_end = source.index("\n\t\tdoc.save()", transition_start)
+		transition_block = source[transition_start:transition_end]
+		self.assertIn("doc.reviewed_by = frappe.session.user", transition_block)
+		self.assertIn("doc.reviewed_on = now_datetime()", transition_block)
+		self.assertNotIn("elif action == ACTION_RETIRE", transition_block)
 
 	def test_whitelisted_api_requires_record_read_permission(self):
 		source = (APP / "api/question_governance.py").read_text(encoding="utf-8")
