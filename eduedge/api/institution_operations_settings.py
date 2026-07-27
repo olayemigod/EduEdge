@@ -85,12 +85,13 @@ def _available_scopes() -> list[str]:
 
 
 def _select_option(requested: str | None, options: list[dict], fallback: str | None = None) -> str:
-	allowed = {row.get("value") for row in options}
+	ordered_values = [row.get("value") for row in options if row.get("value")]
+	allowed = set(ordered_values)
 	if requested and requested in allowed:
 		return requested
 	if fallback and fallback in allowed:
 		return fallback
-	return next(iter(allowed), "")
+	return ordered_values[0] if ordered_values else ""
 
 
 def _default_company(options: list[dict]) -> str:
