@@ -67,18 +67,26 @@ def fee_structure_query(user: str | None = None) -> str:
 	return _institution_query("Fee Structure", INSTITUTION_FIELD, user)
 
 
-def has_academic_institution_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_academic_institution_permission(doc, user=None, permission_type=None) -> bool:
+	"""Return an explicit Frappe 16-compatible record permission decision.
+
+	Frappe 16 no longer treats ``None`` from a ``has_permission`` hook as an
+	allow/defer result. Every allowed path must therefore return ``True``. Legacy
+	ERPNext academic masters may remain temporarily unclassified, while records
+	with Institution context are restricted to Institutions resolved from the
+	user's permitted School Branches.
+	"""
 	resolved_user = user or frappe.session.user
-	if not _should_scope(resolved_user) or not doc:
-		return None
+	if not doc or not _should_scope(resolved_user):
+		return True
 	meta = frappe.get_meta(doc.doctype)
 	fieldname = "institution" if doc.doctype in DIRECT_INSTITUTION_DOCTYPES else INSTITUTION_FIELD
 	if not meta.has_field(fieldname):
-		return None
+		return True
 	institution = doc.get(fieldname)
 	if not institution:
-		return None if doc.doctype in LEGACY_OPTIONAL_DOCTYPES else False
-	return None if institution in _allowed_institutions(resolved_user) else False
+		return doc.doctype in LEGACY_OPTIONAL_DOCTYPES
+	return institution in _allowed_institutions(resolved_user)
 
 
 def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
