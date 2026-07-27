@@ -16,6 +16,10 @@ CBT_DOCTYPES = (
 	"EduEdge CBT Exam Schedule",
 	"EduEdge CBT Candidate Assignment",
 	"EduEdge CBT Intervention Log",
+	"EduEdge CBT Attempt",
+	"EduEdge CBT Attempt Scoring Key",
+	"EduEdge CBT Attempt Answer",
+	"EduEdge CBT Sync Log",
 )
 
 PUBLIC_ASSIGNMENT_DOCTYPES = {
@@ -48,8 +52,24 @@ def cbt_intervention_log_query(user: str | None = None) -> str:
 	return _school_branch_condition("EduEdge CBT Intervention Log", user)
 
 
+def cbt_attempt_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Attempt", user)
+
+
+def cbt_attempt_scoring_key_query(user: str | None = None) -> str:
+	return _attempt_reference_condition("EduEdge CBT Attempt Scoring Key", user)
+
+
+def cbt_attempt_answer_query(user: str | None = None) -> str:
+	return _attempt_reference_condition("EduEdge CBT Attempt Answer", user)
+
+
+def cbt_sync_log_query(user: str | None = None) -> str:
+	return _attempt_reference_condition("EduEdge CBT Sync Log", user)
+
+
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
-	"""Allow role permissions unless public-exam or branch isolation denies the record."""
+	"""Allow role permissions unless public-exam or Branch isolation denies the record."""
 	resolved_user = user or frappe.session.user
 	if not _is_cbt_operational_user(resolved_user):
 		return True
@@ -66,6 +86,23 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 	return branch in allowed
 
 
+def has_attempt_reference_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	attempt_name = doc.get("attempt") if doc else None
+	if not attempt_name:
+		return False
+	attempt = frappe.db.get_value(
+		"EduEdge CBT Attempt",
+		attempt_name,
+		["name", "school_branch", "exam_scope"],
+		as_dict=True,
+	)
+	if not attempt:
+		return False
+	attempt.doctype = "EduEdge CBT Attempt"
+	return has_school_branch_permission(attempt, resolved_user, permission_type)
+
+
 def _school_branch_condition(doctype: str, user: str | None) -> str:
 	resolved_user = user or frappe.session.user
 	if not _is_cbt_operational_user(resolved_user):
@@ -73,8 +110,6 @@ def _school_branch_condition(doctype: str, user: str | None) -> str:
 	if _has_public_record_access(doctype, resolved_user):
 		return ""
 
-	# Keep centrally owned public records hidden from tenant and standalone
-	# school roles even when the site is still using legacy branch fallback.
 	if not is_branch_access_enforced():
 		return f"`tab{doctype}`.`school_branch` is not null"
 
@@ -85,6 +120,37 @@ def _school_branch_condition(doctype: str, user: str | None) -> str:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
 	return f"`tab{doctype}`.`school_branch` in ({values})"
+
+
+def _attempt_reference_condition(doctype: str, user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+	if can_author_public_exams(resolved_user):
+		return ""
+
+	if not is_branch_access_enforced():
+		return (
+			f"exists (select 1 from `tabEduEdge CBT Attempt` attempt "
+			f"where attempt.name = `tab{doctype}`.`attempt` "
+			"and attempt.school_branch is not null)"
+		)
+
+	allowed = _allowed_branch_names(resolved_user)
+	if allowed is None:
+		return (
+			f"exists (select 1 from `tabEduEdge CBT Attempt` attempt "
+			f"where attempt.name = `tab{doctype}`.`attempt` "
+			"and attempt.school_branch is not null)"
+		)
+	if not allowed:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+	return (
+		f"exists (select 1 from `tabEduEdge CBT Attempt` attempt "
+		f"where attempt.name = `tab{doctype}`.`attempt` "
+		f"and attempt.school_branch in ({values}))"
+	)
 
 
 def _has_public_record_access(doctype: str | None, user: str) -> bool:
