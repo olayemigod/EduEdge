@@ -13,6 +13,7 @@ CBT_DOCTYPES = (
 	"EduEdge Examination Centre",
 	"EduEdge CBT Question",
 	"EduEdge CBT Exam Template",
+	"EduEdge CBT Exam Schedule",
 )
 
 
@@ -28,6 +29,10 @@ def cbt_exam_template_query(user: str | None = None) -> str:
 	return _school_branch_condition("EduEdge CBT Exam Template", user)
 
 
+def cbt_exam_schedule_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Exam Schedule", user)
+
+
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 	"""Allow role permissions unless tenant/public or branch isolation denies the record."""
 	resolved_user = user or frappe.session.user
@@ -36,8 +41,8 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 
 	branch = doc.get("school_branch") if doc else None
 	if not branch:
-		# Public centres, questions, and templates are visible only to identities
-		# with the CoreEdge author capability and an explicit ProcessEdge role.
+		# Public centres, questions, templates, and schedules are visible only to
+		# identities with the CoreEdge author capability and an explicit role.
 		return False
 	if not is_branch_access_enforced():
 		return True
