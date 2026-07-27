@@ -45,6 +45,7 @@ class TestCBTCandidateGovernanceContract(unittest.TestCase):
 			"Student Group Student",
 			"New candidates can be assigned only",
 			"require_public_exam_capability",
+			"reference_doctype=\"EduEdge CBT Exam Schedule\"",
 			"This candidate is already assigned",
 			"An eligible candidate assignment is immutable",
 			"Candidate check-in has not opened",
@@ -71,6 +72,16 @@ class TestCBTCandidateGovernanceContract(unittest.TestCase):
 			"Force Submission is not permitted",
 		):
 			self.assertIn(token, controller)
+
+	def test_public_capability_helper_accepts_record_context(self):
+		public_access = (APP / "cbt" / "public_access.py").read_text()
+		for token in (
+			"reference_doctype: str | None = None",
+			"reference_name: str | None = None",
+			"reference_doctype=reference_doctype",
+			"reference_name=reference_name",
+		):
+			self.assertIn(token, public_access)
 
 	def test_general_settings_remain_free_of_candidate_and_intervention_policies(self):
 		settings = (
