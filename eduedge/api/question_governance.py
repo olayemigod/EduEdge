@@ -20,7 +20,9 @@ def _require_readable_question(question: str):
 @frappe.whitelist()
 def get_action_state(question: str) -> dict:
 	doc = _require_readable_question(question)
-	return get_question_action_state(doc)
+	state = get_question_action_state(doc)
+	state["modified"] = str(doc.modified)
+	return state
 
 
 @frappe.whitelist()
