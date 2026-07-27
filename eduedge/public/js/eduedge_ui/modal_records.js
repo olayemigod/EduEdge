@@ -35,10 +35,17 @@ function translateModalText(value) {
 }
 
 function translateModalOption(option) {
-	if (!option || typeof option !== "object" || Array.isArray(option)) return option;
+	if (option === undefined || option === null || option === "") return null;
+	if (typeof option !== "object" || Array.isArray(option)) {
+		const value = String(option);
+		return { value, label: translateModalText(value) };
+	}
+	const value = String(option.value ?? option.name ?? option.label ?? "");
+	if (!value) return null;
 	return {
 		...option,
-		label: translateModalText(option.label),
+		value,
+		label: translateModalText(option.label ?? value),
 		description: translateModalText(option.description),
 	};
 }
@@ -51,7 +58,9 @@ function translateModalField(field) {
 		description: translateModalText(field.description),
 		placeholder: translateModalText(field.placeholder),
 		help: translateModalText(field.help),
-		options: Array.isArray(field.options) ? field.options.map(translateModalOption) : field.options,
+		options: Array.isArray(field.options)
+			? field.options.map(translateModalOption).filter(Boolean)
+			: field.options,
 	};
 }
 
@@ -171,7 +180,9 @@ export async function searchRecordModalOptions(modal, { field, query = "", value
 			context: JSON.stringify(modal.context || {}),
 		});
 		if (modal.searchTokens?.[fieldname] !== token) return;
-		const options = Array.isArray(response.message) ? response.message.map(translateModalOption) : [];
+		const options = Array.isArray(response.message)
+			? response.message.map(translateModalOption).filter(Boolean)
+			: [];
 		modal.fields = (modal.fields || []).map((item) =>
 			item.fieldname === fieldname
 				? { ...item, options, options_loading: false }
