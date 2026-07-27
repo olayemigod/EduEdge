@@ -1,3 +1,29 @@
+const BRANCH_BUNDLE_READY_TIMEOUT_MS = 1500;
+const BRANCH_BUNDLE_READY_POLL_MS = 50;
+
+function getBranchGovernanceBundle() {
+	const component = window.EduEdgeBranchGovernance;
+	const factory = window.createEduEdgeBranchGovernanceApp;
+	if (!component || typeof factory !== "function") return null;
+	return { component, factory };
+}
+
+function waitForBranchGovernanceBundle(callback, startedAt = Date.now()) {
+	const bundle = getBranchGovernanceBundle();
+	if (bundle) {
+		callback(bundle);
+		return;
+	}
+	if (Date.now() - startedAt >= BRANCH_BUNDLE_READY_TIMEOUT_MS) {
+		callback(null);
+		return;
+	}
+	setTimeout(
+		() => waitForBranchGovernanceBundle(callback, startedAt),
+		BRANCH_BUNDLE_READY_POLL_MS
+	);
+}
+
 frappe.pages["eduedge-branch-governance"].on_page_load = function (wrapper) {
 	wrapper.page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -26,6 +52,7 @@ frappe.pages["eduedge-branch-governance"].on_page_show = function (wrapper) {
 	).appendTo(page.body);
 
 	const fail = (message) => {
+		if (wrapper.current_visit_id !== visitId) return;
 		$loading.remove();
 		$(
 			`<div class="alert alert-danger p-6 text-center">
@@ -33,6 +60,27 @@ frappe.pages["eduedge-branch-governance"].on_page_show = function (wrapper) {
 				<div>${frappe.utils.escape_html(message || "")}</div>
 			</div>`
 		).appendTo(page.body);
+	};
+
+	const mount = (bundle) => {
+		if (wrapper.current_visit_id !== visitId) return;
+		if (!bundle) {
+			fail(__("The EduEdge Branch Governance bundle is unavailable or incomplete."));
+			return;
+		}
+		$loading.remove();
+		const root = $(
+			'<div class="eduedge-branch-governance-root" data-edge-product="eduedge"></div>'
+		).appendTo(page.body);
+		try {
+			wrapper.vue_app = bundle.factory({
+				pageName: "eduedge-branch-governance",
+			});
+			wrapper.vue_app.mount(root[0]);
+		} catch (error) {
+			console.error("Failed to mount EduEdge Branch Governance", error);
+			fail(error.message || String(error));
+		}
 	};
 
 	// The legacy `edgeui.bundle.js` manifest key is intentionally not loaded.
@@ -47,26 +95,7 @@ frappe.pages["eduedge-branch-governance"].on_page_show = function (wrapper) {
 
 		frappe.require("eduedge_branch_governance.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (
-				!window.EduEdgeBranchGovernance ||
-				typeof window.createEduEdgeBranchGovernanceApp !== "function"
-			) {
-				fail(__("The EduEdge Branch Governance bundle is unavailable or incomplete."));
-				return;
-			}
-			$loading.remove();
-			const root = $(
-				'<div class="eduedge-branch-governance-root" data-edge-product="eduedge"></div>'
-			).appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeBranchGovernanceApp({
-					pageName: "eduedge-branch-governance",
-				});
-				wrapper.vue_app.mount(root[0]);
-			} catch (error) {
-				console.error("Failed to mount EduEdge Branch Governance", error);
-				fail(error.message || String(error));
-			}
+			waitForBranchGovernanceBundle(mount);
 		});
 	});
 };
