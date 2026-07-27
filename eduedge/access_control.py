@@ -21,6 +21,8 @@ PERMISSION_TYPES = (
 # Resource keys are stable UI/API identifiers. DocType names remain the Frappe
 # permission source of truth and can be changed through Role Permission Manager.
 RESOURCE_DOCTYPES = {
+	"institution": "EduEdge Institution",
+	"company_operations_settings": "EduEdge Company Operations Settings",
 	"school_branch": "EduEdge School Branch",
 	"user_branch_access": "EduEdge User Branch Access",
 	"instructor_branch_assignment": "EduEdge Instructor Branch Assignment",
@@ -87,6 +89,10 @@ ROUTE_REQUIREMENTS = {
 		("assessment_result", "read"),
 	),
 	"/app/eduedge-school-branches": (("school_branch", "read"),),
+	"/app/eduedge-institution-operations-settings": (
+		("institution", "read"),
+		("company_operations_settings", "read"),
+	),
 	"/app/eduedge-branch-governance": (
 		("user_branch_access", "read"),
 		("instructor_branch_assignment", "read"),
