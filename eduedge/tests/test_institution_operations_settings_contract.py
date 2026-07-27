@@ -106,6 +106,17 @@ class TestInstitutionOperationsSettingsContract(unittest.TestCase):
 		self.assertIn("createEduEdgeInstitutionOperationsSettingsApp", bundle)
 		self.assertLess(loader.index("edgesuite_ui.bundle.js"), loader.index("eduedge_institution_operations_settings.bundle.js"))
 
+	def test_component_template_does_not_dereference_browser_globals(self):
+		component = (
+			APP
+			/ "public/js/eduedge_institution_operations_settings/EduEdgeInstitutionOperationsSettings.vue"
+		).read_text(encoding="utf-8")
+		template = component.split("<script>", 1)[0]
+		self.assertIn(':user-name="userFullName"', template)
+		self.assertNotIn("frappe.", template)
+		self.assertIn("userFullName()", component)
+		self.assertIn("frappe.session?.user_fullname", component)
+
 	def test_navigation_and_access_manifest_expose_the_page(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text(encoding="utf-8")
 		access = (APP / "access_control.py").read_text(encoding="utf-8")
