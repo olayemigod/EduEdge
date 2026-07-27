@@ -9,12 +9,26 @@ CBT_MASTER_DOCTYPES = {
 	"EduEdge CBT Exam Template": "Template Status",
 }
 
+DEVICE_CHANGE_POLICIES = {
+	"Not Allowed",
+	"Invigilator Approval Required",
+	"Administrator Approval Required",
+	"Allowed Before First Answer Only",
+}
+ATTEMPT_REVIEW_POLICIES = {
+	"Review Flagged Attempts Only",
+	"Review All Attempts",
+	"No Pre-publication Review",
+}
+
 
 def validate_master_docstatus(doc, method: str | None = None) -> None:
 	if doc.doctype not in CBT_MASTER_DOCTYPES:
 		return
 	if cint(doc.docstatus) != 0:
 		throw_master_lifecycle_error(doc)
+	if doc.doctype == "EduEdge CBT Exam Template":
+		_validate_template_runtime_policies(doc)
 
 
 def block_master_submit(doc, method: str | None = None) -> None:
@@ -34,3 +48,19 @@ def throw_master_lifecycle_error(doc) -> None:
 		frappe.ValidationError,
 		title=_("Use Governance Status"),
 	)
+
+
+def _validate_template_runtime_policies(doc) -> None:
+	if doc.device_change_policy not in DEVICE_CHANGE_POLICIES:
+		frappe.throw(_("Select a valid Device Change Policy."), frappe.ValidationError)
+	if doc.attempt_review_policy not in ATTEMPT_REVIEW_POLICIES:
+		frappe.throw(_("Select a valid Attempt Review Policy."), frappe.ValidationError)
+	before = doc.get_doc_before_save()
+	if not before or before.status not in {"Approved", "Retired"}:
+		return
+	for fieldname in ("device_change_policy", "attempt_review_policy"):
+		if before.get(fieldname) != doc.get(fieldname):
+			frappe.throw(
+				_("Approved exam template policies are immutable. Create a new template version instead."),
+				frappe.ValidationError,
+			)
