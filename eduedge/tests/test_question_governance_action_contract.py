@@ -54,6 +54,7 @@ class TestQuestionGovernanceActionContract(unittest.TestCase):
 			"@frappe.whitelist()",
 			'doc.has_permission("read")',
 			"get_question_action_state(doc)",
+			'state["modified"] = str(doc.modified)',
 			"apply_question_action(doc, action, expected_modified=expected_modified)",
 		):
 			self.assertIn(expected, source)
@@ -69,6 +70,7 @@ class TestQuestionGovernanceActionContract(unittest.TestCase):
 			'"return_to_draft"',
 			'"submit_for_review"',
 			"requires_confirmation",
+			"expected_modified: this.context?.question_action_state?.modified",
 		):
 			self.assertIn(expected, source)
 		self.assertLess(
