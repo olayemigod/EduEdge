@@ -12,14 +12,14 @@ from eduedge.api.question_batch import (
 	_normalise_common,
 	_parse_payload,
 	_parse_upload,
-	_require_create_permission,
+	_require_import_permission,
 )
 
 
 @frappe.whitelist()
 def import_question_upload(file_name: str, file_content: str, common) -> dict:
 	"""Re-parse and revalidate the original upload before creating Draft questions."""
-	_require_create_permission()
+	_require_import_permission()
 	common_values = _normalise_common(_parse_payload(common))
 	rows = _parse_upload(file_name, _decode_upload(file_content))
 	within_batch, existing = _duplicate_codes(rows)
