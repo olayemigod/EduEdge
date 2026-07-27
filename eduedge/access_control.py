@@ -47,6 +47,7 @@ RESOURCE_DOCTYPES = {
 	"cbt_schedule": "EduEdge CBT Exam Schedule",
 	"cbt_candidate_assignment": "EduEdge CBT Candidate Assignment",
 	"cbt_attempt": "EduEdge CBT Attempt",
+	"cbt_attempt_review": "EduEdge CBT Attempt Review",
 	"cbt_result": "EduEdge CBT Result",
 	"eduedge_settings": "EduEdge Settings",
 	"training_course": "EduEdge Training Course",
@@ -79,6 +80,7 @@ ROUTE_REQUIREMENTS = {
 		("cbt_attempt", "read"),
 	),
 	"/app/eduedge-cbt-marking": (("cbt_result", "write"),),
+	"/app/eduedge-cbt-attempt-review": (("cbt_attempt_review", "create"),),
 	"/app/eduedge-question-builder": (
 		("cbt_question", "read"),
 		("cbt_question", "create"),
