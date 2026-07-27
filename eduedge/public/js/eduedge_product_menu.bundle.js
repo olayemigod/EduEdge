@@ -83,7 +83,16 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					description: "Centres, approved questions, and exam templates",
 					icon: "assessment",
 					route: "/app/eduedge-cbt-operations",
-					keywords: ["cbt", "exam", "question bank", "invigilation", "template"],
+					keywords: ["cbt", "exam", "question bank", "template"],
+				},
+				{
+					label: "CBT Invigilation",
+					description: "Monitor candidates, sync health, and result readiness",
+					icon: "monitor",
+					route: "/app/eduedge-cbt-invigilation",
+					resource: "cbt_attempt",
+					permissions: ["read", "report"],
+					keywords: ["cbt", "invigilation", "candidate", "pending sync", "monitor"],
 				},
 				{
 					label: "Assessments & Results",
