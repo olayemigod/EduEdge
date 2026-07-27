@@ -5,7 +5,11 @@ import re
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import validate_email_address
+from frappe.utils import cint, validate_email_address
+
+
+APPROVAL_MODES = {"Recommended", "Simple", "Standard"}
+MAX_BULK_QUESTIONS = 100
 
 
 class EduEdgeInstitution(Document):
@@ -23,6 +27,7 @@ class EduEdgeInstitution(Document):
 		self._validate_company_change()
 		self._validate_institution_type()
 		self._validate_contact_details()
+		self._validate_operations_preferences()
 		if self.is_default and not self.enabled:
 			frappe.throw(_("A default Institution must be enabled."), frappe.ValidationError)
 
@@ -62,6 +67,17 @@ class EduEdgeInstitution(Document):
 	def _validate_contact_details(self) -> None:
 		if self.email and not validate_email_address(self.email):
 			frappe.throw(_("Enter a valid institution email address."), frappe.ValidationError)
+
+	def _validate_operations_preferences(self) -> None:
+		self.question_approval_mode = self.question_approval_mode or "Recommended"
+		if self.question_approval_mode not in APPROVAL_MODES:
+			frappe.throw(_("Question Approval Mode must be Recommended, Simple, or Standard."), frappe.ValidationError)
+		self.max_bulk_question_approval = cint(self.max_bulk_question_approval or MAX_BULK_QUESTIONS)
+		if not 1 <= self.max_bulk_question_approval <= MAX_BULK_QUESTIONS:
+			frappe.throw(
+				_("Maximum Questions per Bulk Action must be between 1 and {0}.").format(MAX_BULK_QUESTIONS),
+				frappe.ValidationError,
+			)
 
 
 def _normalize_code(value: str | None) -> str:
