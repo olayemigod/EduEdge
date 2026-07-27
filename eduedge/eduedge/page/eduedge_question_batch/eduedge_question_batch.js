@@ -54,7 +54,11 @@ frappe.pages["eduedge-question-batch"].on_page_show = function (wrapper) {
 		}
 
 		frappe.require(
-			["eduedge_question_batch.bundle.css", "eduedge_question_batch.bundle.js"],
+			[
+				"eduedge_question_batch.bundle.css",
+				"eduedge_question_batch_permissions.bundle.css",
+				"eduedge_question_batch.bundle.js",
+			],
 			() => {
 				if (wrapper.current_visit_id !== visitId) return;
 				if (
@@ -66,7 +70,7 @@ frappe.pages["eduedge-question-batch"].on_page_show = function (wrapper) {
 				}
 				$loading.remove();
 				const root = $(
-					'<div class="eduedge-question-batch-root" data-edge-product="eduedge"></div>'
+					'<div class="eduedge-question-batch-root" data-edge-product="eduedge" data-can-upload="0"></div>'
 				).appendTo(page.body);
 				try {
 					wrapper.vue_app = window.createEduEdgeQuestionBatchApp({
