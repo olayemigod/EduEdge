@@ -1,28 +1,39 @@
 <template>
 	<Teleport to="body">
-		<div v-if="open" class="edge-modal edge-modal-fallback" data-eduedge-terminology-managed>
-			<div class="edge-modal-fallback__backdrop" @mousedown.self="requestClose">
-				<section
-					ref="dialog"
-					class="edge-modal-fallback__dialog"
-					:class="`edge-modal-fallback__dialog--${size}`"
-					role="dialog"
-					aria-modal="true"
-					:aria-labelledby="titleId"
-					tabindex="-1"
-					@keydown.esc.prevent="requestClose"
-				>
-					<header class="edge-modal-fallback__header">
-						<div>
-							<h2 :id="titleId">{{ title }}</h2>
-							<p v-if="subtitle">{{ subtitle }}</p>
-						</div>
-						<button type="button" class="edge-modal-fallback__close" :disabled="busy" aria-label="Close dialog" @click="requestClose">×</button>
-					</header>
-					<div class="edge-modal-fallback__body"><slot /></div>
-					<footer v-if="$slots.footer" class="edge-modal-fallback__footer"><slot name="footer" /></footer>
-				</section>
-			</div>
+		<div
+			v-if="open"
+			class="edge-modal-backdrop eduedge-modal-backdrop"
+			data-eduedge-terminology-managed
+			@mousedown.self="requestClose"
+		>
+			<section
+				ref="dialog"
+				class="edge-modal eduedge-compatible-modal"
+				:class="`edge-modal--${size}`"
+				role="dialog"
+				aria-modal="true"
+				:aria-labelledby="titleId"
+				tabindex="-1"
+				@keydown.esc.prevent="requestClose"
+			>
+				<header class="edge-modal__header">
+					<div class="edge-modal__heading">
+						<h2 :id="titleId">{{ title }}</h2>
+						<p v-if="subtitle">{{ subtitle }}</p>
+					</div>
+					<button
+						type="button"
+						class="edge-modal__close"
+						:disabled="busy"
+						aria-label="Close dialog"
+						@click="requestClose"
+					>
+						×
+					</button>
+				</header>
+				<div class="edge-modal__body"><slot /></div>
+				<footer v-if="$slots.footer" class="edge-modal__footer"><slot name="footer" /></footer>
+			</section>
 		</div>
 	</Teleport>
 </template>
@@ -56,17 +67,45 @@ export default {
 </script>
 
 <style scoped>
-.edge-modal-fallback { position: fixed; inset: 0; z-index: 1060; }
-.edge-modal-fallback__backdrop { align-items: center; background: rgba(15, 23, 42, .52); display: flex; inset: 0; justify-content: center; overflow-y: auto; padding: 1.25rem; position: absolute; }
-.edge-modal-fallback__dialog { background: var(--card-bg, #fff); border: 1px solid var(--border-color, #d8dee8); border-radius: var(--edge-radius-lg, 12px); box-shadow: 0 24px 64px rgba(15, 23, 42, .24); color: var(--text-color, #1f2937); display: flex; flex-direction: column; max-height: calc(100vh - 2.5rem); max-width: 48rem; outline: none; overflow: hidden; width: min(100%, 42rem); }
-.edge-modal-fallback__dialog--sm { max-width: 28rem; }
-.edge-modal-fallback__dialog--lg { max-width: 64rem; width: min(100%, 58rem); }
-.edge-modal-fallback__header { align-items: flex-start; border-bottom: 1px solid var(--border-color, #d8dee8); display: flex; gap: 1rem; justify-content: space-between; padding: 1rem 1.25rem; }
-.edge-modal-fallback__header h2 { font-size: 1.15rem; margin: 0; }
-.edge-modal-fallback__header p { color: var(--text-muted, #667085); margin: .35rem 0 0; }
-.edge-modal-fallback__close { background: transparent; border: 0; color: var(--text-muted, #667085); cursor: pointer; font-size: 1.5rem; line-height: 1; padding: .1rem .35rem; }
-.edge-modal-fallback__close:disabled { cursor: not-allowed; opacity: .55; }
-.edge-modal-fallback__body { overflow-y: auto; padding: 1.25rem; }
-.edge-modal-fallback__footer { align-items: center; border-top: 1px solid var(--border-color, #d8dee8); display: flex; gap: .65rem; justify-content: flex-end; padding: .9rem 1.25rem; }
-@media (max-width: 640px) { .edge-modal-fallback__backdrop { align-items: flex-end; padding: .5rem; } .edge-modal-fallback__dialog { max-height: calc(100vh - 1rem); width: 100%; } }
+/* The canonical EdgeSuite classes above provide the visual contract. These
+   guards keep the compatibility component correctly layered and centred even
+   when a product site is temporarily serving an older shared stylesheet. */
+.eduedge-modal-backdrop {
+	align-items: center;
+	background: rgb(15 23 42 / 42%);
+	display: flex;
+	inset: 0;
+	justify-content: center;
+	overflow-y: auto;
+	padding: clamp(.75rem, 3vw, 2rem);
+	position: fixed;
+	z-index: 1100;
+}
+.eduedge-compatible-modal {
+	background: var(--edge-color-surface, #fff);
+	border: 1px solid var(--edge-color-border-strong, #cbd7e5);
+	border-radius: var(--edge-radius-lg, 1rem);
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+	max-height: min(88vh, 54rem);
+	overflow: hidden;
+	width: min(100%, 42rem);
+}
+.eduedge-compatible-modal.edge-modal--sm { width: min(100%, 30rem); }
+.eduedge-compatible-modal.edge-modal--lg { width: min(100%, 58rem); }
+.eduedge-compatible-modal.edge-modal--xl { width: min(100%, 72rem); }
+@media (max-width: 47.99rem) {
+	.eduedge-modal-backdrop { align-items: flex-end; padding: 0; }
+	.eduedge-compatible-modal {
+		border-bottom: 0;
+		border-left: 0;
+		border-radius: 1rem 1rem 0 0;
+		border-right: 0;
+		margin: auto 0 0;
+		max-height: 92vh;
+		width: 100%;
+	}
+}
 </style>
