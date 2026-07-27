@@ -85,6 +85,27 @@ class TestQuickEditorVisualContract(unittest.TestCase):
 		self.assertNotIn("<datalist", form)
 		self.assertNotIn(":list=", form)
 
+	def test_searchable_flyout_has_capture_phase_outside_click_dismissal(self):
+		form = (
+			APP
+			/ "public"
+			/ "js"
+			/ "eduedge_ui"
+			/ "components"
+			/ "EdgeFormDialogFallback.vue"
+		).read_text(encoding="utf-8")
+
+		for expected in (
+			'ref="formRoot"',
+			'document.addEventListener("pointerdown", this.dismissOpenLinkOnOutsidePointer, true)',
+			'document.removeEventListener("pointerdown", this.dismissOpenLinkOnOutsidePointer, true)',
+			'active?.classList?.contains("edge-link-field__input")',
+			'this.$refs.formRoot?.contains(active)',
+			'active.closest?.(".edge-link-field")',
+			"active.blur()",
+		):
+			self.assertIn(expected, form)
+
 
 if __name__ == "__main__":
 	unittest.main()
