@@ -96,14 +96,16 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			self.assertIn(token, service)
 		self.assertNotIn('"is_correct":', service)
 
-	def test_runtime_guard_hides_prestart_questions_and_rejects_late_answers(self):
+	def test_runtime_guard_hides_prestart_and_terminal_questions_and_audits_late_answers(self):
 		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
 		for token in (
 			'"questions": []',
 			'"answers": {}',
-			"Post-timeout sync accepts only answers saved before the server deadline",
-			"Answers were reconciled after the server timeout",
-			"attempt.attempt_status == \"In Progress\" and base._remaining(attempt) <= 0",
+			'SYNC_RECONCILIATION_HOURS = 24',
+			'Post-submission sync accepts only answers saved before the server cutoff',
+			'Answers were reconciled after submission or timeout',
+			'attempt.attempt_status == "In Progress" and base._remaining(attempt) <= 0',
+			'show_questions = attempt.attempt_status == "In Progress"',
 		):
 			self.assertIn(token, guard)
 
