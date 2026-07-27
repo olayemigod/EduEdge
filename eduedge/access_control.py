@@ -71,6 +71,7 @@ ROUTE_REQUIREMENTS = {
 		("cbt_question", "read"),
 		("cbt_template", "read"),
 	),
+	"/app/eduedge-question-bank": (("cbt_question", "read"),),
 	"/app/eduedge-question-builder": (
 		("cbt_question", "read"),
 		("cbt_question", "create"),
