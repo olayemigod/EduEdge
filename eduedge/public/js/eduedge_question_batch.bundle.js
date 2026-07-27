@@ -1,6 +1,25 @@
 import EduEdgeQuestionBatch from "./eduedge_question_batch/EduEdgeQuestionBatch.vue";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
+const originalAddQuestion = EduEdgeQuestionBatch.methods?.addQuestion;
+
+if (typeof originalAddQuestion === "function") {
+	EduEdgeQuestionBatch.methods.addQuestion = function addQuestionNewestFirst(...args) {
+		const before = this.questions.length;
+		const result = originalAddQuestion.apply(this, args);
+		if (this.questions.length > before) {
+			const newest = this.questions.pop();
+			this.questions.unshift(newest);
+			this.$nextTick(() => {
+				this.$el
+					?.querySelector(".eduedge-question-card input.form-control")
+					?.focus();
+			});
+		}
+		return result;
+	};
+}
+
 export function createEduEdgeQuestionBatchApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeQuestionBatch, rootProps);
 }
