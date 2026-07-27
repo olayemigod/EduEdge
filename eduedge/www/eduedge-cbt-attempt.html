@@ -1,0 +1,30 @@
+{% extends "templates/web.html" %}
+
+{% block title %}EduEdge CBT{% endblock %}
+
+{% block head_include %}
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="/assets/eduedge/css/eduedge_cbt_candidate.css?v=1">
+{% endblock %}
+
+{% block page_content %}
+<div id="eduedge-cbt-candidate-root" aria-live="polite">
+	<main class="cbt-loading">
+		<div class="cbt-spinner" aria-hidden="true"></div>
+		<h1>EduEdge CBT</h1>
+		<p>Preparing examination runtime…</p>
+	</main>
+</div>
+<noscript>
+	<div class="cbt-fatal">
+		<div class="cbt-fatal-card">
+			<h1>JavaScript is required</h1>
+			<p>Enable JavaScript in this browser before starting the examination.</p>
+		</div>
+	</div>
+</noscript>
+<script src="/assets/eduedge/js/eduedge_cbt_runtime_storage.js?v=1"></script>
+<script src="/assets/eduedge/js/eduedge_cbt_candidate.js?v=1"></script>
+{% endblock %}
