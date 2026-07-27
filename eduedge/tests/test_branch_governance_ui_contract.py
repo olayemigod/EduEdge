@@ -62,6 +62,17 @@ class TestBranchGovernanceUIContract(unittest.TestCase):
 		self.assertNotIn("new frappe.ui.Dialog", vue)
 		self.assertNotIn("frappe.confirm(", vue)
 
+	def test_branch_role_select_is_renderable_and_persistent_in_quick_editor(self):
+		backend = (APP / "api" / "modal_records.py").read_text()
+		adapter = (APP / "public" / "js" / "eduedge_ui" / "modal_records.js").read_text()
+		self.assertIn('"fieldname": "branch_role", "type": "Select"', backend)
+		self.assertIn('"options": BRANCH_ROLES', backend)
+		self.assertIn('const value = String(option);', adapter)
+		self.assertIn('return { value, label: translateModalText(value) };', adapter)
+		self.assertIn('field.options.map(translateModalOption).filter(Boolean)', adapter)
+		self.assertIn('modal.values = { ...(schema.values || {}) };', adapter)
+		self.assertIn('values: JSON.stringify(modal.values || {})', adapter)
+
 	def test_backend_enforces_coverage_and_configured_permissions(self):
 		service = (APP / "services" / "branch_governance.py").read_text()
 		api = (APP / "api" / "branch_governance.py").read_text()
