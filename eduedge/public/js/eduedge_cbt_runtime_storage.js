@@ -44,7 +44,11 @@
 					database.createObjectStore(META, { keyPath: "id" });
 				}
 			};
-			request.onsuccess = () => resolve(request.result);
+			request.onsuccess = () => {
+				const database = request.result;
+				database.onversionchange = () => database.close();
+				resolve(database);
+			};
 			request.onerror = () => reject(request.error || new Error("Unable to open browser answer storage."));
 			request.onblocked = () => reject(new Error("Browser answer storage is blocked by another open EduEdge CBT tab."));
 		});
@@ -90,15 +94,15 @@
 		}
 
 		async seedServerAnswers(serverAnswers = {}) {
-			const transaction = this.database.transaction(ANSWERS, "readwrite");
-			const store = transaction.objectStore(ANSWERS);
+			const localRows = await this.listAnswers();
+			const localByKey = new Map(localRows.map((row) => [row.question_snapshot_key, row]));
+			const writes = [];
 			for (const [questionKey, serverRow] of Object.entries(serverAnswers || {})) {
-				const id = this.answerId(questionKey);
-				const local = await requestPromise(store.get(id));
+				const local = localByKey.get(questionKey);
 				const serverRevision = Number(serverRow.client_revision || 0);
 				if (local && Number(local.client_revision || 0) > serverRevision) continue;
-				store.put({
-					id,
+				writes.push({
+					id: this.answerId(questionKey),
 					attempt: this.attempt,
 					question_snapshot_key: questionKey,
 					answer: serverRow.answer || {},
@@ -108,6 +112,10 @@
 					server_saved_at: serverRow.server_saved_at || null,
 				});
 			}
+			if (!writes.length) return;
+			const transaction = this.database.transaction(ANSWERS, "readwrite");
+			const store = transaction.objectStore(ANSWERS);
+			for (const row of writes) store.put(row);
 			await transactionPromise(transaction);
 		}
 
@@ -119,18 +127,23 @@
 		}
 
 		async markBatchSynced(batch) {
+			const currentRows = await this.listAnswers();
+			const currentByKey = new Map(currentRows.map((row) => [row.question_snapshot_key, row]));
+			const updates = [];
+			for (const sent of batch.answers || []) {
+				const current = currentByKey.get(sent.question_snapshot_key);
+				if (!current) continue;
+				updates.push({
+					...current,
+					synced_revision: Math.max(
+						Number(current.synced_revision || 0),
+						Number(sent.client_revision || 0)
+					),
+				});
+			}
 			const transaction = this.database.transaction([ANSWERS, BATCHES], "readwrite");
 			const answerStore = transaction.objectStore(ANSWERS);
-			for (const sent of batch.answers || []) {
-				const id = this.answerId(sent.question_snapshot_key);
-				const current = await requestPromise(answerStore.get(id));
-				if (!current) continue;
-				current.synced_revision = Math.max(
-					Number(current.synced_revision || 0),
-					Number(sent.client_revision || 0)
-				);
-				answerStore.put(current);
-			}
+			for (const row of updates) answerStore.put(row);
 			transaction.objectStore(BATCHES).delete(this.batchId());
 			await transactionPromise(transaction);
 		}
