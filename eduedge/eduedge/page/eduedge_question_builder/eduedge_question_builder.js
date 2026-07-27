@@ -22,6 +22,9 @@ frappe.pages["eduedge-question-builder"].on_page_show = function (wrapper) {
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
 
+	wrapper.rich_text_runtime?.destroy?.();
+	wrapper.rich_text_runtime = null;
+
 	if (wrapper.vue_app) {
 		try {
 			wrapper.vue_app.unmount();
@@ -55,12 +58,18 @@ frappe.pages["eduedge-question-builder"].on_page_show = function (wrapper) {
 		}
 
 		frappe.require(
-			["eduedge_question_builder.bundle.css", "eduedge_question_builder.bundle.js"],
+			[
+				"eduedge_question_rich_text.bundle.css",
+				"eduedge_question_builder.bundle.css",
+				"eduedge_question_rich_text.bundle.js",
+				"eduedge_question_builder.bundle.js",
+			],
 			() => {
 				if (wrapper.current_visit_id !== visitId) return;
 				if (
 					!window.EduEdgeQuestionBuilder
 					|| typeof window.createEduEdgeQuestionBuilderApp !== "function"
+					|| typeof window.installEduEdgeQuestionRichTextEditors !== "function"
 				) {
 					fail(__("The EduEdge Question Builder bundle is unavailable or incomplete."));
 					return;
@@ -75,6 +84,7 @@ frappe.pages["eduedge-question-builder"].on_page_show = function (wrapper) {
 						questionName: resolveQuestionName(),
 					});
 					wrapper.vue_app.mount(root[0]);
+					wrapper.rich_text_runtime = window.installEduEdgeQuestionRichTextEditors(root[0]);
 				} catch (error) {
 					console.error("Failed to mount EduEdge Question Builder", error);
 					fail(error.message || String(error));
