@@ -188,6 +188,7 @@ permission_query_conditions = {
 	"EduEdge CBT Candidate Assignment": "eduedge.cbt.permissions.cbt_candidate_assignment_query",
 	"EduEdge CBT Intervention Log": "eduedge.cbt.permissions.cbt_intervention_log_query",
 	"EduEdge CBT Attempt": "eduedge.cbt.permissions.cbt_attempt_query",
+	"EduEdge CBT Attempt Review": "eduedge.cbt.permissions.cbt_attempt_review_query",
 	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.cbt_attempt_scoring_key_query",
 	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.cbt_attempt_answer_query",
 	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.cbt_sync_log_query",
@@ -235,6 +236,7 @@ has_permission = {
 	"EduEdge CBT Candidate Assignment": "eduedge.cbt.permissions.has_school_branch_permission",
 	"EduEdge CBT Intervention Log": "eduedge.cbt.permissions.has_school_branch_permission",
 	"EduEdge CBT Attempt": "eduedge.cbt.permissions.has_school_branch_permission",
+	"EduEdge CBT Attempt Review": "eduedge.cbt.permissions.has_school_branch_permission",
 	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.has_attempt_reference_permission",
 	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.has_attempt_reference_permission",
 	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.has_attempt_reference_permission",
@@ -269,5 +271,5 @@ fixtures = [
 				],
 			]
 		],
-	},
+	}
 ]
