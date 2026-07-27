@@ -12,7 +12,7 @@ class EduEdgeCBTResult(Document):
 			or getattr(frappe.flags, "in_cbt_result_sync_service", False)
 		):
 			frappe.throw(
-				_("CBT Results are maintained only through the governed scoring, marking and result-sync services."),
+				_("CBT Results are maintained only through the governed scoring and marking services, including the result-sync service."),
 				frappe.PermissionError,
 			)
 
