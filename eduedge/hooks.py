@@ -176,6 +176,7 @@ permission_query_conditions = {
 	"EduEdge Examination Centre": "eduedge.cbt.permissions.examination_centre_query",
 	"EduEdge CBT Question": "eduedge.cbt.permissions.cbt_question_query",
 	"EduEdge CBT Exam Template": "eduedge.cbt.permissions.cbt_exam_template_query",
+	"EduEdge CBT Exam Schedule": "eduedge.cbt.permissions.cbt_exam_schedule_query",
 }
 
 has_permission = {
@@ -213,6 +214,7 @@ has_permission = {
 	"EduEdge Examination Centre": "eduedge.cbt.permissions.has_school_branch_permission",
 	"EduEdge CBT Question": "eduedge.cbt.permissions.has_school_branch_permission",
 	"EduEdge CBT Exam Template": "eduedge.cbt.permissions.has_school_branch_permission",
+	"EduEdge CBT Exam Schedule": "eduedge.cbt.permissions.has_school_branch_permission",
 }
 
 fixtures = [
