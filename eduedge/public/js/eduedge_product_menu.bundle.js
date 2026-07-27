@@ -104,6 +104,15 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					keywords: ["cbt", "score", "marking", "result", "approval"],
 				},
 				{
+					label: "CBT Attempt Review",
+					description: "Resolve integrity flags before scoring",
+					icon: "shield",
+					route: "/app/eduedge-cbt-attempt-review",
+					resource: "cbt_attempt_review",
+					permissions: ["create"],
+					keywords: ["cbt", "attempt", "review", "integrity", "disqualify"],
+				},
+				{
 					label: "Assessments & Results",
 					description: "Plan, review, approve, and publish results",
 					icon: "assessment",
