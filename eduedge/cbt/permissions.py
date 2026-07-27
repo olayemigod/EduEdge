@@ -20,6 +20,9 @@ CBT_DOCTYPES = (
 	"EduEdge CBT Attempt Scoring Key",
 	"EduEdge CBT Attempt Answer",
 	"EduEdge CBT Sync Log",
+	"EduEdge CBT Result",
+	"EduEdge CBT Result Item",
+	"EduEdge CBT Marking Log",
 )
 
 PUBLIC_ASSIGNMENT_DOCTYPES = {
@@ -68,6 +71,18 @@ def cbt_sync_log_query(user: str | None = None) -> str:
 	return _attempt_reference_condition("EduEdge CBT Sync Log", user)
 
 
+def cbt_result_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Result", user)
+
+
+def cbt_result_item_query(user: str | None = None) -> str:
+	return _result_reference_condition("EduEdge CBT Result Item", user)
+
+
+def cbt_marking_log_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Marking Log", user)
+
+
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 	"""Allow role permissions unless public-exam or Branch isolation denies the record."""
 	resolved_user = user or frappe.session.user
@@ -101,6 +116,23 @@ def has_attempt_reference_permission(doc, user=None, permission_type=None) -> bo
 		return False
 	attempt.doctype = "EduEdge CBT Attempt"
 	return has_school_branch_permission(attempt, resolved_user, permission_type)
+
+
+def has_result_reference_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	result_name = doc.get("parent") or doc.get("result") if doc else None
+	if not result_name:
+		return False
+	result = frappe.db.get_value(
+		"EduEdge CBT Result",
+		result_name,
+		["name", "school_branch"],
+		as_dict=True,
+	)
+	if not result:
+		return False
+	result.doctype = "EduEdge CBT Result"
+	return has_school_branch_permission(result, resolved_user, permission_type)
 
 
 def _school_branch_condition(doctype: str, user: str | None) -> str:
@@ -150,6 +182,34 @@ def _attempt_reference_condition(doctype: str, user: str | None) -> str:
 		f"exists (select 1 from `tabEduEdge CBT Attempt` attempt "
 		f"where attempt.name = `tab{doctype}`.`attempt` "
 		f"and attempt.school_branch in ({values}))"
+	)
+
+
+def _result_reference_condition(doctype: str, user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+
+	if not is_branch_access_enforced():
+		return (
+			f"exists (select 1 from `tabEduEdge CBT Result` result "
+			f"where result.name = `tab{doctype}`.`parent` "
+			"and result.school_branch is not null)"
+		)
+	allowed = _allowed_branch_names(resolved_user)
+	if allowed is None:
+		return (
+			f"exists (select 1 from `tabEduEdge CBT Result` result "
+			f"where result.name = `tab{doctype}`.`parent` "
+			"and result.school_branch is not null)"
+		)
+	if not allowed:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+	return (
+		f"exists (select 1 from `tabEduEdge CBT Result` result "
+		f"where result.name = `tab{doctype}`.`parent` "
+		f"and result.school_branch in ({values}))"
 	)
 
 
