@@ -85,6 +85,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 				"exam_scope",
 				"school_branch",
 				"course",
+				"student_group",
 				"scheduled_start",
 				"scheduled_end",
 				"check_in_opens_at",
@@ -107,13 +108,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 		self.exam_scope = schedule.exam_scope
 		self.school_branch = schedule.school_branch
 		self.course = schedule.course
-		template = frappe.db.get_value(
-			"EduEdge CBT Exam Template",
-			schedule.exam_template,
-			["student_group"],
-			as_dict=True,
-		)
-		self.student_group = template.student_group if template else None
+		self.student_group = schedule.student_group
 
 	def _validate_candidate_identity(self) -> None:
 		if self.exam_scope == SCHOOL_EXAM:
@@ -137,7 +132,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 			self.student_name = student.student_name
 			self.candidate_name = student.student_name
 			self.public_candidate_reference = None
-			self.eligibility_source = "Template Student Group" if self.student_group else "Manual School Assignment"
+			self.eligibility_source = "Schedule Student Group" if self.student_group else "Manual School Assignment"
 			return
 
 		if self.exam_scope == PUBLIC_EXAM:
@@ -170,7 +165,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 			{"parent": self.student_group, "student": self.student, "active": 1},
 		):
 			frappe.throw(
-				_("Student is not an active member of the Student Group / Class defined by the exam template."),
+				_("Student is not an active member of the Student Group / Class locked on the examination schedule."),
 				frappe.ValidationError,
 			)
 
