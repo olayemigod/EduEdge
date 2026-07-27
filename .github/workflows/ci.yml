@@ -41,6 +41,9 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_cbt_exam_template/eduedge_cbt_exam_template.js
           node --check eduedge/eduedge/doctype/eduedge_cbt_exam_schedule/eduedge_cbt_exam_schedule.js
           node --check eduedge/eduedge/doctype/eduedge_cbt_candidate_assignment/eduedge_cbt_candidate_assignment.js
+          node --check eduedge/public/js/eduedge_cbt_runtime_storage.js
+          node --check eduedge/public/js/eduedge_cbt_candidate.js
+          node --check eduedge/public/js/eduedge_cbt_candidate_serialization.js
           node --check eduedge/public/js/eduedge_ui/app_factory.js
           node --check eduedge/public/js/eduedge_ui/native_frappe_dialog.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
