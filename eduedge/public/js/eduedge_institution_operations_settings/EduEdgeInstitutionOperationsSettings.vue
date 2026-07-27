@@ -4,7 +4,7 @@
 		title="EduEdge"
 		:tenant-name="selectedCompany || schoolIdentity.name || ''"
 		branch-name="Institution Operations"
-		:user-name="frappe.session.user_fullname || ''"
+		:user-name="userFullName"
 		:menu-items="menuItems"
 		active-route="/app/eduedge-institution-operations-settings"
 		@navigate="openRoute"
@@ -158,9 +158,7 @@
 
 						<div class="eduedge-effective-policy">
 							<strong>Effective behaviour</strong>
-							<p>
-								{{ effectivePolicySummary }}
-							</p>
+							<p>{{ effectivePolicySummary }}</p>
 						</div>
 
 						<p v-if="saveError" class="eduedge-operations-error" role="alert">{{ saveError }}</p>
@@ -218,6 +216,7 @@ export default {
 	},
 	computed: {
 		schoolIdentity() { return frappe.boot?.eduedge_ui_identity?.school || {}; },
+		userFullName() { return frappe.session?.user_fullname || frappe.session?.user || ""; },
 		isInstitutionScope() { return this.scope === "Institution Preference"; },
 		inheritingCompany() {
 			return this.isInstitutionScope && this.truthy(this.values.use_company_question_governance_defaults);
