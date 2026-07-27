@@ -102,8 +102,19 @@ def can_author_public_exams(user: str | None = None) -> bool:
 	)
 
 
-def require_public_exam_capability(action: str, *, user: str | None = None) -> dict:
-	decision = get_public_exam_access_decision(action, user=user)
+def require_public_exam_capability(
+	action: str,
+	*,
+	user: str | None = None,
+	reference_doctype: str | None = None,
+	reference_name: str | None = None,
+) -> dict:
+	decision = get_public_exam_access_decision(
+		action,
+		user=user,
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
+	)
 	if not decision.get("allowed"):
 		frappe.throw(
 			decision.get("reason") or _("EduEdge public examination access is not available."),
