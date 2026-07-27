@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe.permissions import add_permission, update_permission_property
 
+from eduedge.cbt.result_sync_fields import ensure_result_sync_custom_fields
 from eduedge.education.academic_fields import ensure_academic_context_foundation
 from eduedge.education.custom_fields import (
 	backfill_education_branch_context,
@@ -88,6 +89,7 @@ def after_install() -> None:
 	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
+	ensure_result_sync_custom_fields()
 	ensure_academic_context_foundation()
 	ensure_program_enrollment_branch_selector()
 	ensure_admission_manager_permissions()
@@ -104,6 +106,7 @@ def after_migrate() -> None:
 	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
+	ensure_result_sync_custom_fields()
 	ensure_academic_context_foundation()
 	ensure_program_enrollment_branch_selector()
 	ensure_admission_manager_permissions()
