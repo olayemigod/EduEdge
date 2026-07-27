@@ -276,7 +276,10 @@ def prepare_schedule_assessment_results(exam_schedule: str) -> dict:
 	existing = []
 	for cbt_result in results:
 		assessment_result, created = _prepare_one(cbt_result, schedule, plan, criterion)
-		(created and prepared or existing).append(assessment_result.name)
+		if created:
+			prepared.append(assessment_result.name)
+		else:
+			existing.append(assessment_result.name)
 	return {
 		"exam_schedule": schedule.name,
 		"assessment_plan": plan.name,
