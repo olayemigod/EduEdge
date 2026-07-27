@@ -62,6 +62,29 @@ class TestQuickEditorVisualContract(unittest.TestCase):
 		self.assertNotIn("edge-form-dialog-fallback__grid", form)
 		self.assertNotIn('class="form-control"', form)
 
+	def test_searchable_links_use_shared_width_bound_flyout(self):
+		form = (
+			APP
+			/ "public"
+			/ "js"
+			/ "eduedge_ui"
+			/ "components"
+			/ "EdgeFormDialogFallback.vue"
+		).read_text(encoding="utf-8")
+
+		for expected in (
+			"<EdgeLinkField",
+			':options="normalizedOptions(field.options)"',
+			'@query-change="requestOptions(field, $event)"',
+			'@update:model-value="setValue(field, $event)"',
+			"eduedge-quick-link-control",
+			"eduedge-quick-link-field { min-width: 0; width: 100%; }",
+		):
+			self.assertIn(expected, form)
+
+		self.assertNotIn("<datalist", form)
+		self.assertNotIn(":list=", form)
+
 
 if __name__ == "__main__":
 	unittest.main()
