@@ -71,7 +71,7 @@ class TestCBTInvigilationContract(unittest.TestCase):
 			"get_invigilation_context",
 			"Result processing is blocked",
 			"Pending Sync",
-			"Connection Stale",
+			"Stale Connections",
 			"candidate.answered_count",
 		):
 			self.assertIn(token, component)
