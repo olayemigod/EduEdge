@@ -102,6 +102,15 @@ def can_author_public_exams(user: str | None = None) -> bool:
 	)
 
 
+def can_assign_public_exams(user: str | None = None) -> bool:
+	resolved_user = user or frappe.session.user
+	if not has_public_exam_capability("assign", user=resolved_user):
+		return False
+	if is_public_exam_authority_site():
+		return has_public_exam_author_role(resolved_user)
+	return True
+
+
 def require_public_exam_capability(
 	action: str,
 	*,
@@ -120,6 +129,28 @@ def require_public_exam_capability(
 			decision.get("reason") or _("EduEdge public examination access is not available."),
 			frappe.PermissionError,
 			title=_("Public Examination Access Required"),
+		)
+	return decision
+
+
+def require_public_exam_assignment(
+	*,
+	user: str | None = None,
+	reference_doctype: str | None = None,
+	reference_name: str | None = None,
+) -> dict:
+	resolved_user = user or frappe.session.user
+	decision = require_public_exam_capability(
+		"assign",
+		user=resolved_user,
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
+	)
+	if is_public_exam_authority_site() and not has_public_exam_author_role(resolved_user):
+		frappe.throw(
+			_("Only an authorised ProcessEdge public examination administrator can assign candidates on the authority site."),
+			frappe.PermissionError,
+			title=_("Public Examination Assignment Restricted"),
 		)
 	return decision
 
@@ -143,6 +174,8 @@ def get_public_exam_capability_summary(user: str | None = None) -> dict:
 		decision = get_public_exam_access_decision(action, user=resolved_user)
 		allowed = bool(decision.get("allowed"))
 		if action == "author":
+			allowed = allowed and has_public_exam_author_role(resolved_user)
+		if action == "assign" and is_public_exam_authority_site():
 			allowed = allowed and has_public_exam_author_role(resolved_user)
 		result[action] = {
 			"allowed": allowed,
