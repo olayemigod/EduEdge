@@ -7,7 +7,7 @@
 		:busy="busy"
 		@close="$emit('close')"
 	>
-		<form class="edge-form-dialog" data-eduedge-terminology-managed @submit.prevent="$emit('submit')">
+		<form ref="formRoot" class="edge-form-dialog" data-eduedge-terminology-managed @submit.prevent="$emit('submit')">
 			<div v-if="loading" class="edge-modal-state">
 				<span class="eduedge-form-spinner" aria-hidden="true"></span>
 				<span>Loading form…</span>
@@ -132,6 +132,12 @@ export default {
 	watch: {
 		modelValue: { deep: true, immediate: true, handler(value) { this.localValues = { ...(value || {}) }; } },
 	},
+	mounted() {
+		document.addEventListener("pointerdown", this.dismissOpenLinkOnOutsidePointer, true);
+	},
+	beforeUnmount() {
+		document.removeEventListener("pointerdown", this.dismissOpenLinkOnOutsidePointer, true);
+	},
 	methods: {
 		fieldType(field) { return String(field?.type || field?.fieldtype || "Data"); },
 		fieldClasses(field) {
@@ -164,6 +170,14 @@ export default {
 			if (!value) return "";
 			const selected = this.normalizedOptions(field.options).find((option) => option.value === value);
 			return selected?.label || value;
+		},
+		dismissOpenLinkOnOutsidePointer(event) {
+			const active = document.activeElement;
+			if (!active?.classList?.contains("edge-link-field__input")) return;
+			if (!this.$refs.formRoot?.contains(active)) return;
+			const fieldRoot = active.closest?.(".edge-link-field");
+			if (!fieldRoot || fieldRoot.contains(event.target)) return;
+			active.blur();
 		},
 		setCheckValue(field, event) { this.setValue(field, event.target.checked ? 1 : 0); },
 		setValue(field, value) {
