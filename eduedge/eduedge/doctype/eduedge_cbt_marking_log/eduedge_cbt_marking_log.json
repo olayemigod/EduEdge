@@ -44,9 +44,7 @@
   {"export": 1, "print": 1, "read": 1, "report": 1, "role": "EduEdge Administrator"},
   {"export": 1, "print": 1, "read": 1, "report": 1, "role": "School Administrator"},
   {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Academic Administrator"},
-  {"print": 1, "read": 1, "report": 1, "role": "Education Manager"},
-  {"print": 1, "read": 1, "report": 1, "role": "Teacher"},
-  {"print": 1, "read": 1, "report": 1, "role": "Instructor"}
+  {"print": 1, "read": 1, "report": 1, "role": "Education Manager"}
  ],
  "search_fields": "result,attempt,exam_schedule,candidate_name,question_snapshot_key,acted_by",
  "sort_field": "acted_on",
