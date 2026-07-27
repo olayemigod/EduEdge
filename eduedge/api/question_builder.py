@@ -54,6 +54,13 @@ def _parse_payload(payload) -> dict:
 	return payload or {}
 
 
+def _require_question_reader() -> None:
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Authentication required."), frappe.PermissionError)
+	if not frappe.has_permission(QUESTION_DOCTYPE, "read"):
+		frappe.throw(_("You are not permitted to view CBT questions."), frappe.PermissionError)
+
+
 def _require_readable_question(name: str):
 	doc = frappe.get_doc(QUESTION_DOCTYPE, name)
 	if not doc.has_permission("read"):
@@ -195,12 +202,13 @@ def _builder_response(question: dict, public_access: dict, source_doc=None) -> d
 
 @frappe.whitelist()
 def get_question_builder_context(question: str | None = None) -> dict:
-	_require_question_author()
 	public_access = get_public_exam_capability_summary(frappe.session.user)
 	if question:
+		_require_question_reader()
 		doc = _require_readable_question(question)
 		payload = _serialize_question(doc)
 		return _builder_response(payload, public_access, doc)
+	_require_question_author()
 	return _builder_response(_new_question(), public_access)
 
 
@@ -220,6 +228,7 @@ def search_courses(txt: str | None = None, page_len: int = 20) -> list[dict]:
 
 @frappe.whitelist()
 def search_topics(course: str, txt: str | None = None, page_len: int = 50) -> list[dict]:
+	_require_question_reader()
 	rows = course_topic_query(
 		"Topic",
 		txt or "",
