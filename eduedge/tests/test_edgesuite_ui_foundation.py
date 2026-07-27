@@ -10,6 +10,7 @@ GLOBAL_DESK_BUNDLES = {
 	"eduedge_shell_identity.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 	"eduedge_terminology.bundle.js",
+	"eduedge_question_rich_text.bundle.js",
 }
 
 
