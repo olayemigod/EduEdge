@@ -5,7 +5,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, now_datetime
 
-from eduedge.cbt.public_access import require_public_exam_capability
+from eduedge.cbt.public_access import require_public_exam_assignment
 from eduedge.education.offerings import assert_branch_access
 
 INTERVENTION_TYPES = {
@@ -67,8 +67,7 @@ class EduEdgeCBTInterventionLog(Document):
 		if assignment.school_branch:
 			assert_branch_access(assignment.school_branch)
 		else:
-			require_public_exam_capability(
-				"assign",
+			require_public_exam_assignment(
 				reference_doctype="EduEdge CBT Candidate Assignment",
 				reference_name=self.candidate_assignment,
 			)
