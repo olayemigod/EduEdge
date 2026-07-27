@@ -95,6 +95,15 @@ const EDUEDGE_PRODUCT_MENU = Object.freeze({
 					keywords: ["cbt", "invigilation", "candidate", "pending sync", "monitor"],
 				},
 				{
+					label: "CBT Scoring & Marking",
+					description: "Score objective responses, mark written answers, and approve results",
+					icon: "edit",
+					route: "/app/eduedge-cbt-marking",
+					resource: "cbt_result",
+					permissions: ["write"],
+					keywords: ["cbt", "score", "marking", "result", "approval"],
+				},
+				{
 					label: "Assessments & Results",
 					description: "Plan, review, approve, and publish results",
 					icon: "assessment",
