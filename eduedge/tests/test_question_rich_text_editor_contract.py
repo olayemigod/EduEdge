@@ -5,9 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_JS = ROOT / "eduedge" / "public" / "js"
-EDITOR_JS = PUBLIC_JS / "eduedge_question_builder" / "rich_text_editor.js"
-LEGACY_EDITOR_CSS = PUBLIC_JS / "eduedge_question_builder" / "rich_text_editor.css"
-EXPLICIT_EDITOR_CSS = ROOT / "eduedge" / "public" / "css" / "eduedge_question_builder.bundle.css"
+EDITOR_JS = PUBLIC_JS / "eduedge_question_rich_text.bundle.js"
+EXPLICIT_EDITOR_CSS = ROOT / "eduedge" / "public" / "css" / "eduedge_question_rich_text.bundle.css"
 BUNDLE = PUBLIC_JS / "eduedge_question_builder.bundle.js"
 PAGE_LOADER = (
 	ROOT
@@ -16,6 +15,14 @@ PAGE_LOADER = (
 	/ "page"
 	/ "eduedge_question_builder"
 	/ "eduedge_question_builder.js"
+)
+BATCH_LOADER = (
+	ROOT
+	/ "eduedge"
+	/ "eduedge"
+	/ "page"
+	/ "eduedge_question_batch"
+	/ "eduedge_question_batch.js"
 )
 QUESTION_META = (
 	ROOT
@@ -33,23 +40,19 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		fields = {field["fieldname"]: field for field in metadata["fields"]}
 		self.assertEqual(fields["question_text"]["fieldtype"], "Text Editor")
 
-	def test_bundle_owns_editor_lifecycle_without_replacing_mount(self):
-		bundle = BUNDLE.read_text()
-		self.assertIn("installQuestionRichTextEditor", bundle)
-		self.assertIn("EduEdgeQuestionBuilder.mounted", bundle)
-		self.assertIn("EduEdgeQuestionBuilder.updated", bundle)
-		self.assertIn("EduEdgeQuestionBuilder.beforeUnmount", bundle)
-		self.assertIn("return createEduEdgeApp(EduEdgeQuestionBuilder, rootProps)", bundle)
-		self.assertNotIn("app.mount =", bundle)
+	def test_shared_runtime_is_loaded_by_single_and_multiple_entry(self):
+		for loader_path in (PAGE_LOADER, BATCH_LOADER):
+			loader = loader_path.read_text()
+			self.assertIn('"eduedge_question_rich_text.bundle.css"', loader)
+			self.assertIn('"eduedge_question_rich_text.bundle.js"', loader)
+			self.assertIn("window.installEduEdgeQuestionRichTextEditors(root[0])", loader)
+			self.assertIn("wrapper.rich_text_runtime?.destroy?.()", loader)
 
-	def test_page_loader_uses_explicit_css_and_no_duplicate_toolbar_runtime(self):
-		loader = PAGE_LOADER.read_text()
-		self.assertIn('"eduedge_question_builder.bundle.css"', loader)
-		self.assertIn('"eduedge_question_builder.bundle.js"', loader)
-		self.assertIn("wrapper.vue_app.mount(root[0])", loader)
-		self.assertNotIn("installQuestionToolbar", loader)
-		self.assertNotIn("MutationObserver", loader)
-		self.assertNotIn("setInterval", loader)
+	def test_builder_bundle_uses_normal_vue_mount_without_duplicate_toolbar(self):
+		bundle = BUNDLE.read_text()
+		self.assertIn("return createEduEdgeApp(EduEdgeQuestionBuilder, rootProps)", bundle)
+		self.assertNotIn("installQuestionRichTextEditor", bundle)
+		self.assertNotIn("app.mount =", bundle)
 
 	def test_editor_supports_required_formatting_and_symbols(self):
 		source = EDITOR_JS.read_text()
@@ -61,22 +64,27 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 			'command: "subscript"',
 			'command: "insertUnorderedList"',
 			'command: "insertOrderedList"',
+			'command: "removeFormat"',
 		):
 			self.assertIn(command, source)
-		for symbol in ("²", "³", "₁", "₂", "√", "π", "θ", "Δ", "∑", "∞", "×", "÷", "±", "≤", "≥", "≠", "°"):
+		for symbol in ("²", "³", "₀", "₁", "₂", "₃", "√", "π", "θ", "Δ", "∑", "∞", "×", "÷", "±", "≤", "≥", "≠", "°"):
 			self.assertIn(symbol, source)
-		self.assertIn("setRangeText", source)
-		self.assertIn("last focused answer or answer-key field", source)
 
 	def test_enhancer_avoids_caret_rewriting(self):
 		source = EDITOR_JS.read_text()
 		self.assertIn('editor.setAttribute("dir", "ltr")', source)
-		self.assertIn('editor.contentEditable = readOnly ? "false" : "true"', source)
+		self.assertIn('editor.contentEditable = disabled ? "false" : "true"', source)
 		self.assertIn('source.style.display = "none"', source)
 		self.assertIn('source.dispatchEvent(new Event("input", { bubbles: true }))', source)
 		self.assertIn("MutationObserver", source)
 		self.assertIn("document.activeElement !== editor", source)
 		self.assertNotIn("editor.innerHTML = form.question_text", source)
+
+	def test_runtime_detects_single_and_multiple_question_fields(self):
+		source = EDITOR_JS.read_text()
+		self.assertIn('.eduedge-question-editor', source)
+		self.assertIn('.eduedge-question-card', source)
+		self.assertIn(':scope > .eduedge-batch-field--wide > textarea', source)
 
 	def test_explicit_styles_force_left_to_right_readable_editor(self):
 		styles = EXPLICIT_EDITOR_CSS.read_text()
@@ -85,7 +93,7 @@ class TestQuestionRichTextEditorContract(unittest.TestCase):
 		self.assertIn("unicode-bidi: plaintext", styles)
 		self.assertIn(".eduedge-rich-editor__surface sup", styles)
 		self.assertIn(".eduedge-rich-editor__surface sub", styles)
-		self.assertEqual(LEGACY_EDITOR_CSS.read_text().strip(), styles.split("*/", 1)[1].strip())
+		self.assertIn(".eduedge-question-card .eduedge-rich-editor__surface", styles)
 
 
 if __name__ == "__main__":
