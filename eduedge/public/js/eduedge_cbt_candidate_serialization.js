@@ -59,9 +59,18 @@
 			});
 		}
 
+		async function awaitQuestionQueues() {
+			while (questionQueues.size) {
+				await Promise.all(
+					Array.from(questionQueues.values(), (promise) => promise.catch(() => undefined))
+				);
+			}
+		}
+
 		async function flushCapturedDrafts() {
 			const keys = Array.from(capturedDrafts.keys());
 			for (const questionKey of keys) await persistCapturedDraft(questionKey);
+			await awaitQuestionQueues();
 		}
 
 		function activeQuestion() {
