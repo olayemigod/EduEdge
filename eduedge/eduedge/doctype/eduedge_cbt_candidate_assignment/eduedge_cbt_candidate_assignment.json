@@ -1,0 +1,329 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "format:CBT-CAND-{#####}",
+ "creation": "2026-07-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "is_submittable": 0,
+ "field_order": [
+  "assignment_section",
+  "exam_schedule",
+  "exam_template",
+  "exam_scope",
+  "school_branch",
+  "course",
+  "candidate_section",
+  "candidate_type",
+  "student",
+  "student_name",
+  "public_candidate_reference",
+  "candidate_name",
+  "eligibility_section",
+  "student_group",
+  "eligibility_source",
+  "approved_extra_time_minutes",
+  "access_start",
+  "access_end",
+  "governance_section",
+  "assignment_status",
+  "assigned_by",
+  "assigned_on",
+  "checked_in_by",
+  "checked_in_on",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "assignment_section",
+   "fieldtype": "Section Break",
+   "label": "Examination Assignment"
+  },
+  {
+   "fieldname": "exam_schedule",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Examination Schedule",
+   "options": "EduEdge CBT Exam Schedule",
+   "reqd": 1
+  },
+  {
+   "fieldname": "exam_template",
+   "fieldtype": "Link",
+   "label": "CBT Exam Template",
+   "options": "EduEdge CBT Exam Template",
+   "read_only": 1
+  },
+  {
+   "fieldname": "exam_scope",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Examination Scope",
+   "read_only": 1
+  },
+  {
+   "fieldname": "school_branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "School Branch / Campus",
+   "options": "EduEdge School Branch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "course",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Subject / Course",
+   "options": "Course",
+   "read_only": 1
+  },
+  {
+   "fieldname": "candidate_section",
+   "fieldtype": "Section Break",
+   "label": "Candidate Identity"
+  },
+  {
+   "default": "EduEdge Student",
+   "fieldname": "candidate_type",
+   "fieldtype": "Select",
+   "label": "Candidate Type",
+   "options": "EduEdge Student\nPublic Candidate Reference",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.candidate_type=='EduEdge Student'",
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Student",
+   "options": "Student"
+  },
+  {
+   "depends_on": "eval:doc.candidate_type=='EduEdge Student'",
+   "fieldname": "student_name",
+   "fieldtype": "Data",
+   "label": "Student Name",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.candidate_type=='Public Candidate Reference'",
+   "fieldname": "public_candidate_reference",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Public Candidate Reference"
+  },
+  {
+   "depends_on": "eval:doc.candidate_type=='Public Candidate Reference'",
+   "fieldname": "candidate_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Candidate Name"
+  },
+  {
+   "fieldname": "eligibility_section",
+   "fieldtype": "Section Break",
+   "label": "Eligibility and Access"
+  },
+  {
+   "fieldname": "student_group",
+   "fieldtype": "Link",
+   "label": "Student Group / Class",
+   "options": "Student Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "eligibility_source",
+   "fieldtype": "Data",
+   "label": "Eligibility Source",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "approved_extra_time_minutes",
+   "fieldtype": "Int",
+   "label": "Approved Extra Time (Minutes)"
+  },
+  {
+   "fieldname": "access_start",
+   "fieldtype": "Datetime",
+   "label": "Candidate Access Starts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "access_end",
+   "fieldtype": "Datetime",
+   "label": "Candidate Access Ends",
+   "read_only": 1
+  },
+  {
+   "fieldname": "governance_section",
+   "fieldtype": "Section Break",
+   "label": "Assignment Status and Audit"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "assignment_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Assignment Status",
+   "options": "Draft\nEligible\nChecked In\nReleased\nCompleted\nWithdrawn\nDisqualified",
+   "reqd": 1
+  },
+  {
+   "fieldname": "assigned_by",
+   "fieldtype": "Link",
+   "label": "Assigned By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assigned_on",
+   "fieldtype": "Datetime",
+   "label": "Assigned On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checked_in_by",
+   "fieldtype": "Link",
+   "label": "Checked In By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checked_in_on",
+   "fieldtype": "Datetime",
+   "label": "Checked In On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Internal Notes"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge CBT Candidate Assignment",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "EduEdge Super Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "EduEdge Public Exam Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "EduEdge Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "School Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Academic Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Education Manager",
+   "write": 1
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Teacher"
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Instructor"
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "CBT Invigilator"
+  }
+ ],
+ "search_fields": "exam_schedule,student,student_name,public_candidate_reference,candidate_name,school_branch,course",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "candidate_name",
+ "track_changes": 1
+}
