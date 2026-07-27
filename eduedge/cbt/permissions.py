@@ -17,6 +17,7 @@ CBT_DOCTYPES = (
 	"EduEdge CBT Candidate Assignment",
 	"EduEdge CBT Intervention Log",
 	"EduEdge CBT Attempt",
+	"EduEdge CBT Attempt Review",
 	"EduEdge CBT Attempt Scoring Key",
 	"EduEdge CBT Attempt Answer",
 	"EduEdge CBT Sync Log",
@@ -57,6 +58,10 @@ def cbt_intervention_log_query(user: str | None = None) -> str:
 
 def cbt_attempt_query(user: str | None = None) -> str:
 	return _school_branch_condition("EduEdge CBT Attempt", user)
+
+
+def cbt_attempt_review_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Attempt Review", user)
 
 
 def cbt_attempt_scoring_key_query(user: str | None = None) -> str:
