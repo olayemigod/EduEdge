@@ -20,6 +20,7 @@ frappe.ui.form.on("EduEdge CBT Candidate Assignment", {
 				school_branch: null,
 				course: null,
 				student_group: null,
+				candidate_type: "EduEdge Student",
 			});
 			return;
 		}
@@ -34,6 +35,9 @@ frappe.ui.form.on("EduEdge CBT Candidate Assignment", {
 				exam_scope: message.exam_scope,
 				school_branch: message.school_branch,
 				course: message.course,
+				candidate_type: message.exam_scope === "EduEdge Public Examination"
+					? "Public Candidate Reference"
+					: "EduEdge Student",
 				student: null,
 				public_candidate_reference: null,
 				candidate_name: null,
