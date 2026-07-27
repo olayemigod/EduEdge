@@ -96,10 +96,24 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			self.assertIn(token, service)
 		self.assertNotIn('"is_correct":', service)
 
-	def test_hooks_register_branch_permissions_and_server_timeout_job(self):
+	def test_runtime_guard_hides_prestart_questions_and_rejects_late_answers(self):
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		for token in (
+			'"questions": []',
+			'"answers": {}',
+			"Post-timeout sync accepts only answers saved before the server deadline",
+			"Answers were reconciled after the server timeout",
+			"attempt.attempt_status == \"In Progress\" and base._remaining(attempt) <= 0",
+		):
+			self.assertIn(token, guard)
+
+	def test_hooks_register_branch_permissions_timeout_and_rpc_guards(self):
 		hooks = (APP / "hooks.py").read_text()
 		for token in (
 			"eduedge.cbt.attempts.finalize_expired_attempts",
+			"eduedge.cbt.attempt_runtime_guard.get_attempt_state",
+			"eduedge.cbt.attempt_runtime_guard.sync_answers",
+			"eduedge.cbt.attempt_runtime_guard.submit_attempt",
 			"EduEdge CBT Attempt\": \"eduedge.cbt.permissions.cbt_attempt_query",
 			"EduEdge CBT Attempt Answer\": \"eduedge.cbt.permissions.cbt_attempt_answer_query",
 			"EduEdge CBT Attempt Scoring Key\": \"eduedge.cbt.permissions.cbt_attempt_scoring_key_query",
