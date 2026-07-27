@@ -29,7 +29,8 @@ class TestQuestionBuilderRichEditorRuntimeContract(unittest.TestCase):
 
 	def test_builder_bundle_does_not_mount_a_duplicate_editor(self):
 		bundle = BUNDLE.read_text()
-		self.assertIn("return createEduEdgeApp(EduEdgeQuestionBuilder, rootProps)", bundle)
+		self.assertIn("...EduEdgeQuestionBuilder", bundle)
+		self.assertIn("return createEduEdgeApp(EduEdgeQuestionBuilderPage, rootProps)", bundle)
 		self.assertNotIn("installQuestionRichTextEditor", bundle)
 		self.assertNotIn("EduEdgeQuestionBuilder.updated", bundle)
 		self.assertNotIn("app.mount =", bundle)
