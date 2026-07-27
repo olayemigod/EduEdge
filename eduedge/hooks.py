@@ -191,6 +191,9 @@ permission_query_conditions = {
 	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.cbt_attempt_scoring_key_query",
 	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.cbt_attempt_answer_query",
 	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.cbt_sync_log_query",
+	"EduEdge CBT Result": "eduedge.cbt.permissions.cbt_result_query",
+	"EduEdge CBT Result Item": "eduedge.cbt.permissions.cbt_result_item_query",
+	"EduEdge CBT Marking Log": "eduedge.cbt.permissions.cbt_marking_log_query",
 }
 
 has_permission = {
@@ -235,6 +238,9 @@ has_permission = {
 	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.has_attempt_reference_permission",
 	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.has_attempt_reference_permission",
 	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.has_attempt_reference_permission",
+	"EduEdge CBT Result": "eduedge.cbt.permissions.has_school_branch_permission",
+	"EduEdge CBT Result Item": "eduedge.cbt.permissions.has_result_reference_permission",
+	"EduEdge CBT Marking Log": "eduedge.cbt.permissions.has_school_branch_permission",
 }
 
 fixtures = [
