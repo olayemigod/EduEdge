@@ -98,7 +98,8 @@ class TestResourceCenterContract(unittest.TestCase):
 		self.assertTrue(modal.exists())
 		self.assertTrue(form.exists())
 		self.assertIn('registerFallbackComponent(app, "EdgeModal"', factory)
-		self.assertIn('registerFallbackComponent(app, "EdgeFormDialog"', factory)
+		self.assertIn('app.component("EdgeFormDialog", EdgeFormDialogFallback)', factory)
+		self.assertNotIn('registerFallbackComponent(app, "EdgeFormDialog"', factory)
 
 	def test_quick_entry_mutations_are_platform_guarded(self):
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
