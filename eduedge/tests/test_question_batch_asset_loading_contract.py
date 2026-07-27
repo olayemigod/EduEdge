@@ -11,6 +11,13 @@ LOADER = (
 	/ "eduedge_question_batch"
 	/ "eduedge_question_batch.js"
 )
+CSS_BUNDLE = (
+	ROOT
+	/ "eduedge"
+	/ "public"
+	/ "css"
+	/ "eduedge_question_batch.bundle.css"
+)
 
 
 class TestQuestionBatchAssetLoadingContract(unittest.TestCase):
@@ -23,6 +30,20 @@ class TestQuestionBatchAssetLoadingContract(unittest.TestCase):
 			loader.index('"eduedge_question_batch.bundle.css"'),
 			loader.index("window.createEduEdgeQuestionBatchApp"),
 		)
+
+	def test_explicit_css_bundle_contains_page_layout_contract(self):
+		self.assertTrue(CSS_BUNDLE.exists())
+		styles = CSS_BUNDLE.read_text()
+		for selector in (
+			".eduedge-batch-tabs",
+			".eduedge-batch-panel",
+			".eduedge-common-fields",
+			".eduedge-question-card",
+			".eduedge-card-answer-row",
+			".eduedge-upload-drop",
+		):
+			self.assertIn(selector, styles)
+		self.assertNotIn("<style", styles)
 
 
 if __name__ == "__main__":
