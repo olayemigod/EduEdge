@@ -107,6 +107,24 @@ def get_result_readiness(exam_schedule: str, *, check_permission: bool = True) -
 	]
 
 	operational_blockers = []
+	if not assignments:
+		operational_blockers.append(
+			_blocker(
+				"NO_CANDIDATES",
+				"No active candidate assignments",
+				0,
+				"Assign eligible candidates before starting result processing.",
+			)
+		)
+	elif not latest_attempts:
+		operational_blockers.append(
+			_blocker(
+				"NO_ATTEMPTS",
+				"No candidate attempts have been prepared",
+				0,
+				"Prepare attempts or formally withdraw candidates who will not sit the examination.",
+			)
+		)
 	if missing_attempts:
 		operational_blockers.append(
 			_blocker(
@@ -175,7 +193,7 @@ def get_result_readiness(exam_schedule: str, *, check_permission: bool = True) -
 		"pending_sync_count": len(pending_sync_attempts),
 		"review_required_count": len(review_attempts),
 		"missing_attempt_count": len(missing_attempts),
-		"ready_for_result_processing": not operational_blockers,
+		"ready_for_result_processing": not operational_blockers and bool(latest_attempts),
 		"ready_for_result_approval": not approval_blockers and bool(latest_attempts),
 		"operational_blockers": operational_blockers,
 		"approval_blockers": approval_blockers,
