@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = ROOT / "eduedge" / "public" / "js" / "eduedge_question_builder.bundle.js"
+RUNTIME = ROOT / "eduedge" / "public" / "js" / "eduedge_question_rich_text.bundle.js"
 LOADER = (
 	ROOT
 	/ "eduedge"
@@ -12,30 +13,41 @@ LOADER = (
 	/ "eduedge_question_builder"
 	/ "eduedge_question_builder.js"
 )
-CSS = ROOT / "eduedge" / "public" / "css" / "eduedge_question_builder.bundle.css"
+CSS = ROOT / "eduedge" / "public" / "css" / "eduedge_question_rich_text.bundle.css"
 
 
 class TestQuestionBuilderRichEditorRuntimeContract(unittest.TestCase):
-	def test_vue_bundle_owns_rich_editor_lifecycle(self):
-		bundle = BUNDLE.read_text()
-		self.assertIn("installQuestionRichTextEditor", bundle)
-		self.assertIn("EduEdgeQuestionBuilder.mounted", bundle)
-		self.assertIn("EduEdgeQuestionBuilder.updated", bundle)
-		self.assertIn("EduEdgeQuestionBuilder.beforeUnmount", bundle)
-		self.assertIn("_eduedgeRichTextEditor?.refresh?.()", bundle)
-		self.assertIn("_eduedgeRichTextEditor?.destroy?.()", bundle)
-
-	def test_page_loads_explicit_editor_css_before_mount(self):
+	def test_page_loader_owns_shared_editor_lifecycle(self):
 		loader = LOADER.read_text()
-		self.assertIn('"eduedge_question_builder.bundle.css"', loader)
+		self.assertIn('"eduedge_question_rich_text.bundle.js"', loader)
+		self.assertIn("window.installEduEdgeQuestionRichTextEditors(root[0])", loader)
+		self.assertIn("wrapper.rich_text_runtime?.destroy?.()", loader)
+		self.assertLess(
+			loader.index('"eduedge_question_rich_text.bundle.js"'),
+			loader.index("window.installEduEdgeQuestionRichTextEditors(root[0])"),
+		)
+
+	def test_builder_bundle_does_not_mount_a_duplicate_editor(self):
+		bundle = BUNDLE.read_text()
+		self.assertIn("return createEduEdgeApp(EduEdgeQuestionBuilder, rootProps)", bundle)
+		self.assertNotIn("installQuestionRichTextEditor", bundle)
+		self.assertNotIn("EduEdgeQuestionBuilder.updated", bundle)
+		self.assertNotIn("app.mount =", bundle)
+
+	def test_shared_runtime_detects_single_question_source(self):
+		runtime = RUNTIME.read_text()
+		self.assertIn('.eduedge-question-editor', runtime)
+		self.assertIn('document.activeElement !== editor', runtime)
+		self.assertIn('source.dispatchEvent(new Event("input", { bubbles: true }))', runtime)
+
+	def test_page_loads_explicit_shared_css_before_mount(self):
+		loader = LOADER.read_text()
+		self.assertIn('"eduedge_question_rich_text.bundle.css"', loader)
 		self.assertIn('"eduedge_question_builder.bundle.js"', loader)
 		self.assertLess(
-			loader.index('"eduedge_question_builder.bundle.css"'),
+			loader.index('"eduedge_question_rich_text.bundle.css"'),
 			loader.index("window.createEduEdgeQuestionBuilderApp"),
 		)
-		self.assertNotIn("installQuestionToolbar", loader)
-		self.assertNotIn("MutationObserver", loader)
-		self.assertNotIn("setInterval", loader)
 
 	def test_explicit_css_contains_toolbar_and_surface_contracts(self):
 		css = CSS.read_text()
