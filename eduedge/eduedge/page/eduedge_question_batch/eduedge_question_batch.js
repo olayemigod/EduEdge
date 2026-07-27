@@ -21,6 +21,9 @@ frappe.pages["eduedge-question-batch"].on_page_show = function (wrapper) {
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
 
+	wrapper.rich_text_runtime?.destroy?.();
+	wrapper.rich_text_runtime = null;
+
 	if (wrapper.vue_app) {
 		try {
 			wrapper.vue_app.unmount();
@@ -55,15 +58,18 @@ frappe.pages["eduedge-question-batch"].on_page_show = function (wrapper) {
 
 		frappe.require(
 			[
+				"eduedge_question_rich_text.bundle.css",
 				"eduedge_question_batch.bundle.css",
 				"eduedge_question_batch_permissions.bundle.css",
+				"eduedge_question_rich_text.bundle.js",
 				"eduedge_question_batch.bundle.js",
 			],
 			() => {
 				if (wrapper.current_visit_id !== visitId) return;
 				if (
-					!window.EduEdgeQuestionBatch ||
-					typeof window.createEduEdgeQuestionBatchApp !== "function"
+					!window.EduEdgeQuestionBatch
+					|| typeof window.createEduEdgeQuestionBatchApp !== "function"
+					|| typeof window.installEduEdgeQuestionRichTextEditors !== "function"
 				) {
 					fail(__("The EduEdge Multiple Questions bundle is unavailable or incomplete."));
 					return;
@@ -78,6 +84,7 @@ frappe.pages["eduedge-question-batch"].on_page_show = function (wrapper) {
 						initialMode: resolveBatchMode(),
 					});
 					wrapper.vue_app.mount(root[0]);
+					wrapper.rich_text_runtime = window.installEduEdgeQuestionRichTextEditors(root[0]);
 				} catch (error) {
 					console.error("Failed to mount EduEdge Question Batch", error);
 					fail(error.message || String(error));
