@@ -23,6 +23,7 @@ SORT_OPTIONS = {
 	"code_desc": "question_code desc",
 	"status_asc": "status asc, modified desc",
 }
+PAGE_LENGTH_OPTIONS = (20, 50, 100)
 DEFAULT_PAGE_LENGTH = 20
 MAX_PAGE_LENGTH = 100
 PREVIEW_LENGTH = 180
@@ -84,6 +85,85 @@ def _branch_context() -> tuple[list[dict], list[dict]]:
 def _normalise_selection(value: str | None, allowed: set[str]) -> str:
 	cleaned = str(value or "").strip()
 	return cleaned if cleaned in allowed else ""
+
+
+def _require_allowed_selection(value: str | None, allowed: set[str], label: str) -> str:
+	cleaned = str(value or "").strip()
+	if cleaned and cleaned not in allowed:
+		frappe.throw(
+			_("You are not permitted to use the selected {0}.").format(label),
+			frappe.PermissionError,
+		)
+	return cleaned
+
+
+def _effective_institution(institution: str, branch: str, branches: list[dict]) -> str:
+	if institution:
+		return institution
+	if not branch:
+		return ""
+	return next((row.get("institution") or "" for row in branches if row.get("value") == branch), "")
+
+
+def _course_scope_filters(
+	*,
+	ownership_scope: str,
+	institution: str,
+	branch: str,
+	branches: list[dict],
+) -> dict:
+	meta = frappe.get_meta("Course")
+	if not meta.has_field("eduedge_institution") or ownership_scope == PLATFORM_BANK:
+		return {}
+	effective_institution = _effective_institution(institution, branch, branches)
+	if effective_institution:
+		return {"eduedge_institution": effective_institution}
+	permitted_institutions = sorted({row.get("institution") for row in branches if row.get("institution")})
+	return {"eduedge_institution": ["in", permitted_institutions or [""]]}
+
+
+def _resolve_course(
+	course: str | None,
+	*,
+	ownership_scope: str,
+	institution: str,
+	branch: str,
+	branches: list[dict],
+) -> str:
+	cleaned = str(course or "").strip()
+	if not cleaned:
+		return ""
+	if not frappe.has_permission("Course", "read"):
+		frappe.throw(_("You are not permitted to filter by Subject / Course."), frappe.PermissionError)
+	filters = {"name": cleaned}
+	filters.update(
+		_course_scope_filters(
+			ownership_scope=ownership_scope,
+			institution=institution,
+			branch=branch,
+			branches=branches,
+		)
+	)
+	rows = frappe.get_list("Course", filters=filters, fields=["name"], limit_page_length=1)
+	if not rows:
+		frappe.throw(
+			_("The selected Subject / Course is not available in the permitted Question Bank context."),
+			frappe.PermissionError,
+		)
+	return cleaned
+
+
+def _normalise_page_length(value: int | str | None) -> int:
+	requested = cint(value)
+	return requested if requested in PAGE_LENGTH_OPTIONS else DEFAULT_PAGE_LENGTH
+
+
+def _clamp_page_start(start: int | str | None, total: int, page_length: int) -> int:
+	if total <= 0:
+		return 0
+	requested = max(0, cint(start))
+	last_start = ((total - 1) // page_length) * page_length
+	return min(requested, last_start)
 
 
 def _question_preview(value: Any) -> str:
@@ -199,24 +279,35 @@ def get_question_bank(
 	if can_manage_public:
 		scope_options.append(_option(PLATFORM_BANK))
 	allowed_scopes = {row["value"] for row in scope_options}
-	resolved_scope = _normalise_selection(ownership_scope, allowed_scopes) or SCHOOL_BANK
-	if resolved_scope == PLATFORM_BANK and not can_manage_public:
-		frappe.throw(_("You are not permitted to view the EduEdge Examination Bank."), frappe.PermissionError)
+	requested_scope = _require_allowed_selection(ownership_scope, allowed_scopes, _("Question Bank"))
+	resolved_scope = requested_scope or SCHOOL_BANK
 
 	institution_values = {row["value"] for row in institutions}
-	resolved_institution = _normalise_selection(institution, institution_values) if resolved_scope == SCHOOL_BANK else ""
+	if resolved_scope == SCHOOL_BANK:
+		resolved_institution = _require_allowed_selection(institution, institution_values, _("Institution"))
+	else:
+		resolved_institution = ""
 	visible_branches = [row for row in branches if not resolved_institution or row.get("institution") == resolved_institution]
 	branch_values = {row["value"] for row in visible_branches}
-	resolved_branch = _normalise_selection(branch, branch_values) if resolved_scope == SCHOOL_BANK else ""
+	if resolved_scope == SCHOOL_BANK:
+		resolved_branch = _require_allowed_selection(branch, branch_values, _("Branch / Campus"))
+	else:
+		resolved_branch = ""
+
 	resolved_status = _normalise_selection(status, set(STATUSES))
 	resolved_difficulty = _normalise_selection(difficulty, set(DIFFICULTIES))
 	resolved_type = _normalise_selection(question_type, set(QUESTION_TYPES))
 	resolved_exam_body = _normalise_selection(exam_body, set(EXAM_BODIES))
-	resolved_course = str(course or "").strip()
+	resolved_course = _resolve_course(
+		course,
+		ownership_scope=resolved_scope,
+		institution=resolved_institution,
+		branch=resolved_branch,
+		branches=branches,
+	)
 	resolved_search = str(search or "").strip()[:120]
 	resolved_sort = sort_by if sort_by in SORT_OPTIONS else "modified_desc"
-	resolved_start = max(0, cint(start))
-	resolved_page_length = min(MAX_PAGE_LENGTH, max(10, cint(page_length) or DEFAULT_PAGE_LENGTH))
+	resolved_page_length = _normalise_page_length(page_length)
 
 	base_filters = _filters(
 		ownership_scope=resolved_scope,
@@ -235,6 +326,9 @@ def get_question_bank(
 		row_filters["status"] = resolved_status
 	or_filters = _search_or_filters(resolved_search)
 	counts = _status_counts(base_filters, or_filters)
+	filtered_total = counts.get(resolved_status, 0) if resolved_status else counts["Total"]
+	resolved_start = _clamp_page_start(start, filtered_total, resolved_page_length)
+
 	rows = frappe.get_list(
 		QUESTION_DOCTYPE,
 		filters=row_filters,
@@ -259,7 +353,6 @@ def get_question_bank(
 		row["institution"] = branch_row.get("institution") or ""
 		row["institution_label"] = institution_map.get(row["institution"], {}).get("label") or ""
 
-	filtered_total = counts.get(resolved_status, 0) if resolved_status else counts["Total"]
 	current_branch = get_current_school_branch() or {}
 	return {
 		"rows": serialised,
@@ -291,6 +384,7 @@ def get_question_bank(
 			"difficulties": [_option(value) for value in DIFFICULTIES],
 			"question_types": [_option(value) for value in QUESTION_TYPES],
 			"exam_bodies": [_option(value) for value in EXAM_BODIES],
+			"page_lengths": [{"value": value, "label": str(value)} for value in PAGE_LENGTH_OPTIONS],
 			"sort": [
 				{"value": "modified_desc", "label": _("Recently Updated")},
 				{"value": "modified_asc", "label": _("Oldest Updated")},
@@ -315,15 +409,40 @@ def get_question_bank(
 
 
 @frappe.whitelist()
-def search_courses(txt: str | None = None, institution: str | None = None, page_length: int = 20) -> list[dict]:
+def search_courses(
+	txt: str | None = None,
+	institution: str | None = None,
+	branch: str | None = None,
+	ownership_scope: str | None = None,
+	page_length: int = 20,
+) -> list[dict]:
 	_require_read_access()
 	if not frappe.has_permission("Course", "read"):
 		return []
+
+	branches, institutions = _branch_context()
+	can_manage_public = bool(can_author_public_exams(frappe.session.user))
+	allowed_scopes = {SCHOOL_BANK}
+	if can_manage_public:
+		allowed_scopes.add(PLATFORM_BANK)
+	resolved_scope = _require_allowed_selection(ownership_scope, allowed_scopes, _("Question Bank")) or SCHOOL_BANK
+
+	resolved_institution = ""
+	resolved_branch = ""
+	if resolved_scope == SCHOOL_BANK:
+		institution_values = {row["value"] for row in institutions}
+		resolved_institution = _require_allowed_selection(institution, institution_values, _("Institution"))
+		visible_branches = [row for row in branches if not resolved_institution or row.get("institution") == resolved_institution]
+		branch_values = {row["value"] for row in visible_branches}
+		resolved_branch = _require_allowed_selection(branch, branch_values, _("Branch / Campus"))
+
 	pattern = f"%{str(txt or '').strip()}%"
-	filters = {}
-	meta = frappe.get_meta("Course")
-	if institution and meta.has_field("eduedge_institution"):
-		filters["eduedge_institution"] = institution
+	filters = _course_scope_filters(
+		ownership_scope=resolved_scope,
+		institution=resolved_institution,
+		branch=resolved_branch,
+		branches=branches,
+	)
 	rows = frappe.get_list(
 		"Course",
 		filters=filters,
