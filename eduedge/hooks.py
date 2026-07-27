@@ -195,6 +195,7 @@ permission_query_conditions = {
 	"EduEdge CBT Result": "eduedge.cbt.permissions.cbt_result_query",
 	"EduEdge CBT Result Item": "eduedge.cbt.permissions.cbt_result_item_query",
 	"EduEdge CBT Marking Log": "eduedge.cbt.permissions.cbt_marking_log_query",
+	"EduEdge CBT Result Sync Log": "eduedge.cbt.permissions.cbt_result_sync_log_query",
 }
 
 has_permission = {
@@ -243,6 +244,7 @@ has_permission = {
 	"EduEdge CBT Result": "eduedge.cbt.permissions.has_school_branch_permission",
 	"EduEdge CBT Result Item": "eduedge.cbt.permissions.has_result_reference_permission",
 	"EduEdge CBT Marking Log": "eduedge.cbt.permissions.has_school_branch_permission",
+	"EduEdge CBT Result Sync Log": "eduedge.cbt.permissions.has_school_branch_permission",
 }
 
 fixtures = [
