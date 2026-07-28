@@ -8,6 +8,9 @@ from frappe.utils import cint, getdate, nowdate
 
 from eduedge.services.branch_accounting import ACCOUNTING_FIELDS, get_missing_core_defaults
 from eduedge.services.branch_context import (
+	ASSIGNMENT_SCOPE_BRANCH,
+	ASSIGNMENT_SCOPE_COMPANY,
+	ASSIGNMENT_SCOPE_INSTITUTION,
 	get_allowed_school_branches,
 	invalidate_user_branch_context,
 	is_branch_access_enforced,
@@ -17,8 +20,10 @@ from eduedge.services.branch_context import (
 ACCESS_FIELDS = (
 	"user",
 	"branch_role",
+	"access_scope",
 	"hq_all_branch_access",
 	"company",
+	"institution",
 	"school_branch",
 	"is_default_branch",
 	"can_switch_branch",
@@ -47,21 +52,28 @@ def get_branch_governance_context(
 
 	branches = _get_branch_rows(company=company, allowed_branch_names=allowed_branch_names)
 	allowed_companies = {row["company"] for row in branches if row.get("company")}
+	allowed_institutions = {row["institution"] for row in branches if row.get("institution")}
 	assignments = _get_access_rows(
 		company=company,
 		allowed_branch_names=allowed_branch_names,
 		allowed_companies=allowed_companies,
+		allowed_institutions=allowed_institutions,
 	)
 	active_assignments = [row for row in assignments if row["status"] == "Active"]
 
-	hq_companies = {
+	company_scopes = {
 		row["company"]
 		for row in active_assignments
-		if row.get("hq_all_branch_access") and row.get("company")
+		if row.get("access_scope") == ASSIGNMENT_SCOPE_COMPANY and row.get("company")
+	}
+	institution_scopes = {
+		row["institution"]
+		for row in active_assignments
+		if row.get("access_scope") == ASSIGNMENT_SCOPE_INSTITUTION and row.get("institution")
 	}
 	direct_assignment_count: dict[str, int] = {}
 	for row in active_assignments:
-		if row.get("school_branch"):
+		if row.get("access_scope") == ASSIGNMENT_SCOPE_BRANCH and row.get("school_branch"):
 			direct_assignment_count[row["school_branch"]] = (
 				direct_assignment_count.get(row["school_branch"], 0) + 1
 			)
@@ -70,9 +82,13 @@ def get_branch_governance_context(
 	accounting_ready_count = 0
 	for branch in branches:
 		branch["direct_assignment_count"] = direct_assignment_count.get(branch["name"], 0)
-		branch["covered_by_hq"] = branch["company"] in hq_companies
+		branch["covered_by_company"] = branch["company"] in company_scopes
+		branch["covered_by_institution"] = branch.get("institution") in institution_scopes
+		branch["covered_by_hq"] = branch["covered_by_company"] or branch["covered_by_institution"]
 		branch["access_covered"] = bool(
-			branch["direct_assignment_count"] or branch["covered_by_hq"]
+			branch["direct_assignment_count"]
+			or branch["covered_by_institution"]
+			or branch["covered_by_company"]
 		)
 		if branch["access_covered"]:
 			covered_branch_count += 1
@@ -96,13 +112,13 @@ def get_branch_governance_context(
 		},
 		{
 			"key": "assignments",
-			"label": "At least one active User Branch Access assignment exists",
+			"label": "At least one active User Access Assignment exists",
 			"passed": bool(active_assignments),
 			"blocking": True,
 		},
 		{
 			"key": "coverage",
-			"label": "Every enabled campus is covered by a direct or company HQ assignment",
+			"label": "Every enabled campus is covered by a Branch, Institution, or Company assignment",
 			"passed": bool(branches) and covered_branch_count == len(branches),
 			"blocking": True,
 		},
@@ -147,10 +163,10 @@ def save_branch_access(payload: str | dict) -> dict:
 	if name:
 		doc = frappe.get_doc("EduEdge User Branch Access", name)
 		if not doc.has_permission("write"):
-			frappe.throw(_("You are not permitted to update this branch assignment."), frappe.PermissionError)
+			frappe.throw(_("You are not permitted to update this access assignment."), frappe.PermissionError)
 	else:
 		if not frappe.has_permission("EduEdge User Branch Access", "create"):
-			frappe.throw(_("You are not permitted to create branch assignments."), frappe.PermissionError)
+			frappe.throw(_("You are not permitted to create access assignments."), frappe.PermissionError)
 		doc = frappe.new_doc("EduEdge User Branch Access")
 
 	for fieldname in ACCESS_FIELDS:
@@ -163,7 +179,7 @@ def save_branch_access(payload: str | dict) -> dict:
 def set_branch_access_enabled(name: str, enabled: int | str) -> dict:
 	doc = frappe.get_doc("EduEdge User Branch Access", name)
 	if not doc.has_permission("write"):
-		frappe.throw(_("You are not permitted to change this branch assignment."), frappe.PermissionError)
+		frappe.throw(_("You are not permitted to change this access assignment."), frappe.PermissionError)
 	doc.enabled = cint(enabled)
 	doc.save()
 	invalidate_user_branch_context(doc.user)
@@ -230,6 +246,8 @@ def _get_branch_rows(
 		"branch_code",
 		"branch_type",
 		"company",
+		"institution",
+		"institution_type",
 		"is_main_branch",
 		"is_default",
 		"enabled",
@@ -242,15 +260,27 @@ def _get_branch_rows(
 		if not allowed_branch_names:
 			return []
 		filters["name"] = ["in", sorted(allowed_branch_names)]
-	return [
+	rows = [
 		dict(row)
 		for row in frappe.get_all(
 			"EduEdge School Branch",
 			filters=filters,
 			fields=fields,
-			order_by="company asc, is_default desc, branch_name asc",
+			order_by="company asc, institution asc, is_default desc, branch_name asc",
 		)
 	]
+	institution_names = {
+		row.name: row.institution_name
+		for row in frappe.get_all(
+			"EduEdge Institution",
+			filters={"name": ["in", sorted({row.get("institution") for row in rows if row.get("institution")})]},
+			fields=["name", "institution_name"],
+			limit_page_length=0,
+		)
+	} if rows else {}
+	for row in rows:
+		row["institution_name"] = institution_names.get(row.get("institution"))
+	return rows
 
 
 def _get_access_rows(
@@ -258,8 +288,14 @@ def _get_access_rows(
 	company: str | None = None,
 	allowed_branch_names: set[str] | None = None,
 	allowed_companies: set[str] | None = None,
+	allowed_institutions: set[str] | None = None,
 ) -> list[dict]:
-	if allowed_branch_names is not None and not allowed_branch_names and not allowed_companies:
+	if (
+		allowed_branch_names is not None
+		and not allowed_branch_names
+		and not allowed_companies
+		and not allowed_institutions
+	):
 		return []
 	filters = {"company": company} if company else {}
 	rows = frappe.get_all(
@@ -270,8 +306,10 @@ def _get_access_rows(
 			"user",
 			"user_full_name",
 			"branch_role",
+			"access_scope",
 			"hq_all_branch_access",
 			"company",
+			"institution",
 			"school_branch",
 			"branch_name",
 			"is_default_branch",
@@ -281,8 +319,11 @@ def _get_access_rows(
 			"valid_to",
 			"modified",
 		],
-		order_by="enabled desc, user_full_name asc, company asc, branch_name asc",
+		order_by="enabled desc, user_full_name asc, company asc, institution asc, branch_name asc",
 	)
+	for row in rows:
+		row.access_scope = _effective_access_scope(row)
+
 	user_names = sorted({row.user for row in rows if row.user})
 	enabled_users = set(
 		frappe.get_all(
@@ -298,29 +339,95 @@ def _get_access_rows(
 			pluck="name",
 		)
 	)
+	enabled_institutions = set(
+		frappe.get_all(
+			"EduEdge Institution",
+			filters={"enabled": 1},
+			pluck="name",
+		)
+	)
 	if allowed_branch_names is not None:
 		rows = [
 			row
 			for row in rows
-			if (row.school_branch and row.school_branch in allowed_branch_names)
-			or (row.hq_all_branch_access and row.company in (allowed_companies or set()))
+			if (
+				row.access_scope == ASSIGNMENT_SCOPE_BRANCH
+				and row.school_branch
+				and row.school_branch in allowed_branch_names
+			)
+			or (
+				row.access_scope == ASSIGNMENT_SCOPE_INSTITUTION
+				and row.institution
+				and row.institution in (allowed_institutions or set())
+			)
+			or (
+				row.access_scope == ASSIGNMENT_SCOPE_COMPANY
+				and row.company in (allowed_companies or set())
+			)
 		]
 	today = getdate(nowdate())
+	institution_names = {
+		row.name: row.institution_name
+		for row in frappe.get_all(
+			"EduEdge Institution",
+			filters={"name": ["in", sorted({row.institution for row in rows if row.institution})]},
+			fields=["name", "institution_name"],
+			limit_page_length=0,
+		)
+	} if rows else {}
 	return [
 		{
 			**dict(row),
+			"institution_name": institution_names.get(row.institution),
+			"branch_name": row.get("branch_name")
+			or (
+				institution_names.get(row.institution)
+				if row.access_scope == ASSIGNMENT_SCOPE_INSTITUTION
+				else None
+			),
+			"scope_label": _scope_label(row, institution_names),
 			"status": _get_assignment_status(
 				row,
 				today=today,
 				enabled_users=enabled_users,
 				enabled_branches=enabled_branches,
+				enabled_institutions=enabled_institutions,
 			),
 		}
 		for row in rows
 	]
 
 
-def _get_assignment_status(row, *, today, enabled_users: set[str], enabled_branches: set[str]) -> str:
+def _effective_access_scope(row) -> str:
+	if row.get("access_scope") in {
+		ASSIGNMENT_SCOPE_COMPANY,
+		ASSIGNMENT_SCOPE_INSTITUTION,
+		ASSIGNMENT_SCOPE_BRANCH,
+	}:
+		return row.access_scope
+	if cint(row.get("hq_all_branch_access")):
+		return ASSIGNMENT_SCOPE_COMPANY
+	if row.get("institution") and not row.get("school_branch"):
+		return ASSIGNMENT_SCOPE_INSTITUTION
+	return ASSIGNMENT_SCOPE_BRANCH
+
+
+def _scope_label(row, institution_names: dict[str, str]) -> str:
+	if row.access_scope == ASSIGNMENT_SCOPE_COMPANY:
+		return _("All Institutions and Branches")
+	if row.access_scope == ASSIGNMENT_SCOPE_INSTITUTION:
+		return institution_names.get(row.institution) or row.institution or _("Institution")
+	return row.get("branch_name") or row.get("school_branch") or _("Branch")
+
+
+def _get_assignment_status(
+	row,
+	*,
+	today,
+	enabled_users: set[str],
+	enabled_branches: set[str],
+	enabled_institutions: set[str],
+) -> str:
 	if not row.enabled:
 		return "Disabled"
 	if row.user not in enabled_users:
@@ -329,17 +436,32 @@ def _get_assignment_status(row, *, today, enabled_users: set[str], enabled_branc
 		return "Not Yet Active"
 	if row.valid_to and getdate(row.valid_to) < today:
 		return "Expired"
-	if row.school_branch and row.school_branch not in enabled_branches:
+	if row.access_scope == ASSIGNMENT_SCOPE_INSTITUTION and row.institution not in enabled_institutions:
+		return "Institution Disabled"
+	if row.access_scope == ASSIGNMENT_SCOPE_BRANCH and row.school_branch not in enabled_branches:
 		return "Branch Disabled"
 	return "Active"
 
 
 def _serialize_access_doc(doc) -> dict:
+	institution_name = (
+		frappe.db.get_value("EduEdge Institution", doc.institution, "institution_name")
+		if doc.institution
+		else None
+	)
+	scope = _effective_access_scope(doc)
+	branch_name = doc.get("branch_name") or (
+		frappe.db.get_value("EduEdge School Branch", doc.school_branch, "branch_name")
+		if doc.school_branch
+		else None
+	)
 	return {
 		"name": doc.name,
 		**{fieldname: doc.get(fieldname) for fieldname in ACCESS_FIELDS},
+		"access_scope": scope,
 		"user_full_name": doc.get("user_full_name")
 		or frappe.db.get_value("User", doc.user, "full_name"),
-		"branch_name": doc.get("branch_name")
-		or (frappe.db.get_value("EduEdge School Branch", doc.school_branch, "branch_name") if doc.school_branch else None),
+		"institution_name": institution_name,
+		"branch_name": branch_name or (institution_name if scope == ASSIGNMENT_SCOPE_INSTITUTION else None),
+		"scope_label": _scope_label(doc, {doc.institution: institution_name} if doc.institution else {}),
 	}
