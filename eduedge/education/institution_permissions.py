@@ -3,12 +3,10 @@ from __future__ import annotations
 import frappe
 
 from eduedge.services.branch_context import (
-	get_allowed_school_branches,
-	get_branch_access_profile,
+	get_allowed_institutions,
 	is_branch_access_enforced,
 )
 
-STRUCTURE_MANAGER_ROLES = {"School Administrator", "Academic Administrator", "Bursar"}
 PRIVILEGED_ROLES = {"System Manager", "EduEdge Administrator"}
 
 
@@ -16,64 +14,27 @@ def institution_query(user: str | None = None) -> str:
 	resolved_user = user or frappe.session.user
 	if not _should_scope(resolved_user):
 		return ""
-	branches = get_allowed_school_branches(user=resolved_user)
-	if not branches:
-		return "1=0" if frappe.db.count("EduEdge School Branch", {"enabled": 1}) else ""
-
-	roles = set(frappe.get_roles(resolved_user))
-	if roles.intersection(STRUCTURE_MANAGER_ROLES) and _has_company_structure_scope(resolved_user):
-		companies = {row.get("company") for row in branches if row.get("company")}
-		if not companies:
-			return "1=0"
-		values = ", ".join(frappe.db.escape(value) for value in sorted(companies))
-		return f"`tabEduEdge Institution`.company in ({values})"
-
-	branch_names = [row.get("name") for row in branches if row.get("name")]
-	institutions = set(
-		frappe.get_all(
-			"EduEdge School Branch",
-			filters={"name": ["in", branch_names]},
-			pluck="institution",
-		)
-	)
-	institutions.discard(None)
-	institutions.discard("")
+	institutions = {
+		row.get("name")
+		for row in get_allowed_institutions(user=resolved_user)
+		if row.get("name")
+	}
 	if not institutions:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
 	return f"`tabEduEdge Institution`.name in ({values})"
 
 
-def has_institution_permission(doc, user=None, permission_type=None) -> bool | None:
+def has_institution_permission(doc, user=None, permission_type=None) -> bool:
 	resolved_user = user or frappe.session.user
-	if not _should_scope(resolved_user) or not doc:
-		return None
-	branches = get_allowed_school_branches(user=resolved_user)
-	if not branches:
-		return False if frappe.db.count("EduEdge School Branch", {"enabled": 1}) else None
-
-	roles = set(frappe.get_roles(resolved_user))
-	if roles.intersection(STRUCTURE_MANAGER_ROLES) and _has_company_structure_scope(resolved_user):
-		companies = {row.get("company") for row in branches if row.get("company")}
-		return None if doc.get("company") in companies else False
-
-	branch_names = [row.get("name") for row in branches if row.get("name")]
-	return None if frappe.db.exists(
-		"EduEdge School Branch",
-		{"name": ["in", branch_names], "institution": doc.name},
-	) else False
-
-
-def _has_company_structure_scope(user: str) -> bool:
-	"""Keep legacy company-wide structure access until branch enforcement is enabled.
-
-	Once enforcement is active, a structure-management role receives company-wide
-	Institution access only through an authorised HQ / All-Branch profile. Direct
-	branch assignments remain limited to the Institutions linked to those branches.
-	"""
-	if not is_branch_access_enforced():
+	if not doc or not _should_scope(resolved_user):
 		return True
-	return bool(get_branch_access_profile(user=user).get("can_view_all_branches"))
+	allowed = {
+		row.get("name")
+		for row in get_allowed_institutions(user=resolved_user)
+		if row.get("name")
+	}
+	return doc.name in allowed
 
 
 def _should_scope(user: str) -> bool:
