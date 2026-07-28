@@ -12,10 +12,12 @@ class TestQuestionGovernanceActionContract(unittest.TestCase):
 		for expected in (
 			'ACTION_SUBMIT = "submit_for_review"',
 			'ACTION_RETURN = "return_to_draft"',
+			'ACTION_REQUEST_CHANGES = "request_changes"',
+			'ACTION_RECOMMEND = "recommend"',
 			'ACTION_APPROVE = "approve"',
 			'ACTION_RETIRE = "retire"',
 			"resolve_question_governance",
-			'policy.get("question_approval_mode") == "Standard"',
+			"get_question_responsibility_state",
 			'require_separate_question_approver',
 			'allow_academic_admin_override',
 			'_value(question, "owner") == user',
@@ -39,27 +41,35 @@ class TestQuestionGovernanceActionContract(unittest.TestCase):
 		self.assertIn("validate_question_governance_transition(doc)", lifecycle)
 		self.assertIn("Use the Question Bank or Question Builder action", service)
 
-	def test_approval_audit_is_set_without_overwriting_it_on_retirement(self):
+	def test_recommendation_and_approval_audits_are_separate(self):
 		source = (APP / "cbt/question_governance.py").read_text(encoding="utf-8")
 		transition_start = source.index("with governance_action_context(action):")
 		transition_end = source.index("\n\t\tdoc.save()", transition_start)
 		transition_block = source[transition_start:transition_end]
-		self.assertIn("doc.reviewed_by = frappe.session.user", transition_block)
-		self.assertIn("doc.reviewed_on = now_datetime()", transition_block)
+		for expected in (
+			"doc.recommended_by = frappe.session.user",
+			"doc.recommended_on = now_datetime()",
+			"doc.reviewed_by = frappe.session.user",
+			"doc.reviewed_on = now_datetime()",
+			"doc.review_feedback = clean_feedback",
+		):
+			self.assertIn(expected, transition_block)
 		self.assertNotIn("elif action == ACTION_RETIRE", transition_block)
 
-	def test_whitelisted_api_requires_record_read_permission(self):
+	def test_whitelisted_api_requires_record_read_permission_and_accepts_feedback(self):
 		source = (APP / "api/question_governance.py").read_text(encoding="utf-8")
 		for expected in (
 			"@frappe.whitelist()",
 			'doc.has_permission("read")',
 			"get_question_action_state(doc)",
 			'state["modified"] = str(doc.modified)',
-			"apply_question_action(doc, action, expected_modified=expected_modified)",
+			"feedback: str | None = None",
+			"expected_modified=expected_modified",
+			"feedback=feedback",
 		):
 			self.assertIn(expected, source)
 
-	def test_builder_saves_content_before_calling_governed_action_api(self):
+	def test_builder_saves_editable_content_before_calling_governed_action_api(self):
 		source = (APP / "public/js/eduedge_question_builder.bundle.js").read_text(encoding="utf-8")
 		for expected in (
 			"question_action_state",
@@ -69,8 +79,11 @@ class TestQuestionGovernanceActionContract(unittest.TestCase):
 			"eduedge.api.question_governance.perform_action",
 			'"return_to_draft"',
 			'"submit_for_review"',
+			'"request_changes"',
+			'"recommend"',
 			"requires_confirmation",
 			"expected_modified: this.context?.question_action_state?.modified",
+			"feedback: String(feedback || \"\").trim()",
 		):
 			self.assertIn(expected, source)
 		self.assertLess(
