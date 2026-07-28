@@ -2,7 +2,7 @@
 	<EdgeAppShell
 		product="eduedge"
 		title="EduEdge"
-		:tenant-name="selectedInstitutionLabel"
+		:tenant-name="selectedCompanyLabel"
 		branch-name="Exam Templates"
 		:user-name="state.user?.full_name || ''"
 		:menu-items="menuItems"
@@ -14,7 +14,7 @@
 				<EdgePageHeader
 					eyebrow="CBT Exam Design"
 					title="Exam Templates"
-					subtitle="Build reusable, permission-aware examination definitions without working in the native ERPNext form."
+					subtitle="Reuse Universal, Institution-wide, Branch-wide, Any-Subject, or Specific-Subject exam designs."
 					:action-label="state.permissions?.can_create ? 'Create Template' : null"
 					@action="openBuilder()"
 				/>
@@ -37,7 +37,7 @@
 								v-model.trim="filters.search"
 								type="search"
 								class="form-control"
-								placeholder="Template title, code, subject, programme or class"
+								placeholder="Title, code, purpose, subject, programme or class"
 								@input="scheduleSearch"
 							/>
 						</label>
@@ -46,6 +46,22 @@
 							<span>Examination Scope</span>
 							<select v-model="filters.exam_scope" class="form-control" @change="scopeChanged">
 								<option v-for="option in state.options.scope" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</select>
+						</label>
+
+						<label v-if="isSchoolScope" class="eduedge-template-field">
+							<span>Company</span>
+							<select v-model="filters.company" class="form-control" @change="companyChanged">
+								<option value="">All permitted Companies</option>
+								<option v-for="option in state.options.companies" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</select>
+						</label>
+
+						<label v-if="isSchoolScope" class="eduedge-template-field">
+							<span>Reuse Scope</span>
+							<select v-model="filters.template_reuse_scope" class="form-control" @change="filterChanged">
+								<option value="">All reuse scopes</option>
+								<option v-for="option in state.options.reuse_scopes" :key="option.value" :value="option.value">{{ option.label }}</option>
 							</select>
 						</label>
 
@@ -65,21 +81,46 @@
 							</select>
 						</label>
 
+						<label class="eduedge-template-field">
+							<span>Subject Applicability</span>
+							<select v-model="filters.subject_applicability" class="form-control" @change="subjectScopeChanged">
+								<option value="">Any or Specific Subject</option>
+								<option v-for="option in state.options.subject_applicability" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</select>
+						</label>
+
 						<div class="eduedge-template-field">
 							<span>Subject / Course</span>
 							<EdgeLinkField
 								:model-value="filters.course"
 								:selected-label="courseLabel"
 								:searcher="searchCourses"
-								:context="{ exam_scope: filters.exam_scope, school_branch: filters.branch }"
+								:context="filters"
 								placeholder="Search Subject or Course"
 								:allow-clear="true"
 								:open-on-focus="true"
+								:disabled="filters.subject_applicability === 'Any Subject'"
 								@update:model-value="courseValueChanged"
 								@select="courseSelected"
 								@clear="courseCleared"
 							/>
 						</div>
+
+						<label class="eduedge-template-field">
+							<span>Exam Purpose</span>
+							<select v-model="filters.exam_purpose" class="form-control" @change="filterChanged">
+								<option value="">All purposes</option>
+								<option v-for="option in state.options.purposes" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</select>
+						</label>
+
+						<label class="eduedge-template-field">
+							<span>Content Mode</span>
+							<select v-model="filters.template_mode" class="form-control" @change="filterChanged">
+								<option value="">Blueprint or Fixed Set</option>
+								<option v-for="option in state.options.template_modes" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</select>
+						</label>
 
 						<label class="eduedge-template-field">
 							<span>Status</span>
@@ -88,29 +129,6 @@
 								<option v-for="option in state.options.statuses" :key="option.value" :value="option.value">{{ option.label }}</option>
 							</select>
 						</label>
-
-						<label class="eduedge-template-field">
-							<span>Exam Body / Source</span>
-							<select v-model="filters.exam_body" class="form-control" @change="filterChanged">
-								<option value="">All sources</option>
-								<option v-for="option in state.options.exam_bodies" :key="option.value" :value="option.value">{{ option.label }}</option>
-							</select>
-						</label>
-
-						<div class="eduedge-template-field">
-							<span>Academic Year</span>
-							<EdgeLinkField
-								:model-value="filters.academic_year"
-								:selected-label="academicYearLabel"
-								:searcher="searchAcademicYears"
-								placeholder="Search Academic Year"
-								:allow-clear="true"
-								:open-on-focus="true"
-								@update:model-value="academicYearValueChanged"
-								@select="academicYearSelected"
-								@clear="academicYearCleared"
-							/>
-						</div>
 
 						<label class="eduedge-template-field">
 							<span>Sort</span>
@@ -159,7 +177,7 @@
 					<EdgeEmptyState
 						v-if="!state.rows.length && !loading"
 						title="No templates match these filters"
-						description="Clear one or more filters, or create a reusable exam template."
+						description="Create a reusable policy blueprint instead of rebuilding the same exam settings for every subject or sitting."
 						:action-label="state.permissions?.can_create ? 'Create Template' : null"
 						@action="openBuilder()"
 					/>
@@ -167,9 +185,9 @@
 					<div v-else class="eduedge-template-table" role="table" aria-label="Exam Template records">
 						<div class="eduedge-template-table__head" role="row">
 							<span role="columnheader">Template</span>
-							<span role="columnheader">Academic Scope</span>
-							<span role="columnheader">Exam Controls</span>
-							<span role="columnheader">Questions</span>
+							<span role="columnheader">Reuse Scope</span>
+							<span role="columnheader">Subject</span>
+							<span role="columnheader">Exam Design</span>
 							<span role="columnheader">Status</span>
 						</div>
 						<button
@@ -183,20 +201,20 @@
 							<span class="eduedge-template-primary" role="cell">
 								<strong>{{ row.template_title }}</strong>
 								<span>{{ row.template_code }} · Version {{ row.version_number || 1 }}</span>
-								<small>Updated {{ formatDate(row.modified) }}</small>
+								<small>{{ row.exam_purpose }} · Updated {{ formatDate(row.modified) }}</small>
 							</span>
 							<span class="eduedge-template-cell" role="cell">
-								<strong>{{ row.course_label || row.course }}</strong>
-								<span>{{ row.branch_label }}</span>
-								<small>{{ row.academic_year || row.exam_scope }}{{ row.student_group ? ` · ${row.student_group}` : '' }}</small>
+								<strong>{{ row.scope_label }}</strong>
+								<small>{{ row.exam_scope }}</small>
 							</span>
 							<span class="eduedge-template-cell" role="cell">
-								<strong>{{ row.duration_minutes || 0 }} minutes</strong>
-								<span>{{ row.exam_body || 'No source' }}</span>
+								<strong>{{ row.subject_applicability }}</strong>
+								<span>{{ row.course_label }}</span>
 							</span>
 							<span class="eduedge-template-cell" role="cell">
-								<strong>{{ row.question_count || 0 }} questions</strong>
-								<span>{{ row.total_marks || 0 }} marks</span>
+								<strong>{{ row.template_mode }}</strong>
+								<span>{{ row.duration_minutes || 0 }} minutes</span>
+								<small>{{ row.question_count || 0 }} fixed questions · {{ row.total_marks || 0 }} marks</small>
 							</span>
 							<span class="eduedge-template-status" role="cell">
 								<EdgeStatusBadge :label="row.status" :status="row.status" :tone="statusTone(row.status)" />
@@ -224,8 +242,33 @@ const SCHOOL_EXAM = "School Examination";
 
 function defaultState() {
 	return {
-		rows: [], counts: {}, filters: {}, options: { scope: [], institutions: [], branches: [], statuses: [], exam_bodies: [], page_lengths: [] },
-		pagination: { start: 0, page_length: 20, total: 0, has_previous: false, has_next: false }, permissions: {}, user: {},
+		rows: [],
+		counts: {},
+		filters: {},
+		options: {
+			scope: [], companies: [], institutions: [], branches: [], reuse_scopes: [], subject_applicability: [], purposes: [], template_modes: [], statuses: [], exam_bodies: [], page_lengths: [],
+		},
+		pagination: { start: 0, page_length: 20, total: 0, has_previous: false, has_next: false },
+		permissions: {},
+		user: {},
+	};
+}
+
+function defaultFilters() {
+	return {
+		search: "",
+		exam_scope: SCHOOL_EXAM,
+		company: "",
+		institution: "",
+		branch: "",
+		template_reuse_scope: "",
+		subject_applicability: "",
+		course: "",
+		status: "",
+		exam_purpose: "",
+		template_mode: "",
+		exam_body: "",
+		sort_by: "modified_desc",
 	};
 }
 
@@ -240,16 +283,15 @@ export default {
 			searchTimer: null,
 			requestSequence: 0,
 			courseLabel: "",
-			academicYearLabel: "",
-			filters: { search: "", exam_scope: SCHOOL_EXAM, institution: "", branch: "", course: "", status: "", exam_body: "", academic_year: "", sort_by: "modified_desc" },
+			filters: defaultFilters(),
 			state: defaultState(),
 		};
 	},
 	computed: {
 		isSchoolScope() { return this.filters.exam_scope === SCHOOL_EXAM; },
 		pagination() { return this.state.pagination || defaultState().pagination; },
-		selectedInstitutionLabel() {
-			return this.state.options.institutions.find((row) => row.value === this.filters.institution)?.label || "Exam Templates";
+		selectedCompanyLabel() {
+			return this.state.options.companies.find((row) => row.value === this.filters.company)?.label || "Exam Templates";
 		},
 		statusCards() {
 			return [
@@ -280,7 +322,6 @@ export default {
 				this.state = response.message || defaultState();
 				this.filters = { ...this.filters, ...(this.state.filters || {}) };
 				if (!this.courseLabel && this.filters.course) this.courseLabel = this.filters.course;
-				if (!this.academicYearLabel && this.filters.academic_year) this.academicYearLabel = this.filters.academic_year;
 			} catch (error) {
 				if (sequence !== this.requestSequence) return;
 				this.loadError = error?.message || "Exam Templates could not be loaded.";
@@ -297,35 +338,65 @@ export default {
 		},
 		filterChanged() { this.loadTemplates({ resetPage: true }); },
 		scopeChanged() {
-			this.filters.institution = ""; this.filters.branch = ""; this.filters.course = ""; this.filters.academic_year = "";
-			this.courseLabel = ""; this.academicYearLabel = "";
+			this.filters.company = "";
+			this.filters.institution = "";
+			this.filters.branch = "";
+			this.filters.course = "";
+			this.courseLabel = "";
+			this.loadTemplates({ resetPage: true });
+		},
+		companyChanged() {
+			this.filters.institution = "";
+			this.filters.branch = "";
+			this.filters.course = "";
+			this.courseLabel = "";
 			this.loadTemplates({ resetPage: true });
 		},
 		institutionChanged() {
-			this.filters.branch = ""; this.filters.course = ""; this.courseLabel = "";
+			this.filters.branch = "";
+			this.filters.course = "";
+			this.courseLabel = "";
 			this.loadTemplates({ resetPage: true });
 		},
-		branchChanged() { this.filters.course = ""; this.courseLabel = ""; this.loadTemplates({ resetPage: true }); },
+		branchChanged() {
+			this.filters.course = "";
+			this.courseLabel = "";
+			this.loadTemplates({ resetPage: true });
+		},
+		subjectScopeChanged() {
+			if (this.filters.subject_applicability === "Any Subject") {
+				this.filters.course = "";
+				this.courseLabel = "";
+			}
+			this.loadTemplates({ resetPage: true });
+		},
 		selectStatus(status) { this.filters.status = status; this.loadTemplates({ resetPage: true }); },
 		clearFilters() {
-			this.filters = { search: "", exam_scope: SCHOOL_EXAM, institution: "", branch: "", course: "", status: "", exam_body: "", academic_year: "", sort_by: "modified_desc" };
-			this.courseLabel = ""; this.academicYearLabel = "";
+			this.filters = defaultFilters();
+			this.courseLabel = "";
 			this.loadTemplates({ resetPage: true });
 		},
-		async searchOption(fieldname, query, values = {}) {
-			const response = await frappe.call("eduedge.api.exam_templates.search_template_options", { fieldname, txt: query || "", values: JSON.stringify({ ...this.filters, ...values }) });
+		async searchCourses(query) {
+			const response = await frappe.call("eduedge.api.exam_templates.search_template_options", {
+				fieldname: "course",
+				txt: query || "",
+				values: JSON.stringify({ ...this.filters, school_branch: this.filters.branch }),
+			});
 			return response.message || [];
 		},
-		searchCourses(query) { return this.searchOption("course", query); },
-		searchAcademicYears(query) { return this.searchOption("academic_year", query); },
 		courseValueChanged(value) { this.filters.course = value || ""; if (!value) this.courseLabel = ""; },
 		courseSelected(option) { this.filters.course = option?.value || ""; this.courseLabel = option?.label || this.filters.course; this.filterChanged(); },
 		courseCleared() { this.filters.course = ""; this.courseLabel = ""; this.filterChanged(); },
-		academicYearValueChanged(value) { this.filters.academic_year = value || ""; if (!value) this.academicYearLabel = ""; },
-		academicYearSelected(option) { this.filters.academic_year = option?.value || ""; this.academicYearLabel = option?.label || this.filters.academic_year; this.filterChanged(); },
-		academicYearCleared() { this.filters.academic_year = ""; this.academicYearLabel = ""; this.filterChanged(); },
-		previousPage() { if (!this.pagination.has_previous) return; this.state.pagination.start = Math.max(0, this.pagination.start - this.pagination.page_length); this.loadTemplates(); },
-		nextPage() { if (!this.pagination.has_next) return; this.state.pagination.start = this.pagination.start + this.pagination.page_length; this.loadTemplates(); },
+		previousPage() {
+			if (!this.pagination.has_previous) return;
+			this.state.pagination.start = Math.max(0, this.pagination.start - this.pagination.page_length);
+			this.loadTemplates();
+		},
+		nextPage() {
+			if (!this.pagination.has_next) return;
+			this.state.pagination.start = this.pagination.start + this.pagination.page_length;
+			this.loadTemplates();
+		},
 		openBuilder(row = null) {
 			const route = row?.name ? `/app/eduedge-exam-template-builder?template=${encodeURIComponent(row.name)}` : "/app/eduedge-exam-template-builder";
 			this.openRoute(route);
@@ -354,7 +425,7 @@ export default {
 .eduedge-template-panel { border: 1px solid var(--edge-border, #e2e8f0); border-radius: 1rem; background: var(--edge-surface, #fff); overflow: hidden; }
 .eduedge-template-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; padding: 1rem; border-bottom: 1px solid var(--edge-border, #e2e8f0); }
 .eduedge-template-heading h2, .eduedge-template-heading p { margin: 0; }
-.eduedge-template-table__head, .eduedge-template-row { display: grid; grid-template-columns: minmax(16rem, 2fr) minmax(14rem, 1.5fr) minmax(9rem, .8fr) minmax(8rem, .7fr) minmax(7rem, .6fr); gap: .8rem; align-items: center; }
+.eduedge-template-table__head, .eduedge-template-row { display: grid; grid-template-columns: minmax(16rem, 2fr) minmax(14rem, 1.3fr) minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(7rem, .6fr); gap: .8rem; align-items: center; }
 .eduedge-template-table__head { padding: .75rem 1rem; background: var(--edge-surface-muted, #f8fafc); color: var(--edge-text-muted, #64748b); font-size: .78rem; font-weight: 700; }
 .eduedge-template-row { width: 100%; border: 0; border-top: 1px solid var(--edge-border, #e2e8f0); background: transparent; text-align: left; padding: .9rem 1rem; }
 .eduedge-template-row:hover { background: var(--edge-surface-muted, #f8fafc); }
