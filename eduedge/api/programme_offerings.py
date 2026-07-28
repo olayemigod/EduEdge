@@ -201,12 +201,6 @@ def _attach_runtime_status(rows: list[dict]) -> None:
 		row["occupied_seats"] = occupied
 		row["seats_remaining"] = max(capacity - occupied, 0) if capacity else None
 		row["identity_locked"] = row.name in locked
-		row["application_open"] = bool(
-			cint(row.admission_enabled)
-			and (not row.application_start_date or getdate(row.application_start_date) <= today)
-			and (not row.application_end_date or getdate(row.application_end_date) >= today)
-		)
-		row["enrollment_open"] = bool(cint(row.enrollment_enabled))
 		if not cint(row.is_active):
 			status = "Disabled"
 		elif row.end_date and getdate(row.end_date) < today:
@@ -218,6 +212,16 @@ def _attach_runtime_status(rows: list[dict]) -> None:
 		else:
 			status = "Active"
 		row["operational_status"] = status
+		row["application_open"] = bool(
+			status not in {"Disabled", "Closed"}
+			and cint(row.admission_enabled)
+			and (not row.application_start_date or getdate(row.application_start_date) <= today)
+			and (not row.application_end_date or getdate(row.application_end_date) >= today)
+		)
+		row["enrollment_open"] = bool(
+			status not in {"Disabled", "Closed", "Full"}
+			and cint(row.enrollment_enabled)
+		)
 		row["admission_status"] = "Admission Open" if row["application_open"] else "Admission Closed"
 		row["enrollment_status"] = "Enrollment Open" if row["enrollment_open"] else "Enrollment Closed"
 
@@ -266,7 +270,7 @@ def _get_context_options(institution: str | None, academic_year: str | None) -> 
 		frappe.get_list(
 			"Program",
 			filters=program_filters,
-			fields=["name", "program_name", "program_abbreviation", INSTITUTION_FIELD],
+			fields=["name", "program_name", "program_abbreviation", INSTITUTION_FIELD, "eduedge_academic_section"],
 			order_by="program_name asc",
 			page_length=MAX_OPTION_ROWS,
 		)
@@ -295,20 +299,7 @@ def _get_context_options(institution: str | None, academic_year: str | None) -> 
 		if frappe.has_permission("Academic Year", "read")
 		else []
 	)
-	term_filters = {}
-	if academic_year:
-		term_filters["academic_year"] = academic_year
-	terms = (
-		frappe.get_list(
-			"Academic Term",
-			filters=term_filters,
-			fields=["name", "academic_year", "term_start_date", "term_end_date"],
-			order_by="term_start_date asc, name asc",
-			page_length=MAX_OPTION_ROWS,
-		)
-		if frappe.has_permission("Academic Term", "read")
-		else []
-	)
+	terms = _list_institution_calendar_terms(institution, academic_year)
 	batch_filters = {}
 	batch_meta = frappe.get_meta("Student Batch Name")
 	if institution and batch_meta.has_field(INSTITUTION_FIELD):
@@ -335,6 +326,52 @@ def _get_context_options(institution: str | None, academic_year: str | None) -> 
 		"study_modes": ["Full-Time", "Part-Time", "Weekend", "Evening", "Short Course", "Flexible"],
 		"delivery_modes": ["Onsite", "Online", "Hybrid"],
 	}
+
+
+def _list_institution_calendar_terms(
+	institution: str | None,
+	academic_year: str | None,
+) -> list[dict]:
+	if (
+		not institution
+		or not academic_year
+		or not frappe.has_permission("Academic Term", "read")
+		or not frappe.db.exists("DocType", "EduEdge Institution Academic Calendar")
+	):
+		return []
+	if not frappe.has_permission("EduEdge Institution Academic Calendar", "read"):
+		return []
+	calendar_names = frappe.get_list(
+		"EduEdge Institution Academic Calendar",
+		filters={
+			"institution": institution,
+			"academic_year": academic_year,
+			"enabled": 1,
+		},
+		pluck="name",
+		page_length=MAX_OPTION_ROWS,
+	)
+	if not calendar_names:
+		return []
+	period_terms = frappe.get_all(
+		"EduEdge Academic Calendar Period",
+		filters={
+			"parent": ["in", calendar_names],
+			"parenttype": "EduEdge Institution Academic Calendar",
+		},
+		pluck="academic_term",
+		limit_page_length=MAX_OPTION_ROWS,
+	)
+	term_names = list(dict.fromkeys(term for term in period_terms if term))
+	if not term_names:
+		return []
+	return frappe.get_list(
+		"Academic Term",
+		filters={"name": ["in", term_names], "academic_year": academic_year},
+		fields=["name", "academic_year", "term_start_date", "term_end_date"],
+		order_by="term_start_date asc, name asc",
+		page_length=MAX_OPTION_ROWS,
+	)
 
 
 def _list_institution_master(
