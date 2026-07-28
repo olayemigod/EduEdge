@@ -98,8 +98,8 @@
 					<EdgeStatCard :label="`Assigned ${term('instructor', true, 'Instructors')}`" :value="context.counts.assigned_instructors" helper="Enabled Branch assignments" />
 					<EdgeStatCard :label="`Today's ${term('class_session', true, 'Schedules')}`" :value="context.counts.schedules" helper="Filtered by selected date" />
 					<EdgeStatCard label="Rooms Used" :value="context.counts.rooms_used" :helper="`${context.counts.unassigned_room_sessions || 0} sessions without rooms`" />
-					<EdgeStatCard label="Attendance Complete" :value="context.counts.attendance_complete_groups" tone="success" helper="Scheduled groups with complete registers" />
-					<EdgeStatCard label="Missing Registers" :value="context.counts.attendance_missing_groups" :tone="context.counts.attendance_missing_groups ? 'danger' : 'success'" helper="Scheduled groups with no submitted attendance" />
+					<EdgeStatCard label="Attendance Complete" :value="context.counts.attendance_complete_registers" tone="success" helper="Scheduled sessions with complete registers" />
+					<EdgeStatCard label="Missing Registers" :value="context.counts.attendance_missing_registers" :tone="context.counts.attendance_missing_registers ? 'danger' : 'success'" helper="Scheduled sessions with no submitted attendance" />
 				</EdgeDashboardLayout>
 
 				<section class="eduedge-quick-actions" aria-label="Academic quick actions">
@@ -209,10 +209,13 @@
 				<section class="eduedge-insight-grid">
 					<article class="eduedge-panel">
 						<div class="eduedge-panel-header"><div><p class="edge-eyebrow">Register readiness</p><h2>Scheduled attendance coverage</h2></div></div>
-						<EdgeEmptyState v-if="!context.attendance_coverage.length" title="No scheduled registers" description="Attendance readiness will appear when a class is scheduled for this date." />
+						<EdgeEmptyState v-if="!context.attendance_coverage.length" title="No scheduled registers" description="Attendance readiness will appear when a class session is scheduled for this date." />
 						<div v-else class="eduedge-readiness-list">
-							<button v-for="row in context.attendance_coverage" :key="row.student_group" type="button" class="eduedge-readiness-row" @click="selectCoverage(row)">
-								<span><strong>{{ row.student_group_name }}</strong><small>{{ row.submitted }} of {{ row.expected }} submitted</small></span>
+							<button v-for="row in context.attendance_coverage" :key="row.course_schedule" type="button" class="eduedge-readiness-row" @click="selectCoverage(row)">
+								<span>
+									<strong>{{ row.student_group_name }}</strong>
+									<small>{{ row.course || "Course not set" }} · {{ formatTime(row.from_time) }} – {{ formatTime(row.to_time) }} · {{ row.submitted }} of {{ row.expected }} submitted</small>
+								</span>
 								<EdgeStatusBadge :label="row.complete ? 'Complete' : row.has_attendance ? `${row.missing} missing` : 'Not started'" :status="row.complete ? 'complete' : row.has_attendance ? 'partial' : 'missing'" :tone="row.complete ? 'success' : row.has_attendance ? 'warning' : 'danger'" />
 							</button>
 						</div>
@@ -252,7 +255,7 @@ export default {
 			filters: { branch: "", date: today, student_group: "", course_schedule: "" },
 			context: {
 				user: {}, current_branch: null, selected_branch: {}, allowed_branches: [], academic_calendar: {},
-				counts: { student_groups: 0, assigned_instructors: 0, schedules: 0, rooms_used: 0, unassigned_room_sessions: 0, attendance_submitted: 0, present: 0, absent: 0, leave: 0, attendance_complete_groups: 0, attendance_incomplete_groups: 0, attendance_missing_groups: 0 },
+				counts: { student_groups: 0, assigned_instructors: 0, schedules: 0, rooms_used: 0, unassigned_room_sessions: 0, attendance_submitted: 0, present: 0, absent: 0, leave: 0, attendance_complete_registers: 0, attendance_incomplete_registers: 0, attendance_missing_registers: 0, attendance_complete_groups: 0, attendance_incomplete_groups: 0, attendance_missing_groups: 0 },
 				student_groups: [], schedules: [], attendance_coverage: [], room_usage: [],
 			},
 			register: emptyRegister(),
@@ -296,7 +299,7 @@ export default {
 		async dateChanged() { this.filters.course_schedule = ""; this.register = emptyRegister(); await this.loadContext(); },
 		async groupChanged() { this.filters.course_schedule = ""; this.register = emptyRegister(); await this.loadContext(); },
 		selectSchedule(schedule) { this.filters.student_group = schedule.student_group; this.filters.course_schedule = schedule.name; this.loadRegister(); },
-		selectCoverage(row) { this.filters.student_group = row.student_group; this.filters.course_schedule = ""; this.loadRegister(); },
+		selectCoverage(row) { this.filters.student_group = row.student_group; this.filters.course_schedule = row.course_schedule; this.loadRegister(); },
 		async loadRegister() {
 			if (!this.filters.student_group) return;
 			this.registerLoading = true; this.registerError = "";
