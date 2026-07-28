@@ -15,7 +15,7 @@
 					eyebrow="CBT Question Governance"
 					title="Question Bank"
 					subtitle="Find and review permitted questions without exposing answer keys or internal marking content."
-					:action-label="state.permissions?.can_create ? 'Create Question' : null"
+					:action-label="state.permissions?.can_create ? 'Single Question' : null"
 					@action="openRoute('/app/eduedge-question-builder')"
 				/>
 			</template>
@@ -129,12 +129,20 @@
 					<template #actions>
 						<button type="button" class="edge-button" :disabled="loading" @click="clearFilters">Clear</button>
 						<button
+							v-if="state.permissions?.can_create"
+							type="button"
+							class="edge-button"
+							@click="openRoute('/app/eduedge-question-batch?mode=entry')"
+						>
+							Multiple Entry
+						</button>
+						<button
 							v-if="state.permissions?.can_import"
 							type="button"
 							class="edge-button"
-							@click="openRoute('/app/eduedge-question-batch')"
+							@click="openRoute('/app/eduedge-question-batch?mode=upload')"
 						>
-							Batch Import
+							Upload Questions
 						</button>
 						<button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="loadQuestions">Refresh</button>
 					</template>
@@ -170,7 +178,7 @@
 						v-if="!state.rows.length && !loading"
 						title="No questions match these filters"
 						description="Clear one or more filters, or create a new question for the selected Question Bank."
-						:action-label="state.permissions?.can_create ? 'Create Question' : null"
+						:action-label="state.permissions?.can_create ? 'Single Question' : null"
 						@action="openRoute('/app/eduedge-question-builder')"
 					/>
 
