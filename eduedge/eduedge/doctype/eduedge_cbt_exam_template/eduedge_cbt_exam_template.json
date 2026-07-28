@@ -11,7 +11,14 @@
   "template_title",
   "template_code",
   "exam_scope",
+  "template_reuse_scope",
+  "company",
+  "institution",
   "school_branch",
+  "exam_purpose",
+  "template_mode",
+  "subject_applicability",
+  "course",
   "version_number",
   "supersedes_template",
   "academic_section",
@@ -19,7 +26,6 @@
   "academic_term",
   "program",
   "student_group",
-  "course",
   "assessment_group",
   "exam_body",
   "centre_section",
@@ -52,432 +58,75 @@
   "notes"
  ],
  "fields": [
-  {
-   "fieldname": "identity_section",
-   "fieldtype": "Section Break",
-   "label": "Exam Template Identity"
-  },
-  {
-   "fieldname": "template_title",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Template Title",
-   "reqd": 1
-  },
-  {
-   "fieldname": "template_code",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Template Code",
-   "reqd": 1,
-   "unique": 1
-  },
-  {
-   "fieldname": "exam_scope",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Examination Scope",
-   "options": "School Examination\nEduEdge Public Examination",
-   "reqd": 1
-  },
-  {
-   "depends_on": "eval:doc.exam_scope=='School Examination'",
-   "fieldname": "school_branch",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "School Branch / Campus",
-   "mandatory_depends_on": "eval:doc.exam_scope=='School Examination'",
-   "options": "EduEdge School Branch"
-  },
-  {
-   "default": "1",
-   "description": "Use 1 for a new template. A revised template version must be greater than the previous version.",
-   "fieldname": "version_number",
-   "fieldtype": "Int",
-   "label": "Version",
-   "reqd": 1
-  },
-  {
-   "description": "Optional. Select the Approved or Retired template that this revised template replaces. EduEdge keeps the link for audit history.",
-   "fieldname": "supersedes_template",
-   "fieldtype": "Link",
-   "label": "Previous Template Version",
-   "options": "EduEdge CBT Exam Template"
-  },
-  {
-   "fieldname": "academic_section",
-   "fieldtype": "Section Break",
-   "label": "Academic Context"
-  },
-  {
-   "depends_on": "eval:doc.exam_scope=='School Examination'",
-   "fieldname": "academic_year",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Academic Year",
-   "mandatory_depends_on": "eval:doc.exam_scope=='School Examination'",
-   "options": "Academic Year"
-  },
-  {
-   "depends_on": "eval:doc.exam_scope=='School Examination'",
-   "fieldname": "academic_term",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Academic Term",
-   "options": "Academic Term"
-  },
-  {
-   "depends_on": "eval:doc.exam_scope=='School Examination'",
-   "fieldname": "program",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Program",
-   "options": "Program"
-  },
-  {
-   "depends_on": "eval:doc.exam_scope=='School Examination'",
-   "fieldname": "student_group",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Student Group / Class",
-   "options": "Student Group"
-  },
-  {
-   "fieldname": "course",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Subject / Course",
-   "options": "Course",
-   "reqd": 1
-  },
-  {
-   "depends_on": "eval:doc.exam_scope=='School Examination'",
-   "fieldname": "assessment_group",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Assessment Group",
-   "options": "Assessment Group"
-  },
-  {
-   "fieldname": "exam_body",
-   "fieldtype": "Select",
-   "in_standard_filter": 1,
-   "label": "Exam Body / Source Type",
-   "options": "\nSchool Internal\nWAEC\nNECO\nJAMB\nPost-UTME\nOther"
-  },
-  {
-   "fieldname": "centre_section",
-   "fieldtype": "Section Break",
-   "label": "Default Examination Centre"
-  },
-  {
-   "description": "Optional reusable default. A later exam schedule may select another valid centre.",
-   "fieldname": "default_examination_centre",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Default Examination Centre",
-   "options": "EduEdge Examination Centre"
-  },
-  {
-   "fieldname": "timing_section",
-   "fieldtype": "Section Break",
-   "label": "Timing and Candidate Control"
-  },
-  {
-   "default": "60",
-   "fieldname": "duration_minutes",
-   "fieldtype": "Int",
-   "label": "Duration (Minutes)",
-   "reqd": 1
-  },
-  {
-   "default": "1",
-   "description": "Attempt enforcement will be implemented with candidate scheduling and attempts.",
-   "fieldname": "maximum_attempts",
-   "fieldtype": "Int",
-   "label": "Maximum Attempts",
-   "reqd": 1
-  },
-  {
-   "default": "50",
-   "fieldname": "pass_percentage",
-   "fieldtype": "Percent",
-   "label": "Pass Percentage",
-   "reqd": 1
-  },
-  {
-   "default": "Free Navigation",
-   "fieldname": "navigation_policy",
-   "fieldtype": "Select",
-   "label": "Question Navigation",
-   "options": "Free Navigation\nForward Only",
-   "reqd": 1
-  },
-  {
-   "default": "1",
-   "description": "Server-authoritative timeout and final auto-submission will be implemented in the attempt engine.",
-   "fieldname": "auto_submit_on_timeout",
-   "fieldtype": "Check",
-   "label": "Auto-submit on Timeout"
-  },
-  {
-   "default": "1",
-   "description": "Allows a valid active attempt to resume after refresh or temporary network loss.",
-   "fieldname": "allow_resume",
-   "fieldtype": "Check",
-   "label": "Allow Resume"
-  },
-  {
-   "fieldname": "policy_section",
-   "fieldtype": "Section Break",
-   "label": "Randomisation and Result Policy"
-  },
-  {
-   "default": "1",
-   "fieldname": "randomise_questions",
-   "fieldtype": "Check",
-   "label": "Randomise Question Order"
-  },
-  {
-   "default": "1",
-   "fieldname": "randomise_options",
-   "fieldtype": "Check",
-   "label": "Randomise Objective Answer Options"
-  },
-  {
-   "default": "Use Question Marks",
-   "fieldname": "marking_policy",
-   "fieldtype": "Select",
-   "label": "Marking Policy",
-   "options": "Use Question Marks\nDisable Negative Marking",
-   "reqd": 1
-  },
-  {
-   "default": "Manual Approval",
-   "description": "Manual Approval is recommended for school and public examinations until result-review workflows are complete.",
-   "fieldname": "result_release_policy",
-   "fieldtype": "Select",
-   "label": "Result Release Policy",
-   "options": "Manual Approval\nAfter Submission",
-   "reqd": 1
-  },
-  {
-   "default": "Invigilator Approval Required",
-   "description": "Reusable integrity policy copied into each examination schedule snapshot.",
-   "fieldname": "device_change_policy",
-   "fieldtype": "Select",
-   "label": "Device Change Policy",
-   "options": "Not Allowed\nInvigilator Approval Required\nAdministrator Approval Required\nAllowed Before First Answer Only",
-   "reqd": 1
-  },
-  {
-   "default": "Review Flagged Attempts Only",
-   "description": "Defines the normal review workflow. Integrity exceptions always force review regardless of this selection.",
-   "fieldname": "attempt_review_policy",
-   "fieldtype": "Select",
-   "label": "Attempt Review Policy",
-   "options": "Review Flagged Attempts Only\nReview All Attempts\nNo Pre-publication Review",
-   "reqd": 1
-  },
-  {
-   "fieldname": "question_section",
-   "fieldtype": "Section Break",
-   "label": "Approved Questions"
-  },
-  {
-   "fieldname": "questions",
-   "fieldtype": "Table",
-   "label": "Template Questions",
-   "options": "EduEdge CBT Template Question"
-  },
-  {
-   "default": "0",
-   "fieldname": "question_count",
-   "fieldtype": "Int",
-   "label": "Question Count",
-   "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "total_marks",
-   "fieldtype": "Float",
-   "label": "Total Marks",
-   "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "total_negative_marks",
-   "fieldtype": "Float",
-   "label": "Maximum Negative Marks",
-   "read_only": 1
-  },
-  {
-   "fieldname": "instructions_section",
-   "fieldtype": "Section Break",
-   "label": "Candidate Instructions"
-  },
-  {
-   "fieldname": "candidate_instructions",
-   "fieldtype": "Text Editor",
-   "label": "Instructions Shown Before the Exam"
-  },
-  {
-   "fieldname": "governance_section",
-   "fieldtype": "Section Break",
-   "label": "Review and Governance"
-  },
-  {
-   "default": "Draft",
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Status",
-   "options": "Draft\nUnder Review\nApproved\nRetired",
-   "reqd": 1
-  },
-  {
-   "fieldname": "reviewed_by",
-   "fieldtype": "Link",
-   "label": "Reviewed By",
-   "options": "User",
-   "read_only": 1
-  },
-  {
-   "fieldname": "reviewed_on",
-   "fieldtype": "Datetime",
-   "label": "Reviewed On",
-   "read_only": 1
-  },
-  {
-   "fieldname": "notes",
-   "fieldtype": "Small Text",
-   "label": "Internal Notes"
-  }
+  {"fieldname":"identity_section","fieldtype":"Section Break","label":"Exam Template Identity"},
+  {"fieldname":"template_title","fieldtype":"Data","in_list_view":1,"in_standard_filter":1,"label":"Template Title","reqd":1},
+  {"fieldname":"template_code","fieldtype":"Data","in_list_view":1,"in_standard_filter":1,"label":"Template Code","reqd":1,"unique":1},
+  {"fieldname":"exam_scope","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Examination Scope","options":"School Examination\nEduEdge Public Examination","reqd":1},
+  {"default":"Branch-wide","description":"Universal means Company-wide for school templates and centrally governed for EduEdge Public Examinations.","fieldname":"template_reuse_scope","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Template Reuse Scope","options":"Universal\nInstitution-wide\nBranch-wide","reqd":1},
+  {"depends_on":"eval:doc.exam_scope=='School Examination'","fieldname":"company","fieldtype":"Link","in_standard_filter":1,"label":"Company","mandatory_depends_on":"eval:doc.exam_scope=='School Examination'","options":"Company"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination' && ['Institution-wide','Branch-wide'].includes(doc.template_reuse_scope)","fieldname":"institution","fieldtype":"Link","in_standard_filter":1,"label":"Institution","mandatory_depends_on":"eval:doc.exam_scope=='School Examination' && ['Institution-wide','Branch-wide'].includes(doc.template_reuse_scope)","options":"EduEdge Institution"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination' && doc.template_reuse_scope=='Branch-wide'","fieldname":"school_branch","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"School Branch / Campus","mandatory_depends_on":"eval:doc.exam_scope=='School Examination' && doc.template_reuse_scope=='Branch-wide'","options":"EduEdge School Branch"},
+  {"default":"Other","fieldname":"exam_purpose","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Exam Purpose","options":"Continuous Assessment\nMidterm Examination\nEnd-of-Term Examination\nMock Examination\nEntrance Examination\nPractice / Revision\nOther","reqd":1},
+  {"default":"Fixed Question Set","description":"Policy Blueprints are reusable without fixed questions. Fixed Question Sets are approved subject papers.","fieldname":"template_mode","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Template Content Mode","options":"Policy Blueprint\nFixed Question Set","reqd":1},
+  {"default":"Specific Subject","fieldname":"subject_applicability","fieldtype":"Select","in_standard_filter":1,"label":"Subject Applicability","options":"Any Subject\nSpecific Subject","reqd":1},
+  {"depends_on":"eval:doc.subject_applicability=='Specific Subject'","fieldname":"course","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Subject / Course","mandatory_depends_on":"eval:doc.subject_applicability=='Specific Subject'","options":"Course"},
+  {"default":"1","description":"Use 1 for a new template. A revised template version must be greater than the previous version.","fieldname":"version_number","fieldtype":"Int","label":"Version","reqd":1},
+  {"description":"Optional. Select the Approved or Retired template that this revised template replaces.","fieldname":"supersedes_template","fieldtype":"Link","label":"Previous Template Version","options":"EduEdge CBT Exam Template"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination'","description":"Optional defaults only. The actual exam schedule selects the Academic Year, Term, Class and other sitting-specific context.","fieldname":"academic_section","fieldtype":"Section Break","label":"Optional Academic Defaults"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination'","fieldname":"academic_year","fieldtype":"Link","in_standard_filter":1,"label":"Default Academic Year","options":"Academic Year"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination'","fieldname":"academic_term","fieldtype":"Link","in_standard_filter":1,"label":"Default Academic Term","options":"Academic Term"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination'","fieldname":"program","fieldtype":"Link","in_standard_filter":1,"label":"Default Programme","options":"Program"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination'","fieldname":"student_group","fieldtype":"Link","in_standard_filter":1,"label":"Default Student Group / Class","options":"Student Group"},
+  {"depends_on":"eval:doc.exam_scope=='School Examination'","fieldname":"assessment_group","fieldtype":"Link","in_standard_filter":1,"label":"Default Assessment Group","options":"Assessment Group"},
+  {"fieldname":"exam_body","fieldtype":"Select","in_standard_filter":1,"label":"Exam Body / Source Type","options":"\nSchool Internal\nWAEC\nNECO\nJAMB\nPost-UTME\nOther"},
+  {"fieldname":"centre_section","fieldtype":"Section Break","label":"Default Examination Centre"},
+  {"description":"Optional reusable default. The actual exam schedule may select another valid centre within the template scope.","fieldname":"default_examination_centre","fieldtype":"Link","in_standard_filter":1,"label":"Default Examination Centre","options":"EduEdge Examination Centre"},
+  {"fieldname":"timing_section","fieldtype":"Section Break","label":"Timing and Candidate Control"},
+  {"default":"60","fieldname":"duration_minutes","fieldtype":"Int","label":"Duration (Minutes)","reqd":1},
+  {"default":"1","description":"Attempt enforcement is applied by the candidate scheduling and attempt engine.","fieldname":"maximum_attempts","fieldtype":"Int","label":"Maximum Attempts","reqd":1},
+  {"default":"50","fieldname":"pass_percentage","fieldtype":"Percent","label":"Pass Percentage","reqd":1},
+  {"default":"Free Navigation","fieldname":"navigation_policy","fieldtype":"Select","label":"Question Navigation","options":"Free Navigation\nForward Only","reqd":1},
+  {"default":"1","fieldname":"auto_submit_on_timeout","fieldtype":"Check","label":"Auto-submit on Timeout"},
+  {"default":"1","fieldname":"allow_resume","fieldtype":"Check","label":"Allow Resume"},
+  {"fieldname":"policy_section","fieldtype":"Section Break","label":"Randomisation and Result Policy"},
+  {"default":"1","fieldname":"randomise_questions","fieldtype":"Check","label":"Randomise Question Order"},
+  {"default":"1","fieldname":"randomise_options","fieldtype":"Check","label":"Randomise Objective Answer Options"},
+  {"default":"Use Question Marks","fieldname":"marking_policy","fieldtype":"Select","label":"Marking Policy","options":"Use Question Marks\nDisable Negative Marking","reqd":1},
+  {"default":"Manual Approval","fieldname":"result_release_policy","fieldtype":"Select","label":"Result Release Policy","options":"Manual Approval\nAfter Submission","reqd":1},
+  {"default":"Invigilator Approval Required","fieldname":"device_change_policy","fieldtype":"Select","label":"Device Change Policy","options":"Not Allowed\nInvigilator Approval Required\nAdministrator Approval Required\nAllowed Before First Answer Only","reqd":1},
+  {"default":"Review Flagged Attempts Only","fieldname":"attempt_review_policy","fieldtype":"Select","label":"Attempt Review Policy","options":"Review Flagged Attempts Only\nReview All Attempts\nNo Pre-publication Review","reqd":1},
+  {"depends_on":"eval:doc.template_mode=='Fixed Question Set'","fieldname":"question_section","fieldtype":"Section Break","label":"Approved Questions"},
+  {"depends_on":"eval:doc.template_mode=='Fixed Question Set'","fieldname":"questions","fieldtype":"Table","label":"Template Questions","options":"EduEdge CBT Template Question"},
+  {"default":"0","fieldname":"question_count","fieldtype":"Int","label":"Question Count","read_only":1},
+  {"default":"0","fieldname":"total_marks","fieldtype":"Float","label":"Total Marks","read_only":1},
+  {"default":"0","fieldname":"total_negative_marks","fieldtype":"Float","label":"Maximum Negative Marks","read_only":1},
+  {"fieldname":"instructions_section","fieldtype":"Section Break","label":"Candidate Instructions"},
+  {"fieldname":"candidate_instructions","fieldtype":"Text Editor","label":"Instructions Shown Before the Exam"},
+  {"fieldname":"governance_section","fieldtype":"Section Break","label":"Review and Governance"},
+  {"default":"Draft","fieldname":"status","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Status","options":"Draft\nUnder Review\nApproved\nRetired","reqd":1},
+  {"fieldname":"reviewed_by","fieldtype":"Link","label":"Reviewed By","options":"User","read_only":1},
+  {"fieldname":"reviewed_on","fieldtype":"Datetime","label":"Reviewed On","read_only":1},
+  {"fieldname":"notes","fieldtype":"Small Text","label":"Internal Notes"}
  ],
  "links": [],
- "modified": "2026-07-27 00:00:00.000000",
+ "modified": "2026-07-28 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "EduEdge",
  "name": "EduEdge CBT Exam Template",
  "owner": "Administrator",
  "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "import": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "import": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "EduEdge Super Administrator",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "import": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "EduEdge Public Exam Administrator",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "import": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "EduEdge Administrator",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "import": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "School Administrator",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "import": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "Academic Administrator",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "Education Manager",
-   "write": 1
-  },
-  {
-   "create": 1,
-   "read": 1,
-   "report": 1,
-   "role": "Teacher",
-   "write": 1
-  },
-  {
-   "create": 1,
-   "read": 1,
-   "report": 1,
-   "role": "Instructor",
-   "write": 1
-  },
-  {
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "CBT Invigilator"
-  }
+  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
+  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"EduEdge Super Administrator","share":1,"write":1},
+  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"EduEdge Public Exam Administrator","share":1,"write":1},
+  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"EduEdge Administrator","share":1,"write":1},
+  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"School Administrator","share":1,"write":1},
+  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"Academic Administrator","share":1,"write":1},
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Education Manager","write":1},
+  {"create":1,"read":1,"report":1,"role":"Teacher","write":1},
+  {"create":1,"read":1,"report":1,"role":"Instructor","write":1},
+  {"print":1,"read":1,"report":1,"role":"CBT Invigilator"}
  ],
- "search_fields": "template_title,template_code,course,school_branch,exam_body",
+ "search_fields": "template_title,template_code,course,company,institution,school_branch,exam_purpose,exam_body",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
