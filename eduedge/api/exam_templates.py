@@ -9,8 +9,23 @@ from frappe.utils import cint, flt
 
 from eduedge.cbt.public_access import can_author_public_exams, require_public_exam_authoring
 from eduedge.eduedge.doctype.eduedge_cbt_exam_template.eduedge_cbt_exam_template import (
+	EXAM_PURPOSES,
+	MODE_BLUEPRINT,
+	MODE_FIXED,
+	PLATFORM_BANK,
+	PLATFORM_CENTRE,
 	PUBLIC_EXAM,
+	REUSE_BRANCH,
+	REUSE_INSTITUTION,
+	REUSE_SCOPES,
+	REUSE_UNIVERSAL,
+	SCHOOL_BANK,
+	SCHOOL_CENTRE,
 	SCHOOL_EXAM,
+	SUBJECT_ANY,
+	SUBJECT_APPLICABILITY,
+	SUBJECT_SPECIFIC,
+	TEMPLATE_MODES,
 	can_review_templates,
 )
 from eduedge.platform.access import require_eduedge_access
@@ -18,15 +33,12 @@ from eduedge.services.branch_context import get_allowed_school_branches, get_cur
 
 TEMPLATE_DOCTYPE = "EduEdge CBT Exam Template"
 QUESTION_DOCTYPE = "EduEdge CBT Question"
-SCHOOL_BANK = "School Question Bank"
-PLATFORM_BANK = "EduEdge Examination Bank"
-SCHOOL_CENTRE = "School Examination Centre"
-PLATFORM_CENTRE = "EduEdge Exam Centre"
 STATUSES = ("Draft", "Under Review", "Approved", "Retired")
 EXAM_BODIES = ("School Internal", "WAEC", "NECO", "JAMB", "Post-UTME", "Other")
 PAGE_LENGTH_OPTIONS = (20, 50, 100)
 DEFAULT_PAGE_LENGTH = 20
 MAX_OPTIONS = 50
+MAX_APPLICABLE_RESULTS = 200
 SORT_OPTIONS = {
 	"modified_desc": "modified desc",
 	"modified_asc": "modified asc",
@@ -38,14 +50,20 @@ SORT_OPTIONS = {
 EDITABLE_FIELDS = (
 	"template_title",
 	"exam_scope",
+	"template_reuse_scope",
+	"company",
+	"institution",
 	"school_branch",
+	"exam_purpose",
+	"template_mode",
+	"subject_applicability",
+	"course",
 	"version_number",
 	"supersedes_template",
 	"academic_year",
 	"academic_term",
 	"program",
 	"student_group",
-	"course",
 	"assessment_group",
 	"exam_body",
 	"default_examination_centre",
@@ -114,21 +132,19 @@ def _allowed_branch_rows() -> list[dict]:
 	return [dict(row) for row in rows]
 
 
-def _branch_options(branches: list[dict], institution: str = "") -> list[dict]:
-	return [
-		_option(
-			row.get("name"),
-			row.get("branch_name") or row.get("name"),
-			row.get("company") or "",
-			institution=row.get("institution") or "",
-		)
-		for row in branches
-		if not institution or row.get("institution") == institution
-	]
+def _company_options(branches: list[dict]) -> list[dict]:
+	names = sorted({row.get("company") for row in branches if row.get("company")})
+	return [_option(name, name) for name in names]
 
 
-def _institution_options(branches: list[dict]) -> list[dict]:
-	names = sorted({row.get("institution") for row in branches if row.get("institution")})
+def _institution_options(branches: list[dict], company: str = "") -> list[dict]:
+	names = sorted(
+		{
+			row.get("institution")
+			for row in branches
+			if row.get("institution") and (not company or row.get("company") == company)
+		}
+	)
 	if not names:
 		return []
 	rows = frappe.get_all(
@@ -148,6 +164,21 @@ def _institution_options(branches: list[dict]) -> list[dict]:
 	]
 
 
+def _branch_options(branches: list[dict], company: str = "", institution: str = "") -> list[dict]:
+	return [
+		_option(
+			row.get("name"),
+			row.get("branch_name") or row.get("name"),
+			row.get("company") or "",
+			company=row.get("company") or "",
+			institution=row.get("institution") or "",
+		)
+		for row in branches
+		if (not company or row.get("company") == company)
+		and (not institution or row.get("institution") == institution)
+	]
+
+
 def _require_allowed(value: str | None, allowed: set[str], label: str, *, optional: bool = True) -> str:
 	cleaned = str(value or "").strip()
 	if not cleaned and optional:
@@ -157,8 +188,8 @@ def _require_allowed(value: str | None, allowed: set[str], label: str, *, option
 	return cleaned
 
 
-def _resolve_scope(exam_scope: str | None) -> str:
-	resolved = str(exam_scope or SCHOOL_EXAM).strip()
+def _resolve_exam_scope(value: str | None) -> str:
+	resolved = str(value or SCHOOL_EXAM).strip()
 	if resolved not in {SCHOOL_EXAM, PUBLIC_EXAM}:
 		frappe.throw(_("Select a valid Examination Scope."), frappe.ValidationError)
 	if resolved == PUBLIC_EXAM:
@@ -189,39 +220,8 @@ def _search_or_filters(search: str) -> list[list[str]]:
 		["course", "like", pattern],
 		["program", "like", pattern],
 		["student_group", "like", pattern],
+		["exam_purpose", "like", pattern],
 	]
-
-
-def _list_filters(
-	*,
-	exam_scope: str,
-	institution: str,
-	branch: str,
-	course: str,
-	status: str,
-	exam_body: str,
-	academic_year: str,
-	branches: list[dict],
-	include_status: bool = True,
-) -> dict:
-	filters: dict[str, Any] = {"exam_scope": exam_scope}
-	if exam_scope == SCHOOL_EXAM:
-		if branch:
-			filters["school_branch"] = branch
-		elif institution:
-			names = sorted(row.get("name") for row in branches if row.get("institution") == institution)
-			filters["school_branch"] = ["in", names or [""]]
-		else:
-			filters["school_branch"] = ["in", sorted(row.get("name") for row in branches) or [""]]
-	if course:
-		filters["course"] = course
-	if include_status and status:
-		filters["status"] = status
-	if exam_body:
-		filters["exam_body"] = exam_body
-	if academic_year and exam_scope == SCHOOL_EXAM:
-		filters["academic_year"] = academic_year
-	return filters
 
 
 def _status_counts(base_filters: dict, or_filters: list[list[str]]) -> dict:
@@ -243,68 +243,125 @@ def _course_label_map(rows: list[dict]) -> dict[str, str]:
 	}
 
 
+def _serialise_list_rows(rows: list[dict], branches: list[dict], institutions: list[dict]) -> list[dict]:
+	serialised = [dict(row) for row in rows]
+	branch_map = {row.get("name"): row for row in branches}
+	institution_map = {row.get("value"): row for row in institutions}
+	course_map = _course_label_map(serialised)
+	for row in serialised:
+		branch_row = branch_map.get(row.get("school_branch")) or {}
+		institution = row.get("institution") or branch_row.get("institution") or ""
+		row["branch_label"] = branch_row.get("branch_name") or row.get("school_branch") or ""
+		row["institution_label"] = institution_map.get(institution, {}).get("label") or institution
+		row["course_label"] = course_map.get(row.get("course"), row.get("course") or "Any Subject")
+		row["scope_label"] = _template_scope_label(row)
+	return serialised
+
+
+def _template_scope_label(row: dict) -> str:
+	if row.get("exam_scope") == PUBLIC_EXAM:
+		return _("EduEdge Public Examination")
+	scope = row.get("template_reuse_scope") or REUSE_BRANCH
+	if scope == REUSE_UNIVERSAL:
+		return _("Universal · {0}").format(row.get("company") or _("Company"))
+	if scope == REUSE_INSTITUTION:
+		return _("Institution-wide · {0}").format(row.get("institution") or _("Institution"))
+	return _("Branch-wide · {0}").format(row.get("branch_label") or row.get("school_branch") or _("Branch"))
+
+
 @frappe.whitelist()
 def get_exam_templates(
 	search: str | None = None,
 	exam_scope: str | None = None,
+	company: str | None = None,
 	institution: str | None = None,
 	branch: str | None = None,
+	template_reuse_scope: str | None = None,
+	subject_applicability: str | None = None,
 	course: str | None = None,
 	status: str | None = None,
+	exam_purpose: str | None = None,
+	template_mode: str | None = None,
 	exam_body: str | None = None,
-	academic_year: str | None = None,
 	sort_by: str | None = None,
 	start: int = 0,
 	page_length: int = DEFAULT_PAGE_LENGTH,
 ) -> dict:
 	_require_permission("read")
 	branches = _allowed_branch_rows()
-	institutions = _institution_options(branches)
-	resolved_scope = _resolve_scope(exam_scope)
+	companies = _company_options(branches)
+	resolved_scope = _resolve_exam_scope(exam_scope)
+	resolved_company = ""
 	resolved_institution = ""
 	resolved_branch = ""
+	visible_institutions: list[dict] = []
+	visible_branches: list[dict] = []
+
 	if resolved_scope == SCHOOL_EXAM:
+		resolved_company = _require_allowed(
+			company,
+			{row["value"] for row in companies},
+			_("Company"),
+		)
+		visible_institutions = _institution_options(branches, resolved_company)
 		resolved_institution = _require_allowed(
 			institution,
-			{row["value"] for row in institutions},
+			{row["value"] for row in visible_institutions},
 			_("Institution"),
 		)
-		visible_branches = _branch_options(branches, resolved_institution)
+		visible_branches = _branch_options(branches, resolved_company, resolved_institution)
 		resolved_branch = _require_allowed(
 			branch,
 			{row["value"] for row in visible_branches},
 			_("Branch / Campus"),
 		)
-	else:
-		visible_branches = []
 
+	resolved_reuse = str(template_reuse_scope or "").strip()
+	if resolved_reuse and resolved_reuse not in REUSE_SCOPES:
+		resolved_reuse = ""
+	resolved_subject_scope = str(subject_applicability or "").strip()
+	if resolved_subject_scope and resolved_subject_scope not in SUBJECT_APPLICABILITY:
+		resolved_subject_scope = ""
 	resolved_status = str(status or "").strip()
 	if resolved_status and resolved_status not in STATUSES:
 		resolved_status = ""
+	resolved_purpose = str(exam_purpose or "").strip()
+	if resolved_purpose and resolved_purpose not in EXAM_PURPOSES:
+		resolved_purpose = ""
+	resolved_mode = str(template_mode or "").strip()
+	if resolved_mode and resolved_mode not in TEMPLATE_MODES:
+		resolved_mode = ""
 	resolved_exam_body = str(exam_body or "").strip()
 	if resolved_exam_body and resolved_exam_body not in EXAM_BODIES:
 		resolved_exam_body = ""
-	resolved_search = str(search or "").strip()[:120]
-	resolved_sort = sort_by if sort_by in SORT_OPTIONS else "modified_desc"
-	resolved_page_length = _normalise_page_length(page_length)
 	resolved_course = str(course or "").strip()
 	if resolved_course and not frappe.db.exists("Course", resolved_course):
 		frappe.throw(_("Select a valid Subject / Course."), frappe.ValidationError)
-	resolved_academic_year = str(academic_year or "").strip()
-	if resolved_academic_year and not frappe.db.exists("Academic Year", resolved_academic_year):
-		frappe.throw(_("Select a valid Academic Year."), frappe.ValidationError)
+	resolved_search = str(search or "").strip()[:120]
+	resolved_sort = sort_by if sort_by in SORT_OPTIONS else "modified_desc"
+	resolved_page_length = _normalise_page_length(page_length)
 
-	base_filters = _list_filters(
-		exam_scope=resolved_scope,
-		institution=resolved_institution,
-		branch=resolved_branch,
-		course=resolved_course,
-		status="",
-		exam_body=resolved_exam_body,
-		academic_year=resolved_academic_year,
-		branches=branches,
-		include_status=False,
-	)
+	base_filters: dict[str, Any] = {"exam_scope": resolved_scope}
+	if resolved_scope == SCHOOL_EXAM:
+		allowed_companies = [resolved_company] if resolved_company else [row["value"] for row in companies]
+		base_filters["company"] = ["in", allowed_companies or [""]]
+		if resolved_institution:
+			base_filters["institution"] = resolved_institution
+		if resolved_branch:
+			base_filters["school_branch"] = resolved_branch
+		if resolved_reuse:
+			base_filters["template_reuse_scope"] = resolved_reuse
+	if resolved_subject_scope:
+		base_filters["subject_applicability"] = resolved_subject_scope
+	if resolved_course:
+		base_filters["course"] = resolved_course
+	if resolved_purpose:
+		base_filters["exam_purpose"] = resolved_purpose
+	if resolved_mode:
+		base_filters["template_mode"] = resolved_mode
+	if resolved_exam_body:
+		base_filters["exam_body"] = resolved_exam_body
+
 	row_filters = dict(base_filters)
 	if resolved_status:
 		row_filters["status"] = resolved_status
@@ -322,11 +379,13 @@ def get_exam_templates(
 			"template_title",
 			"template_code",
 			"exam_scope",
+			"template_reuse_scope",
+			"company",
+			"institution",
 			"school_branch",
-			"academic_year",
-			"academic_term",
-			"program",
-			"student_group",
+			"exam_purpose",
+			"template_mode",
+			"subject_applicability",
 			"course",
 			"exam_body",
 			"duration_minutes",
@@ -340,38 +399,36 @@ def get_exam_templates(
 		start=resolved_start,
 		page_length=resolved_page_length,
 	)
-	serialised = [dict(row) for row in rows]
-	branch_map = {row.get("name"): row for row in branches}
-	course_map = _course_label_map(serialised)
-	for row in serialised:
-		branch_row = branch_map.get(row.get("school_branch")) or {}
-		row["branch_label"] = branch_row.get("branch_name") or row.get("school_branch") or "EduEdge Public Examination"
-		row["institution"] = branch_row.get("institution") or ""
-		row["course_label"] = course_map.get(row.get("course"), row.get("course") or "")
+	all_institutions = _institution_options(branches)
+	serialised = _serialise_list_rows(rows, branches, all_institutions)
 
-	permissions = {
-		"can_create": bool(frappe.has_permission(TEMPLATE_DOCTYPE, "create")),
-		"can_write": bool(frappe.has_permission(TEMPLATE_DOCTYPE, "write")),
-		"can_review": bool(can_review_templates(frappe.session.user)),
-	}
 	return {
 		"rows": serialised,
 		"counts": counts,
 		"filters": {
 			"search": resolved_search,
 			"exam_scope": resolved_scope,
+			"company": resolved_company,
 			"institution": resolved_institution,
 			"branch": resolved_branch,
+			"template_reuse_scope": resolved_reuse,
+			"subject_applicability": resolved_subject_scope,
 			"course": resolved_course,
 			"status": resolved_status,
+			"exam_purpose": resolved_purpose,
+			"template_mode": resolved_mode,
 			"exam_body": resolved_exam_body,
-			"academic_year": resolved_academic_year,
 			"sort_by": resolved_sort,
 		},
 		"options": {
 			"scope": [_option(SCHOOL_EXAM)] + ([_option(PUBLIC_EXAM)] if can_author_public_exams(frappe.session.user) else []),
-			"institutions": institutions,
+			"companies": companies,
+			"institutions": visible_institutions,
 			"branches": visible_branches,
+			"reuse_scopes": [_option(value) for value in (REUSE_UNIVERSAL, REUSE_INSTITUTION, REUSE_BRANCH)],
+			"subject_applicability": [_option(value) for value in (SUBJECT_ANY, SUBJECT_SPECIFIC)],
+			"purposes": [_option(value) for value in sorted(EXAM_PURPOSES)],
+			"template_modes": [_option(value) for value in (MODE_BLUEPRINT, MODE_FIXED)],
 			"statuses": [_option(value) for value in STATUSES],
 			"exam_bodies": [_option(value) for value in EXAM_BODIES],
 			"page_lengths": list(PAGE_LENGTH_OPTIONS),
@@ -383,12 +440,89 @@ def get_exam_templates(
 			"has_previous": resolved_start > 0,
 			"has_next": resolved_start + resolved_page_length < filtered_total,
 		},
-		"permissions": permissions,
+		"permissions": {
+			"can_create": bool(frappe.has_permission(TEMPLATE_DOCTYPE, "create")),
+			"can_write": bool(frappe.has_permission(TEMPLATE_DOCTYPE, "write")),
+			"can_review": bool(can_review_templates(frappe.session.user)),
+		},
 		"user": {
 			"name": frappe.session.user,
 			"full_name": frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user,
 		},
 	}
+
+
+@frappe.whitelist()
+def get_applicable_exam_templates(
+	branch: str,
+	course: str,
+	exam_purpose: str | None = None,
+) -> list[dict]:
+	"""Return approved templates reusable for one concrete school exam context."""
+	_require_permission("read")
+	branches = _allowed_branch_rows()
+	branch_names = {row.get("name") for row in branches}
+	resolved_branch = _require_allowed(branch, branch_names, _("Branch / Campus"), optional=False)
+	branch_row = next(row for row in branches if row.get("name") == resolved_branch)
+	if not course or not frappe.db.exists("Course", course):
+		frappe.throw(_("Select a valid Subject / Course."), frappe.ValidationError)
+	purpose = str(exam_purpose or "").strip()
+	if purpose and purpose not in EXAM_PURPOSES:
+		frappe.throw(_("Select a valid Exam Purpose."), frappe.ValidationError)
+
+	filters: dict[str, Any] = {
+		"exam_scope": SCHOOL_EXAM,
+		"company": branch_row.get("company"),
+		"status": "Approved",
+	}
+	if purpose:
+		filters["exam_purpose"] = purpose
+	rows = frappe.get_list(
+		TEMPLATE_DOCTYPE,
+		filters=filters,
+		fields=[
+			"name",
+			"template_title",
+			"template_code",
+			"template_reuse_scope",
+			"institution",
+			"school_branch",
+			"subject_applicability",
+			"course",
+			"exam_purpose",
+			"template_mode",
+			"duration_minutes",
+		],
+		order_by="template_reuse_scope asc, template_title asc",
+		page_length=MAX_APPLICABLE_RESULTS,
+	)
+	result = []
+	for row in rows:
+		if row.template_reuse_scope == REUSE_INSTITUTION and row.institution != branch_row.get("institution"):
+			continue
+		if row.template_reuse_scope == REUSE_BRANCH and row.school_branch != resolved_branch:
+			continue
+		if row.subject_applicability == SUBJECT_SPECIFIC and row.course != course:
+			continue
+		result.append(
+			{
+				"value": row.name,
+				"label": row.template_title or row.name,
+				"description": " · ".join(
+					filter(
+						None,
+						[
+							row.template_code,
+							row.template_reuse_scope,
+							row.subject_applicability,
+							row.template_mode,
+						],
+					)
+				),
+				"duration_minutes": cint(row.duration_minutes),
+			}
+		)
+	return result
 
 
 def _question_rows(doc) -> list[dict]:
@@ -424,14 +558,20 @@ def _serialize_template(doc) -> dict:
 		"template_title": doc.template_title or "",
 		"template_code": doc.template_code or "",
 		"exam_scope": doc.exam_scope or SCHOOL_EXAM,
+		"template_reuse_scope": doc.template_reuse_scope or REUSE_BRANCH,
+		"company": doc.company or "",
+		"institution": doc.institution or "",
 		"school_branch": doc.school_branch or "",
+		"exam_purpose": doc.exam_purpose or "Other",
+		"template_mode": doc.template_mode or MODE_FIXED,
+		"subject_applicability": doc.subject_applicability or SUBJECT_SPECIFIC,
+		"course": doc.course or "",
 		"version_number": cint(doc.version_number) or 1,
 		"supersedes_template": doc.supersedes_template or "",
 		"academic_year": doc.academic_year or "",
 		"academic_term": doc.academic_term or "",
 		"program": doc.program or "",
 		"student_group": doc.student_group or "",
-		"course": doc.course or "",
 		"assessment_group": doc.assessment_group or "",
 		"exam_body": doc.exam_body or "School Internal",
 		"default_examination_centre": doc.default_examination_centre or "",
@@ -461,20 +601,29 @@ def _serialize_template(doc) -> dict:
 
 
 def _new_template() -> dict:
+	branches = _allowed_branch_rows()
+	companies = _company_options(branches)
 	current = get_current_school_branch() or {}
+	default_company = current.get("company") or (companies[0]["value"] if companies else "")
 	return {
 		"name": None,
 		"template_title": "",
 		"template_code": "",
 		"exam_scope": SCHOOL_EXAM,
-		"school_branch": current.get("name") or "",
+		"template_reuse_scope": REUSE_UNIVERSAL,
+		"company": default_company,
+		"institution": "",
+		"school_branch": "",
+		"exam_purpose": "Other",
+		"template_mode": MODE_BLUEPRINT,
+		"subject_applicability": SUBJECT_ANY,
+		"course": "",
 		"version_number": 1,
 		"supersedes_template": "",
 		"academic_year": "",
 		"academic_term": "",
 		"program": "",
 		"student_group": "",
-		"course": "",
 		"assessment_group": "",
 		"exam_body": "School Internal",
 		"default_examination_centre": "",
@@ -538,8 +687,14 @@ def _builder_response(template: dict, source_doc=None) -> dict:
 	branches = _allowed_branch_rows()
 	return {
 		"template": template,
-		"allowed_branches": _branch_options(branches),
+		"company_options": _company_options(branches),
+		"institution_options": _institution_options(branches, template.get("company") or ""),
+		"allowed_branches": _branch_options(branches, template.get("company") or "", template.get("institution") or ""),
 		"scope_options": [_option(SCHOOL_EXAM)] + ([_option(PUBLIC_EXAM)] if can_author_public_exams(frappe.session.user) else []),
+		"reuse_scope_options": [_option(value) for value in (REUSE_UNIVERSAL, REUSE_INSTITUTION, REUSE_BRANCH)],
+		"subject_applicability_options": [_option(value) for value in (SUBJECT_ANY, SUBJECT_SPECIFIC)],
+		"template_mode_options": [_option(value) for value in (MODE_BLUEPRINT, MODE_FIXED)],
+		"exam_purpose_options": [_option(value) for value in sorted(EXAM_PURPOSES)],
 		"exam_bodies": list(EXAM_BODIES),
 		"navigation_policies": ["Free Navigation", "Forward Only"],
 		"marking_policies": ["Use Question Marks", "Disable Negative Marking"],
@@ -585,14 +740,6 @@ def get_template_builder_context(template: str | None = None) -> dict:
 	return _builder_response(_new_template())
 
 
-def _assert_template_scope(values: dict) -> None:
-	scope = _resolve_scope(values.get("exam_scope"))
-	if scope == PUBLIC_EXAM:
-		return
-	branches = {row.get("name") for row in _allowed_branch_rows()}
-	_require_allowed(values.get("school_branch"), branches, _("Branch / Campus"), optional=False)
-
-
 @frappe.whitelist()
 def save_template(payload: str | dict) -> dict:
 	values = _parse_json(payload)
@@ -612,7 +759,6 @@ def save_template(payload: str | dict) -> dict:
 		doc.status = "Draft"
 		action = "create_exam_template"
 
-	_assert_template_scope(values)
 	for fieldname in EDITABLE_FIELDS:
 		if fieldname in values:
 			doc.set(fieldname, values.get(fieldname))
@@ -690,7 +836,6 @@ def create_template_version(template: str) -> dict:
 	doc = frappe.copy_doc(source)
 	doc.name = None
 	doc.template_code = _next_template_code(source.template_code, version_number)
-	doc.template_title = source.template_title
 	doc.version_number = version_number
 	doc.supersedes_template = source.name
 	doc.status = "Draft"
@@ -713,7 +858,13 @@ def _filter_rows(rows: list[dict], query: str) -> list[dict]:
 	][:MAX_OPTIONS]
 
 
-def _simple_link_options(doctype: str, query: str, fields: list[str], label_field: str | None = None, filters=None) -> list[dict]:
+def _simple_link_options(
+	doctype: str,
+	query: str,
+	fields: list[str],
+	label_field: str | None = None,
+	filters=None,
+) -> list[dict]:
 	pattern = f"%{query}%"
 	rows = frappe.get_list(
 		doctype,
@@ -729,6 +880,18 @@ def _simple_link_options(doctype: str, query: str, fields: list[str], label_fiel
 	]
 
 
+def _scope_branch_names(values: dict, branches: list[dict]) -> list[str]:
+	reuse_scope = values.get("template_reuse_scope") or REUSE_UNIVERSAL
+	company = values.get("company") or ""
+	institution = values.get("institution") or ""
+	branch = values.get("school_branch") or ""
+	if reuse_scope == REUSE_BRANCH:
+		return [branch] if branch else []
+	if reuse_scope == REUSE_INSTITUTION:
+		return [row.get("name") for row in branches if row.get("institution") == institution]
+	return [row.get("name") for row in branches if row.get("company") == company]
+
+
 @frappe.whitelist()
 def search_template_options(
 	fieldname: str,
@@ -738,20 +901,32 @@ def search_template_options(
 	_require_permission("read")
 	payload = _parse_json(values)
 	query = str(txt or "").strip()
-	scope = _resolve_scope(payload.get("exam_scope"))
+	branches = _allowed_branch_rows()
+	scope = _resolve_exam_scope(payload.get("exam_scope"))
+	company = str(payload.get("company") or "").strip()
+	institution = str(payload.get("institution") or "").strip()
 	branch = str(payload.get("school_branch") or "").strip()
-	if scope == SCHOOL_EXAM:
-		_require_allowed(branch, {row.get("name") for row in _allowed_branch_rows()}, _("Branch / Campus"), optional=False)
 
+	if fieldname == "company":
+		return _filter_rows(_company_options(branches), query)
+	if fieldname == "institution":
+		return _filter_rows(_institution_options(branches, company), query)
 	if fieldname == "school_branch":
-		return _filter_rows(_branch_options(_allowed_branch_rows()), query)
+		return _filter_rows(_branch_options(branches, company, institution), query)
 	if fieldname == "course":
 		filters: dict[str, Any] = {}
-		if scope == SCHOOL_EXAM and branch:
-			institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
-			meta = frappe.get_meta("Course")
-			if institution and meta.has_field("eduedge_institution"):
-				filters["eduedge_institution"] = institution
+		meta = frappe.get_meta("Course")
+		if meta.has_field("eduedge_institution"):
+			institutions = sorted(
+				{
+					row.get("institution")
+					for row in branches
+					if row.get("institution")
+					and (not company or row.get("company") == company)
+					and (not institution or row.get("institution") == institution)
+				}
+			)
+			filters["eduedge_institution"] = ["in", institutions or [""]]
 		return _simple_link_options("Course", query, ["name", "course_name"], "course_name", filters)
 	if fieldname == "academic_year":
 		return _simple_link_options("Academic Year", query, ["name"])
@@ -760,10 +935,11 @@ def search_template_options(
 		return _simple_link_options("Academic Term", query, ["name"], filters=filters)
 	if fieldname == "program":
 		filters: dict[str, Any] = {}
-		if branch and frappe.db.exists("DocType", "EduEdge Program Offering"):
+		branch_names = _scope_branch_names(payload, branches)
+		if branch_names and frappe.db.exists("DocType", "EduEdge Program Offering"):
 			programs = frappe.get_all(
 				"EduEdge Program Offering",
-				filters={"school_branch": branch, "is_active": 1},
+				filters={"school_branch": ["in", branch_names], "is_active": 1},
 				pluck="program",
 			)
 			filters["name"] = ["in", programs or [""]]
@@ -771,8 +947,9 @@ def search_template_options(
 	if fieldname == "student_group":
 		filters: dict[str, Any] = {"disabled": 0}
 		meta = frappe.get_meta("Student Group")
-		if branch and meta.has_field("eduedge_school_branch"):
-			filters["eduedge_school_branch"] = branch
+		branch_names = _scope_branch_names(payload, branches)
+		if branch_names and meta.has_field("eduedge_school_branch"):
+			filters["eduedge_school_branch"] = ["in", branch_names]
 		for key in ("academic_year", "academic_term", "program"):
 			if payload.get(key):
 				filters[key] = payload.get(key)
@@ -780,12 +957,13 @@ def search_template_options(
 	if fieldname == "assessment_group":
 		return _simple_link_options("Assessment Group", query, ["name"])
 	if fieldname == "default_examination_centre":
-		filters = {
+		filters: dict[str, Any] = {
 			"centre_status": "Active",
 			"centre_type": SCHOOL_CENTRE if scope == SCHOOL_EXAM else PLATFORM_CENTRE,
 		}
 		if scope == SCHOOL_EXAM:
-			filters["school_branch"] = branch
+			branch_names = _scope_branch_names(payload, branches)
+			filters["school_branch"] = ["in", branch_names or [""]]
 		return _simple_link_options(
 			"EduEdge Examination Centre",
 			query,
@@ -797,13 +975,24 @@ def search_template_options(
 		filters = {
 			"status": ["in", ["Approved", "Retired"]],
 			"exam_scope": scope,
+			"template_reuse_scope": payload.get("template_reuse_scope") or REUSE_UNIVERSAL,
+			"company": company,
+			"institution": institution,
+			"school_branch": branch,
+			"exam_purpose": payload.get("exam_purpose") or "Other",
+			"template_mode": payload.get("template_mode") or MODE_BLUEPRINT,
+			"subject_applicability": payload.get("subject_applicability") or SUBJECT_ANY,
 			"course": payload.get("course") or "",
 			"exam_body": payload.get("exam_body") or "",
 		}
-		if scope == SCHOOL_EXAM:
-			filters["school_branch"] = branch
 		return _simple_link_options(TEMPLATE_DOCTYPE, query, ["name", "template_title", "template_code"], "template_title", filters)
 	if fieldname == "question":
+		if payload.get("template_mode") != MODE_FIXED:
+			return []
+		if payload.get("subject_applicability") != SUBJECT_SPECIFIC:
+			return []
+		if scope == SCHOOL_EXAM and payload.get("template_reuse_scope") != REUSE_BRANCH:
+			return []
 		course = str(payload.get("course") or "").strip()
 		if not course:
 			return []
@@ -813,7 +1002,9 @@ def search_template_options(
 			"ownership_scope": SCHOOL_BANK if scope == SCHOOL_EXAM else PLATFORM_BANK,
 		}
 		if scope == SCHOOL_EXAM:
-			filters["school_branch"] = branch
+			allowed = {row.get("name") for row in branches}
+			resolved_branch = _require_allowed(branch, allowed, _("Branch / Campus"), optional=False)
+			filters["school_branch"] = resolved_branch
 		pattern = f"%{query}%"
 		rows = frappe.get_list(
 			QUESTION_DOCTYPE,
