@@ -72,6 +72,7 @@
 										:open-on-focus="true"
 										:debounce-ms="180"
 										class="eduedge-quick-link-field"
+										@open="requestOptions(field, '')"
 										@update:model-value="setValue(field, $event)"
 										@query-change="requestOptions(field, $event)"
 									/>
