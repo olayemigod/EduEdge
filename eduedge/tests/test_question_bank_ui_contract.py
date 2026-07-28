@@ -76,7 +76,8 @@ class TestQuestionBankUIContract(unittest.TestCase):
 			"limit_start=resolved_start",
 			"limit_page_length=resolved_page_length",
 			"def _status_counts",
-			"frappe.db.count(QUESTION_DOCTYPE",
+			'fields=["status"]',
+			"limit_page_length=0",
 		):
 			self.assertIn(expected, api)
 		for forbidden in (
@@ -88,6 +89,8 @@ class TestQuestionBankUIContract(unittest.TestCase):
 			'"notes"',
 			"ignore_permissions=True",
 			"frappe.db.sql(",
+			"frappe.db.count(",
+			"count(name) as count",
 		):
 			self.assertNotIn(forbidden, api)
 
