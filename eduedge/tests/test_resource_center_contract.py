@@ -97,9 +97,10 @@ class TestResourceCenterContract(unittest.TestCase):
 		form = APP / "public/js/eduedge_ui/components/EdgeFormDialogFallback.vue"
 		self.assertTrue(modal.exists())
 		self.assertTrue(form.exists())
-		self.assertIn('registerFallbackComponent(app, "EdgeModal"', factory)
+		self.assertIn('app.component("EdgeModal", EdgeModalFallback)', factory)
 		self.assertIn('app.component("EdgeFormDialog", EdgeFormDialogFallback)', factory)
-		self.assertNotIn('registerFallbackComponent(app, "EdgeFormDialog"', factory)
+		self.assertNotIn("registerFallbackComponent", factory)
+		self.assertLess(factory.index("runtime.install(app);"), factory.index('app.component("EdgeModal"'))
 
 	def test_quick_entry_mutations_are_platform_guarded(self):
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
