@@ -336,7 +336,7 @@ def get_question_bank(
 		fields=[
 			"name", "question_code", "ownership_scope", "school_branch", "course", "topic",
 			"curriculum", "exam_body", "difficulty", "question_type", "question_text",
-			"default_mark", "negative_mark", "version_number", "status", "modified", "owner",
+			"version_number", "status", "modified", "owner",
 		],
 		order_by=SORT_OPTIONS[resolved_sort],
 		limit_start=resolved_start,
