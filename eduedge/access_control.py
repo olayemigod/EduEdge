@@ -72,6 +72,12 @@ ROUTE_REQUIREMENTS = {
 		("cbt_question", "read"),
 		("cbt_template", "read"),
 	),
+	"/app/eduedge-exam-templates": (("cbt_template", "read"),),
+	"/app/eduedge-exam-template-builder": (
+		("cbt_template", "read"),
+		("cbt_template", "create"),
+		("cbt_template", "write"),
+	),
 	"/app/eduedge-question-bank": (("cbt_question", "read"),),
 	"/app/eduedge-question-responsibilities": (("question_responsibility_assignment", "read"),),
 	"/app/eduedge-question-builder": (
@@ -148,8 +154,6 @@ def _has_permission(doctype: str, permission_type: str, user: str) -> bool:
 	if not _doctype_exists(doctype):
 		return False
 	try:
-		# Frappe 16 accepts doctype, permission type, and user here. Avoid
-		# unsupported legacy keyword arguments such as print_logs.
 		return bool(frappe.has_permission(doctype, permission_type, user=user))
 	except (frappe.DoesNotExistError, frappe.PermissionError):
 		return False
