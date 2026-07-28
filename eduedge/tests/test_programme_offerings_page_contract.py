@@ -69,9 +69,11 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 			"draftBranchChanged",
 			"draftYearChanged",
 			"Zero means no configured limit",
+			"Current active Branch",
 		):
 			self.assertIn(token, component)
 		self.assertIn(':disabled="draft.identity_locked"', component)
+		self.assertIn('this.filters.institution = ""', component)
 		self.assertIn('frappe.set_route("Form", "EduEdge Program Offering", name)', component)
 
 	def test_page_loader_uses_canonical_edgesuite_bundle(self):
