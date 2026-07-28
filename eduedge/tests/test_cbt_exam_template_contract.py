@@ -11,7 +11,7 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 	def _load_doctype(self, folder: str, filename: str) -> dict:
 		return json.loads((DOCTYPE_ROOT / folder / filename).read_text())
 
-	def test_exam_template_has_scope_academic_timing_and_policy_fields(self):
+	def test_exam_template_has_reuse_academic_timing_and_policy_fields(self):
 		payload = self._load_doctype(
 			"eduedge_cbt_exam_template", "eduedge_cbt_exam_template.json"
 		)
@@ -20,14 +20,20 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			"template_title",
 			"template_code",
 			"exam_scope",
+			"template_reuse_scope",
+			"company",
+			"institution",
 			"school_branch",
+			"exam_purpose",
+			"template_mode",
+			"subject_applicability",
+			"course",
 			"version_number",
 			"supersedes_template",
 			"academic_year",
 			"academic_term",
 			"program",
 			"student_group",
-			"course",
 			"assessment_group",
 			"default_examination_centre",
 			"duration_minutes",
@@ -40,6 +46,8 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			"randomise_options",
 			"marking_policy",
 			"result_release_policy",
+			"device_change_policy",
+			"attempt_review_policy",
 			"questions",
 			"question_count",
 			"total_marks",
@@ -47,11 +55,25 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			"status",
 		):
 			self.assertIn(fieldname, fields)
+
 		self.assertIn("School Examination", fields["exam_scope"]["options"])
 		self.assertIn("EduEdge Public Examination", fields["exam_scope"]["options"])
+		for scope in ("Universal", "Institution-wide", "Branch-wide"):
+			self.assertIn(scope, fields["template_reuse_scope"]["options"])
+		for purpose in ("Midterm Examination", "End-of-Term Examination", "Mock Examination"):
+			self.assertIn(purpose, fields["exam_purpose"]["options"])
+		for mode in ("Policy Blueprint", "Fixed Question Set"):
+			self.assertIn(mode, fields["template_mode"]["options"])
+		for subject_scope in ("Any Subject", "Specific Subject"):
+			self.assertIn(subject_scope, fields["subject_applicability"]["options"])
+
 		self.assertEqual(fields["questions"]["options"], "EduEdge CBT Template Question")
-		self.assertIn("mandatory_depends_on", fields["school_branch"])
-		self.assertIn("mandatory_depends_on", fields["academic_year"])
+		self.assertIn("Branch-wide", fields["school_branch"]["mandatory_depends_on"])
+		self.assertIn("Institution-wide", fields["institution"]["mandatory_depends_on"])
+		self.assertIn("Specific Subject", fields["course"]["mandatory_depends_on"])
+		self.assertIn("Fixed Question Set", fields["questions"]["depends_on"])
+		self.assertNotIn("mandatory_depends_on", fields["academic_year"])
+		self.assertEqual(fields["academic_year"]["label"], "Default Academic Year")
 
 	def test_template_question_rows_snapshot_safe_scoring_metadata(self):
 		payload = self._load_doctype(
@@ -88,13 +110,22 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 		self.assertIn("EduEdge Super Administrator", roles)
 		self.assertIn("EduEdge Public Exam Administrator", roles)
 
-	def test_controller_enforces_approved_questions_scope_and_immutability(self):
+	def test_controller_enforces_reuse_scope_questions_and_immutability(self):
 		text = (
 			DOCTYPE_ROOT
 			/ "eduedge_cbt_exam_template"
 			/ "eduedge_cbt_exam_template.py"
 		).read_text()
 		for marker in (
+			"REUSE_UNIVERSAL",
+			"REUSE_INSTITUTION",
+			"REUSE_BRANCH",
+			"MODE_BLUEPRINT",
+			"MODE_FIXED",
+			"SUBJECT_ANY",
+			"SUBJECT_SPECIFIC",
+			"A Policy Blueprint cannot carry fixed questions",
+			"School Fixed Question Sets must be Branch-wide",
 			"Question {0} must be Approved",
 			"belongs to a different Question Bank",
 			"does not belong to the selected School Branch",
@@ -111,7 +142,7 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			self.assertIn(marker, text)
 		self.assertNotIn("REVIEW_ROLES", text)
 
-	def test_smart_form_cascades_context_and_uses_server_queries(self):
+	def test_smart_native_form_preserves_server_queries_as_technical_fallback(self):
 		text = (
 			DOCTYPE_ROOT
 			/ "eduedge_cbt_exam_template"
@@ -138,7 +169,7 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 		self.assertIn("without a selected branch deliberately returns empty", text)
 		self.assertIn('"status": "Approved"', text)
 
-	def test_exam_templates_are_registered_for_permission_hooks(self):
+	def test_exam_templates_are_registered_for_scope_aware_permission_hooks(self):
 		hooks = (ROOT / "eduedge" / "hooks.py").read_text()
 		self.assertIn(
 			'"EduEdge CBT Exam Template": "eduedge.cbt.permissions.cbt_exam_template_query"',
@@ -149,9 +180,17 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			hooks,
 		)
 		permissions = (ROOT / "eduedge" / "cbt" / "permissions.py").read_text()
-		self.assertIn("def cbt_exam_template_query", permissions)
-		self.assertIn("school_branch` is not null", permissions)
-		self.assertIn("can_author_public_exams", permissions)
+		for marker in (
+			"def cbt_exam_template_query",
+			"def _exam_template_condition",
+			"def _has_exam_template_scope_permission",
+			"template_reuse_scope",
+			"company` in",
+			"institution` in",
+			"school_branch` in",
+			"can_author_public_exams",
+		):
+			self.assertIn(marker, permissions)
 
 	def test_cbt_operations_is_registered_across_navigation_surfaces(self):
 		navigation = (ROOT / "eduedge" / "public" / "js" / "eduedge_ui" / "navigation.js").read_text()
@@ -160,6 +199,7 @@ class TestCBTExamTemplateContract(unittest.TestCase):
 			(ROOT / "eduedge" / "eduedge" / "workspace" / "eduedge" / "eduedge.json").read_text()
 		)
 		self.assertIn("/app/eduedge-cbt-operations", navigation)
+		self.assertIn("/app/eduedge-exam-templates", navigation)
 		self.assertIn("CBT Operations", menu)
 		self.assertIn("eduedge_access_manifest", menu)
 		self.assertIn("itemAllowed", menu)
