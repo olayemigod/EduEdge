@@ -49,16 +49,13 @@ def _permission_safe_status_counts(base_filters: dict, or_filters: list[list[str
 		TEMPLATE_DOCTYPE,
 		filters=base_filters,
 		or_filters=or_filters or None,
-		fields=["status", "count(name) as count"],
-		group_by="status",
-		page_length=len(STATUSES) + 1,
+		fields=["status"],
+		limit_page_length=0,
 	)
-	counts = {"Total": 0, **{status: 0 for status in STATUSES}}
+	counts = {"Total": len(rows), **{status: 0 for status in STATUSES}}
 	for row in rows:
-		status = row.status or "Draft"
-		value = int(row.count or 0)
-		counts[status] = value
-		counts["Total"] += value
+		status = row.status if row.status in STATUSES else "Draft"
+		counts[status] += 1
 	return counts
 
 
