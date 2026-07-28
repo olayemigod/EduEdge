@@ -56,7 +56,7 @@ class TestQuestionStandardWorkflowContract(unittest.TestCase):
 		source = (APP / "cbt/question_governance.py").read_text(encoding="utf-8")
 		for expected in (
 			'"requires_feedback": True',
-			"if action_state.get(\"requires_feedback\") and not clean_feedback",
+			'if action_state.get("requires_feedback") and not clean_feedback',
 			"Enter the changes required",
 			"doc.review_feedback = clean_feedback",
 			"doc.recommended_by = frappe.session.user",
@@ -78,9 +78,10 @@ class TestQuestionStandardWorkflowContract(unittest.TestCase):
 		for expected in (
 			"Policy-driven workflow",
 			"Subject review note",
-			'\"request_changes\"',
-			'\"recommend\"',
-			"Final Approver: ${allowed ? \"Assigned\" : \"Not assigned\"}",
+			'"request_changes"',
+			'"recommend"',
+			'["Final Approver", responsibility.can_final_approve]',
+			'`${label}: ${allowed ? "Assigned" : "Not assigned"}`',
 			"Latest review feedback",
 		):
 			self.assertIn(expected, bundle)
