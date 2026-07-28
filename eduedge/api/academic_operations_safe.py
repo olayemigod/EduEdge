@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import Counter
+
 import frappe
 from frappe.utils import getdate, nowdate
 
@@ -8,6 +10,112 @@ from eduedge.education.academic_operations import ASSIGNMENT_DOCTYPE
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.academic_calendar import resolve_academic_defaults
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+
+
+def _selected_branch_context(branch: str) -> dict:
+	row = frappe.db.get_value(
+		"EduEdge School Branch",
+		branch,
+		["name", "branch_name", "company", "institution"],
+		as_dict=True,
+	) or {}
+	institution = row.get("institution")
+	row["institution_name"] = (
+		frappe.db.get_value("EduEdge Institution", institution, "institution_name")
+		if institution
+		else None
+	)
+	return row
+
+
+def _attendance_coverage(
+	branch: str,
+	date: str,
+	schedules: list[dict],
+	group_strength: dict[str, int],
+	group_labels: dict[str, str],
+) -> list[dict]:
+	scheduled_groups = sorted({row.get("student_group") for row in schedules if row.get("student_group")})
+	if not scheduled_groups:
+		return []
+
+	rows = frappe.get_all(
+		"Student Attendance",
+		filters={
+			BRANCH_FIELD: branch,
+			"date": date,
+			"docstatus": 1,
+			"student_group": ["in", scheduled_groups],
+		},
+		fields=[
+			"student_group",
+			"status",
+			{"COUNT": "name", "as": "record_count"},
+		],
+		group_by="student_group, status",
+	)
+	counts: dict[str, Counter] = {group: Counter() for group in scheduled_groups}
+	for row in rows:
+		counts.setdefault(row.student_group, Counter())[row.status] = int(row.record_count or 0)
+
+	coverage = []
+	for group in scheduled_groups:
+		expected = int(group_strength.get(group, 0))
+		group_counts = counts.get(group, Counter())
+		submitted = sum(group_counts.values())
+		coverage.append(
+			{
+				"student_group": group,
+				"student_group_name": group_labels.get(group) or group,
+				"expected": expected,
+				"submitted": submitted,
+				"present": group_counts["Present"],
+				"absent": group_counts["Absent"],
+				"leave": group_counts["Leave"],
+				"missing": max(expected - submitted, 0),
+				"has_attendance": submitted > 0,
+				"complete": expected > 0 and submitted >= expected,
+			}
+		)
+	return coverage
+
+
+def _room_usage(schedules: list[dict]) -> list[dict]:
+	usage: dict[str, dict] = {}
+	for schedule in schedules:
+		room = schedule.get("room") or "Unassigned"
+		item = usage.setdefault(
+			room,
+			{
+				"room": room,
+				"is_unassigned": not bool(schedule.get("room")),
+				"sessions": 0,
+				"first_start": schedule.get("from_time"),
+				"last_end": schedule.get("to_time"),
+			},
+		)
+		item["sessions"] += 1
+		if schedule.get("from_time") and (
+			not item.get("first_start") or schedule.get("from_time") < item.get("first_start")
+		):
+			item["first_start"] = schedule.get("from_time")
+		if schedule.get("to_time") and (
+			not item.get("last_end") or schedule.get("to_time") > item.get("last_end")
+		):
+			item["last_end"] = schedule.get("to_time")
+	return sorted(usage.values(), key=lambda row: (row["is_unassigned"], row["room"]))
+
+
+def _calendar_display(calendar_context: dict, target_date: str) -> dict:
+	context = dict(calendar_context or {})
+	context["reference_date"] = target_date
+	context["calendar_gap"] = bool(
+		context.get("source") == "institution_calendar"
+		and context.get("calendar")
+		and not context.get("academic_term")
+	)
+	context["period_label"] = context.get("academic_term") or "No configured period"
+	return context
 
 
 @frappe.whitelist()
@@ -19,7 +127,7 @@ def get_operations_context(
 	base._require_academic_operator()
 	resolved_branch = base._resolve_branch(branch)
 	target_date = str(getdate(date or nowdate()))
-	calendar_context = resolve_academic_defaults(resolved_branch, target_date)
+	calendar_context = _calendar_display(resolve_academic_defaults(resolved_branch, target_date), target_date)
 	academic_year = calendar_context.get("academic_year")
 	academic_term = calendar_context.get("academic_term")
 
@@ -47,8 +155,10 @@ def get_operations_context(
 		groups = [row for row in groups if not row.academic_term or row.academic_term == academic_term]
 	group_names = [row.name for row in groups]
 	group_strength = base._get_group_strength(group_names)
+	group_labels = {}
 	for row in groups:
 		row["student_count"] = group_strength.get(row.name, 0)
+		group_labels[row.name] = row.student_group_name
 
 	schedule_filters: dict = {
 		BRANCH_FIELD: resolved_branch,
@@ -75,14 +185,27 @@ def get_operations_context(
 		page_length=200,
 	)
 	attendance_summary = base._get_attendance_summary(resolved_branch, target_date)
+	attendance_coverage = _attendance_coverage(
+		resolved_branch,
+		target_date,
+		schedules,
+		group_strength,
+		group_labels,
+	)
+	room_usage = _room_usage(schedules)
 	allowed_branches = get_allowed_school_branches()
 	current_branch = get_current_school_branch()
+	selected_branch = _selected_branch_context(resolved_branch)
 	full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
+	missing_registers = sum(1 for row in attendance_coverage if not row["has_attendance"])
+	incomplete_registers = sum(1 for row in attendance_coverage if row["has_attendance"] and not row["complete"])
+	complete_registers = sum(1 for row in attendance_coverage if row["complete"])
 
 	return {
 		"user": {"name": frappe.session.user, "full_name": full_name},
-		"tenant_name": (current_branch or {}).get("company"),
+		"tenant_name": selected_branch.get("company"),
 		"current_branch": current_branch,
+		"selected_branch": selected_branch,
 		"allowed_branches": allowed_branches,
 		"academic_calendar": calendar_context,
 		"filters": {
@@ -99,11 +222,18 @@ def get_operations_context(
 				{"school_branch": resolved_branch, "enabled": 1},
 			),
 			"schedules": len(schedules),
+			"rooms_used": sum(1 for row in room_usage if not row["is_unassigned"]),
+			"unassigned_room_sessions": sum(row["sessions"] for row in room_usage if row["is_unassigned"]),
 			"attendance_submitted": attendance_summary["total"],
 			"present": attendance_summary["Present"],
 			"absent": attendance_summary["Absent"],
 			"leave": attendance_summary["Leave"],
+			"attendance_complete_groups": complete_registers,
+			"attendance_incomplete_groups": incomplete_registers,
+			"attendance_missing_groups": missing_registers,
 		},
 		"student_groups": groups,
 		"schedules": schedules,
+		"attendance_coverage": attendance_coverage,
+		"room_usage": room_usage,
 	}
