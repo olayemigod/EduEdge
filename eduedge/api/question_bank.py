@@ -229,11 +229,17 @@ def _search_or_filters(search: str) -> list[list[str]]:
 
 
 def _status_counts(base_filters: dict, or_filters: list[list[str]]) -> dict:
-	counts = {"Total": frappe.db.count(QUESTION_DOCTYPE, filters=base_filters, or_filters=or_filters or None)}
-	for value in STATUSES:
-		filters = dict(base_filters)
-		filters["status"] = value
-		counts[value] = frappe.db.count(QUESTION_DOCTYPE, filters=filters, or_filters=or_filters or None)
+	rows = frappe.get_list(
+		QUESTION_DOCTYPE,
+		filters=base_filters,
+		or_filters=or_filters or None,
+		fields=["status"],
+		limit_page_length=0,
+	)
+	counts = {"Total": len(rows), **{status: 0 for status in STATUSES}}
+	for row in rows:
+		status = row.status if row.status in STATUSES else "Draft"
+		counts[status] += 1
 	return counts
 
 
