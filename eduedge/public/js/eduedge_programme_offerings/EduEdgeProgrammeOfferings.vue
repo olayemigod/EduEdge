@@ -19,7 +19,11 @@
 				/>
 			</template>
 
-			<EdgeLoadingState v-if="loading && !loadedOnce" :message="`Loading ${offeringPlural.toLowerCase()}...`" :skeleton="true" />
+			<EdgeLoadingState
+				v-if="loading && !loadedOnce"
+				:message="`Loading ${offeringPlural.toLowerCase()}...`"
+				:skeleton="true"
+			/>
 			<EdgeErrorState
 				v-else-if="error && !loadedOnce"
 				:title="`${offeringPlural} could not load`"
@@ -33,8 +37,12 @@
 						<label>
 							<span>Branch / Campus</span>
 							<select v-model="filters.branch" class="form-control" @change="filterBranchChanged">
-								<option value="">All permitted Branches</option>
-								<option v-for="branch in data.options.branches" :key="branch.name" :value="branch.name">
+								<option value="">Current active Branch</option>
+								<option
+									v-for="branch in data.options.branches"
+									:key="branch.name"
+									:value="branch.name"
+								>
 									{{ branch.branch_name || branch.name }}
 								</option>
 							</select>
@@ -43,7 +51,11 @@
 							<span>{{ programmeSingular }}</span>
 							<select v-model="filters.program" class="form-control" @change="applyFilters">
 								<option value="">All {{ programmePlural.toLowerCase() }}</option>
-								<option v-for="programme in data.options.programmes" :key="programme.name" :value="programme.name">
+								<option
+									v-for="programme in data.options.programmes"
+									:key="programme.name"
+									:value="programme.name"
+								>
 									{{ programme.program_name || programme.name }}
 								</option>
 							</select>
@@ -125,17 +137,31 @@
 					</div>
 					<template #actions>
 						<button type="button" class="edge-button" @click="clearFilters">Clear</button>
-						<button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="applyFilters">
+						<button
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="loading"
+							@click="applyFilters"
+						>
 							{{ loading ? "Loading..." : "Apply" }}
 						</button>
 					</template>
 				</EdgeFilterBar>
 
 				<EdgeDashboardLayout min-column-width="12rem">
-					<EdgeStatCard label="Matching Offerings" :value="data.summary.total_offerings" :helper="`${data.summary.visible_offerings} on this page`" />
+					<EdgeStatCard
+						label="Matching Offerings"
+						:value="data.summary.total_offerings"
+						:helper="`${data.summary.visible_offerings} on this page`"
+					/>
 					<EdgeStatCard label="Active" :value="data.summary.active" tone="success" helper="Currently operational" />
 					<EdgeStatCard label="Upcoming" :value="data.summary.upcoming" helper="Start date is ahead" />
-					<EdgeStatCard label="Full" :value="data.summary.full" :tone="data.summary.full ? 'warning' : 'neutral'" helper="Capacity reached" />
+					<EdgeStatCard
+						label="Full"
+						:value="data.summary.full"
+						:tone="data.summary.full ? 'warning' : 'neutral'"
+						helper="Capacity reached"
+					/>
 					<EdgeStatCard label="Occupied Seats" :value="data.summary.occupied_seats" :helper="capacitySummary" />
 				</EdgeDashboardLayout>
 
@@ -166,31 +192,36 @@
 											<small>{{ row.offering_code }}</small>
 										</span>
 										<div class="eduedge-offering-badges">
-											<EdgeStatusBadge :label="row.operational_status" :status="row.operational_status" :tone="statusTone(row.operational_status)" />
-											<EdgeStatusBadge v-if="row.identity_locked" label="Identity locked" status="locked" tone="warning" />
+											<EdgeStatusBadge
+												:label="row.operational_status"
+												:status="row.operational_status"
+												:tone="statusTone(row.operational_status)"
+											/>
+											<EdgeStatusBadge
+												v-if="row.identity_locked"
+												label="Identity locked"
+												status="locked"
+												tone="warning"
+											/>
 										</div>
 									</div>
 									<div class="eduedge-offering-grid">
-										<span>
-											<strong>{{ row.program }}</strong>
-											<small>{{ branchName(row.school_branch) }}</small>
-										</span>
-										<span>
-											<strong>{{ row.academic_year }}</strong>
-											<small>{{ row.academic_term || "Year-wide" }}</small>
-										</span>
-										<span>
-											<strong>{{ row.study_mode }} · {{ row.delivery_mode }}</strong>
-											<small>{{ row.student_batch || "No cohort" }}</small>
-										</span>
-										<span>
-											<strong>{{ capacityLabel(row) }}</strong>
-											<small>{{ row.occupied_seats }} occupied</small>
-										</span>
+										<span><strong>{{ row.program }}</strong><small>{{ branchName(row.school_branch) }}</small></span>
+										<span><strong>{{ row.academic_year }}</strong><small>{{ row.academic_term || "Year-wide" }}</small></span>
+										<span><strong>{{ row.study_mode }} · {{ row.delivery_mode }}</strong><small>{{ row.student_batch || "No cohort" }}</small></span>
+										<span><strong>{{ capacityLabel(row) }}</strong><small>{{ row.occupied_seats }} occupied</small></span>
 									</div>
 									<div class="eduedge-offering-badges">
-										<EdgeStatusBadge :label="row.admission_status" status="admission" :tone="row.application_open ? 'success' : 'neutral'" />
-										<EdgeStatusBadge :label="row.enrollment_status" status="enrollment" :tone="row.enrollment_open ? 'success' : 'neutral'" />
+										<EdgeStatusBadge
+											:label="row.admission_status"
+											status="admission"
+											:tone="row.application_open ? 'success' : 'neutral'"
+										/>
+										<EdgeStatusBadge
+											:label="row.enrollment_status"
+											status="enrollment"
+											:tone="row.enrollment_open ? 'success' : 'neutral'"
+										/>
 										<EdgeStatusBadge :label="dateRange(row)" status="dates" tone="neutral" />
 									</div>
 								</button>
@@ -199,12 +230,26 @@
 						</div>
 
 						<div class="eduedge-offering-paging">
-							<button type="button" class="edge-button" :disabled="loading || data.paging.start <= 0" @click="previousPage">Previous</button>
+							<button
+								type="button"
+								class="edge-button"
+								:disabled="loading || data.paging.start <= 0"
+								@click="previousPage"
+							>
+								Previous
+							</button>
 							<span>
 								{{ data.paging.start + (data.offerings.length ? 1 : 0) }}–{{ data.paging.start + data.offerings.length }}
 								of {{ data.summary.total_offerings }}
 							</span>
-							<button type="button" class="edge-button" :disabled="loading || !data.paging.has_more" @click="nextPage">Next</button>
+							<button
+								type="button"
+								class="edge-button"
+								:disabled="loading || !data.paging.has_more"
+								@click="nextPage"
+							>
+								Next
+							</button>
 						</div>
 					</section>
 
@@ -228,7 +273,12 @@
 							</p>
 							<label>
 								<span>Branch / Campus</span>
-								<select v-model="draft.school_branch" class="form-control" :disabled="draft.identity_locked" @change="draftBranchChanged">
+								<select
+									v-model="draft.school_branch"
+									class="form-control"
+									:disabled="draft.identity_locked"
+									@change="draftBranchChanged"
+								>
 									<option value="">Select Branch</option>
 									<option v-for="branch in draftOptions.branches" :key="branch.name" :value="branch.name">
 										{{ branch.branch_name || branch.name }}
@@ -260,16 +310,25 @@
 							<div class="eduedge-offering-two-column">
 								<label>
 									<span>Academic Year</span>
-									<select v-model="draft.academic_year" class="form-control" :disabled="draft.identity_locked" @change="draftYearChanged">
+									<select
+										v-model="draft.academic_year"
+										class="form-control"
+										:disabled="draft.identity_locked"
+										@change="draftYearChanged"
+									>
 										<option value="">Select year</option>
-										<option v-for="year in draftOptions.academic_years" :key="year.name" :value="year.name">{{ year.name }}</option>
+										<option v-for="year in draftOptions.academic_years" :key="year.name" :value="year.name">
+											{{ year.name }}
+										</option>
 									</select>
 								</label>
 								<label>
 									<span>Academic Period</span>
 									<select v-model="draft.academic_term" class="form-control" :disabled="draft.identity_locked">
 										<option value="">Year-wide</option>
-										<option v-for="term in draftOptions.academic_terms" :key="term.name" :value="term.name">{{ term.name }}</option>
+										<option v-for="term in draftOptions.academic_terms" :key="term.name" :value="term.name">
+											{{ term.name }}
+										</option>
 									</select>
 								</label>
 							</div>
@@ -277,7 +336,9 @@
 								<span>Cohort / Batch</span>
 								<select v-model="draft.student_batch" class="form-control" :disabled="draft.identity_locked">
 									<option value="">Not assigned</option>
-									<option v-for="batch in draftOptions.student_batches" :key="batch.name" :value="batch.name">{{ batch.name }}</option>
+									<option v-for="batch in draftOptions.student_batches" :key="batch.name" :value="batch.name">
+										{{ batch.name }}
+									</option>
 								</select>
 							</label>
 							<div class="eduedge-offering-two-column">
@@ -300,17 +361,16 @@
 							</label>
 							<label>
 								<span>Offering Code</span>
-								<input v-model.trim="draft.offering_code" class="form-control" :disabled="Boolean(draft.name)" placeholder="Generated when left blank" />
+								<input
+									v-model.trim="draft.offering_code"
+									class="form-control"
+									:disabled="Boolean(draft.name)"
+									placeholder="Generated when left blank"
+								/>
 							</label>
 							<div class="eduedge-offering-two-column">
-								<label>
-									<span>Start Date</span>
-									<input v-model="draft.start_date" type="date" class="form-control" />
-								</label>
-								<label>
-									<span>End Date</span>
-									<input v-model="draft.end_date" type="date" class="form-control" />
-								</label>
+								<label><span>Start Date</span><input v-model="draft.start_date" type="date" class="form-control" /></label>
+								<label><span>End Date</span><input v-model="draft.end_date" type="date" class="form-control" /></label>
 							</div>
 							<label>
 								<span>Capacity</span>
@@ -323,24 +383,22 @@
 								<label><input v-model="draft.enrollment_enabled" type="checkbox" /> Enrollment enabled</label>
 							</div>
 							<div class="eduedge-offering-two-column">
-								<label>
-									<span>Application Opens</span>
-									<input v-model="draft.application_start_date" type="date" class="form-control" />
-								</label>
-								<label>
-									<span>Application Closes</span>
-									<input v-model="draft.application_end_date" type="date" class="form-control" />
-								</label>
+								<label><span>Application Opens</span><input v-model="draft.application_start_date" type="date" class="form-control" /></label>
+								<label><span>Application Closes</span><input v-model="draft.application_end_date" type="date" class="form-control" /></label>
 							</div>
-							<label>
-								<span>Notes</span>
-								<textarea v-model.trim="draft.notes" class="form-control" rows="3"></textarea>
-							</label>
+							<label><span>Notes</span><textarea v-model.trim="draft.notes" class="form-control" rows="3"></textarea></label>
 							<div class="eduedge-offering-editor-actions">
-								<button type="button" class="edge-button edge-button--primary" :disabled="!canSave || saving" @click="saveOffering">
+								<button
+									type="button"
+									class="edge-button edge-button--primary"
+									:disabled="!canSave || saving"
+									@click="saveOffering"
+								>
 									{{ saving ? "Saving..." : `Save ${offeringSingular}` }}
 								</button>
-								<button v-if="draft.name" type="button" class="edge-button" @click="openFullForm(draft.name)">Open full form</button>
+								<button v-if="draft.name" type="button" class="edge-button" @click="openFullForm(draft.name)">
+									Open full form
+								</button>
 							</div>
 							<p v-if="saveError" class="eduedge-offering-error">{{ saveError }}</p>
 						</template>
@@ -434,16 +492,8 @@ export default {
 					occupied_seats: 0,
 					configured_capacity: 0,
 				},
-				paging: {
-					start: 0,
-					page_length: 25,
-					has_more: false,
-					next_start: 0,
-				},
-				permissions: {
-					can_create: false,
-					can_write: false,
-				},
+				paging: { start: 0, page_length: 25, has_more: false, next_start: 0 },
+				permissions: { can_create: false, can_write: false },
 			},
 		};
 	},
@@ -477,12 +527,7 @@ export default {
 		},
 		canSave() {
 			const permitted = this.draft.name ? this.canWrite : this.canCreate;
-			return Boolean(
-				permitted &&
-					this.draft.school_branch &&
-					this.draft.program &&
-					this.draft.academic_year
-			);
+			return Boolean(permitted && this.draft.school_branch && this.draft.program && this.draft.academic_year);
 		},
 		capacitySummary() {
 			return this.data.summary.configured_capacity
@@ -490,9 +535,7 @@ export default {
 				: "No limits across visible records";
 		},
 		draftInstitutionName() {
-			const branch = this.draftOptions.branches.find(
-				(row) => row.name === this.draft.school_branch
-			);
+			const branch = this.draftOptions.branches.find((row) => row.name === this.draft.school_branch);
 			return branch?.institution_name || this.draft.institution || "Select a Branch";
 		},
 	},
@@ -502,20 +545,10 @@ export default {
 	methods: {
 		openRoute: openEduEdgeRoute,
 		term(key, plural = false, fallback = "") {
-			return (
-				frappe.eduedge?.term?.(key, {
-					plural,
-					context: this.activeContext,
-					fallback,
-				}) || fallback
-			);
+			return frappe.eduedge?.term?.(key, { plural, context: this.activeContext, fallback }) || fallback;
 		},
 		branchName(name) {
-			return (
-				this.data.options.branches.find((row) => row.name === name)?.branch_name ||
-				name ||
-				"Unknown Branch"
-			);
+			return this.data.options.branches.find((row) => row.name === name)?.branch_name || name || "Unknown Branch";
 		},
 		statusTone(status) {
 			if (status === "Active") return "success";
@@ -541,23 +574,18 @@ export default {
 			this.loading = true;
 			this.error = "";
 			try {
-				const response = await frappe.call(
-					"eduedge.api.programme_offerings.get_programme_offerings_page",
-					{
-						...this.filters,
-						start: this.data.paging.start || 0,
-						page_length: this.data.paging.page_length || 25,
-					}
-				);
+				const response = await frappe.call("eduedge.api.programme_offerings.get_programme_offerings_page", {
+					...this.filters,
+					start: this.data.paging.start || 0,
+					page_length: this.data.paging.page_length || 25,
+				});
 				this.data = response.message || this.data;
 				this.filters = { ...this.filters, ...(this.data.filters || {}) };
 				if (!this.draft.school_branch) {
 					this.draft.school_branch = this.filters.branch || "";
 					this.draft.institution = this.filters.institution || "";
 				}
-				if (!this.draftOptions.branches.length) {
-					this.draftOptions = JSON.parse(JSON.stringify(this.data.options));
-				}
+				if (!this.draftOptions.branches.length) this.draftOptions = JSON.parse(JSON.stringify(this.data.options));
 				this.loadedOnce = true;
 			} catch (error) {
 				this.error = error?.message || `${this.offeringPlural} could not be loaded.`;
@@ -569,6 +597,7 @@ export default {
 			this.load(true);
 		},
 		filterBranchChanged() {
+			this.filters.institution = "";
 			this.filters.program = "";
 			this.filters.academic_section = "";
 			this.filters.academic_level = "";
@@ -601,10 +630,7 @@ export default {
 			this.load(true);
 		},
 		previousPage() {
-			this.data.paging.start = Math.max(
-				0,
-				this.data.paging.start - this.data.paging.page_length
-			);
+			this.data.paging.start = Math.max(0, this.data.paging.start - this.data.paging.page_length);
 			this.load(false);
 		},
 		nextPage() {
@@ -613,11 +639,7 @@ export default {
 			this.load(false);
 		},
 		async newOffering() {
-			this.draft = {
-				...emptyDraft(),
-				school_branch: this.filters.branch || "",
-				institution: this.filters.institution || "",
-			};
+			this.draft = { ...emptyDraft(), school_branch: this.filters.branch || "", institution: this.filters.institution || "" };
 			this.saveError = "";
 			await this.loadDraftOptions();
 		},
@@ -635,13 +657,10 @@ export default {
 		},
 		async loadDraftOptions() {
 			try {
-				const response = await frappe.call(
-					"eduedge.api.programme_offerings.get_programme_offering_options",
-					{
-						branch: this.draft.school_branch || undefined,
-						academic_year: this.draft.academic_year || undefined,
-					}
-				);
+				const response = await frappe.call("eduedge.api.programme_offerings.get_programme_offering_options", {
+					branch: this.draft.school_branch || undefined,
+					academic_year: this.draft.academic_year || undefined,
+				});
 				const result = response.message || {};
 				this.draftOptions = result.options || emptyOptions();
 				this.draft.institution = result.institution || this.draft.institution || "";
@@ -664,36 +683,30 @@ export default {
 			this.saving = true;
 			this.saveError = "";
 			try {
-				const response = await frappe.call(
-					"eduedge.api.programme_offerings.save_programme_offering",
-					{
-						offering: this.draft.name || undefined,
-						school_branch: this.draft.school_branch,
-						program: this.draft.program,
-						academic_level: this.draft.academic_level || undefined,
-						academic_year: this.draft.academic_year,
-						academic_term: this.draft.academic_term || undefined,
-						student_batch: this.draft.student_batch || undefined,
-						offering_title: this.draft.offering_title || undefined,
-						offering_code: this.draft.offering_code || undefined,
-						study_mode: this.draft.study_mode,
-						delivery_mode: this.draft.delivery_mode,
-						start_date: this.draft.start_date || undefined,
-						end_date: this.draft.end_date || undefined,
-						is_active: this.draft.is_active ? 1 : 0,
-						admission_enabled: this.draft.admission_enabled ? 1 : 0,
-						enrollment_enabled: this.draft.enrollment_enabled ? 1 : 0,
-						capacity: this.draft.capacity || 0,
-						application_start_date: this.draft.application_start_date || undefined,
-						application_end_date: this.draft.application_end_date || undefined,
-						notes: this.draft.notes || undefined,
-					}
-				);
-				const saved = response.message || {};
-				frappe.show_alert({
-					message: __(`${this.offeringSingular} saved`),
-					indicator: "green",
+				const response = await frappe.call("eduedge.api.programme_offerings.save_programme_offering", {
+					offering: this.draft.name || undefined,
+					school_branch: this.draft.school_branch,
+					program: this.draft.program,
+					academic_level: this.draft.academic_level || undefined,
+					academic_year: this.draft.academic_year,
+					academic_term: this.draft.academic_term || undefined,
+					student_batch: this.draft.student_batch || undefined,
+					offering_title: this.draft.offering_title || undefined,
+					offering_code: this.draft.offering_code || undefined,
+					study_mode: this.draft.study_mode,
+					delivery_mode: this.draft.delivery_mode,
+					start_date: this.draft.start_date || undefined,
+					end_date: this.draft.end_date || undefined,
+					is_active: this.draft.is_active ? 1 : 0,
+					admission_enabled: this.draft.admission_enabled ? 1 : 0,
+					enrollment_enabled: this.draft.enrollment_enabled ? 1 : 0,
+					capacity: this.draft.capacity || 0,
+					application_start_date: this.draft.application_start_date || undefined,
+					application_end_date: this.draft.application_end_date || undefined,
+					notes: this.draft.notes || undefined,
 				});
+				const saved = response.message || {};
+				frappe.show_alert({ message: __(`${this.offeringSingular} saved`), indicator: "green" });
 				await this.load(true);
 				const row = this.data.offerings.find((item) => item.name === saved.name);
 				if (row) await this.editOffering(row);
@@ -705,8 +718,7 @@ export default {
 			}
 		},
 		openFullForm(name) {
-			if (!name) return;
-			frappe.set_route("Form", "EduEdge Program Offering", name);
+			if (name) frappe.set_route("Form", "EduEdge Program Offering", name);
 		},
 		openNativeList() {
 			window.open("/app/eduedge-program-offering", "_blank", "noopener,noreferrer");
@@ -716,164 +728,25 @@ export default {
 </script>
 
 <style scoped>
-.eduedge-offering-filter-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-	gap: 0.75rem;
-	width: 100%;
-}
-
-.eduedge-offering-filter-grid label,
-.eduedge-offering-editor label {
-	display: grid;
-	gap: 0.35rem;
-	font-weight: 600;
-}
-
-.eduedge-offering-search {
-	grid-column: span 2;
-}
-
-.eduedge-offering-layout {
-	display: grid;
-	grid-template-columns: minmax(0, 1.55fr) minmax(20rem, 0.85fr);
-	gap: 1rem;
-	margin-top: 1rem;
-}
-
-.eduedge-offering-panel {
-	display: grid;
-	gap: 1rem;
-	align-content: start;
-	padding: 1rem;
-	border: 1px solid var(--border-color);
-	border-radius: var(--edge-radius-lg, 12px);
-	background: var(--card-bg);
-}
-
-.eduedge-offering-heading,
-.eduedge-offering-title {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-start;
-	gap: 1rem;
-}
-
-.eduedge-offering-heading h2 {
-	margin: 0;
-}
-
-.eduedge-offering-list {
-	display: grid;
-	gap: 0.75rem;
-}
-
-.eduedge-offering-card {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 0.75rem;
-	align-items: center;
-	padding: 0.85rem;
-	border: 1px solid var(--border-color);
-	border-radius: var(--edge-radius-md, 8px);
-	background: var(--control-bg);
-}
-
-.eduedge-offering-main {
-	display: grid;
-	gap: 0.75rem;
-	width: 100%;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	text-align: left;
-}
-
-.eduedge-offering-title > span,
-.eduedge-offering-grid span,
-.eduedge-offering-context-readonly {
-	display: grid;
-	gap: 0.2rem;
-}
-
-.eduedge-offering-title small,
-.eduedge-offering-grid small,
-.eduedge-offering-editor small {
-	color: var(--text-muted);
-}
-
-.eduedge-offering-grid {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 0.75rem;
-}
-
-.eduedge-offering-badges,
-.eduedge-offering-editor-actions,
-.eduedge-offering-checks {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.5rem;
-}
-
-.eduedge-offering-two-column {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.75rem;
-}
-
-.eduedge-offering-checks label {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-	font-weight: 500;
-}
-
-.eduedge-offering-paging {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	gap: 0.75rem;
-}
-
-.eduedge-offering-lock-note {
-	padding: 0.75rem;
-	border: 1px solid var(--orange-300, #f4b860);
-	border-radius: var(--edge-radius-md, 8px);
-	background: var(--orange-50, #fff7e8);
-}
-
-.eduedge-offering-error {
-	margin: 0;
-	color: var(--red-600, #b42318);
-}
-
-@media (max-width: 1100px) {
-	.eduedge-offering-layout {
-		grid-template-columns: 1fr;
-	}
-
-	.eduedge-offering-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-}
-
-@media (max-width: 700px) {
-	.eduedge-offering-search {
-		grid-column: auto;
-	}
-
-	.eduedge-offering-card,
-	.eduedge-offering-grid,
-	.eduedge-offering-two-column {
-		grid-template-columns: 1fr;
-	}
-
-	.eduedge-offering-heading,
-	.eduedge-offering-title,
-	.eduedge-offering-paging {
-		align-items: stretch;
-		flex-direction: column;
-	}
-}
+.eduedge-offering-filter-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(12rem,1fr)); gap:.75rem; width:100%; }
+.eduedge-offering-filter-grid label,.eduedge-offering-editor label { display:grid; gap:.35rem; font-weight:600; }
+.eduedge-offering-search { grid-column:span 2; }
+.eduedge-offering-layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(20rem,.85fr); gap:1rem; margin-top:1rem; }
+.eduedge-offering-panel { display:grid; gap:1rem; align-content:start; padding:1rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-lg,12px); background:var(--card-bg); }
+.eduedge-offering-heading,.eduedge-offering-title { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
+.eduedge-offering-heading h2 { margin:0; }
+.eduedge-offering-list { display:grid; gap:.75rem; }
+.eduedge-offering-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.75rem; align-items:center; padding:.85rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--control-bg); }
+.eduedge-offering-main { display:grid; gap:.75rem; width:100%; padding:0; border:0; background:transparent; text-align:left; }
+.eduedge-offering-title>span,.eduedge-offering-grid span,.eduedge-offering-context-readonly { display:grid; gap:.2rem; }
+.eduedge-offering-title small,.eduedge-offering-grid small,.eduedge-offering-editor small { color:var(--text-muted); }
+.eduedge-offering-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; }
+.eduedge-offering-badges,.eduedge-offering-editor-actions,.eduedge-offering-checks { display:flex; flex-wrap:wrap; gap:.5rem; }
+.eduedge-offering-two-column { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
+.eduedge-offering-checks label { display:flex; align-items:center; gap:.4rem; font-weight:500; }
+.eduedge-offering-paging { display:flex; justify-content:space-between; align-items:center; gap:.75rem; }
+.eduedge-offering-lock-note { padding:.75rem; border:1px solid var(--orange-300,#f4b860); border-radius:var(--edge-radius-md,8px); background:var(--orange-50,#fff7e8); }
+.eduedge-offering-error { margin:0; color:var(--red-600,#b42318); }
+@media (max-width:1100px) { .eduedge-offering-layout { grid-template-columns:1fr; } .eduedge-offering-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:700px) { .eduedge-offering-search { grid-column:auto; } .eduedge-offering-card,.eduedge-offering-grid,.eduedge-offering-two-column { grid-template-columns:1fr; } .eduedge-offering-heading,.eduedge-offering-title,.eduedge-offering-paging { align-items:stretch; flex-direction:column; } }
 </style>
