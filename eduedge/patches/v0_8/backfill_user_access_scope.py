@@ -30,10 +30,12 @@ def execute() -> None:
 		company = row.company
 		institution = row.institution
 
-		if scope not in VALID_SCOPES:
-			if row.hq_all_branch_access:
-				scope = "Company"
-			elif institution and not row.school_branch:
+		# Preserve legacy HQ records even when schema sync has already populated
+		# the new Select field with its default Branch value.
+		if row.hq_all_branch_access:
+			scope = "Company"
+		elif scope not in VALID_SCOPES:
+			if institution and not row.school_branch:
 				scope = "Institution"
 			else:
 				scope = "Branch"
