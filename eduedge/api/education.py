@@ -37,7 +37,10 @@ def _require_login() -> None:
 def school_branch_query(doctype, txt, searchfield, start, page_len, filters):
 	_require_login()
 	filters = parse_query_filters(filters)
-	rows = get_allowed_school_branches(company=filters.get("company"))
+	rows = get_allowed_school_branches(
+		company=filters.get("company"),
+		institution=filters.get("institution"),
+	)
 	needle = (txt or "").strip().lower()
 	if needle:
 		rows = [
@@ -46,12 +49,25 @@ def school_branch_query(doctype, txt, searchfield, start, page_len, filters):
 			if needle
 			in " ".join(
 				str(row.get(key) or "")
-				for key in ("name", "branch_name", "branch_code", "company")
+				for key in (
+					"name",
+					"branch_name",
+					"branch_code",
+					"company",
+					"institution",
+					"institution_name",
+				)
 			).lower()
 		]
 	rows = rows[int(start) : int(start) + int(page_len)]
 	return [
-		[row["name"], row.get("branch_name"), row.get("branch_code"), row.get("company")]
+		[
+			row["name"],
+			row.get("branch_name"),
+			row.get("branch_code"),
+			row.get("institution_name") or row.get("institution"),
+			row.get("company"),
+		]
 		for row in rows
 	]
 
@@ -140,115 +156,18 @@ def student_admission_query(doctype, txt, searchfield, start, page_len, filters)
 		select distinct admission.name, admission.title
 		from `tabStudent Admission` admission
 		{program_join}
-		where admission.`{BRANCH_FIELD}` = %(branch)s
+		where admission.docstatus = 1
+			and admission.{BRANCH_FIELD} = %(branch)s
 			and admission.academic_year = %(academic_year)s
-			and admission.enable_admission_application = 1
-			and (
-				coalesce(admission.admission_start_date, '') = ''
-				or admission.admission_start_date <= %(today)s
-			)
-			and (
-				coalesce(admission.admission_end_date, '') = ''
-				or admission.admission_end_date >= %(today)s
-			)
+			and admission.application_start_date <= %(today)s
+			and admission.application_end_date >= %(today)s
 			{program_condition}
 			and (
 				admission.name like %(txt)s
-				or coalesce(admission.title, '') like %(txt)s
+				or admission.title like %(txt)s
 			)
-		order by admission.admission_end_date asc, admission.title asc
+		order by admission.application_end_date desc, admission.title asc
 		limit {int(start)}, {int(page_len)}
 		""",
 		params,
 	)
-
-
-@frappe.whitelist()
-@frappe.validate_and_sanitize_search_inputs
-def student_query(doctype, txt, searchfield, start, page_len, filters):
-	_require_login()
-	filters = parse_query_filters(filters)
-	branch = filters.get(BRANCH_FIELD)
-	allowed = {row["name"] for row in get_allowed_school_branches()}
-	if branch and branch not in allowed:
-		frappe.throw(_("You do not have access to the selected School Branch."), frappe.PermissionError)
-	if not branch:
-		current = get_current_school_branch()
-		branch = current.get("name") if current else None
-
-	allow_cross_branch = str(filters.get("allow_cross_branch") or "").lower() in {"1", "true", "yes", "on"}
-	if allow_cross_branch:
-		roles = set(frappe.get_roles(frappe.session.user))
-		if not roles.intersection(CROSS_BRANCH_ENROLLMENT_ROLES):
-			frappe.throw(_("You are not permitted to enroll students across Branches."), frappe.PermissionError)
-		if not branch:
-			return []
-		institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
-		if not institution:
-			return []
-		return frappe.db.sql(
-			f"""
-			select student.name, student.student_name, student.student_email_id, student.`{BRANCH_FIELD}`
-			from `tabStudent` student
-			inner join `tabEduEdge School Branch` home_branch
-				on home_branch.name = student.`{BRANCH_FIELD}`
-			where student.enabled = 1
-				and home_branch.institution = %(institution)s
-				and (
-					student.name like %(txt)s
-					or student.student_name like %(txt)s
-					or coalesce(student.student_email_id, '') like %(txt)s
-				)
-			order by student.student_name asc
-			limit %(start)s, %(page_len)s
-			""",
-			{
-				"institution": institution,
-				"txt": f"%{txt or ''}%",
-				"start": int(start),
-				"page_len": int(page_len),
-			},
-		)
-
-	student_filters: dict = {"enabled": 1}
-	if branch:
-		student_filters[BRANCH_FIELD] = branch
-	rows = frappe.get_list(
-		"Student",
-		filters=student_filters,
-		or_filters={
-			"name": ["like", f"%{txt}%"],
-			"student_name": ["like", f"%{txt}%"],
-			"student_email_id": ["like", f"%{txt}%"],
-		},
-		fields=["name", "student_name", "student_email_id", BRANCH_FIELD],
-		start=int(start),
-		page_length=int(page_len),
-		order_by="student_name asc",
-	)
-	return [
-		[row["name"], row.get("student_name"), row.get("student_email_id"), row.get(BRANCH_FIELD)]
-		for row in rows
-	]
-
-
-@frappe.whitelist()
-def get_guardian_branch_summary(guardian: str) -> dict:
-	_require_login()
-	if not frappe.has_permission("Guardian", "read", guardian):
-		frappe.throw(_("Not permitted to read this Guardian."), frappe.PermissionError)
-	students = frappe.get_all(
-		"Guardian Student",
-		filters={"parent": guardian, "parenttype": "Guardian"},
-		pluck="student",
-	)
-	if not students:
-		return {"guardian": guardian, "branches": [], "students": []}
-	rows = frappe.get_list(
-		"Student",
-		filters={"name": ["in", students]},
-		fields=["name", "student_name", BRANCH_FIELD],
-		order_by="student_name asc",
-	)
-	branches = sorted({row.get(BRANCH_FIELD) for row in rows if row.get(BRANCH_FIELD)})
-	return {"guardian": guardian, "branches": branches, "students": rows}
