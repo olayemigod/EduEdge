@@ -33,8 +33,8 @@ class TestExamTemplateReuseEdgeSuiteContract(unittest.TestCase):
 			"Subject Applicability",
 			"Exam Purpose",
 			"Content Mode",
-			"Policy Blueprint",
-			"Fixed Question Set",
+			"state.options.template_modes",
+			"row.template_mode",
 			"get_exam_templates",
 			"requestSequence",
 			"pagination.has_previous",
@@ -68,7 +68,7 @@ class TestExamTemplateReuseEdgeSuiteContract(unittest.TestCase):
 			"Specific Subject",
 			"actual exam schedule selects",
 			"isBlueprint",
-			"isFixedQuestionSet",
+			"isFixedSet",
 			"Only Approved questions",
 			"save_template",
 			"perform_template_action",
@@ -76,7 +76,8 @@ class TestExamTemplateReuseEdgeSuiteContract(unittest.TestCase):
 		):
 			self.assertIn(marker, component)
 		self.assertIn('v-if="isBlueprint"', component)
-		self.assertIn('v-if="isFixedQuestionSet"', component)
+		self.assertIn('<section v-else class="eduedge-template-builder-panel">', component)
+		self.assertIn("if (!this.isFixedSet", component)
 
 	def test_template_api_is_scope_safe_and_returns_applicable_approved_templates(self):
 		api = (APP / "api" / "exam_templates.py").read_text()
@@ -103,12 +104,15 @@ class TestExamTemplateReuseEdgeSuiteContract(unittest.TestCase):
 			"TimestampMismatchError",
 		):
 			self.assertIn(marker, api)
-		for forbidden in (
-			'"answer_key"',
-			'"marking_guide"',
-			'"question_text"',
-			"ignore_permissions=True",
-		):
+
+		# Question text may be searched server-side while selecting an approved
+		# question, but it must not be returned by the template list payload.
+		list_query_start = api.index("rows = frappe.get_list(\n\t\tTEMPLATE_DOCTYPE")
+		list_query_end = api.index("\n\tall_institutions =", list_query_start)
+		list_query = api[list_query_start:list_query_end]
+		for forbidden in ('"answer_key"', '"marking_guide"', '"question_text"'):
+			self.assertNotIn(forbidden, list_query)
+		for forbidden in ('"answer_key"', '"marking_guide"', "ignore_permissions=True"):
 			self.assertNotIn(forbidden, api)
 
 	def test_schedule_resolves_reusable_template_against_actual_branch_and_subject(self):
