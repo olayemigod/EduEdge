@@ -95,7 +95,8 @@ class TestExamTemplateReuseScopeContract(unittest.TestCase):
 		for expected in (
 			"_permission_safe_status_counts",
 			"frappe.get_list(",
-			'group_by="status"',
+			'fields=["status"]',
+			"limit_page_length=0",
 			"get_applicable_exam_templates",
 			"MAX_APPLICABLE_RESULTS",
 			"template_reuse_scope",
@@ -105,6 +106,8 @@ class TestExamTemplateReuseScopeContract(unittest.TestCase):
 		):
 			self.assertIn(expected, list_api + core_api)
 		self.assertNotIn("frappe.db.count", list_api)
+		self.assertNotIn("count(name) as count", list_api)
+		self.assertNotIn('group_by="status"', list_api)
 		self.assertNotIn('"answer_key"', list_api)
 		self.assertNotIn('"marking_guide"', list_api)
 
