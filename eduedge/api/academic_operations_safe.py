@@ -35,43 +35,60 @@ def _attendance_coverage(
 	group_strength: dict[str, int],
 	group_labels: dict[str, str],
 ) -> list[dict]:
-	scheduled_groups = sorted({row.get("student_group") for row in schedules if row.get("student_group")})
-	if not scheduled_groups:
+	"""Return submitted-attendance coverage for each scheduled session.
+
+	Attendance is saved against Course Schedule when the register is opened from a
+	schedule. Coverage therefore follows the schedule identity, not only the Student
+	Group, so two sessions for the same class cannot incorrectly satisfy each other.
+	"""
+	scheduled_rows = [
+		dict(row)
+		for row in schedules
+		if row.get("name") and row.get("student_group")
+	]
+	if not scheduled_rows:
 		return []
 
+	schedule_names = [row["name"] for row in scheduled_rows]
 	rows = frappe.get_all(
 		"Student Attendance",
 		filters={
 			BRANCH_FIELD: branch,
 			"date": date,
 			"docstatus": 1,
-			"student_group": ["in", scheduled_groups],
+			"course_schedule": ["in", schedule_names],
 		},
 		fields=[
-			"student_group",
+			"course_schedule",
 			"status",
 			{"COUNT": "name", "as": "record_count"},
 		],
-		group_by="student_group, status",
+		group_by="course_schedule, status",
 	)
-	counts: dict[str, Counter] = {group: Counter() for group in scheduled_groups}
+	counts: dict[str, Counter] = {name: Counter() for name in schedule_names}
 	for row in rows:
-		counts.setdefault(row.student_group, Counter())[row.status] = int(row.record_count or 0)
+		counts.setdefault(row.course_schedule, Counter())[row.status] = int(row.record_count or 0)
 
 	coverage = []
-	for group in scheduled_groups:
+	for schedule in scheduled_rows:
+		group = schedule["student_group"]
 		expected = int(group_strength.get(group, 0))
-		group_counts = counts.get(group, Counter())
-		submitted = sum(group_counts.values())
+		schedule_counts = counts.get(schedule["name"], Counter())
+		submitted = sum(schedule_counts.values())
 		coverage.append(
 			{
+				"course_schedule": schedule["name"],
+				"course": schedule.get("course"),
 				"student_group": group,
 				"student_group_name": group_labels.get(group) or group,
+				"from_time": schedule.get("from_time"),
+				"to_time": schedule.get("to_time"),
+				"room": schedule.get("room"),
 				"expected": expected,
 				"submitted": submitted,
-				"present": group_counts["Present"],
-				"absent": group_counts["Absent"],
-				"leave": group_counts["Leave"],
+				"present": schedule_counts["Present"],
+				"absent": schedule_counts["Absent"],
+				"leave": schedule_counts["Leave"],
 				"missing": max(expected - submitted, 0),
 				"has_attendance": submitted > 0,
 				"complete": expected > 0 and submitted >= expected,
@@ -228,6 +245,10 @@ def get_operations_context(
 			"present": attendance_summary["Present"],
 			"absent": attendance_summary["Absent"],
 			"leave": attendance_summary["Leave"],
+			"attendance_complete_registers": complete_registers,
+			"attendance_incomplete_registers": incomplete_registers,
+			"attendance_missing_registers": missing_registers,
+			# Backward-compatible aliases retained for existing consumers and tests.
 			"attendance_complete_groups": complete_registers,
 			"attendance_incomplete_groups": incomplete_registers,
 			"attendance_missing_groups": missing_registers,
