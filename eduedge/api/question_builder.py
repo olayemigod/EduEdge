@@ -46,6 +46,7 @@ QUESTION_TYPES = (
 )
 DIFFICULTIES = ("Easy", "Moderate", "Hard")
 EXAM_BODIES = ("School Internal", "WAEC", "NECO", "JAMB", "Post-UTME", "Other")
+EDITABLE_STATUSES = {"Draft", "Changes Requested"}
 
 
 def _parse_payload(payload) -> dict:
@@ -119,6 +120,9 @@ def _serialize_question(doc) -> dict:
 		"default_mark": flt(doc.default_mark) or 1,
 		"negative_mark": flt(doc.negative_mark),
 		"status": doc.status or "Draft",
+		"recommended_by": doc.recommended_by or "",
+		"recommended_on": doc.recommended_on,
+		"review_feedback": doc.review_feedback or "",
 		"reviewed_by": doc.reviewed_by or "",
 		"reviewed_on": doc.reviewed_on,
 		"notes": doc.notes or "",
@@ -149,6 +153,9 @@ def _new_question() -> dict:
 		"default_mark": 1,
 		"negative_mark": 0,
 		"status": "Draft",
+		"recommended_by": "",
+		"recommended_on": None,
+		"review_feedback": "",
 		"reviewed_by": "",
 		"reviewed_on": None,
 		"notes": "",
@@ -170,7 +177,7 @@ def _builder_response(question: dict, public_access: dict, source_doc=None) -> d
 		can_write = frappe.has_permission(QUESTION_DOCTYPE, "create")
 	else:
 		can_write = bool(source_doc and source_doc.has_permission("write"))
-	if status in {"Approved", "Retired"}:
+	if status not in EDITABLE_STATUSES:
 		can_write = False
 	current_branch = get_current_school_branch() or {}
 	return {
@@ -252,6 +259,11 @@ def save_question(payload) -> dict:
 		doc = _require_readable_question(name)
 		if not doc.has_permission("write"):
 			frappe.throw(_("You are not permitted to edit this CBT question."), frappe.PermissionError)
+		if doc.status not in EDITABLE_STATUSES:
+			frappe.throw(
+				_("Question content can be changed only while the question is Draft or Changes Requested."),
+				frappe.ValidationError,
+			)
 		if values.get("question_code") and values.get("question_code").strip().upper() != doc.question_code:
 			frappe.throw(_("Question Code cannot be changed after the first save."), frappe.ValidationError)
 	else:
@@ -309,6 +321,9 @@ def create_question_version(question: str) -> dict:
 	doc.version_number = version_number
 	doc.supersedes_question = source.name
 	doc.status = "Draft"
+	doc.recommended_by = None
+	doc.recommended_on = None
+	doc.review_feedback = None
 	doc.reviewed_by = None
 	doc.reviewed_on = None
 	doc.insert()
