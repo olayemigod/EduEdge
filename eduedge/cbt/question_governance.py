@@ -7,8 +7,11 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from eduedge.access_control import user_has_role_permission
 from eduedge.cbt.public_access import can_author_public_exams
+from eduedge.cbt.question_responsibilities import get_question_responsibility_state
 from eduedge.education.operations_policy import resolve_question_governance
+from eduedge.eduedge.doctype.eduedge_cbt_question import eduedge_cbt_question as question_doctype
 from eduedge.eduedge.doctype.eduedge_cbt_question.eduedge_cbt_question import (
 	PLATFORM_BANK,
 	SCHOOL_BANK,
@@ -20,35 +23,44 @@ GOVERNANCE_ACTION_FLAG = "eduedge_question_governance_action"
 
 ACTION_SUBMIT = "submit_for_review"
 ACTION_RETURN = "return_to_draft"
+ACTION_REQUEST_CHANGES = "request_changes"
+ACTION_RECOMMEND = "recommend"
 ACTION_APPROVE = "approve"
 ACTION_RETIRE = "retire"
 
 ACTION_DEFINITIONS = {
-	ACTION_SUBMIT: {
-		"label": _("Send for Review"),
-		"source_status": "Draft",
-		"target_status": "Under Review",
-		"confirmation": False,
-	},
-	ACTION_RETURN: {
-		"label": _("Return to Draft"),
-		"source_status": "Under Review",
-		"target_status": "Draft",
+	ACTION_SUBMIT: {"label": _("Send for Review"), "confirmation": False},
+	ACTION_RETURN: {"label": _("Return to Draft"), "confirmation": True},
+	ACTION_REQUEST_CHANGES: {
+		"label": _("Request Changes"),
 		"confirmation": True,
+		"requires_feedback": True,
 	},
-	ACTION_APPROVE: {
-		"label": _("Approve Question"),
-		"source_status": "Under Review",
-		"target_status": "Approved",
-		"confirmation": True,
-	},
-	ACTION_RETIRE: {
-		"label": _("Retire Question"),
-		"source_status": "Approved",
-		"target_status": "Retired",
-		"confirmation": True,
-	},
+	ACTION_RECOMMEND: {"label": _("Recommend Question"), "confirmation": True},
+	ACTION_APPROVE: {"label": _("Approve Question"), "confirmation": True},
+	ACTION_RETIRE: {"label": _("Retire Question"), "confirmation": True},
 }
+
+# The DocType controller predates the Standard workflow. Its internal transition
+# guard remains useful, so extend its allowed transition map instead of bypassing
+# validation. The lifecycle hook still blocks every direct Status write.
+question_doctype.ALLOWED_STATUS_TRANSITIONS.update(
+	{
+		"Draft": {"Draft", "Under Review", "Under Subject Review"},
+		"Under Review": {
+			"Draft",
+			"Under Review",
+			"Changes Requested",
+			"Recommended",
+			"Approved",
+		},
+		"Under Subject Review": {"Under Subject Review", "Changes Requested", "Recommended"},
+		"Changes Requested": {"Changes Requested", "Draft", "Under Review", "Under Subject Review"},
+		"Recommended": {"Recommended", "Approved"},
+		"Approved": {"Approved", "Retired"},
+		"Retired": {"Retired"},
+	}
+)
 
 PRIVILEGED_REVIEW_ROLES = {
 	"Administrator",
@@ -96,10 +108,36 @@ def _question_policy(question: Any) -> dict:
 	return resolve_question_governance(institution)
 
 
+def _question_responsibilities(question: Any, user: str) -> dict:
+	if _value(question, "ownership_scope") == PLATFORM_BANK:
+		allowed = bool(can_author_public_exams(user))
+		return {
+			"user": user,
+			"institution": "",
+			"school_branch": "",
+			"course": _value(question, "course") or "",
+			"can_author": allowed,
+			"can_subject_review": allowed,
+			"can_final_approve": allowed,
+			"assignment_names": [],
+		}
+	institution = _question_institution(question)
+	return get_question_responsibility_state(
+		user=user,
+		institution=institution,
+		course=_value(question, "course") or "",
+		school_branch=_value(question, "school_branch") or "",
+	)
+
+
 def _can_write_question(question: Any) -> bool:
 	if hasattr(question, "has_permission"):
 		return bool(question.has_permission("write"))
 	return bool(frappe.has_permission(QUESTION_DOCTYPE, "write"))
+
+
+def _can_subject_review(user: str) -> bool:
+	return user_has_role_permission(QUESTION_DOCTYPE, "write", user)
 
 
 def _academic_admin_override_blocked(policy: dict, user: str) -> bool:
@@ -111,20 +149,121 @@ def _academic_admin_override_blocked(policy: dict, user: str) -> bool:
 	return not bool(PRIVILEGED_REVIEW_ROLES.intersection(roles | {user}))
 
 
-def _review_block_reason(question: Any, policy: dict, user: str, can_review: bool) -> str:
+def _common_scope_reason(question: Any, policy: dict) -> str:
+	if policy.get("source") == "Missing Institution Context":
+		return _("The Question Branch is not linked to an Institution, so its approval policy cannot be resolved.")
+	if not _value(question, "course"):
+		return _("Select a Subject / Course before using Question governance actions.")
+	return ""
+
+
+def _author_reason(question: Any, policy: dict, responsibilities: dict, can_write: bool) -> str:
+	common = _common_scope_reason(question, policy)
+	if common:
+		return common
+	if not can_write:
+		return _("You do not have permission to change this question.")
+	if not responsibilities.get("can_author"):
+		return _("You do not have an active Question Author assignment for this Institution, Branch, and Subject / Course.")
+	return ""
+
+
+def _subject_review_reason(
+	question: Any,
+	policy: dict,
+	user: str,
+	responsibilities: dict,
+	can_subject_review: bool,
+) -> str:
+	common = _common_scope_reason(question, policy)
+	if common:
+		return common
+	if policy.get("question_approval_mode") != "Standard":
+		return _("Subject recommendation is available only when the Institution uses Standard approval.")
+	if not can_subject_review:
+		return _("Your role does not provide CBT Question review capability.")
+	if _value(question, "ownership_scope") == PLATFORM_BANK and not can_author_public_exams(user):
+		return _("EduEdge Examination Bank review requires public-exam authoring access.")
+	if not responsibilities.get("can_subject_review"):
+		return _("You do not have an active Subject Reviewer assignment for this Institution, Branch, and Subject / Course.")
+	return ""
+
+
+def _final_approval_reason(
+	question: Any,
+	policy: dict,
+	user: str,
+	responsibilities: dict,
+	can_review: bool,
+) -> str:
+	common = _common_scope_reason(question, policy)
+	if common:
+		return common
 	if not can_review:
 		return _("Your role does not permit final question approval.")
 	if _value(question, "ownership_scope") == PLATFORM_BANK and not can_author_public_exams(user):
 		return _("EduEdge Examination Bank approval requires public-exam authoring access.")
-	if policy.get("source") == "Missing Institution Context":
-		return _("The Question Branch is not linked to an Institution, so its approval policy cannot be resolved.")
-	if policy.get("question_approval_mode") == "Standard":
-		return _("This Institution uses Standard approval. A subject reviewer recommendation is required before final approval.")
+	if not responsibilities.get("can_final_approve"):
+		return _("You do not have an active Final Approver assignment for this Institution, Branch, and Subject / Course.")
 	if policy.get("require_separate_question_approver") and _value(question, "owner") == user:
 		return _("The question author cannot approve this question because separate author and approver governance is enabled.")
 	if _academic_admin_override_blocked(policy, user):
 		return _("Academic Administrator override is disabled for this Institution.")
 	return ""
+
+
+def _action_target(action: str, status: str, policy: dict) -> str:
+	mode = policy.get("question_approval_mode") or "Standard"
+	if action == ACTION_SUBMIT:
+		return "Under Subject Review" if mode == "Standard" else "Under Review"
+	if action == ACTION_RETURN:
+		return "Draft"
+	if action == ACTION_REQUEST_CHANGES:
+		return "Changes Requested"
+	if action == ACTION_RECOMMEND:
+		return "Recommended"
+	if action == ACTION_APPROVE:
+		return "Approved"
+	if action == ACTION_RETIRE:
+		return "Retired"
+	return status
+
+
+def _action_source_allowed(action: str, status: str, policy: dict) -> bool:
+	mode = policy.get("question_approval_mode") or "Standard"
+	if action == ACTION_SUBMIT:
+		return status in {"Draft", "Changes Requested"}
+	if action == ACTION_RETURN:
+		return status == "Changes Requested" or (status == "Under Review" and mode == "Simple")
+	if action in {ACTION_REQUEST_CHANGES, ACTION_RECOMMEND}:
+		return mode == "Standard" and status in {"Under Subject Review", "Under Review"}
+	if action == ACTION_APPROVE:
+		return status == ("Recommended" if mode == "Standard" else "Under Review")
+	if action == ACTION_RETIRE:
+		return status == "Approved"
+	return False
+
+
+def _action_reason(
+	action: str,
+	question: Any,
+	status: str,
+	policy: dict,
+	user: str,
+	responsibilities: dict,
+	can_write: bool,
+	can_subject_review: bool,
+	can_review: bool,
+) -> str:
+	if not _action_source_allowed(action, status, policy):
+		return _("This action is not available while the question is {0}.").format(status)
+	if action in {ACTION_SUBMIT, ACTION_RETURN}:
+		return _author_reason(question, policy, responsibilities, can_write)
+	if action in {ACTION_REQUEST_CHANGES, ACTION_RECOMMEND}:
+		return _subject_review_reason(question, policy, user, responsibilities, can_subject_review)
+	if action in {ACTION_APPROVE, ACTION_RETIRE}:
+		return _final_approval_reason(question, policy, user, responsibilities, can_review)
+	return _("This Question action is not available.")
 
 
 def get_question_action_state(
@@ -133,35 +272,39 @@ def get_question_action_state(
 	user: str | None = None,
 	can_write: bool | None = None,
 	can_review: bool | None = None,
+	can_subject_review: bool | None = None,
 ) -> dict:
 	resolved_user = user or frappe.session.user
 	status = _value(question, "status", "Draft") or "Draft"
 	policy = _question_policy(question)
+	responsibilities = _question_responsibilities(question, resolved_user)
 	resolved_can_write = _can_write_question(question) if can_write is None else bool(can_write)
 	resolved_can_review = can_review_questions(resolved_user) if can_review is None else bool(can_review)
+	resolved_can_subject_review = (
+		_can_subject_review(resolved_user) if can_subject_review is None else bool(can_subject_review)
+	)
 
 	actions = []
 	for action, definition in ACTION_DEFINITIONS.items():
-		reason = ""
-		if status != definition["source_status"]:
-			reason = _("This action is not available while the question is {0}.").format(status)
-		elif action in {ACTION_SUBMIT, ACTION_RETURN} and not resolved_can_write:
-			reason = _("You do not have permission to change this question.")
-		elif action == ACTION_APPROVE:
-			reason = _review_block_reason(question, policy, resolved_user, resolved_can_review)
-		elif action == ACTION_RETIRE:
-			if not resolved_can_review:
-				reason = _("Your role does not permit question retirement.")
-			elif _value(question, "ownership_scope") == PLATFORM_BANK and not can_author_public_exams(resolved_user):
-				reason = _("EduEdge Examination Bank retirement requires public-exam authoring access.")
-
+		reason = _action_reason(
+			action,
+			question,
+			status,
+			policy,
+			resolved_user,
+			responsibilities,
+			resolved_can_write,
+			resolved_can_subject_review,
+			resolved_can_review,
+		)
 		actions.append(
 			{
 				"action": action,
 				"label": definition["label"],
-				"source_status": definition["source_status"],
-				"target_status": definition["target_status"],
-				"requires_confirmation": definition["confirmation"],
+				"source_status": status,
+				"target_status": _action_target(action, status, policy),
+				"requires_confirmation": bool(definition.get("confirmation")),
+				"requires_feedback": bool(definition.get("requires_feedback")),
 				"allowed": not bool(reason),
 				"reason": reason,
 			}
@@ -169,12 +312,21 @@ def get_question_action_state(
 
 	return {
 		"status": status,
+		"modified": str(_value(question, "modified") or ""),
 		"policy": {
 			"source": policy.get("source"),
 			"institution": policy.get("institution") or _question_institution(question) or None,
 			"question_approval_mode": policy.get("question_approval_mode"),
 			"require_separate_question_approver": bool(policy.get("require_separate_question_approver")),
 			"allow_academic_admin_override": bool(policy.get("allow_academic_admin_override")),
+		},
+		"responsibilities": responsibilities,
+		"audit": {
+			"recommended_by": _value(question, "recommended_by") or "",
+			"recommended_on": _value(question, "recommended_on"),
+			"review_feedback": _value(question, "review_feedback") or "",
+			"approved_by": _value(question, "reviewed_by") or "",
+			"approved_on": _value(question, "reviewed_on"),
 		},
 		"actions": actions,
 	}
@@ -209,7 +361,12 @@ def validate_question_governance_transition(doc, method: str | None = None) -> N
 	)
 
 
-def apply_question_action(doc, action: str, expected_modified: str | None = None) -> dict:
+def apply_question_action(
+	doc,
+	action: str,
+	expected_modified: str | None = None,
+	feedback: str | None = None,
+) -> dict:
 	definition = ACTION_DEFINITIONS.get(action)
 	if not definition:
 		frappe.throw(_("Select a valid Question action."), frappe.ValidationError)
@@ -227,11 +384,31 @@ def apply_question_action(doc, action: str, expected_modified: str | None = None
 			frappe.PermissionError,
 		)
 
+	clean_feedback = str(feedback or "").strip()
+	if action_state.get("requires_feedback") and not clean_feedback:
+		frappe.throw(_("Enter the changes required before returning this question to the author."), frappe.ValidationError)
+
 	with governance_action_context(action):
-		doc.status = definition["target_status"]
-		if action in {ACTION_SUBMIT, ACTION_RETURN}:
+		doc.status = action_state["target_status"]
+		if action == ACTION_SUBMIT:
 			doc.reviewed_by = None
 			doc.reviewed_on = None
+			doc.recommended_by = None
+			doc.recommended_on = None
+		elif action == ACTION_RETURN:
+			doc.reviewed_by = None
+			doc.reviewed_on = None
+		elif action == ACTION_REQUEST_CHANGES:
+			doc.review_feedback = clean_feedback
+			doc.recommended_by = None
+			doc.recommended_on = None
+			doc.reviewed_by = None
+			doc.reviewed_on = None
+		elif action == ACTION_RECOMMEND:
+			doc.recommended_by = frappe.session.user
+			doc.recommended_on = now_datetime()
+			if clean_feedback:
+				doc.review_feedback = clean_feedback
 		elif action == ACTION_APPROVE:
 			doc.reviewed_by = frappe.session.user
 			doc.reviewed_on = now_datetime()
@@ -241,6 +418,9 @@ def apply_question_action(doc, action: str, expected_modified: str | None = None
 		"question": doc.name,
 		"status": doc.status,
 		"modified": str(doc.modified),
+		"recommended_by": doc.recommended_by or "",
+		"recommended_on": doc.recommended_on,
+		"review_feedback": doc.review_feedback or "",
 		"reviewed_by": doc.reviewed_by or "",
 		"reviewed_on": doc.reviewed_on,
 		"action": action,
