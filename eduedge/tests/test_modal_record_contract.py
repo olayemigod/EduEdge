@@ -38,7 +38,8 @@ class TestModalRecordContract(unittest.TestCase):
 	def test_options_are_context_filtered_and_bounded(self):
 		api = (APP / "api" / "modal_records.py").read_text(encoding="utf-8")
 		self.assertIn("MAX_OPTIONS = 30", api)
-		self.assertIn("get_allowed_school_branches(company=company)", api)
+		self.assertIn("get_allowed_institutions(company=company)", api)
+		self.assertIn("get_allowed_school_branches(company=company, institution=institution)", api)
 		self.assertIn('filters={"enabled": 1, "user_type": "System User"}', api)
 		self.assertIn('filters = {"academic_year": values.get("academic_year")}', api)
 		self.assertIn("limit_page_length=MAX_OPTIONS", api)
