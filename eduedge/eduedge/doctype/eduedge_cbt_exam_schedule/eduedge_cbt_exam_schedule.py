@@ -9,9 +9,16 @@ from frappe.utils import cint, get_datetime, now_datetime
 
 from eduedge.cbt.public_access import require_public_exam_authoring
 from eduedge.education.offerings import assert_branch_access
+from eduedge.eduedge.doctype.eduedge_cbt_exam_template.eduedge_cbt_exam_template import (
+	PUBLIC_EXAM,
+	REUSE_BRANCH,
+	REUSE_INSTITUTION,
+	REUSE_UNIVERSAL,
+	SCHOOL_EXAM,
+	SUBJECT_ANY,
+	SUBJECT_SPECIFIC,
+)
 
-SCHOOL_EXAM = "School Examination"
-PUBLIC_EXAM = "EduEdge Public Examination"
 SCHOOL_CENTRE = "School Examination Centre"
 PLATFORM_CENTRE = "EduEdge Exam Centre"
 
@@ -70,6 +77,7 @@ class EduEdgeCBTExamSchedule(Document):
 		template = self._get_approved_template()
 		self._apply_template_context_and_snapshot(template)
 		self._validate_scope()
+		self._validate_template_applicability(template)
 		self._validate_centre()
 		self._validate_timing()
 		self._validate_operational_policy()
@@ -99,8 +107,13 @@ class EduEdgeCBTExamSchedule(Document):
 				"name",
 				"status",
 				"exam_scope",
+				"template_reuse_scope",
+				"company",
+				"institution",
 				"school_branch",
+				"subject_applicability",
 				"course",
+				"template_mode",
 				"default_examination_centre",
 				*SNAPSHOT_FIELDS,
 			],
@@ -111,10 +124,7 @@ class EduEdgeCBTExamSchedule(Document):
 		if before and before.status in {"Ready", "Active", "Suspended", "Completed", "Cancelled"}:
 			allowed_statuses.add("Retired")
 		if not template or template.status not in allowed_statuses:
-			frappe.throw(
-				_("Select an Approved CBT Exam Template."),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("Select an Approved CBT Exam Template."), frappe.ValidationError)
 		return template
 
 	def _apply_template_context_and_snapshot(self, template) -> None:
@@ -123,8 +133,12 @@ class EduEdgeCBTExamSchedule(Document):
 		if not should_refresh:
 			return
 		self.exam_scope = template.exam_scope
-		self.school_branch = template.school_branch
-		self.course = template.course
+		if template.exam_scope == SCHOOL_EXAM and template.template_reuse_scope == REUSE_BRANCH:
+			self.school_branch = template.school_branch
+		elif template.exam_scope == PUBLIC_EXAM:
+			self.school_branch = None
+		if template.subject_applicability == SUBJECT_SPECIFIC:
+			self.course = template.course
 		if not self.examination_centre and template.default_examination_centre:
 			self.examination_centre = template.default_examination_centre
 		for fieldname in SNAPSHOT_FIELDS:
@@ -138,6 +152,8 @@ class EduEdgeCBTExamSchedule(Document):
 					frappe.ValidationError,
 				)
 			assert_branch_access(self.school_branch)
+			if not self.course:
+				frappe.throw(_("A School Examination schedule requires a Subject / Course."), frappe.ValidationError)
 			return
 		if self.exam_scope == PUBLIC_EXAM:
 			require_public_exam_authoring()
@@ -146,8 +162,35 @@ class EduEdgeCBTExamSchedule(Document):
 					_("Centrally authored public examination schedules cannot carry a local School Branch."),
 					frappe.ValidationError,
 				)
+			if not self.course:
+				frappe.throw(_("A public examination schedule requires a Subject / Course."), frappe.ValidationError)
 			return
 		frappe.throw(_("Select a valid Examination Scope."), frappe.ValidationError)
+
+	def _validate_template_applicability(self, template) -> None:
+		if template.exam_scope != self.exam_scope:
+			frappe.throw(_("The selected Template does not match the Schedule Examination Scope."), frappe.ValidationError)
+		if template.subject_applicability == SUBJECT_SPECIFIC and self.course != template.course:
+			frappe.throw(_("The Schedule Subject must match the Specific Subject template."), frappe.ValidationError)
+		if template.subject_applicability == SUBJECT_ANY and not self.course:
+			frappe.throw(_("Select the actual Subject / Course for this schedule."), frappe.ValidationError)
+		if self.exam_scope != SCHOOL_EXAM:
+			return
+
+		branch = frappe.db.get_value(
+			"EduEdge School Branch",
+			self.school_branch,
+			["company", "institution", "enabled"],
+			as_dict=True,
+		)
+		if not branch or not cint(branch.enabled):
+			frappe.throw(_("Select an enabled School Branch / Campus."), frappe.ValidationError)
+		if template.template_reuse_scope == REUSE_BRANCH and self.school_branch != template.school_branch:
+			frappe.throw(_("This Branch-wide template cannot be used by another Branch."), frappe.PermissionError)
+		if template.template_reuse_scope == REUSE_INSTITUTION and branch.institution != template.institution:
+			frappe.throw(_("This Institution-wide template cannot be used outside its Institution."), frappe.PermissionError)
+		if template.template_reuse_scope == REUSE_UNIVERSAL and branch.company != template.company:
+			frappe.throw(_("This Universal template cannot be used outside its Company."), frappe.PermissionError)
 
 	def _validate_centre(self) -> None:
 		if not self.examination_centre:
@@ -238,9 +281,7 @@ class EduEdgeCBTExamSchedule(Document):
 		allowed = ALLOWED_STATUS_TRANSITIONS.get(previous_status, {previous_status})
 		if self.status not in allowed:
 			frappe.throw(
-				_("Examination Schedule Status cannot change from {0} to {1}.").format(
-					previous_status, self.status
-				),
+				_("Examination Schedule Status cannot change from {0} to {1}.").format(previous_status, self.status),
 				frappe.ValidationError,
 			)
 		if self.status in {"Ready", "Active"} and not self.primary_invigilator and cint(self.require_candidate_check_in):
