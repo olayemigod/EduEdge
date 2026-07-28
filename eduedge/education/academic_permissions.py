@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
-from eduedge.services.branch_context import get_allowed_school_branches, is_branch_access_enforced
+from eduedge.services.branch_context import get_allowed_institutions, is_branch_access_enforced
 
 PRIVILEGED_ROLES = {"System Manager", "EduEdge Administrator"}
 DIRECT_INSTITUTION_DOCTYPES = {
@@ -68,14 +68,6 @@ def fee_structure_query(user: str | None = None) -> str:
 
 
 def has_academic_institution_permission(doc, user=None, permission_type=None) -> bool:
-	"""Return an explicit Frappe 16-compatible record permission decision.
-
-	Frappe 16 no longer treats ``None`` from a ``has_permission`` hook as an
-	allow/defer result. Every allowed path must therefore return ``True``. Legacy
-	ERPNext academic masters may remain temporarily unclassified, while records
-	with Institution context are restricted to Institutions resolved from the
-	user's permitted School Branches.
-	"""
 	resolved_user = user or frappe.session.user
 	if not doc or not _should_scope(resolved_user):
 		return True
@@ -106,28 +98,10 @@ def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
 
 
 def _allowed_institutions(user: str) -> set[str]:
-	"""Resolve institutions only through branches already allowed for the user.
-
-	The branch-context payload intentionally stays compact and may not expose the
-	Institution field on every caller. Re-read only the already-authorised Branch
-	names here so custom roles and standard roles receive the same academic scope.
-	"""
-	branch_names = {
-		row.get("name")
-		for row in get_allowed_school_branches(user=user)
-		if row.get("name")
-	}
-	if not branch_names:
-		return set()
 	return {
-		institution
-		for institution in frappe.get_all(
-			"EduEdge School Branch",
-			filters={"name": ["in", sorted(branch_names)], "enabled": 1},
-			pluck="institution",
-			limit_page_length=0,
-		)
-		if institution
+		row.get("name")
+		for row in get_allowed_institutions(user=user)
+		if row.get("name")
 	}
 
 
