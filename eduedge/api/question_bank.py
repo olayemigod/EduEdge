@@ -12,7 +12,15 @@ from eduedge.eduedge.doctype.eduedge_cbt_question.eduedge_cbt_question import PL
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
 QUESTION_DOCTYPE = "EduEdge CBT Question"
-STATUSES = ("Draft", "Under Review", "Approved", "Retired")
+STATUSES = (
+	"Draft",
+	"Under Review",
+	"Under Subject Review",
+	"Changes Requested",
+	"Recommended",
+	"Approved",
+	"Retired",
+)
 DIFFICULTIES = ("Easy", "Moderate", "Hard")
 QUESTION_TYPES = ("Single Choice", "Multiple Choice", "True/False", "Yes/No", "Short Answer", "Essay", "Numeric")
 EXAM_BODIES = ("School Internal", "WAEC", "NECO", "JAMB", "Post-UTME", "Other")
@@ -220,20 +228,12 @@ def _search_or_filters(search: str) -> list[list[str]]:
 	]
 
 
-def _status_counts(filters: dict, or_filters: list[list[str]]) -> dict[str, int]:
-	rows = frappe.get_list(
-		QUESTION_DOCTYPE,
-		filters=filters,
-		or_filters=or_filters or None,
-		fields=["status", "count(name) as count"],
-		group_by="status",
-		limit_page_length=20,
-	)
-	counts = {status: 0 for status in STATUSES}
-	for row in rows:
-		if row.status in counts:
-			counts[row.status] = cint(row.count)
-	counts["Total"] = sum(counts.values())
+def _status_counts(base_filters: dict, or_filters: list[list[str]]) -> dict:
+	counts = {"Total": frappe.db.count(QUESTION_DOCTYPE, filters=base_filters, or_filters=or_filters or None)}
+	for value in STATUSES:
+		filters = dict(base_filters)
+		filters["status"] = value
+		counts[value] = frappe.db.count(QUESTION_DOCTYPE, filters=filters, or_filters=or_filters or None)
 	return counts
 
 
@@ -433,8 +433,11 @@ def search_courses(
 		institution_values = {row["value"] for row in institutions}
 		resolved_institution = _require_allowed_selection(institution, institution_values, _("Institution"))
 		visible_branches = [row for row in branches if not resolved_institution or row.get("institution") == resolved_institution]
-		branch_values = {row["value"] for row in visible_branches}
-		resolved_branch = _require_allowed_selection(branch, branch_values, _("Branch / Campus"))
+		resolved_branch = _require_allowed_selection(
+			branch,
+			{row["value"] for row in visible_branches},
+			_("Branch / Campus"),
+		)
 
 	pattern = f"%{str(txt or '').strip()}%"
 	filters = _course_scope_filters(
