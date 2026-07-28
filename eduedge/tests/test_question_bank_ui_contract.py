@@ -59,7 +59,8 @@ class TestQuestionBankUIContract(unittest.TestCase):
 			"row.pop(\"question_text\"",
 			"limit_start=resolved_start",
 			"limit_page_length=resolved_page_length",
-			"group_by=\"status\"",
+			"def _status_counts",
+			"frappe.db.count(QUESTION_DOCTYPE",
 		):
 			self.assertIn(expected, api)
 		for forbidden in (
