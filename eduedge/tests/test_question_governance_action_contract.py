@@ -26,6 +26,15 @@ class TestQuestionGovernanceActionContract(unittest.TestCase):
 			self.assertIn(expected, source)
 		self.assertNotIn("bulk", source.lower())
 
+	def test_question_governance_log_has_a_loadable_doctype_controller(self):
+		controller = (
+			APP
+			/ "eduedge/doctype/eduedge_question_governance_log/eduedge_question_governance_log.py"
+		)
+		self.assertTrue(controller.exists())
+		source = controller.read_text(encoding="utf-8")
+		self.assertIn("class EduEdgeQuestionGovernanceLog(Document):", source)
+
 	def test_status_changes_require_governance_context_and_stale_records_are_rejected(self):
 		service = (APP / "cbt/question_governance.py").read_text(encoding="utf-8")
 		lifecycle = (APP / "cbt/master_lifecycle.py").read_text(encoding="utf-8")
