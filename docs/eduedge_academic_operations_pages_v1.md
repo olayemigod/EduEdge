@@ -10,13 +10,7 @@ This slice does not introduce new DocTypes or mutate submitted academic or accou
 
 ### Academic context
 
-The page now displays the selected:
-
-- Institution;
-- Branch / Campus;
-- Academic Year;
-- Academic Period; and
-- source of the resolved academic calendar context.
+The page now displays the selected Institution, Branch / Campus, Academic Year, Academic Period, and source of the resolved academic calendar context.
 
 Where a selected date is inside an Institution Academic Calendar but outside every configured period, EduEdge displays a calendar-gap warning and intentionally leaves the Academic Period blank. It does not inherit an unrelated site-wide Academic Term.
 
@@ -35,32 +29,15 @@ The Academic Operations context now provides:
 
 ### Attendance coverage
 
-Attendance readiness is calculated only from:
+Attendance readiness is calculated only from the selected Branch, selected date, scheduled Student Groups, and submitted Student Attendance records.
 
-- the selected Branch;
-- the selected date;
-- scheduled Student Groups; and
-- submitted Student Attendance records.
-
-Each scheduled Student Group returns:
-
-- expected active learners;
-- submitted records;
-- Present, Absent, and Leave counts;
-- missing records;
-- whether attendance has started; and
-- whether the register is complete.
+Each scheduled Student Group returns expected active learners, submitted records, Present, Absent and Leave counts, missing records, whether attendance has started, and whether the register is complete.
 
 The existing draft attendance workflow remains unchanged. Submitted attendance remains immutable.
 
 ### Room usage
 
-Room usage is summarised from the selected date's Course Schedules. The page shows:
-
-- each allocated Room;
-- number of sessions;
-- first start and last end time; and
-- a separate Unassigned entry for schedules without a Room.
+Room usage is summarised from the selected date's Course Schedules. The page shows each allocated Room, number of sessions, first start and last end time, and a separate Unassigned entry for schedules without a Room.
 
 ### User experience
 
@@ -94,8 +71,6 @@ The EdgeSuite page now includes:
 
 ## Focused validation required
 
-Automated validation should include:
-
 ```bash
 python -m compileall eduedge
 python -m unittest eduedge.tests.test_academic_operations_contract
@@ -103,7 +78,7 @@ node --check eduedge/eduedge/page/eduedge_academic_operations/eduedge_academic_o
 node --check eduedge/public/js/eduedge_academic_operations.bundle.js
 ```
 
-Local Frappe validation should include:
+Local Frappe validation:
 
 ```bash
 bench build --app eduedge
@@ -129,9 +104,13 @@ bench --site eduedge.local clear-cache
 14. Test a restricted Teacher against permitted and non-permitted Branches.
 15. Confirm no submitted accounting or academic document outside attendance is changed.
 
-## Next implementation slices
+## Connected page batch
 
-1. Complete Academic Foundation calendar and progression readiness.
-2. Replace the generic Programmes resource page with a dedicated Institution-aware page.
-3. Replace the generic Programme Offerings resource page with a dedicated capacity and operational-status page.
-4. Run combined academic workflow QA after all four page areas are complete.
+This daily operations page is now part of one connected Academic Operations implementation batch with:
+
+1. Academic Foundation;
+2. Programmes;
+3. Programme Offerings; and
+4. daily Classes, Schedules, Rooms and Attendance.
+
+Combined local QA should test the four areas in that order.
