@@ -58,6 +58,7 @@ jobs:
           node --check eduedge/public/js/eduedge_academic_operations.bundle.js
           node --check eduedge/public/js/eduedge_cbt_operations.bundle.js
           node --check eduedge/public/js/eduedge_question_bank.bundle.js
+          node --check eduedge/public/js/eduedge_question_responsibilities.bundle.js
           node --check eduedge/public/js/eduedge_question_builder.bundle.js
           node --check eduedge/public/js/eduedge_question_builder/rich_text_editor.js
           node --check eduedge/public/js/eduedge_question_batch.bundle.js
@@ -69,6 +70,7 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_academic_operations/eduedge_academic_operations.js
           node --check eduedge/eduedge/page/eduedge_cbt_operations/eduedge_cbt_operations.js
           node --check eduedge/eduedge/page/eduedge_question_bank/eduedge_question_bank.js
+          node --check eduedge/eduedge/page/eduedge_question_responsibilities/eduedge_question_responsibilities.js
           node --check eduedge/eduedge/page/eduedge_question_builder/eduedge_question_builder.js
           node --check eduedge/eduedge/page/eduedge_question_batch/eduedge_question_batch.js
           node --check eduedge/eduedge/page/eduedge_assessment_operations/eduedge_assessment_operations.js
