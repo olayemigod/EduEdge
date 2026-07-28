@@ -109,7 +109,7 @@ class TestQuestionResponsibilityContract(unittest.TestCase):
 			"Question Author",
 			"Subject Reviewer",
 			"Final Approver",
-			"All Institution Branches",
+			"Institution-wide assignments",
 			"eduedge.api.question_responsibilities.save_assignment",
 			"eduedge.api.question_responsibilities.search_options",
 		):
