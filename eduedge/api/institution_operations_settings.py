@@ -121,6 +121,33 @@ def _institution_values(institution: str) -> dict:
 	return dict(values or {})
 
 
+def _effective_institution_values(values: dict, effective_policy: dict | None) -> dict:
+	"""Show effective Company values when an Institution is inheriting.
+
+	The Institution record retains its own stored override values. They must not be
+	displayed in disabled controls while Company inheritance is active because that
+	misrepresents the policy that EduEdge will actually enforce.
+	"""
+	if not cint(values.get("use_company_question_governance_defaults")) or not effective_policy:
+		return values
+
+	display_values = dict(values)
+	display_values.update(
+		{
+			"question_approval_mode": effective_policy.get("question_approval_mode") or "Recommended",
+			"allow_bulk_question_approval": cint(effective_policy.get("allow_bulk_question_approval")),
+			"max_bulk_question_approval": cint(
+				effective_policy.get("max_bulk_question_approval") or MAX_BULK_QUESTIONS
+			),
+			"require_separate_question_approver": cint(
+				effective_policy.get("require_separate_question_approver")
+			),
+			"allow_academic_admin_override": cint(effective_policy.get("allow_academic_admin_override")),
+		}
+	)
+	return display_values
+
+
 def _company_can_write(company: str) -> bool:
 	settings_name = frappe.db.get_value(COMPANY_SETTINGS_DOCTYPE, {"company": company}, "name")
 	if settings_name:
@@ -221,6 +248,10 @@ def get_settings_context(
 				frappe.throw(_("The selected Institution does not belong to this Company."), frappe.ValidationError)
 			values = _institution_values(selected_institution)
 			effective_policy = resolve_question_governance(selected_institution)
+			if cint(values.get("use_company_question_governance_defaults")) and effective_policy:
+				effective_policy = dict(effective_policy)
+				effective_policy["source"] = COMPANY_SCOPE
+				values = _effective_institution_values(values, effective_policy)
 			can_write = _institution_can_write(selected_institution)
 
 	return {
