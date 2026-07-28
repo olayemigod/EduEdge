@@ -26,6 +26,16 @@ def get_action_state(question: str) -> dict:
 
 
 @frappe.whitelist()
-def perform_action(question: str, action: str, expected_modified: str | None = None) -> dict:
+def perform_action(
+	question: str,
+	action: str,
+	expected_modified: str | None = None,
+	feedback: str | None = None,
+) -> dict:
 	doc = _require_readable_question(question)
-	return apply_question_action(doc, action, expected_modified=expected_modified)
+	return apply_question_action(
+		doc,
+		action,
+		expected_modified=expected_modified,
+		feedback=feedback,
+	)
