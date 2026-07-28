@@ -41,12 +41,28 @@ class TestQuestionBankUIContract(unittest.TestCase):
 			"pagination.has_previous",
 			"pagination.has_next",
 			"/app/eduedge-question-builder?question=",
-			"/app/eduedge-question-batch",
 		):
 			self.assertIn(expected, component)
 		self.assertNotIn("answer_key", component)
 		self.assertNotIn("marking_guide", component)
 		self.assertNotIn("reviewed_by", component)
+
+	def test_question_entry_routes_are_distinct_and_permission_aware(self):
+		component = (
+			APP / "public/js/eduedge_question_bank/EduEdgeQuestionBank.vue"
+		).read_text(encoding="utf-8")
+		for expected in (
+			"Single Question",
+			"Multiple Entry",
+			"Upload Questions",
+			"/app/eduedge-question-builder",
+			"/app/eduedge-question-batch?mode=entry",
+			"/app/eduedge-question-batch?mode=upload",
+			'v-if="state.permissions?.can_create"',
+			'v-if="state.permissions?.can_import"',
+		):
+			self.assertIn(expected, component)
+		self.assertNotIn("Batch Import", component)
 
 	def test_list_api_uses_permission_aware_question_queries_and_safe_payload(self):
 		api = (APP / "api/question_bank.py").read_text(encoding="utf-8")
@@ -66,6 +82,8 @@ class TestQuestionBankUIContract(unittest.TestCase):
 		for forbidden in (
 			'"answer_key"',
 			'"marking_guide"',
+			'"default_mark"',
+			'"negative_mark"',
 			'"reviewed_by"',
 			'"notes"',
 			"ignore_permissions=True",
