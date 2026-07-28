@@ -92,13 +92,14 @@ class TestAcademicOperationsContract(unittest.TestCase):
 		self.assertIn("Scheduled attendance coverage", component)
 		self.assertIn("Room usage", component)
 
-	def test_attendance_coverage_is_branch_date_and_submission_scoped(self):
+	def test_attendance_coverage_is_branch_date_submission_and_schedule_scoped(self):
 		safe = (ROOT / "eduedge" / "api" / "academic_operations_safe.py").read_text()
 		self.assertIn('"docstatus": 1', safe)
 		self.assertIn('BRANCH_FIELD: branch', safe)
 		self.assertIn('"date": date', safe)
-		self.assertIn('"student_group": ["in", scheduled_groups]', safe)
-		self.assertIn('group_by="student_group, status"', safe)
+		self.assertIn('"course_schedule": ["in", schedule_names]', safe)
+		self.assertIn('group_by="course_schedule, status"', safe)
+		self.assertIn('"course_schedule": schedule["name"]', safe)
 		self.assertIn('"complete": expected > 0 and submitted >= expected', safe)
 
 	def test_academic_operations_uses_dynamic_terminology_and_safe_navigation(self):
