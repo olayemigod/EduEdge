@@ -26,6 +26,7 @@ RESOURCE_DOCTYPES = {
 	"school_branch": "EduEdge School Branch",
 	"user_branch_access": "EduEdge User Branch Access",
 	"instructor_branch_assignment": "EduEdge Instructor Branch Assignment",
+	"question_responsibility_assignment": "EduEdge Question Responsibility Assignment",
 	"student_admission": "Student Admission",
 	"student_applicant": "Student Applicant",
 	"student": "Student",
@@ -72,6 +73,7 @@ ROUTE_REQUIREMENTS = {
 		("cbt_template", "read"),
 	),
 	"/app/eduedge-question-bank": (("cbt_question", "read"),),
+	"/app/eduedge-question-responsibilities": (("question_responsibility_assignment", "read"),),
 	"/app/eduedge-question-builder": (
 		("cbt_question", "read"),
 		("cbt_question", "create"),
