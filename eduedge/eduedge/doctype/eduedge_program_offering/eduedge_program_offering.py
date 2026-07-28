@@ -47,6 +47,7 @@ class EduEdgeProgramOffering(Document):
 			frappe.throw(_("Offering Code cannot change after creation."), frappe.ValidationError)
 		self._validate_identity_changes()
 		self._validate_term()
+		self._validate_institution_calendar_period()
 		self._validate_institution_context()
 		self._validate_capacity()
 		self._validate_dates()
@@ -119,6 +120,55 @@ class EduEdgeProgramOffering(Document):
 		if actual_year != self.academic_year:
 			frappe.throw(
 				_("Academic Term {0} does not belong to Academic Year {1}.").format(
+					self.academic_term, self.academic_year
+				),
+				frappe.ValidationError,
+			)
+
+	def _validate_institution_calendar_period(self) -> None:
+		"""Protect new or re-contextualised Offerings from global-term leakage.
+
+		Legacy Offerings are not blocked when only non-identity fields are edited.
+		When the Branch, year or period is selected or changed, the period must be
+		configured on an enabled calendar owned by the resolved Institution.
+		"""
+		if not self.academic_term or not frappe.db.exists(
+			"DocType", "EduEdge Institution Academic Calendar"
+		):
+			return
+		context_changed = self.is_new() or any(
+			self.has_value_changed(fieldname)
+			for fieldname in ("school_branch", "academic_year", "academic_term")
+		)
+		if not context_changed:
+			return
+		calendars = frappe.get_all(
+			"EduEdge Institution Academic Calendar",
+			filters={
+				"institution": self.institution,
+				"academic_year": self.academic_year,
+				"enabled": 1,
+			},
+			pluck="name",
+		)
+		if not calendars:
+			frappe.throw(
+				_("Configure an enabled Institution Academic Calendar for Academic Year {0} before selecting an Academic Period.").format(
+					self.academic_year
+				),
+				frappe.ValidationError,
+			)
+		period_exists = frappe.db.exists(
+			"EduEdge Academic Calendar Period",
+			{
+				"parent": ["in", calendars],
+				"parenttype": "EduEdge Institution Academic Calendar",
+				"academic_term": self.academic_term,
+			},
+		)
+		if not period_exists:
+			frappe.throw(
+				_("Academic Period {0} is not configured on this Institution's Academic Calendar for {1}.").format(
 					self.academic_term, self.academic_year
 				),
 				frappe.ValidationError,
