@@ -54,19 +54,46 @@ class TestAcademicFoundationReadinessContract(unittest.TestCase):
 		):
 			self.assertIn(token, component)
 
-	def test_calendar_mutations_remain_on_the_validated_native_form(self):
-		component = (
-			APP
-			/ "public"
-			/ "js"
-			/ "eduedge_academic_foundation"
-			/ "EduEdgeAcademicFoundation.vue"
+	def test_calendar_mutations_use_the_smart_dialog_and_validated_doctype_controller(self):
+		bundle = (APP / "public" / "js" / "eduedge_academic_foundation.bundle.js").read_text(encoding="utf-8")
+		fixes = (
+			APP / "public" / "js" / "eduedge_academic_foundation" / "qa_fixes.js"
 		).read_text(encoding="utf-8")
-		api = (APP / "api" / "academic_foundation.py").read_text(encoding="utf-8")
-		self.assertIn('frappe.new_doc("EduEdge Institution Academic Calendar"', component)
-		self.assertIn('frappe.set_route("Form", "EduEdge Institution Academic Calendar"', component)
-		self.assertNotIn("save_academic_calendar", api)
-		self.assertNotIn("frappe.db.set_value", api)
+		editor = (APP / "api" / "academic_foundation_editor.py").read_text(encoding="utf-8")
+		controller = (
+			APP
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_institution_academic_calendar"
+			/ "eduedge_institution_academic_calendar.py"
+		).read_text(encoding="utf-8")
+
+		self.assertIn("installAcademicFoundationQaFixes", bundle)
+		self.assertIn("new frappe.ui.Dialog", fixes)
+		self.assertIn("save_academic_calendar", fixes)
+		self.assertIn("Open Advanced Form", fixes)
+		self.assertIn('doc.check_permission("write")', editor)
+		self.assertIn('frappe.has_permission(CALENDAR_DOCTYPE, "create")', editor)
+		self.assertIn('doc.set("periods", [])', editor)
+		self.assertIn("doc.save()", editor)
+		self.assertNotIn("ignore_permissions", editor)
+		self.assertNotIn("frappe.db.set_value", editor)
+		self.assertIn("_validate_periods", controller)
+		self.assertIn("overlaps with", controller)
+		self.assertIn("Calendar Institution and Academic Year cannot change after creation", controller)
+
+	def test_selected_institution_drives_foundation_terminology(self):
+		fixes = (
+			APP / "public" / "js" / "eduedge_academic_foundation" / "qa_fixes.js"
+		).read_text(encoding="utf-8")
+		editor = (APP / "api" / "academic_foundation_editor.py").read_text(encoding="utf-8")
+		self.assertIn("selectedInstitutionTerminology", fixes)
+		self.assertIn("get_institution_terminology", fixes)
+		self.assertIn('selectedTerm(this, key, plural, fallback)', fixes)
+		self.assertIn('termFromContext(context, "academic_term"', fixes)
+		self.assertIn("Academic Periods", fixes)
+		self.assertIn("get_terminology_map", editor)
+		self.assertIn("institution_doc.check_permission", editor)
 
 	def test_section_and_level_descriptions_round_trip_through_the_page_api(self):
 		api = (APP / "api" / "academic_foundation.py").read_text(encoding="utf-8")
