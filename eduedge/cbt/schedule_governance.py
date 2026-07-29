@@ -103,23 +103,27 @@ def candidate_rows(schedule: str) -> list[dict[str, Any]]:
 def validate_activation_readiness(doc) -> None:
 	if doc.status != "Active":
 		return
+	before = doc.get_doc_before_save()
+	previous_status = before.status if before else "Draft"
+	initial_activation = previous_status == "Ready"
 	if get_datetime(doc.scheduled_end) <= now_datetime():
-		frappe.throw(_("A Schedule that has already ended cannot be activated."), frappe.ValidationError)
+		frappe.throw(_("A Schedule that has already ended cannot be activated or resumed."), frappe.ValidationError)
 
 	rows = candidate_rows(doc.name)
 	if not rows:
 		frappe.throw(_("Assign at least one candidate before activating this Schedule."), frappe.ValidationError)
-	if any(row.get("assignment_status") == "Draft" for row in rows):
-		frappe.throw(_("Resolve all Draft candidate assignments before activation."), frappe.ValidationError)
 	active_rows = [
 		row
 		for row in rows
 		if row.get("assignment_status") not in TERMINAL_CANDIDATE_STATUSES
 	]
 	if not active_rows:
-		frappe.throw(_("At least one eligible candidate is required before activation."), frappe.ValidationError)
-	if any(row.get("assignment_status") not in {"Eligible", "Checked In"} for row in active_rows):
-		frappe.throw(_("Candidates must be Eligible or Checked In before activation."), frappe.ValidationError)
+		frappe.throw(_("At least one non-terminal candidate is required before activation or resume."), frappe.ValidationError)
+	if initial_activation:
+		if any(row.get("assignment_status") == "Draft" for row in rows):
+			frappe.throw(_("Resolve all Draft candidate assignments before activation."), frappe.ValidationError)
+		if any(row.get("assignment_status") not in {"Eligible", "Checked In"} for row in active_rows):
+			frappe.throw(_("Candidates must be Eligible or Checked In before initial activation."), frappe.ValidationError)
 
 	centre = frappe.db.get_value(
 		"EduEdge Examination Centre",
@@ -239,6 +243,8 @@ def assert_manual_release_window(schedule, previous_status: str) -> None:
 	if schedule.status != "Active":
 		frappe.throw(_("Candidates can be released only after the Schedule becomes Active."), frappe.ValidationError)
 	now = now_datetime()
+	if now < get_datetime(schedule.scheduled_start):
+		frappe.throw(_("Candidates cannot be released before the Scheduled Start."), frappe.ValidationError)
 	if now > get_datetime(schedule.scheduled_end):
 		frappe.throw(_("Candidate access has closed for this Schedule."), frappe.ValidationError)
 	if cint(schedule.require_candidate_check_in):
