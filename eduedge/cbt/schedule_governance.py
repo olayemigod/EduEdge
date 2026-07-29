@@ -15,7 +15,7 @@ ASSIGNMENT_DOCTYPE = "EduEdge CBT Candidate Assignment"
 LIFECYCLE_DOCTYPE = "EduEdge CBT Lifecycle Log"
 
 OPEN_SCHEDULE_STATUSES = ("Ready", "Active", "Suspended")
-TERMINAL_CANDIDATE_STATUSES = ("Withdrawn", "Disqualified")
+TERMINAL_CANDIDATE_STATUSES = ("Completed", "Withdrawn", "Disqualified")
 CONFIRMED_CANDIDATE_STATUSES = ("Eligible", "Checked In", "Released", "Completed")
 
 
@@ -56,7 +56,7 @@ def validate_course_scope(course: str | None, branch: str | None) -> None:
 		if not expected or not meta.has_field(fieldname):
 			continue
 		actual = frappe.db.get_value("Course", course, fieldname)
-		if actual and actual != expected:
+		if actual != expected:
 			frappe.throw(
 				_("The selected Subject / Course does not belong to the Schedule {0}.").format(label),
 				frappe.ValidationError,
@@ -94,7 +94,7 @@ def candidate_rows(schedule: str) -> list[dict[str, Any]]:
 	rows = frappe.get_all(
 		ASSIGNMENT_DOCTYPE,
 		filters={"exam_schedule": schedule},
-		fields=["name", "student", "assignment_status"],
+		fields=["name", "student", "public_candidate_reference", "assignment_status"],
 		order_by="creation asc",
 	)
 	return [dict(row) for row in rows]
@@ -145,7 +145,15 @@ def validate_activation_readiness(doc) -> None:
 	_assert_no_schedule_overlap(doc, "examination_centre", doc.examination_centre, _("Examination Centre"))
 	if doc.primary_invigilator:
 		_assert_no_schedule_overlap(doc, "primary_invigilator", doc.primary_invigilator, _("Primary Invigilator"))
-	_assert_no_candidate_overlap(doc, [row.get("student") for row in active_rows if row.get("student")])
+	_assert_no_candidate_overlap(
+		doc,
+		[row.get("student") for row in active_rows if row.get("student")],
+		[
+			row.get("public_candidate_reference")
+			for row in active_rows
+			if row.get("public_candidate_reference")
+		],
+	)
 
 
 def _overlap_filters(doc) -> list[list[Any]]:
@@ -175,17 +183,32 @@ def _assert_no_schedule_overlap(doc, fieldname: str, value: str, label: str) -> 
 	)
 
 
-def _assert_no_candidate_overlap(doc, students: list[str]) -> None:
-	if not students:
+def _assert_no_candidate_overlap(doc, students: list[str], public_references: list[str]) -> None:
+	_assert_no_candidate_identity_overlap(doc, "student", students, "Student")
+	_assert_no_candidate_identity_overlap(
+		doc,
+		"public_candidate_reference",
+		public_references,
+		"Public Candidate Reference",
+	)
+
+
+def _assert_no_candidate_identity_overlap(
+	doc,
+	identity_field: str,
+	identities: list[str],
+	identity_label: str,
+) -> None:
+	if not identities:
 		return
 	assignments = frappe.get_all(
 		ASSIGNMENT_DOCTYPE,
 		filters={
-			"student": ["in", students],
+			identity_field: ["in", identities],
 			"exam_schedule": ["!=", doc.name],
 			"assignment_status": ["not in", list(TERMINAL_CANDIDATE_STATUSES)],
 		},
-		fields=["student", "exam_schedule"],
+		fields=[identity_field, "exam_schedule"],
 		limit_page_length=1000,
 	)
 	if not assignments:
@@ -206,10 +229,12 @@ def _assert_no_candidate_overlap(doc, students: list[str]) -> None:
 		return
 	assignment = next(row for row in assignments if row.exam_schedule in conflicting_names)
 	other = next(row for row in other_schedules if row.name == assignment.exam_schedule)
-	student_name = frappe.db.get_value("Student", assignment.student, "student_name") or assignment.student
+	identity = assignment.get(identity_field)
+	if identity_field == "student":
+		identity = frappe.db.get_value("Student", identity, "student_name") or identity
 	frappe.throw(
-		_("Candidate {0} has an overlapping Schedule: {1} ({2}).").format(
-			student_name, other.schedule_title or other.name, other.name
+		_("{0} {1} has an overlapping Schedule: {2} ({3}).").format(
+			identity_label, identity, other.schedule_title or other.name, other.name
 		),
 		frappe.ValidationError,
 	)
