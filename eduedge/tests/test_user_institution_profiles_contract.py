@@ -107,6 +107,12 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		self.assertIn("eduedge:institution-context-changed", bridge)
 		self.assertIn("identity.tenant_logo = context.logo", bridge)
 		self.assertIn("contact_identity", bridge)
+		self.assertIn('import EduEdgeMyProfile from "./eduedge_my_profile/EduEdgeMyProfile.vue"', bridge)
+		self.assertIn('import EduEdgeInstitutionProfile from "./eduedge_institution_profile/EduEdgeInstitutionProfile.vue"', bridge)
+		self.assertIn("createEduEdgeMyProfileApp", bridge)
+		self.assertIn("createEduEdgeInstitutionProfileApp", bridge)
+		self.assertIn("data-eduedge-my-profile-link", bridge)
+		self.assertIn("MY_PROFILE_ROUTE", bridge)
 
 		report_api = (APP / "api" / "report_cards_profiled.py").read_text()
 		self.assertIn("_attach_institution_identity", report_api)
@@ -121,6 +127,21 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		for route in ("/app/eduedge-my-profile", "/app/eduedge-institution-profile"):
 			self.assertIn(route, navigation)
 			self.assertIn(route, access)
+		self.assertNotIn('section: __("Account")', navigation)
+
+	def test_profile_pages_use_the_existing_global_profile_asset(self):
+		my_profile_loader = (
+			APP / "eduedge" / "page" / "eduedge_my_profile" / "eduedge_my_profile.js"
+		).read_text()
+		institution_loader = (
+			APP / "eduedge" / "page" / "eduedge_institution_profile" / "eduedge_institution_profile.js"
+		).read_text()
+		for source in (my_profile_loader, institution_loader):
+			self.assertIn('frappe.require("eduedge_profile_identity.bundle.js"', source)
+			self.assertNotIn("eduedge_my_profile.bundle.js", source)
+			self.assertNotIn("eduedge_institution_profile.bundle.js", source)
+		self.assertFalse((APP / "public" / "js" / "eduedge_my_profile.bundle.js").exists())
+		self.assertFalse((APP / "public" / "js" / "eduedge_institution_profile.bundle.js").exists())
 
 	def test_hooks_pages_and_ci_are_wired(self):
 		hooks = (APP / "hooks.py").read_text()
@@ -132,12 +153,12 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
 		for path in (
 			"eduedge/public/js/eduedge_profile_identity.bundle.js",
-			"eduedge/public/js/eduedge_my_profile.bundle.js",
-			"eduedge/public/js/eduedge_institution_profile.bundle.js",
 			"eduedge/eduedge/page/eduedge_my_profile/eduedge_my_profile.js",
 			"eduedge/eduedge/page/eduedge_institution_profile/eduedge_institution_profile.js",
 		):
 			self.assertIn(f"node --check {path}", workflow)
+		self.assertNotIn("eduedge/public/js/eduedge_my_profile.bundle.js", workflow)
+		self.assertNotIn("eduedge/public/js/eduedge_institution_profile.bundle.js", workflow)
 
 
 if __name__ == "__main__":
