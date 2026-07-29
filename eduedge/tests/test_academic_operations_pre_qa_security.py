@@ -40,6 +40,14 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		self.assertIn("More than one Course Schedule exists", safe)
 		self.assertIn('existing_filters["course_schedule"] = schedule.name', safe)
 
+	def test_native_attendance_enforces_schedule_identity_and_serialised_duplicate_check(self):
+		operations = (APP / "education" / "academic_operations.py").read_text(encoding="utf-8")
+		self.assertIn("Student Attendance Student Group must match the selected Course Schedule", operations)
+		self.assertIn("Student Attendance Date must match the selected Course Schedule date", operations)
+		self.assertIn("def _validate_attendance_duplicate", operations)
+		self.assertIn("for update", operations)
+		self.assertIn("Student Attendance already exists for this Student", operations)
+
 	def test_academic_operations_ui_hides_unauthorised_actions(self):
 		component = (
 			APP
