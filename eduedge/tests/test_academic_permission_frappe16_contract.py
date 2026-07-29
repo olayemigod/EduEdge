@@ -24,13 +24,15 @@ class TestAcademicPermissionFrappe16Contract(unittest.TestCase):
 		)
 		function_source = ast.get_source_segment(source, function) or ""
 		self.assertIn("return True", function_source)
-		self.assertIn("return doc.doctype in LEGACY_OPTIONAL_DOCTYPES", function_source)
+		self.assertIn("return False", function_source)
 		self.assertIn("return institution in _allowed_institutions(resolved_user)", function_source)
 
-	def test_legacy_query_still_includes_unclassified_academic_masters(self):
+	def test_legacy_unclassified_academic_masters_fail_closed_for_scoped_users(self):
 		source = PERMISSIONS.read_text()
-		self.assertIn("coalesce(`tab{doctype}`.`{fieldname}`, '') = ''", source)
+		self.assertNotIn("coalesce(`tab{doctype}`.`{fieldname}`, '') = ''", source)
+		self.assertIn("Fail closed for restricted users", source)
 		self.assertIn('"Course",', source)
+		self.assertIn('"EduEdge Super Administrator"', source)
 
 
 if __name__ == "__main__":
