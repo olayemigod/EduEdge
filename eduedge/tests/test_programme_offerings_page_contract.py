@@ -20,12 +20,15 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		):
 			self.assertIn(token, api)
 
-	def test_capacity_uses_enrollment_lifecycle_truth(self):
+	def test_capacity_uses_batched_enrollment_lifecycle_truth(self):
 		api = (APP / "api" / "programme_offerings.py").read_text(encoding="utf-8")
-		self.assertIn("count_capacity_consuming_enrollments(row.name)", api)
+		lifecycle = (APP / "services" / "enrollment_lifecycle.py").read_text(encoding="utf-8")
+		self.assertIn("get_capacity_consuming_enrollment_counts(names)", api)
 		self.assertIn('row["occupied_seats"]', api)
 		self.assertIn('row["seats_remaining"]', api)
-		self.assertNotIn("frappe.db.count(\"Program Enrollment\"", api)
+		self.assertNotIn("count_capacity_consuming_enrollments(row.name)", api)
+		self.assertIn("group by enrollment.", lifecycle)
+		self.assertIn("EduEdge Enrollment Status Log", lifecycle)
 
 	def test_runtime_statuses_are_derived_not_stored(self):
 		api = (APP / "api" / "programme_offerings.py").read_text(encoding="utf-8")
@@ -41,12 +44,17 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		self.assertIn('"docstatus": 1', api)
 		self.assertIn('row["identity_locked"]', api)
 
-	def test_offering_save_uses_document_validation_and_platform_guard(self):
+	def test_offering_save_uses_document_validation_platform_guard_and_link_permissions(self):
 		api = (APP / "api" / "programme_offerings.py").read_text(encoding="utf-8")
 		self.assertIn(
 			'require_eduedge_access(feature_key="academics", action="save_programme_offering")',
 			api,
 		)
+		self.assertIn('_assert_link_read_permission("Program", program', api)
+		self.assertIn('_assert_link_read_permission("Academic Year", academic_year', api)
+		self.assertIn('_assert_link_read_permission("EduEdge Academic Level", academic_level', api)
+		self.assertIn('_assert_link_read_permission("Academic Term", academic_term', api)
+		self.assertIn('_assert_link_read_permission("Student Batch Name", student_batch', api)
 		self.assertIn('doc.check_permission("write")', api)
 		self.assertIn("doc.save()", api)
 		self.assertNotIn("db_set(", api)
