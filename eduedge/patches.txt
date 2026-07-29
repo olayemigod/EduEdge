@@ -9,3 +9,4 @@ eduedge.patches.v0_8.apply_role_permission_baseline
 eduedge.patches.v0_8.normalize_training_progress_permissions
 eduedge.patches.v0_8.backfill_exam_template_reuse_scope
 eduedge.patches.v0_8.backfill_user_access_scope
+eduedge.patches.v0_8.add_cbt_candidate_assignment_unique_indexes
