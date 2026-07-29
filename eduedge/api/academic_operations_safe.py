@@ -9,6 +9,10 @@ from frappe.utils import getdate, nowdate
 from eduedge.api import academic_operations as base
 from eduedge.education.academic_operations import ASSIGNMENT_DOCTYPE
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import (
+	get_user_instructor_names,
+	is_limited_instructor_user,
+)
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.academic_calendar import resolve_academic_defaults
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
@@ -90,12 +94,7 @@ def _attendance_coverage(
 	group_strength: dict[str, int],
 	group_labels: dict[str, str],
 ) -> list[dict]:
-	"""Return submitted-attendance coverage for each scheduled session.
-
-	Attendance is saved against Course Schedule when the register is opened from a
-	schedule. Coverage therefore follows the schedule identity, not only the Student
-	Group, so two sessions for the same class cannot incorrectly satisfy each other.
-	"""
+	"""Return submitted-attendance coverage for each scheduled session."""
 	scheduled_rows = [
 		dict(row)
 		for row in schedules
@@ -105,7 +104,7 @@ def _attendance_coverage(
 		return []
 
 	schedule_names = [row["name"] for row in scheduled_rows]
-	rows = frappe.get_all(
+	rows = frappe.get_list(
 		"Student Attendance",
 		filters={
 			BRANCH_FIELD: branch,
@@ -119,6 +118,7 @@ def _attendance_coverage(
 			{"COUNT": "name", "as": "record_count"},
 		],
 		group_by="course_schedule, status",
+		page_length=max(len(schedule_names) * len(base.ATTENDANCE_STATUSES), 1),
 	)
 	counts: dict[str, Counter] = {name: Counter() for name in schedule_names}
 	for row in rows:
@@ -150,6 +150,23 @@ def _attendance_coverage(
 			}
 		)
 	return coverage
+
+
+def _attendance_summary(branch: str, date: str) -> dict:
+	rows = frappe.get_list(
+		"Student Attendance",
+		filters={BRANCH_FIELD: branch, "date": date, "docstatus": 1},
+		fields=["status", {"COUNT": "name", "as": "record_count"}],
+		group_by="status",
+		page_length=len(base.ATTENDANCE_STATUSES),
+	)
+	counts = Counter({row.status: int(row.record_count or 0) for row in rows})
+	return {
+		"Present": counts["Present"],
+		"Absent": counts["Absent"],
+		"Leave": counts["Leave"],
+		"total": sum(counts.values()),
+	}
 
 
 def _room_usage(schedules: list[dict]) -> list[dict]:
@@ -202,6 +219,8 @@ def get_operations_context(
 	calendar_context = _calendar_display(resolve_academic_defaults(resolved_branch, target_date), target_date)
 	academic_year = calendar_context.get("academic_year")
 	academic_term = calendar_context.get("academic_term")
+	limited_instructor = is_limited_instructor_user()
+	instructor_names = get_user_instructor_names(required=limited_instructor)
 
 	group_filters: dict = {BRANCH_FIELD: resolved_branch, "disabled": 0}
 	if academic_year:
@@ -223,14 +242,7 @@ def get_operations_context(
 		page_length=100,
 	)
 	if academic_term:
-		# Year-wide groups with no term remain operational in every period.
 		groups = [row for row in groups if not row.academic_term or row.academic_term == academic_term]
-	group_names = [row.name for row in groups]
-	group_strength = base._get_group_strength(group_names)
-	group_labels = {}
-	for row in groups:
-		row["student_count"] = group_strength.get(row.name, 0)
-		group_labels[row.name] = row.student_group_name
 
 	schedule_filters: dict = {
 		BRANCH_FIELD: resolved_branch,
@@ -238,6 +250,8 @@ def get_operations_context(
 	}
 	if student_group:
 		schedule_filters["student_group"] = student_group
+	if limited_instructor:
+		schedule_filters["instructor"] = ["in", instructor_names]
 	schedules = frappe.get_list(
 		"Course Schedule",
 		filters=schedule_filters,
@@ -256,7 +270,18 @@ def get_operations_context(
 		order_by="from_time asc",
 		page_length=200,
 	)
-	attendance_summary = base._get_attendance_summary(resolved_branch, target_date)
+	if limited_instructor:
+		assigned_groups = {row.student_group for row in schedules if row.student_group}
+		groups = [row for row in groups if row.name in assigned_groups]
+
+	group_names = [row.name for row in groups]
+	group_strength = base._get_group_strength(group_names)
+	group_labels = {}
+	for row in groups:
+		row["student_count"] = group_strength.get(row.name, 0)
+		group_labels[row.name] = row.student_group_name
+
+	attendance_summary = _attendance_summary(resolved_branch, target_date)
 	attendance_coverage = _attendance_coverage(
 		resolved_branch,
 		target_date,
@@ -274,12 +299,16 @@ def get_operations_context(
 	complete_registers = sum(1 for row in attendance_coverage if row["complete"])
 	permissions = _operations_permissions()
 	assigned_instructors = (
-		frappe.db.count(
-			ASSIGNMENT_DOCTYPE,
-			{"school_branch": resolved_branch, "enabled": 1},
+		len(instructor_names)
+		if limited_instructor
+		else (
+			frappe.db.count(
+				ASSIGNMENT_DOCTYPE,
+				{"school_branch": resolved_branch, "enabled": 1},
+			)
+			if permissions["can_read_instructor_assignments"]
+			else 0
 		)
-		if permissions["can_read_instructor_assignments"]
-		else 0
 	)
 
 	return {
@@ -289,6 +318,7 @@ def get_operations_context(
 		"selected_branch": selected_branch,
 		"allowed_branches": allowed_branches,
 		"academic_calendar": calendar_context,
+		"limited_instructor_scope": limited_instructor,
 		"filters": {
 			"branch": resolved_branch,
 			"date": target_date,
@@ -309,7 +339,6 @@ def get_operations_context(
 			"attendance_complete_registers": complete_registers,
 			"attendance_incomplete_registers": incomplete_registers,
 			"attendance_missing_registers": missing_registers,
-			# Backward-compatible aliases retained for existing consumers and tests.
 			"attendance_complete_groups": complete_registers,
 			"attendance_incomplete_groups": incomplete_registers,
 			"attendance_missing_groups": missing_registers,
@@ -347,6 +376,7 @@ def _resolve_register_schedule(
 	target_date: str,
 	course_schedule: str | None,
 ) -> frappe._dict | None:
+	limited_instructor = is_limited_instructor_user()
 	if course_schedule:
 		schedule = _get_schedule_row(course_schedule)
 		if schedule.student_group != student_group:
@@ -358,13 +388,16 @@ def _resolve_register_schedule(
 			frappe.throw(_("Course Schedule belongs to another Branch."), frappe.ValidationError)
 		return schedule
 
+	filters = {
+		"student_group": student_group,
+		"schedule_date": target_date,
+		BRANCH_FIELD: branch,
+	}
+	if limited_instructor:
+		filters["instructor"] = ["in", get_user_instructor_names(required=True)]
 	matching = frappe.get_list(
 		"Course Schedule",
-		filters={
-			"student_group": student_group,
-			"schedule_date": target_date,
-			BRANCH_FIELD: branch,
-		},
+		filters=filters,
 		fields=[
 			"name",
 			"student_group",
@@ -384,6 +417,11 @@ def _resolve_register_schedule(
 		frappe.throw(
 			_("More than one Course Schedule exists for this Class and date. Select the exact scheduled session before loading attendance."),
 			frappe.ValidationError,
+		)
+	if limited_instructor and not matching:
+		frappe.throw(
+			_("Attendance can only be recorded against a Course Schedule assigned to your Instructor profile."),
+			frappe.PermissionError,
 		)
 	return matching[0] if matching else None
 
