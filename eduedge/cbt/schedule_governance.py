@@ -311,5 +311,8 @@ def write_lifecycle_log(
 	doc.reason = clean_reason
 	doc.acted_by = frappe.session.user
 	doc.acted_on = now_datetime()
-	doc.insert()
+	doc.flags.eduedge_internal_lifecycle_log = True
+	# Source Schedule/Candidate permission has already been checked by the
+	# controller. The audit record itself is not directly creatable by users.
+	doc.insert(ignore_permissions=True)
 	return doc.name
