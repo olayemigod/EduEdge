@@ -4,6 +4,13 @@
 
 Provide a safe self-service profile for Teachers and other EduEdge users, and a permission-aware Institution identity used consistently by the EdgeSuite shell, report cards and communication services.
 
+## Implementation tracking
+
+- Branch: `agent/eduedge-user-institution-profiles`
+- Draft pull request: #16
+- Base: `agent/eduedge-academic-operations-pages`
+- Status: implemented for local QA; not approved for merge or production release.
+
 ## Data ownership
 
 ### User identity
