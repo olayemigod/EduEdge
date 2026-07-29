@@ -10,7 +10,7 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.offerings import assert_branch_access
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
-from eduedge.services.enrollment_lifecycle import count_capacity_consuming_enrollments
+from eduedge.services.enrollment_lifecycle import get_capacity_consuming_enrollment_counts
 from eduedge.services.institution_context import get_effective_institution_context
 
 
@@ -28,6 +28,15 @@ def _require_offering_read() -> None:
 	_require_login()
 	if not frappe.has_permission("EduEdge Program Offering", "read"):
 		frappe.throw(_("You are not permitted to view Programme Offerings."), frappe.PermissionError)
+
+
+def _assert_link_read_permission(doctype: str, name: str | None, label: str) -> None:
+	if not name:
+		return
+	if not frappe.db.exists(doctype, name):
+		frappe.throw(_("{0} does not exist.").format(label), frappe.DoesNotExistError)
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
 
 
 @frappe.whitelist()
@@ -50,7 +59,6 @@ def get_programme_offerings_page(
 	page_length: int | str = DEFAULT_PAGE_LENGTH,
 ) -> dict:
 	_require_offering_read()
-	active_context = get_effective_institution_context()
 	current_branch = get_current_school_branch() or {}
 	branch = str(branch or current_branch.get("name") or "").strip() or None
 	institution = str(institution or "").strip() or None
@@ -60,6 +68,7 @@ def get_programme_offerings_page(
 		if institution and branch_institution != institution:
 			frappe.throw(_("Selected Branch does not belong to the selected Institution."), frappe.ValidationError)
 		institution = branch_institution or institution
+	active_context = get_effective_institution_context(institution=institution, branch=branch)
 
 	start = max(cint(start), 0)
 	page_length = min(max(cint(page_length) or DEFAULT_PAGE_LENGTH, 1), MAX_PAGE_LENGTH)
@@ -194,9 +203,10 @@ def _count_offerings(filters: dict, or_filters: dict | None) -> int:
 def _attach_runtime_status(rows: list[dict]) -> None:
 	names = [row.name for row in rows]
 	locked = _identity_locked_offerings(names)
+	occupied_counts = get_capacity_consuming_enrollment_counts(names)
 	today = getdate(nowdate())
 	for row in rows:
-		occupied = count_capacity_consuming_enrollments(row.name)
+		occupied = occupied_counts.get(row.name, 0)
 		capacity = cint(row.capacity)
 		row["occupied_seats"] = occupied
 		row["seats_remaining"] = max(capacity - occupied, 0) if capacity else None
@@ -409,6 +419,7 @@ def get_programme_offering_options(
 	return {
 		"branch": branch,
 		"institution": institution,
+		"active_context": get_effective_institution_context(institution=institution, branch=branch),
 		"options": _get_context_options(institution, academic_year),
 	}
 
@@ -439,6 +450,11 @@ def save_programme_offering(
 	_require_login()
 	require_eduedge_access(feature_key="academics", action="save_programme_offering")
 	assert_branch_access(school_branch)
+	_assert_link_read_permission("Program", program, _("Programme"))
+	_assert_link_read_permission("Academic Year", academic_year, _("Academic Year"))
+	_assert_link_read_permission("EduEdge Academic Level", academic_level, _("Academic Level"))
+	_assert_link_read_permission("Academic Term", academic_term, _("Academic Period"))
+	_assert_link_read_permission("Student Batch Name", student_batch, _("Student Batch / Cohort"))
 	if offering:
 		doc = frappe.get_doc("EduEdge Program Offering", offering)
 		doc.check_permission("write")
