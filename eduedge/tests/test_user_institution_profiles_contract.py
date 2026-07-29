@@ -57,6 +57,7 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		api = (APP / "api" / "profiles.py").read_text()
 		self.assertIn("MAX_PROFILE_IMAGE_BYTES = 2 * 1024 * 1024", api)
 		self.assertIn('ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}', api)
+		self.assertIn('file_type.startswith("image/")', api)
 		self.assertIn("require_public=False", api)
 		self.assertIn("require_public=True", api)
 		self.assertIn("Institution logos must be uploaded as public images", api)
@@ -91,6 +92,8 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		self.assertIn("You do not have access to this Institution", api)
 		self.assertIn("_address_is_exclusive_to_institution", api)
 		self.assertIn('frappe.db.count("EduEdge School Branch", {"address": address_name})', api)
+		self.assertIn('address_doc.has_permission("write")', api)
+		self.assertIn('frappe.has_permission("Address", "create")', api)
 		self.assertIn("search_letter_heads", api)
 		self.assertIn('letter_head.check_permission("read")', api)
 
