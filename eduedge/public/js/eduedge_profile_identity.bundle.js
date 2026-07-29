@@ -4,6 +4,7 @@ import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
 const MY_PROFILE_ROUTE = "/app/eduedge-my-profile";
 const PROFILE_LINK_ATTRIBUTE = "data-eduedge-my-profile-link";
+const PROFILE_PHOTO_UPLOAD_METHOD = "eduedge.api.profile_uploads.upload_my_profile_photo";
 
 export function createEduEdgeMyProfileApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeMyProfile, rootProps);
@@ -11,6 +12,43 @@ export function createEduEdgeMyProfileApp(rootProps = null) {
 
 export function createEduEdgeInstitutionProfileApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeInstitutionProfile, rootProps);
+}
+
+function installProfilePhotoUploader() {
+	if (!EduEdgeMyProfile?.methods) return;
+	EduEdgeMyProfile.methods.uploadPhoto = function uploadPhoto() {
+		if (!this.canEdit || !frappe.ui?.FileUploader) return;
+		this.saveError = "";
+		new frappe.ui.FileUploader({
+			method: PROFILE_PHOTO_UPLOAD_METHOD,
+			allow_multiple: false,
+			make_attachments_public: false,
+			allow_toggle_private: false,
+			disable_file_browser: true,
+			allow_web_link: false,
+			allow_google_drive: false,
+			restrictions: {
+				allowed_file_types: [".jpg", ".jpeg", ".png", ".webp", "image/jpeg", "image/png", "image/webp"],
+				max_file_size: 2 * 1024 * 1024,
+			},
+			upload_notes: __("JPG, PNG, or WebP only. Maximum size: 2 MB."),
+			on_success: async (fileDoc) => {
+				this.savingPhoto = true;
+				try {
+					if (!fileDoc?.file_url) {
+						throw new Error(__("The uploaded profile photo response was incomplete."));
+					}
+					const response = await frappe.call("eduedge.api.profiles.get_my_profile");
+					this.data = response.message || this.data;
+					frappe.show_alert({ message: __("Profile photo updated"), indicator: "green" });
+				} catch (error) {
+					this.saveError = error?.message || __("Profile photo could not be updated.");
+				} finally {
+					this.savingPhoto = false;
+				}
+			},
+		});
+	};
 }
 
 function applyProfileIdentity(context = {}) {
@@ -117,6 +155,8 @@ function startProfileAvatarIntegration() {
 	observer.observe(document.body, { childList: true, subtree: true });
 	ensureProfileAvatarLink();
 }
+
+installProfilePhotoUploader();
 
 window.addEventListener("eduedge:institution-context-changed", (event) => {
 	applyProfileIdentity(event.detail || {});
