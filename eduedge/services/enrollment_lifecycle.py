@@ -23,6 +23,55 @@ def get_current_enrollment_status(program_enrollment: str) -> str:
 	return status[0][0] if status else "Active"
 
 
+def get_capacity_consuming_enrollment_counts(program_offerings: list[str]) -> dict[str, int]:
+	"""Return occupied-seat counts for multiple Offerings in one query.
+
+	The page catalogue can display up to 50 Offerings. Counting each Offering
+	individually produces an avoidable N+1 query pattern, so list/read surfaces
+	use this grouped helper while submit-time capacity checks retain row locking.
+	"""
+	offerings = list(dict.fromkeys(value for value in program_offerings if value))
+	if not offerings:
+		return {}
+
+	if not frappe.db.exists("DocType", "EduEdge Enrollment Status Log"):
+		rows = frappe.get_all(
+			"Program Enrollment",
+			filters={
+				OFFERING_FIELD: ["in", offerings],
+				"docstatus": 1,
+			},
+			fields=[OFFERING_FIELD, {"COUNT": "name", "as": "record_count"}],
+			group_by=OFFERING_FIELD,
+			limit_page_length=len(offerings),
+		)
+		return {row.get(OFFERING_FIELD): int(row.record_count or 0) for row in rows}
+
+	placeholders = ", ".join(["%s"] * len(offerings))
+	rows = frappe.db.sql(
+		f"""
+		select enrollment.`{OFFERING_FIELD}` as program_offering, count(*) as record_count
+		from `tabProgram Enrollment` enrollment
+		where enrollment.`{OFFERING_FIELD}` in ({placeholders})
+			and enrollment.docstatus = 1
+			and coalesce(
+				(
+					select status_log.new_status
+					from `tabEduEdge Enrollment Status Log` status_log
+					where status_log.program_enrollment = enrollment.name
+					order by status_log.effective_date desc, status_log.creation desc
+					limit 1
+				),
+				%s
+			) in (%s, %s)
+		group by enrollment.`{OFFERING_FIELD}`
+		""",
+		(*offerings, "Active", "Active", "Suspended"),
+		as_dict=True,
+	)
+	return {row.program_offering: int(row.record_count or 0) for row in rows}
+
+
 def count_capacity_consuming_enrollments(
 	program_offering: str,
 	*,
@@ -55,7 +104,7 @@ def count_capacity_consuming_enrollments(
 					select status_log.new_status
 					from `tabEduEdge Enrollment Status Log` status_log
 					where status_log.program_enrollment = enrollment.name
-					order by status_log.effective_date desc, status_log.creation desc
+					order by status_log.effective_date desc, creation desc
 					limit 1
 				),
 				%(active)s
