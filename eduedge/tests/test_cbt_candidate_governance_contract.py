@@ -23,6 +23,7 @@ class TestCBTCandidateGovernanceContract(unittest.TestCase):
 			"exam_template",
 			"exam_scope",
 			"school_branch",
+			"course",
 			"student",
 			"public_candidate_reference",
 			"student_group",
@@ -30,35 +31,48 @@ class TestCBTCandidateGovernanceContract(unittest.TestCase):
 			"access_start",
 			"access_end",
 			"assignment_status",
+			"status_change_reason",
 		):
 			self.assertIn(fieldname, fields)
 		self.assertTrue(fields["school_branch"].get("read_only"))
 		self.assertTrue(fields["access_end"].get("read_only"))
 
-	def test_assignment_controller_enforces_eligibility_and_identity_lock(self):
+	def test_assignment_controller_enforces_schedule_context_identity_and_timing(self):
 		controller = (
 			DOCTYPE_ROOT
 			/ "eduedge_cbt_candidate_assignment"
 			/ "eduedge_cbt_candidate_assignment.py"
 		).read_text()
+		governance = (APP / "cbt" / "schedule_governance.py").read_text()
 		for token in (
 			"Student Group Student",
 			"New candidates can be assigned only",
 			"require_public_exam_assignment",
-			"reference_doctype=\"EduEdge CBT Exam Schedule\"",
 			"This candidate is already assigned",
-			"An eligible candidate assignment is immutable",
-			"Candidate check-in has not opened",
+			"eduedge_time_extension",
+			"write_lifecycle_log",
+			"Schedule Student Group",
 		):
 			self.assertIn(token, controller)
+		for token in (
+			"Candidate check-in has not opened",
+			"Candidate check-in has closed",
+			"Manual candidate release is available only",
+			"Candidate entry has closed",
+		):
+			self.assertIn(token, governance)
 
-	def test_intervention_log_is_append_only_and_always_reviewable(self):
+	def test_intervention_log_is_append_only_and_server_derived(self):
 		meta = self._load(
 			"eduedge_cbt_intervention_log",
 			"eduedge_cbt_intervention_log.json",
 		)
 		fields = {field["fieldname"]: field for field in meta["fields"]}
 		self.assertEqual(fields["requires_attempt_review"].get("default"), "1")
+		self.assertTrue(fields["outcome"].get("read_only"))
+		self.assertTrue(fields["previous_value"].get("read_only"))
+		self.assertTrue(fields["new_value"].get("read_only"))
+		self.assertIn("Recorded for Review", fields["outcome"].get("options", ""))
 		controller = (
 			DOCTYPE_ROOT
 			/ "eduedge_cbt_intervention_log"
@@ -68,10 +82,18 @@ class TestCBTCandidateGovernanceContract(unittest.TestCase):
 			"append-only and cannot be edited",
 			"append-only and cannot be deleted",
 			"A reason is required for every CBT intervention",
-			"maximum permitted by the Examination Schedule",
+			"Cumulative extra time exceeds",
 			"Force Submission is not permitted",
+			"Recorded for Review",
+			"after_insert",
 		):
 			self.assertIn(token, controller)
+
+	def test_candidate_uniqueness_patch_is_database_backed(self):
+		patch = (APP / "patches" / "v0_8" / "add_cbt_candidate_assignment_unique_indexes.py").read_text()
+		self.assertIn("uniq_cbt_schedule_student", patch)
+		self.assertIn("uniq_cbt_schedule_public_candidate", patch)
+		self.assertIn("frappe.db.add_unique", patch)
 
 	def test_public_capability_helper_accepts_record_context_and_authority_roles(self):
 		public_access = (APP / "cbt" / "public_access.py").read_text()
