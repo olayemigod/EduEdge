@@ -46,12 +46,15 @@ jobs:
           node --check eduedge/public/js/eduedge_ui/navigation.js
           node --check eduedge/public/js/eduedge_ui/resource_modal.js
           node --check eduedge/public/js/eduedge_terminology.bundle.js
+          node --check eduedge/public/js/eduedge_profile_identity.bundle.js
           node --check eduedge/public/js/eduedge_shell_identity.bundle.js
           node --check eduedge/public/js/eduedge_institution_structure.bundle.js
           node --check eduedge/public/js/eduedge_academic_foundation.bundle.js
           node --check eduedge/public/js/eduedge_programmes.bundle.js
           node --check eduedge/public/js/eduedge_programme_offerings.bundle.js
           node --check eduedge/public/js/eduedge_programme_offerings/level_cascade.js
+          node --check eduedge/public/js/eduedge_my_profile.bundle.js
+          node --check eduedge/public/js/eduedge_institution_profile.bundle.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
           node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
           node --check eduedge/public/js/eduedge_resource_center.bundle.js
@@ -75,6 +78,8 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_academic_operations/eduedge_academic_operations.js
           node --check eduedge/eduedge/page/eduedge_programs/eduedge_programs.js
           node --check eduedge/eduedge/page/eduedge_program_offerings/eduedge_program_offerings.js
+          node --check eduedge/eduedge/page/eduedge_my_profile/eduedge_my_profile.js
+          node --check eduedge/eduedge/page/eduedge_institution_profile/eduedge_institution_profile.js
           node --check eduedge/eduedge/page/eduedge_cbt_operations/eduedge_cbt_operations.js
           node --check eduedge/eduedge/page/eduedge_exam_templates/eduedge_exam_templates.js
           node --check eduedge/eduedge/page/eduedge_exam_template_builder/eduedge_exam_template_builder.js

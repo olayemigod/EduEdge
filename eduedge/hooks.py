@@ -9,6 +9,7 @@ required_apps = ["erpnext", "education", "edgesuite_ui"]
 app_include_css = []
 app_include_js = [
 	"eduedge_terminology.bundle.js",
+	"eduedge_profile_identity.bundle.js",
 	"eduedge_product_menu.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 ]
@@ -33,6 +34,8 @@ override_whitelisted_methods = {
 	"eduedge.api.academic_operations.get_operations_context": "eduedge.api.academic_operations_safe.get_operations_context",
 	"eduedge.api.academic_operations.get_attendance_register": "eduedge.api.academic_operations_safe.get_attendance_register",
 	"eduedge.api.academic_operations.save_attendance_register": "eduedge.api.academic_operations_safe.save_attendance_register",
+	"eduedge.api.report_cards.get_report_card": "eduedge.api.report_cards_profiled.get_report_card",
+	"eduedge.api.report_cards.preview_report_card": "eduedge.api.report_cards_profiled.preview_report_card",
 }
 
 add_to_apps_screen = [
@@ -102,6 +105,7 @@ doc_events = {
 }
 
 permission_query_conditions = {
+	"EduEdge User Profile": "eduedge.education.profile_permissions.user_profile_query",
 	"EduEdge Institution": "eduedge.education.institution_permissions.institution_query",
 	"EduEdge Academic Section": "eduedge.education.academic_permissions.academic_section_query",
 	"EduEdge Academic Level": "eduedge.education.academic_permissions.academic_level_query",
@@ -142,6 +146,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
+	"EduEdge User Profile": "eduedge.education.profile_permissions.has_user_profile_permission",
 	"EduEdge Institution": "eduedge.education.institution_permissions.has_institution_permission",
 	"EduEdge Academic Section": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"EduEdge Academic Level": "eduedge.education.academic_permissions.has_academic_institution_permission",

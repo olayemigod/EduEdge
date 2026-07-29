@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, validate_email_address
+from frappe.utils.html_utils import sanitize_html
 
 
 APPROVAL_MODES = {"Recommended", "Simple", "Standard"}
@@ -19,6 +20,8 @@ class EduEdgeInstitution(Document):
 	def before_validate(self) -> None:
 		self.institution_code = _normalize_code(self.institution_code)
 		self.official_name = self.official_name or self.institution_name
+		self.motto = _plain_text(self.motto, limit=240)
+		self.report_footer = _plain_text(self.report_footer, limit=1000)
 
 	def validate(self) -> None:
 		if not self.is_new() and self.has_value_changed("institution_code"):
@@ -27,6 +30,7 @@ class EduEdgeInstitution(Document):
 		self._validate_company_change()
 		self._validate_institution_type()
 		self._validate_contact_details()
+		self._validate_report_identity()
 		self._validate_operations_preferences()
 		if self.is_default and not self.enabled:
 			frappe.throw(_("A default Institution must be enabled."), frappe.ValidationError)
@@ -67,6 +71,18 @@ class EduEdgeInstitution(Document):
 	def _validate_contact_details(self) -> None:
 		if self.email and not validate_email_address(self.email):
 			frappe.throw(_("Enter a valid institution email address."), frappe.ValidationError)
+		for fieldname in ("phone", "whatsapp_number"):
+			if self.get(fieldname) and len(self.get(fieldname)) > 40:
+				frappe.throw(
+					_("{0} must not exceed 40 characters.").format(self.meta.get_label(fieldname)),
+					frappe.ValidationError,
+				)
+
+	def _validate_report_identity(self) -> None:
+		if self.report_card_letter_head and not frappe.db.exists(
+			"Letter Head", self.report_card_letter_head
+		):
+			frappe.throw(_("Select a valid Report Card Letter Head."), frappe.ValidationError)
 
 	def _validate_operations_preferences(self) -> None:
 		self.question_approval_mode = self.question_approval_mode or "Recommended"
@@ -85,3 +101,10 @@ def _normalize_code(value: str | None) -> str:
 	if not code:
 		frappe.throw(_("Institution Code is required."))
 	return code
+
+
+def _plain_text(value: str | None, *, limit: int) -> str | None:
+	text = sanitize_html(str(value or "").strip(), always_sanitize=True, disallowed_tags="*")
+	if len(text) > limit:
+		frappe.throw(_("Institution profile text is longer than the allowed limit."), frappe.ValidationError)
+	return text or None

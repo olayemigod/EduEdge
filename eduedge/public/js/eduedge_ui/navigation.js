@@ -30,6 +30,7 @@ export function buildEduEdgeMenuItems() {
 
 	const items = [
 		{ section: __("Overview"), sectionIcon: "home", label: __("Home"), route: "/app/eduedge-home", icon: "home", description: __("Education command centre") },
+		{ section: __("Account"), sectionIcon: "user", label: __("My Profile"), route: "/app/eduedge-my-profile", icon: "user", description: __("Photo, contact information, and teaching identity") },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Academic Operations"), route: "/app/eduedge-academic-operations", icon: "book", description: __(`${groupPlural}, ${sessionPlural}, and attendance`) },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Admissions"), route: "/app/eduedge-admissions", icon: "clipboard", description: __("Admission windows and availability") },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Applicants"), route: "/app/eduedge-applicants", icon: "user", description: __("Review prospective students") },
@@ -43,6 +44,7 @@ export function buildEduEdgeMenuItems() {
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Question Responsibilities"), route: "/app/eduedge-question-responsibilities", icon: "shield", description: __("Scoped question authors, subject reviewers, and final approvers") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __(`${assessmentPlural} & Results`), route: "/app/eduedge-assessment-operations", icon: "assessment", description: __(`Plan, review, approve, and publish ${assessmentPlural.toLowerCase()}`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Report Cards"), route: "/app/eduedge-report-cards", icon: "report", description: __("Comments, progression, and printing") },
+		{ section: __("Administration"), sectionIcon: "settings", label: __("Institution Profile"), route: "/app/eduedge-institution-profile", icon: "building", description: __("Logo, address, contact, and report identity") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("School Branches"), route: "/app/eduedge-school-branches", icon: "building", description: __("Campus identity and operational defaults") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("Institution Structure"), route: "/app/eduedge-institution-structure", icon: "building", description: __("Institution types and academic terminology") },
 		{ section: __("Administration"), sectionIcon: "settings", label: __("Institution Operations"), route: "/app/eduedge-institution-operations-settings", icon: "settings", description: __("Company defaults and Institution workflow preferences") },
@@ -59,6 +61,7 @@ export const EDUEDGE_MENU_ITEMS = buildEduEdgeMenuItems();
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home",
+	"/app/eduedge-my-profile",
 	"/app/eduedge-academic-operations",
 	"/app/eduedge-admissions",
 	"/app/eduedge-applicants",
@@ -75,6 +78,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-question-batch",
 	"/app/eduedge-assessment-operations",
 	"/app/eduedge-report-cards",
+	"/app/eduedge-institution-profile",
 	"/app/eduedge-school-branches",
 	"/app/eduedge-institution-structure",
 	"/app/eduedge-institution-operations-settings",

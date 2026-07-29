@@ -58,6 +58,9 @@ RESOURCE_DOCTYPES = {
 # broad Read right, because their interfaces expose create/update actions.
 ROUTE_REQUIREMENTS = {
 	"/app/eduedge-home": (),
+	# My Profile is a self-service page. The API fixes the target to the logged-in
+	# User and the profile permission hook restricts records to that same User.
+	"/app/eduedge-my-profile": (),
 	"/app/eduedge-academic-operations": (
 		("student_attendance", "create"),
 		("student_attendance", "write"),
@@ -97,6 +100,7 @@ ROUTE_REQUIREMENTS = {
 		("report_card_review", "read"),
 		("assessment_result", "read"),
 	),
+	"/app/eduedge-institution-profile": (("institution", "read"),),
 	"/app/eduedge-school-branches": (("school_branch", "read"),),
 	"/app/eduedge-institution-operations-settings": (
 		("institution", "read"),
@@ -192,6 +196,7 @@ def build_access_manifest(user: str | None = None) -> dict:
 	can_access_eduedge = any(routes.values())
 	if not can_access_eduedge:
 		routes["/app/eduedge-home"] = False
+		routes["/app/eduedge-my-profile"] = False
 
 	return {
 		"resources": resources,
