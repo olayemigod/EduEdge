@@ -49,6 +49,8 @@ def get_programmes_page(
 		_assert_institution_access(institution)
 	if academic_section:
 		_assert_section_context(academic_section, institution)
+	if department:
+		_assert_department_context(department, institution)
 
 	filters: dict[str, Any] = {}
 	if institution:
@@ -96,7 +98,7 @@ def get_programmes_page(
 	total = _count_programmes(filters, or_filters)
 	institutions = _list_institutions()
 	sections = _list_sections(institution)
-	active_context = get_effective_institution_context()
+	active_context = get_effective_institution_context(institution=institution)
 
 	return {
 		"active_context": active_context,
@@ -216,11 +218,37 @@ def _assert_section_context(academic_section: str, institution: str | None) -> N
 		frappe.throw(_("Academic Section does not belong to the selected Institution."), frappe.ValidationError)
 
 
+def _institution_company(institution: str | None) -> str | None:
+	return frappe.db.get_value("EduEdge Institution", institution, "company") if institution else None
+
+
+def _assert_department_context(department: str, institution: str | None) -> None:
+	if not frappe.db.exists("DocType", "Department"):
+		frappe.throw(_("Department is unavailable."), frappe.DoesNotExistError)
+	doc = frappe.get_doc("Department", department)
+	doc.check_permission("read")	
+	meta = frappe.get_meta("Department")
+	if meta.has_field("disabled") and cint(doc.get("disabled")):
+		frappe.throw(_("Select an enabled Department."), frappe.ValidationError)
+	institution_company = _institution_company(institution)
+	if meta.has_field("company") and institution_company and doc.get("company") != institution_company:
+		frappe.throw(
+			_("Department must belong to the same Company as the selected Institution."),
+			frappe.ValidationError,
+		)
+
+
 @frappe.whitelist()
-def search_departments(txt: str | None = None) -> list[dict]:
+def search_departments(
+	txt: str | None = None,
+	institution: str | None = None,
+) -> list[dict]:
 	_require_programme_read()
 	if not frappe.db.exists("DocType", "Department") or not frappe.has_permission("Department", "read"):
 		return []
+	institution = str(institution or "").strip() or None
+	if institution:
+		_assert_institution_access(institution)
 	txt = str(txt or "").strip()
 	meta = frappe.get_meta("Department")
 	fields = ["name"]
@@ -229,6 +257,9 @@ def search_departments(txt: str | None = None) -> list[dict]:
 	filters = {}
 	if meta.has_field("disabled"):
 		filters["disabled"] = 0
+	institution_company = _institution_company(institution)
+	if meta.has_field("company") and institution_company:
+		filters["company"] = institution_company
 	or_filters = None
 	if txt:
 		like = f"%{txt}%"
@@ -266,6 +297,8 @@ def save_programme(
 	_assert_institution_access(institution)
 	if academic_section:
 		_assert_section_context(academic_section, institution)
+	if department:
+		_assert_department_context(department, institution)
 
 	if programme:
 		doc = frappe.get_doc("Program", programme)
