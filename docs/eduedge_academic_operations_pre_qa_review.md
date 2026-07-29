@@ -16,7 +16,7 @@ This review examined the completed Academic Operations page batch and the shared
 - Institution and Branch permission queries;
 - Teacher / Instructor ownership;
 - attendance creation, editing and submission;
-- native Student Group, Course Schedule and Student Attendance forms;
+- native Student, Guardian, Enrollment, Student Group, Course Schedule and Student Attendance access;
 - Programme Offering identity, capacity and calendar context;
 - dependent-field behaviour;
 - list-query performance;
@@ -44,7 +44,7 @@ The inherited attendance save path used `ignore_permissions`, allowing the API t
 - the UI receives the effective permission matrix and hides or disables unavailable actions;
 - no secure attendance path uses `ignore_permissions`.
 
-### 2.3 Teacher accounts could inherit branch-wide academic access
+### 2.3 Teacher accounts could inherit branch-wide personal and academic access
 
 A Teacher or Instructor account combined with Frappe Education permissions could see more branch data than the assigned timetable required.
 
@@ -139,7 +139,7 @@ A Teacher without this chain is denied rather than granted broad fallback access
 
 ### 3.4 Assessment ownership is outside this page batch
 
-This review closes Teacher scope for class, student, enrollment, schedule and attendance records used by the Academic Operations pages. Assessment Plan, Assessment Result, report-card review and publication ownership require their own focused review during the Assessment Operations phase.
+This review closes Teacher scope for class, student, guardian, enrollment, schedule and attendance records used by the Academic Operations pages. Assessment Plan, Assessment Result, report-card review and publication ownership require their own focused review during the Assessment Operations phase.
 
 ### 3.5 Automated checks are not Frappe runtime acceptance
 
@@ -181,7 +181,7 @@ Verify that:
 
 - one Institution cannot see another Institution's classified Programmes or masters;
 - restricted users cannot see blank/unclassified legacy masters;
-- Teachers see only assigned Student Groups and Students;
+- Teachers see only assigned Student Groups, Students, Guardians and Enrollments;
 - Teachers cannot open unassigned Course Schedules or Attendance records by direct URL;
 - Teachers cannot view Applicant or Admission records;
 - administrators retain intended broader access;
@@ -229,7 +229,7 @@ Verify:
 
 PR #14 must remain draft.
 
-It may proceed to local QA only after the latest CI run passes. It must not be merged into `agent/eduedge-integrated-foundation` until:
+It may proceed to local QA because the latest CI run passed. It must not be merged into `agent/eduedge-integrated-foundation` until:
 
 - local build and migration pass;
 - the mandatory role and isolation matrix passes;
