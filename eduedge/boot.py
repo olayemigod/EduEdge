@@ -8,6 +8,7 @@ from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	get_current_school_branch,
 )
+from eduedge.services.institution_branding import get_institution_branding
 from eduedge.services.institution_context import get_effective_institution_context
 
 
@@ -61,6 +62,27 @@ def _get_user_identity() -> dict:
 	}
 
 
+def _attach_institution_branding(context: dict) -> dict:
+	payload = dict(context or {})
+	branding = get_institution_branding(
+		payload.get("institution") or None,
+		branch=payload.get("branch") or None,
+	)
+	payload["branding"] = branding
+	for fieldname in (
+		"logo",
+		"motto",
+		"phone",
+		"whatsapp_number",
+		"email",
+		"website",
+		"formatted_address",
+		"report_footer",
+	):
+		payload[fieldname] = branding.get(fieldname) or ""
+	return payload
+
+
 def extend_bootinfo(bootinfo) -> None:
 	"""Expose permission-safe identity, access, and institution terminology for EdgeSuite UI."""
 	if frappe.session.user == "Guest":
@@ -112,6 +134,12 @@ def extend_bootinfo(bootinfo) -> None:
 			"terms": {},
 			"uses_secondary_fallback": 1,
 		}
+	try:
+		institution_context = _attach_institution_branding(institution_context)
+	except Exception:
+		institution_context = dict(institution_context or {})
+		institution_context.setdefault("branding", {})
+		institution_context.setdefault("logo", "")
 
 	active_institution_identity = _get_institution_identity(institution_context.get("institution"))
 	institution_label = (
@@ -121,7 +149,12 @@ def extend_bootinfo(bootinfo) -> None:
 		or active_company_identity.get("name")
 		or ""
 	)
-	institution_logo = active_institution_identity.get("logo") or active_company_identity.get("logo") or ""
+	institution_logo = (
+		institution_context.get("logo")
+		or active_institution_identity.get("logo")
+		or active_company_identity.get("logo")
+		or ""
+	)
 
 	identity = {
 		"product_code": product_identity["product_code"],
@@ -139,6 +172,13 @@ def extend_bootinfo(bootinfo) -> None:
 		"companies": companies,
 		"user": _get_user_identity(),
 		"institution_context": institution_context,
+		"contact_identity": {
+			"phone": institution_context.get("phone") or "",
+			"whatsapp_number": institution_context.get("whatsapp_number") or "",
+			"email": institution_context.get("email") or "",
+			"website": institution_context.get("website") or "",
+			"formatted_address": institution_context.get("formatted_address") or "",
+		},
 	}
 
 	bootinfo["eduedge_institution_context"] = institution_context
