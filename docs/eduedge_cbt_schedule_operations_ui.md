@@ -124,7 +124,7 @@ The uniqueness patch is idempotent and stops with a clear validation error when 
 
 ## Automated verification
 
-The exact branch head and CI run are recorded in PR #15 and should be confirmed before deployment.
+Use PR #15 as the source of truth for the exact branch head and latest passing CI run before deployment.
 
 ## Deployment
 
