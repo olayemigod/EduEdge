@@ -103,9 +103,16 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		self.assertIn('context["branding"] = branding', branch_api)
 		self.assertIn('"logo",', branch_api)
 
+		boot = (APP / "boot.py").read_text()
+		self.assertIn("get_institution_branding", boot)
+		self.assertIn("_attach_institution_branding", boot)
+		self.assertIn('institution_context.get("logo")', boot)
+		self.assertIn('"contact_identity": {', boot)
+
 		bridge = (APP / "public" / "js" / "eduedge_profile_identity.bundle.js").read_text()
 		self.assertIn("eduedge:institution-context-changed", bridge)
-		self.assertIn("identity.tenant_logo = context.logo", bridge)
+		self.assertIn("hasContextLogo", bridge)
+		self.assertIn("branding.logo || identity.tenant_logo", bridge)
 		self.assertIn("contact_identity", bridge)
 		self.assertIn('import EduEdgeMyProfile from "./eduedge_my_profile/EduEdgeMyProfile.vue"', bridge)
 		self.assertIn('import EduEdgeInstitutionProfile from "./eduedge_institution_profile/EduEdgeInstitutionProfile.vue"', bridge)
