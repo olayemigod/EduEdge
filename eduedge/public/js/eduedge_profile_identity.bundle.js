@@ -115,6 +115,16 @@ function configureExistingProfileLink(menu) {
 	profileLink.setAttribute(PROFILE_LINK_ATTRIBUTE, "1");
 	profileLink.setAttribute("href", MY_PROFILE_ROUTE);
 	profileLink.setAttribute("role", profileLink.getAttribute("role") || "menuitem");
+	profileLink.removeAttribute("data-route");
+	profileLink.removeAttribute("data-doctype");
+	profileLink.removeAttribute("data-name");
+}
+
+function isAvatarProfileMenuItem(element) {
+	if (!element) return false;
+	if (element.hasAttribute(PROFILE_LINK_ATTRIBUTE)) return true;
+	const menu = element.closest(".dropdown-menu, [role='menu']");
+	return Boolean(menu && isUserMenu(menu) && normalizedMenuText(element) === "my profile");
 }
 
 function ensureProfileAvatarLink(root = document) {
@@ -127,21 +137,28 @@ function startProfileAvatarIntegration() {
 	if (!document.body || document.body.dataset.eduedgeProfileAvatarReady === "1") return;
 	document.body.dataset.eduedgeProfileAvatarReady = "1";
 
-	document.addEventListener("click", (event) => {
-		const profileLink = event.target.closest?.(`[${PROFILE_LINK_ATTRIBUTE}]`);
-		if (profileLink) {
-			event.preventDefault();
-			window.location.href = MY_PROFILE_ROUTE;
-			return;
-		}
-		if (
-			event.target.closest?.(
-				".avatar, .dropdown-navbar-user, .navbar-user, .user-menu, .edge-topbar__user, .edge-topbar__profile, [data-user-menu]"
-			)
-		) {
-			window.setTimeout(() => ensureProfileAvatarLink(), 0);
-		}
-	});
+	// Capture the click before Frappe's existing User-profile handler can route to /desk/user/{email}.
+	document.addEventListener(
+		"click",
+		(event) => {
+			const menuItem = event.target.closest?.("a, button");
+			if (isAvatarProfileMenuItem(menuItem)) {
+				event.preventDefault();
+				event.stopPropagation();
+				event.stopImmediatePropagation();
+				window.location.assign(MY_PROFILE_ROUTE);
+				return;
+			}
+			if (
+				event.target.closest?.(
+					".avatar, .dropdown-navbar-user, .navbar-user, .user-menu, .edge-topbar__user, .edge-topbar__profile, [data-user-menu]"
+				)
+			) {
+				window.setTimeout(() => ensureProfileAvatarLink(), 0);
+			}
+		},
+		true
+	);
 
 	const observer = new MutationObserver((mutations) => {
 		for (const mutation of mutations) {
