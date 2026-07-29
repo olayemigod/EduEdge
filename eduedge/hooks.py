@@ -202,7 +202,7 @@ has_permission = {
 	"Student Applicant": "eduedge.education.permissions.has_education_branch_permission",
 	"Student": "eduedge.education.permissions.has_education_branch_permission",
 	"Program Enrollment": "eduedge.education.permissions.has_education_branch_permission",
-	"Student Group": "eduedge.education.permissions.has_education_branch_permission",
+	"Student Group": "eduedge.education.permissions.has_student_group_permission",
 	"Room": "eduedge.education.permissions.has_education_branch_permission",
 	"Course Schedule": "eduedge.education.permissions.has_course_schedule_permission",
 	"Student Attendance": "eduedge.education.permissions.has_student_attendance_permission",
