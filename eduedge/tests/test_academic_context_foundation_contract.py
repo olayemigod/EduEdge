@@ -88,13 +88,14 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		self.assertIn("academic_fee_context.before_validate_fee_schedule", hooks)
 		self.assertNotIn("on_submit", hooks)
 
-	def test_migration_backfills_only_unambiguous_master_context(self):
+	def test_migration_backfills_only_unambiguous_master_context_and_visibility_fails_closed(self):
 		fields = (APP / "education" / "academic_fields.py").read_text()
 		permissions = (APP / "education" / "academic_permissions.py").read_text()
 		self.assertIn("backfill_unambiguous_academic_master_context", fields)
 		self.assertGreaterEqual(fields.count("having institution_count = 1"), 4)
 		self.assertIn("LEGACY_OPTIONAL_DOCTYPES", permissions)
-		self.assertIn("coalesce(`tab{doctype}`.`{fieldname}`, '') = ''", permissions)
+		self.assertIn("Fail closed for restricted users", permissions)
+		self.assertNotIn("coalesce(`tab{doctype}`.`{fieldname}`, '') = ''", permissions)
 
 	def test_institution_calendar_is_active_and_safe(self):
 		calendar = json.loads((APP / "eduedge" / "doctype" / "eduedge_institution_academic_calendar" / "eduedge_institution_academic_calendar.json").read_text())
@@ -147,10 +148,7 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		self.assertIn("<EdgeAppShell", vue)
 		self.assertIn("save_academic_section", vue)
 		self.assertIn("save_academic_level", vue)
-		self.assertLess(
-			loader.index("edgesuite_ui.bundle.js"),
-			loader.index("eduedge_academic_foundation.bundle.js"),
-		)
+		self.assertLess(loader.index("edgesuite_ui.bundle.js"), loader.index("eduedge_academic_foundation.bundle.js"))
 		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 		self.assertIn("/app/eduedge-academic-foundation", navigation)
 		for fieldname in ("study_mode", "delivery_mode", "academic_level", "student_batch"):
