@@ -31,10 +31,22 @@ class TestProgrammesPageContract(unittest.TestCase):
 	def test_programme_quick_save_does_not_rebuild_course_rows(self):
 		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
 		self.assertIn('require_eduedge_access(feature_key="academics", action="save_programme")', api)
-		self.assertIn("doc.check_permission(\"write\")", api)
+		self.assertIn('doc.check_permission("write")', api)
 		self.assertIn("doc.save()", api)
-		self.assertNotIn("doc.set(\"courses\"", api)
+		self.assertNotIn('doc.set("courses"', api)
 		self.assertNotIn("db_set(", api)
+
+	def test_department_options_and_save_are_scoped_to_institution_company(self):
+		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
+		component = (
+			APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue"
+		).read_text(encoding="utf-8")
+		self.assertIn("def _assert_department_context", api)
+		self.assertIn('filters["company"] = institution_company', api)
+		self.assertIn("Department must belong to the same Company", api)
+		self.assertIn("institution: institution || undefined", component)
+		self.assertIn("this.draft.department = \"\"", component)
+		self.assertIn("loadDepartments", component)
 
 	def test_programmes_page_uses_dedicated_edgesuite_runtime(self):
 		component = (
@@ -59,7 +71,7 @@ class TestProgrammesPageContract(unittest.TestCase):
 		).read_text(encoding="utf-8")
 		self.assertIn("draftSections", component)
 		self.assertIn("draftInstitutionChanged", component)
-		self.assertIn("this.draft.eduedge_academic_section = \"\"", component)
+		self.assertIn('this.draft.eduedge_academic_section = ""', component)
 		self.assertIn('frappe.set_route("Form", "Program", name)', component)
 		self.assertIn("Course rows, portal settings, and advanced fields remain", component)
 
