@@ -3,7 +3,7 @@
 **Review date:** 2026-07-29  
 **Branch:** `agent/eduedge-academic-operations-pages`  
 **Pull request:** #14  
-**Reviewed code head:** `5c4c10fb9e518eb7f6c13baea2b39627ffd7876c`  
+**Reviewed code head:** `fbf57b9985f51e39056de0b2b2131e7a9d23b362`  
 **Status:** Conditional pass for local QA; not approved for merge or production release.
 
 ## 1. Review scope
@@ -114,23 +114,23 @@ The page could display New Class, Add Schedule, Save Draft or Submit buttons to 
 
 **Fix:** Actions, editable controls and read-only messages now follow backend create, write, read and submit permissions. The page also uses the Frappe/site date instead of a UTC browser date.
 
+### 2.11 Programme Offering Academic Level did not cascade by Programme
+
+The quick editor could display every enabled Level in the Institution even when the selected Programme belonged to a specific Academic Section.
+
+**Fix:** Programme selection now filters both catalogue and quick-editor Level options to Levels valid for the Programme's Academic Section and clears an invalid selected Level.
+
 ## 3. Remaining risks and decisions
 
 These items are not currently classified as critical blockers to starting local QA, but they must remain visible.
 
-### 3.1 Programme Offering Academic Level cascade — medium UI issue
-
-The backend rejects an Academic Level outside the Programme's Academic Section, but the quick editor may still display all enabled Levels for the Institution until the Programme is saved or validation fails.
-
-**Required direction:** Filter the quick-editor Level options immediately by the selected Programme's Academic Section and clear an invalid Level when Programme changes. Treat this as a UI correction before final acceptance.
-
-### 3.2 Academic Foundation list caps — medium scale risk
+### 3.1 Academic Foundation list caps — medium scale risk
 
 Academic Foundation currently uses bounded global reads for Institutions, Sections, Levels, Calendars and Calendar Periods. A very large shared-hosted site can reach those caps and produce incomplete readiness summaries.
 
 **Required direction:** Before large shared-hosted rollout, change the page to load one selected Institution at a time or return explicit truncation metadata and warnings.
 
-### 3.3 Teacher identity is an operational dependency
+### 3.2 Teacher identity is an operational dependency
 
 Teacher ownership depends on a valid chain:
 
@@ -138,11 +138,11 @@ Teacher ownership depends on a valid chain:
 
 A Teacher without this chain is denied rather than granted broad fallback access. Setup and staff-onboarding QA must verify the chain and provide a clear administrative correction path.
 
-### 3.4 Assessment ownership is outside this page batch
+### 3.3 Assessment ownership is outside this page batch
 
 This review closes Teacher scope for class, student, guardian, enrollment, schedule and attendance records used by the Academic Operations pages. Assessment Plan, Assessment Result, report-card review and publication ownership require their own focused review during the Assessment Operations phase.
 
-### 3.5 Automated checks are not Frappe runtime acceptance
+### 3.4 Automated checks are not Frappe runtime acceptance
 
 Current CI covers Python compilation, JSON validation, JavaScript entry syntax and pure contract tests. It does not replace:
 
@@ -154,7 +154,7 @@ Current CI covers Python compilation, JSON validation, JavaScript entry syntax a
 - concurrent requests;
 - real workflow data.
 
-### 3.6 Rapid filter changes may produce stale UI responses
+### 3.5 Rapid filter changes may produce stale UI responses
 
 The Vue pages do not yet cancel or sequence overlapping requests. A user changing filters rapidly could briefly see an older response replace a newer one.
 
@@ -208,7 +208,8 @@ Verify:
 
 - Institution change clears invalid Academic Section and Department;
 - Department options follow Institution Company;
-- Branch change refreshes Programme, Level, Cohort and Period options;
+- Branch and Programme changes refresh valid Programme, Level, Cohort and Period options;
+- Programme selection filters Levels by Academic Section and clears an invalid Level;
 - Periods come only from the Institution Academic Calendar;
 - disabled or cross-Institution links are rejected;
 - Offering identity becomes locked after Applicant, Student Group or submitted Enrollment usage;
@@ -228,14 +229,12 @@ Verify:
 
 ## 5. Automated validation
 
-The reviewed code head passed EduEdge CI run 2071:
+The reviewed code head passed EduEdge CI run 2101:
 
 - Python compilation;
 - JSON validation;
-- all registered frontend entry-script checks;
-- 320 pure contract tests.
-
-Subsequent commits only updated this review document.
+- all registered frontend entry-script checks, including the Level cascade module;
+- 321 pure contract tests.
 
 ## 6. Release gate
 
@@ -245,7 +244,6 @@ It may proceed to local QA because the reviewed code head passed CI. It must not
 
 - local build and migration pass;
 - the mandatory role and isolation matrix passes;
-- the Programme Offering Level cascade is corrected or explicitly accepted as a tracked defect;
 - any runtime permission or SQL defects are fixed;
 - browser acceptance is recorded.
 
