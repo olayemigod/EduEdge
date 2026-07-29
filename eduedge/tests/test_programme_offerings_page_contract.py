@@ -84,6 +84,20 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		self.assertIn('this.filters.institution = ""', component)
 		self.assertIn('frappe.set_route("Form", "EduEdge Program Offering", name)', component)
 
+	def test_programme_selection_cascades_academic_level_options(self):
+		cascade = (
+			APP / "public" / "js" / "eduedge_programme_offerings" / "level_cascade.js"
+		).read_text(encoding="utf-8")
+		bundle = (APP / "public" / "js" / "eduedge_programme_offerings.bundle.js").read_text(
+			encoding="utf-8"
+		)
+		self.assertIn("eduedge_academic_section", cascade)
+		self.assertIn("levelsForProgramme", cascade)
+		self.assertIn("clearInvalidLevel", cascade)
+		self.assertIn('"draft.program"', cascade)
+		self.assertIn('"filters.program"', cascade)
+		self.assertIn("applyProgrammeOfferingLevelCascade", bundle)
+
 	def test_page_loader_uses_canonical_edgesuite_bundle(self):
 		loader = (
 			APP
@@ -106,6 +120,7 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 	def test_ci_checks_programme_offerings_entries(self):
 		workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 		self.assertIn("node --check eduedge/public/js/eduedge_programme_offerings.bundle.js", workflow)
+		self.assertIn("node --check eduedge/public/js/eduedge_programme_offerings/level_cascade.js", workflow)
 		self.assertIn(
 			"node --check eduedge/eduedge/page/eduedge_program_offerings/eduedge_program_offerings.js",
 			workflow,
