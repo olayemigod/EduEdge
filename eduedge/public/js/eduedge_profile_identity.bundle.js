@@ -99,18 +99,21 @@ function applyProfileIdentity(context = {}) {
 	const frappeBoot = globalThis.frappe?.boot;
 	if (!frappeBoot) return;
 	const identity = frappeBoot.eduedge_ui_identity || {};
+	const branding = context.branding || {};
+	const hasContextLogo = Object.prototype.hasOwnProperty.call(context, "logo");
 	identity.institution_context = context;
-	identity.tenant_name = context.institution_name || context.company || "";
-	identity.tenant_subtitle = context.institution_type_name || "Education workspace";
-	identity.tenant_logo = context.logo || "";
+	identity.tenant_name = context.institution_name || context.company || identity.tenant_name || "";
+	identity.tenant_subtitle = context.institution_type_name || identity.tenant_subtitle || "Education workspace";
+	identity.tenant_logo = hasContextLogo ? context.logo || "" : branding.logo || identity.tenant_logo || "";
 	identity.branch_name = context.branch_name || "";
-	identity.owner_company_name = context.company || "";
+	identity.owner_company_name = context.company || identity.owner_company_name || "";
+	const existingContact = identity.contact_identity || {};
 	identity.contact_identity = {
-		phone: context.phone || "",
-		whatsapp_number: context.whatsapp_number || "",
-		email: context.email || "",
-		website: context.website || "",
-		formatted_address: context.formatted_address || "",
+		phone: context.phone || branding.phone || existingContact.phone || "",
+		whatsapp_number: context.whatsapp_number || branding.whatsapp_number || existingContact.whatsapp_number || "",
+		email: context.email || branding.email || existingContact.email || "",
+		website: context.website || branding.website || existingContact.website || "",
+		formatted_address: context.formatted_address || branding.formatted_address || existingContact.formatted_address || "",
 	};
 	frappeBoot.eduedge_ui_identity = identity;
 	const shared = frappeBoot.edgesuite_ui_identity || {};
