@@ -24,14 +24,12 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 			'"eduedge.api.academic_operations.save_attendance_register": "eduedge.api.academic_operations_safe.save_attendance_register"',
 			hooks,
 		)
-		self.assertIn(
+		for token in (
+			'"Student Group": "eduedge.education.permissions.has_student_group_permission"',
 			'"Course Schedule": "eduedge.education.permissions.has_course_schedule_permission"',
-			hooks,
-		)
-		self.assertIn(
 			'"Student Attendance": "eduedge.education.permissions.has_student_attendance_permission"',
-			hooks,
-		)
+		):
+			self.assertIn(token, hooks)
 
 	def test_secure_attendance_api_enforces_real_permissions(self):
 		safe = (APP / "api" / "academic_operations_safe.py").read_text(encoding="utf-8")
@@ -48,14 +46,16 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		self.assertIn("More than one Course Schedule exists", safe)
 		self.assertIn('existing_filters["course_schedule"] = schedule.name', safe)
 
-	def test_teacher_scope_resolves_user_employee_instructor_and_owned_schedules(self):
+	def test_teacher_scope_resolves_user_employee_instructor_and_owned_academic_records(self):
 		scope = (APP / "education" / "instructor_scope.py").read_text(encoding="utf-8")
 		permissions = (APP / "education" / "permissions.py").read_text(encoding="utf-8")
 		safe = (APP / "api" / "academic_operations_safe.py").read_text(encoding="utf-8")
 		self.assertIn('filters={"user_id": resolved_user, "status": "Active"}', scope)
 		self.assertIn('filters={"employee": ["in", employees], "status": "Active"}', scope)
 		self.assertIn("is_limited_instructor_user", permissions)
+		self.assertIn("schedule.student_group = `tabStudent Group`.name", permissions)
 		self.assertIn("schedule.instructor in", permissions)
+		self.assertIn("has_student_group_permission", permissions)
 		self.assertIn("has_student_attendance_permission", permissions)
 		self.assertIn('schedule_filters["instructor"] = ["in", instructor_names]', safe)
 		self.assertIn("Attendance can only be recorded against a Course Schedule assigned", safe)
