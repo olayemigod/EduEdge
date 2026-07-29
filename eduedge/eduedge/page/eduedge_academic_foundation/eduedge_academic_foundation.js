@@ -22,11 +22,6 @@ frappe.pages["eduedge-academic-foundation"].on_page_show = function (wrapper) {
 	};
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		const runtime = window.EdgeSuiteUI || window.EdgeUI;
-		if (!runtime?.install || !runtime?.components?.EdgeAppShell || !runtime?.components?.EdgePageLayout) {
-			fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
-			return;
-		}
 		frappe.require("eduedge_academic_foundation.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
 			if (!window.EduEdgeAcademicFoundation || typeof window.createEduEdgeAcademicFoundationApp !== "function") {
