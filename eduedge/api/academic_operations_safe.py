@@ -3,13 +3,68 @@ from __future__ import annotations
 from collections import Counter
 
 import frappe
+from frappe import _
 from frappe.utils import getdate, nowdate
 
 from eduedge.api import academic_operations as base
 from eduedge.education.academic_operations import ASSIGNMENT_DOCTYPE
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.academic_calendar import resolve_academic_defaults
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+
+
+def _require_doctype_permission(doctype: str, permission_type: str, message: str) -> None:
+	if not frappe.has_permission(doctype, permission_type):
+		frappe.throw(_(message), frappe.PermissionError)
+
+
+def _attendance_permissions() -> dict:
+	return {
+		"can_read_attendance": bool(frappe.has_permission("Student Attendance", "read")),
+		"can_create_attendance": bool(frappe.has_permission("Student Attendance", "create")),
+		"can_write_attendance": bool(frappe.has_permission("Student Attendance", "write")),
+		"can_submit_attendance": bool(frappe.has_permission("Student Attendance", "submit")),
+	}
+
+
+def _operations_permissions() -> dict:
+	permissions = _attendance_permissions()
+	permissions.update(
+		{
+			"can_create_student_group": bool(frappe.has_permission("Student Group", "create")),
+			"can_create_course_schedule": bool(frappe.has_permission("Course Schedule", "create")),
+			"can_read_rooms": bool(frappe.has_permission("Room", "read")),
+			"can_create_rooms": bool(frappe.has_permission("Room", "create")),
+			"can_read_instructor_assignments": bool(
+				frappe.has_permission(ASSIGNMENT_DOCTYPE, "read")
+			),
+			"can_write_instructor_assignments": bool(
+				frappe.has_permission(ASSIGNMENT_DOCTYPE, "write")
+				or frappe.has_permission(ASSIGNMENT_DOCTYPE, "create")
+			),
+		}
+	)
+	return permissions
+
+
+def _require_operations_read() -> None:
+	base._require_academic_operator()
+	_require_doctype_permission(
+		"Student Group",
+		"read",
+		"You are not permitted to view Classes / Student Groups.",
+	)
+	_require_doctype_permission(
+		"Course Schedule",
+		"read",
+		"You are not permitted to view Course Schedules.",
+	)
+	_require_doctype_permission(
+		"Student Attendance",
+		"read",
+		"You are not permitted to view Student Attendance.",
+	)
 
 
 def _selected_branch_context(branch: str) -> dict:
@@ -141,7 +196,7 @@ def get_operations_context(
 	date: str | None = None,
 	student_group: str | None = None,
 ) -> dict:
-	base._require_academic_operator()
+	_require_operations_read()
 	resolved_branch = base._resolve_branch(branch)
 	target_date = str(getdate(date or nowdate()))
 	calendar_context = _calendar_display(resolve_academic_defaults(resolved_branch, target_date), target_date)
@@ -217,6 +272,15 @@ def get_operations_context(
 	missing_registers = sum(1 for row in attendance_coverage if not row["has_attendance"])
 	incomplete_registers = sum(1 for row in attendance_coverage if row["has_attendance"] and not row["complete"])
 	complete_registers = sum(1 for row in attendance_coverage if row["complete"])
+	permissions = _operations_permissions()
+	assigned_instructors = (
+		frappe.db.count(
+			ASSIGNMENT_DOCTYPE,
+			{"school_branch": resolved_branch, "enabled": 1},
+		)
+		if permissions["can_read_instructor_assignments"]
+		else 0
+	)
 
 	return {
 		"user": {"name": frappe.session.user, "full_name": full_name},
@@ -234,10 +298,7 @@ def get_operations_context(
 		},
 		"counts": {
 			"student_groups": len(groups),
-			"assigned_instructors": frappe.db.count(
-				ASSIGNMENT_DOCTYPE,
-				{"school_branch": resolved_branch, "enabled": 1},
-			),
+			"assigned_instructors": assigned_instructors,
 			"schedules": len(schedules),
 			"rooms_used": sum(1 for row in room_usage if not row["is_unassigned"]),
 			"unassigned_room_sessions": sum(row["sessions"] for row in room_usage if row["is_unassigned"]),
@@ -253,8 +314,255 @@ def get_operations_context(
 			"attendance_incomplete_groups": incomplete_registers,
 			"attendance_missing_groups": missing_registers,
 		},
+		"permissions": permissions,
 		"student_groups": groups,
 		"schedules": schedules,
 		"attendance_coverage": attendance_coverage,
 		"room_usage": room_usage,
+	}
+
+
+def _get_schedule_row(course_schedule: str) -> frappe._dict:
+	doc = frappe.get_doc("Course Schedule", course_schedule)
+	doc.check_permission("read")
+	return frappe._dict(
+		{
+			"name": doc.name,
+			"student_group": doc.student_group,
+			"schedule_date": doc.schedule_date,
+			"instructor": doc.instructor,
+			"instructor_name": doc.instructor_name,
+			"course": doc.course,
+			"room": doc.room,
+			"from_time": doc.from_time,
+			"to_time": doc.to_time,
+			BRANCH_FIELD: doc.get(BRANCH_FIELD),
+		}
+	)
+
+
+def _resolve_register_schedule(
+	student_group: str,
+	branch: str,
+	target_date: str,
+	course_schedule: str | None,
+) -> frappe._dict | None:
+	if course_schedule:
+		schedule = _get_schedule_row(course_schedule)
+		if schedule.student_group != student_group:
+			frappe.throw(
+				_("Course Schedule does not belong to the selected Student Group."),
+				frappe.ValidationError,
+			)
+		if schedule.get(BRANCH_FIELD) != branch:
+			frappe.throw(_("Course Schedule belongs to another Branch."), frappe.ValidationError)
+		return schedule
+
+	matching = frappe.get_list(
+		"Course Schedule",
+		filters={
+			"student_group": student_group,
+			"schedule_date": target_date,
+			BRANCH_FIELD: branch,
+		},
+		fields=[
+			"name",
+			"student_group",
+			"schedule_date",
+			"instructor",
+			"instructor_name",
+			"course",
+			"room",
+			"from_time",
+			"to_time",
+			BRANCH_FIELD,
+		],
+		order_by="from_time asc",
+		page_length=3,
+	)
+	if len(matching) > 1:
+		frappe.throw(
+			_("More than one Course Schedule exists for this Class and date. Select the exact scheduled session before loading attendance."),
+			frappe.ValidationError,
+		)
+	return matching[0] if matching else None
+
+
+@frappe.whitelist()
+def get_attendance_register(
+	student_group: str,
+	date: str | None = None,
+	course_schedule: str | None = None,
+) -> dict:
+	_require_operations_read()
+	group_doc = frappe.get_doc("Student Group", student_group)
+	group_doc.check_permission("read")
+	branch = group_doc.get(BRANCH_FIELD)
+	base.assert_branch_access(branch)
+	if group_doc.disabled:
+		frappe.throw(_("The selected Student Group is disabled."), frappe.ValidationError)
+
+	target_date = str(getdate(date or nowdate()))
+	schedule = _resolve_register_schedule(student_group, branch, target_date, course_schedule)
+	if schedule:
+		target_date = str(getdate(schedule.schedule_date))
+
+	students = frappe.get_all(
+		"Student Group Student",
+		filters={"parent": student_group, "parenttype": "Student Group", "active": 1},
+		fields=["student", "student_name", "group_roll_number"],
+		order_by="group_roll_number asc, student_name asc",
+	)
+	existing_filters: dict = {
+		"student_group": student_group,
+		BRANCH_FIELD: branch,
+		"date": target_date,
+		"docstatus": ["!=", 2],
+	}
+	if schedule:
+		existing_filters["course_schedule"] = schedule.name
+	else:
+		existing_filters["course_schedule"] = ["is", "not set"]
+
+	existing = frappe.get_list(
+		"Student Attendance",
+		filters=existing_filters,
+		fields=["name", "student", "status", "docstatus", "leave_application"],
+		page_length=max(len(students), 1),
+	)
+	records = {row.student: row for row in existing}
+	register = []
+	for row in students:
+		record = records.get(row.student)
+		register.append(
+			{
+				"student": row.student,
+				"student_name": row.student_name,
+				"group_roll_number": row.group_roll_number,
+				"status": record.status if record else "Present",
+				"attendance_name": record.name if record else None,
+				"docstatus": int(record.docstatus) if record else 0,
+				"locked": bool(record and int(record.docstatus) == 1),
+				"leave_application": record.leave_application if record else None,
+			}
+		)
+
+	return {
+		"branch": branch,
+		"student_group": group_doc.name,
+		"student_group_name": group_doc.student_group_name,
+		"date": target_date,
+		"course_schedule": schedule,
+		"students": register,
+		"submitted_count": sum(1 for row in register if row["locked"]),
+		"pending_count": sum(1 for row in register if not row["locked"]),
+		"permissions": _attendance_permissions(),
+	}
+
+
+@frappe.whitelist()
+@guard_eduedge_action("attendance", action="save_attendance_register")
+def save_attendance_register(
+	student_group: str,
+	date: str,
+	entries,
+	course_schedule: str | None = None,
+	submit: int | str | bool = 0,
+) -> dict:
+	base._require_academic_operator()
+	register = get_attendance_register(student_group, date, course_schedule)
+	rows = frappe.parse_json(entries) if isinstance(entries, str) else entries
+	if not isinstance(rows, list) or not rows:
+		frappe.throw(_("Attendance entries are required."), frappe.ValidationError)
+
+	allowed_students = {row["student"] for row in register["students"]}
+	seen: set[str] = set()
+	normalized: list[dict] = []
+	for row in rows:
+		student = row.get("student")
+		status = row.get("status")
+		if student not in allowed_students:
+			frappe.throw(
+				_("Student {0} is not an active member of this Student Group.").format(student),
+				frappe.ValidationError,
+			)
+		if student in seen:
+			frappe.throw(
+				_("Student {0} appears more than once in the register.").format(student),
+				frappe.ValidationError,
+			)
+		if status not in base.ATTENDANCE_STATUSES:
+			frappe.throw(_("Invalid attendance status for {0}.").format(student), frappe.ValidationError)
+		seen.add(student)
+		normalized.append({"student": student, "status": status})
+
+	existing = {
+		row["student"]: row
+		for row in register["students"]
+		if row.get("attendance_name")
+	}
+	conflicts = [
+		row["attendance_name"]
+		for row in normalized
+		if row["student"] in existing
+		and existing[row["student"]]["locked"]
+		and existing[row["student"]]["status"] != row["status"]
+	]
+	if conflicts:
+		frappe.throw(
+			_("Submitted attendance cannot be changed. Cancel or amend these records first: {0}").format(
+				", ".join(conflicts)
+			),
+			frappe.ValidationError,
+		)
+
+	should_submit = str(submit).lower() in {"1", "true", "yes", "on"}
+	permissions = _attendance_permissions()
+	if should_submit and not permissions["can_submit_attendance"]:
+		frappe.throw(_("You are not permitted to submit Student Attendance."), frappe.PermissionError)
+
+	schedule_name = (register.get("course_schedule") or {}).get("name")
+	created = 0
+	updated = 0
+	submitted = 0
+	unchanged = 0
+
+	for row in normalized:
+		current = existing.get(row["student"])
+		if current and current["locked"]:
+			unchanged += 1
+			continue
+
+		if current:
+			if not permissions["can_write_attendance"]:
+				frappe.throw(_("You are not permitted to edit draft Student Attendance."), frappe.PermissionError)
+			doc = frappe.get_doc("Student Attendance", current["attendance_name"])
+			doc.check_permission("write")
+			doc.status = row["status"]
+			updated += 1
+		else:
+			if not permissions["can_create_attendance"]:
+				frappe.throw(_("You are not permitted to create Student Attendance."), frappe.PermissionError)
+			doc = frappe.new_doc("Student Attendance")
+			doc.student = row["student"]
+			doc.student_group = student_group
+			doc.course_schedule = schedule_name
+			doc.date = register["date"]
+			doc.set(BRANCH_FIELD, register["branch"])
+			created += 1
+
+		doc.save()
+		if should_submit and doc.docstatus == 0:
+			doc.check_permission("submit")
+			doc.submit()
+			submitted += 1
+
+	return {
+		"created": created,
+		"updated": updated,
+		"submitted": submitted,
+		"unchanged": unchanged,
+		"student_group": student_group,
+		"course_schedule": schedule_name,
+		"date": register["date"],
 	}
