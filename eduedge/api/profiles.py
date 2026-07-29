@@ -310,7 +310,8 @@ def _file_doc_for_image(
 		as_dict=True,
 	)
 	extension = os.path.splitext((file_doc.file_name or file_doc.file_url or "").lower())[1]
-	if extension not in ALLOWED_IMAGE_EXTENSIONS:
+	file_type = str(file_doc.file_type or "").strip().lower()
+	if extension not in ALLOWED_IMAGE_EXTENSIONS or (file_type and not file_type.startswith("image/")):
 		frappe.throw(_("Only JPG, PNG, and WebP images are allowed."), frappe.ValidationError)
 	if cint(file_doc.file_size or 0) > MAX_PROFILE_IMAGE_BYTES:
 		frappe.throw(_("Profile images and Institution logos must not exceed 2 MB."), frappe.ValidationError)
@@ -394,6 +395,12 @@ def get_institution_profile(institution: str | None = None) -> dict:
 	doc = frappe.get_doc("EduEdge Institution", name)
 	doc.check_permission("read")
 	branding = get_institution_branding(name)
+	address_doc = frappe.get_doc("Address", doc.address) if doc.address else None
+	can_manage_address = bool(
+		address_doc.has_permission("write")
+		if address_doc
+		else frappe.has_permission("Address", "create")
+	)
 	return {
 		"institution": {
 			fieldname: doc.get(fieldname)
@@ -427,10 +434,7 @@ def get_institution_profile(institution: str | None = None) -> dict:
 		"active_context": get_effective_institution_context(institution=name),
 		"permissions": {
 			"can_write": bool(doc.has_permission("write")),
-			"can_manage_address": bool(
-				frappe.has_permission("Address", "write")
-				or frappe.has_permission("Address", "create")
-			),
+			"can_manage_address": can_manage_address,
 		},
 	}
 
