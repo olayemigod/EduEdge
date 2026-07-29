@@ -107,18 +107,41 @@ def before_validate_course_schedule(doc, method=None) -> None:
 
 
 def before_validate_student_attendance(doc, method=None) -> None:
-	schedule_branch = _linked_branch("Course Schedule", doc.course_schedule)
+	schedule = (
+		frappe.db.get_value(
+			"Course Schedule",
+			doc.course_schedule,
+			["name", "student_group", "schedule_date", BRANCH_FIELD],
+			as_dict=True,
+		)
+		if doc.course_schedule
+		else None
+	)
+	if doc.course_schedule and not schedule:
+		frappe.throw(_("Course Schedule does not exist."), frappe.DoesNotExistError)
+
+	if schedule:
+		if doc.student_group and doc.student_group != schedule.student_group:
+			frappe.throw(
+				_("Student Attendance Student Group must match the selected Course Schedule."),
+				frappe.ValidationError,
+			)
+		doc.student_group = schedule.student_group
+		if doc.date and getdate(doc.date) != getdate(schedule.schedule_date):
+			frappe.throw(
+				_("Student Attendance Date must match the selected Course Schedule date."),
+				frappe.ValidationError,
+			)
+		doc.date = schedule.schedule_date
+
 	group_name = doc.student_group
-	if doc.course_schedule:
-		group_name = frappe.db.get_value("Course Schedule", doc.course_schedule, "student_group")
 	group_branch = _linked_branch("Student Group", group_name)
 	student_home_branch = _linked_branch("Student", doc.student)
-
-	resolved_branch = schedule_branch or group_branch or student_home_branch
+	resolved_branch = (schedule or {}).get(BRANCH_FIELD) or group_branch or student_home_branch
 	_assign_branch(doc, preferred_branch=resolved_branch)
 	_validate_branch(doc)
 
-	branches = {value for value in (schedule_branch, group_branch) if value}
+	branches = {value for value in ((schedule or {}).get(BRANCH_FIELD), group_branch) if value}
 	if len(branches) > 1 or (branches and doc.get(BRANCH_FIELD) not in branches):
 		frappe.throw(
 			_("Student Attendance Branch must match the Student Group and Course Schedule."),
@@ -139,6 +162,35 @@ def before_validate_student_attendance(doc, method=None) -> None:
 				_("Student {0} is not an active member of Student Group {1}.").format(doc.student, group_name),
 				frappe.ValidationError,
 			)
+	_validate_attendance_duplicate(doc)
+
+
+def _validate_attendance_duplicate(doc) -> None:
+	if not doc.student or not doc.student_group or not doc.date:
+		return
+	lock_doctype = "Course Schedule" if doc.course_schedule else "Student Group"
+	lock_name = doc.course_schedule or doc.student_group
+	frappe.db.sql(
+		f"select name from `tab{lock_doctype}` where name = %s for update",
+		(lock_name,),
+	)
+	filters = {
+		"student": doc.student,
+		"student_group": doc.student_group,
+		"date": doc.date,
+		"docstatus": ["!=", 2],
+		"name": ["!=", doc.name or ""],
+	}
+	if doc.course_schedule:
+		filters["course_schedule"] = doc.course_schedule
+	else:
+		filters["course_schedule"] = ["is", "not set"]
+	duplicate = frappe.db.exists("Student Attendance", filters)
+	if duplicate:
+		frappe.throw(
+			_("Student Attendance already exists for this Student, Class and scheduled session."),
+			frappe.DuplicateEntryError,
+		)
 
 
 def assert_instructor_assignment(
