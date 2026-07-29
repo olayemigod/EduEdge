@@ -19,6 +19,7 @@ INTERVENTION_TYPES = {
 	"Candidate Reassignment",
 	"Other",
 }
+EXECUTABLE_TYPES = {"Time Extension"}
 
 
 class EduEdgeCBTInterventionLog(Document):
@@ -34,6 +35,15 @@ class EduEdgeCBTInterventionLog(Document):
 		self.acted_on = now_datetime()
 		self.requires_attempt_review = 1
 
+	def after_insert(self) -> None:
+		if self.intervention_type != "Time Extension":
+			return
+		assignment = frappe.get_doc("EduEdge CBT Candidate Assignment", self.candidate_assignment)
+		assignment.check_permission("write")
+		assignment.flags.eduedge_time_extension = True
+		assignment.approved_extra_time_minutes = cint(self.new_value)
+		assignment.save()
+
 	def on_trash(self) -> None:
 		frappe.throw(
 			_("CBT Intervention Logs are append-only and cannot be deleted."),
@@ -43,21 +53,9 @@ class EduEdgeCBTInterventionLog(Document):
 	def _validate_assignment(self) -> None:
 		if not self.candidate_assignment:
 			frappe.throw(_("Candidate Assignment is required."), frappe.ValidationError)
-		assignment = frappe.db.get_value(
-			"EduEdge CBT Candidate Assignment",
-			self.candidate_assignment,
-			[
-				"exam_schedule",
-				"exam_scope",
-				"school_branch",
-				"student",
-				"public_candidate_reference",
-				"assignment_status",
-			],
-			as_dict=True,
-		)
-		if not assignment:
-			frappe.throw(_("Select a valid Candidate Assignment."), frappe.ValidationError)
+		assignment_doc = frappe.get_doc("EduEdge CBT Candidate Assignment", self.candidate_assignment)
+		assignment_doc.check_permission("read")
+		assignment = assignment_doc.as_dict()
 		self.exam_schedule = assignment.exam_schedule
 		self.exam_scope = assignment.exam_scope
 		self.school_branch = assignment.school_branch
@@ -76,7 +74,7 @@ class EduEdgeCBTInterventionLog(Document):
 			"Other",
 		}:
 			frappe.throw(
-				_("The selected intervention is not allowed for a terminal candidate assignment."),
+				_("The selected intervention is not allowed for a terminal Candidate Assignment."),
 				frappe.ValidationError,
 			)
 		self._assignment = assignment
@@ -87,10 +85,17 @@ class EduEdgeCBTInterventionLog(Document):
 		self.reason = (self.reason or "").strip()
 		if not self.reason:
 			frappe.throw(_("A reason is required for every CBT intervention."), frappe.ValidationError)
+
+		# Browser-supplied audit claims are never trusted.
+		self.previous_value = None
+		self.new_value = None
+		self.attempt_reference = None
 		if self.intervention_type == "Time Extension":
-			self._validate_time_extension()
+			self._prepare_time_extension()
 		else:
 			self.additional_minutes = 0
+			self.outcome = "Recorded for Review"
+
 		if self.intervention_type == "Force Submission":
 			allowed = frappe.db.get_value(
 				"EduEdge CBT Exam Schedule",
@@ -103,13 +108,14 @@ class EduEdgeCBTInterventionLog(Document):
 					frappe.PermissionError,
 				)
 
-	def _validate_time_extension(self) -> None:
-		if cint(self.additional_minutes) <= 0:
+	def _prepare_time_extension(self) -> None:
+		additional = cint(self.additional_minutes)
+		if additional <= 0:
 			frappe.throw(_("Additional Minutes must be greater than zero."), frappe.ValidationError)
 		policy = frappe.db.get_value(
 			"EduEdge CBT Exam Schedule",
 			self.exam_schedule,
-			["allow_invigilator_time_extension", "maximum_time_extension_minutes"],
+			["allow_invigilator_time_extension", "maximum_time_extension_minutes", "status"],
 			as_dict=True,
 		)
 		if not policy or not cint(policy.allow_invigilator_time_extension):
@@ -117,8 +123,18 @@ class EduEdgeCBTInterventionLog(Document):
 				_("Time Extension is not permitted for this Examination Schedule."),
 				frappe.PermissionError,
 			)
-		if cint(self.additional_minutes) > cint(policy.maximum_time_extension_minutes):
+		if policy.status not in {"Active", "Suspended"}:
 			frappe.throw(
-				_("Additional Minutes exceed the maximum permitted by the Examination Schedule."),
+				_("Time Extension can be applied only to an Active or Suspended Schedule."),
 				frappe.ValidationError,
 			)
+		previous = cint(self._assignment.approved_extra_time_minutes)
+		new_total = previous + additional
+		if new_total > cint(policy.maximum_time_extension_minutes):
+			frappe.throw(
+				_("Cumulative extra time exceeds the maximum permitted by the Examination Schedule."),
+				frappe.ValidationError,
+			)
+		self.previous_value = str(previous)
+		self.new_value = str(new_total)
+		self.outcome = "Applied"
