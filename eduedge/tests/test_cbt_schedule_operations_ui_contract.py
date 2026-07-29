@@ -181,7 +181,7 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 			"Actual Student Group / Class",
 			"Recorded for Review",
 			"requiresReason",
-			"status_change_reason",
+			"reason: this.confirmDialog.reason",
 			"set_schedule_status",
 			"set_candidate_status",
 			"assign_template_student_group",
