@@ -5,6 +5,9 @@ import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 const MY_PROFILE_ROUTE = "/app/eduedge-my-profile";
 const PROFILE_LINK_ATTRIBUTE = "data-eduedge-my-profile-link";
 const PROFILE_PHOTO_UPLOAD_METHOD = "eduedge.api.profile_uploads.upload_my_profile_photo";
+const INSTITUTION_LOGO_UPLOAD_METHOD = "eduedge.api.institution_logo_uploads.upload_institution_logo";
+const PROFILE_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".webp", "image/jpeg", "image/png", "image/webp"];
+const PROFILE_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 
 export function createEduEdgeMyProfileApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeMyProfile, rootProps);
@@ -28,8 +31,8 @@ function installProfilePhotoUploader() {
 			allow_web_link: false,
 			allow_google_drive: false,
 			restrictions: {
-				allowed_file_types: [".jpg", ".jpeg", ".png", ".webp", "image/jpeg", "image/png", "image/webp"],
-				max_file_size: 2 * 1024 * 1024,
+				allowed_file_types: PROFILE_IMAGE_TYPES,
+				max_file_size: PROFILE_IMAGE_MAX_BYTES,
 			},
 			upload_notes: __("JPG, PNG, or WebP only. Maximum size: 2 MB."),
 			on_success: async (fileDoc) => {
@@ -45,6 +48,47 @@ function installProfilePhotoUploader() {
 					this.saveError = error?.message || __("Profile photo could not be updated.");
 				} finally {
 					this.savingPhoto = false;
+				}
+			},
+		});
+	};
+}
+
+function installInstitutionLogoUploader() {
+	if (!EduEdgeInstitutionProfile?.methods) return;
+	EduEdgeInstitutionProfile.methods.uploadLogo = function uploadLogo() {
+		if (!this.canWrite || !this.selectedInstitution || !frappe.ui?.FileUploader) return;
+		this.profileError = "";
+		const institution = this.selectedInstitution;
+		new frappe.ui.FileUploader({
+			method: INSTITUTION_LOGO_UPLOAD_METHOD,
+			doctype: "EduEdge Institution",
+			docname: institution,
+			fieldname: "logo",
+			allow_multiple: false,
+			make_attachments_public: true,
+			allow_toggle_private: false,
+			disable_file_browser: true,
+			allow_web_link: false,
+			allow_google_drive: false,
+			restrictions: {
+				allowed_file_types: PROFILE_IMAGE_TYPES,
+				max_file_size: PROFILE_IMAGE_MAX_BYTES,
+			},
+			upload_notes: __("JPG, PNG, or WebP only. Maximum size: 2 MB. Institution logos are public."),
+			on_success: async (fileDoc) => {
+				try {
+					if (!fileDoc?.file_url) {
+						throw new Error(__("The uploaded Institution logo response was incomplete."));
+					}
+					const response = await frappe.call("eduedge.api.profiles.get_institution_profile", {
+						institution,
+					});
+					this.data = response.message || this.data;
+					await frappe.eduedge?.syncInstitutionContext?.({ force: true });
+					frappe.show_alert({ message: __("Institution logo updated"), indicator: "green" });
+				} catch (error) {
+					this.profileError = error?.message || __("Institution logo could not be updated.");
 				}
 			},
 		});
@@ -174,6 +218,7 @@ function startProfileAvatarIntegration() {
 }
 
 installProfilePhotoUploader();
+installInstitutionLogoUploader();
 
 window.addEventListener("eduedge:institution-context-changed", (event) => {
 	applyProfileIdentity(event.detail || {});
