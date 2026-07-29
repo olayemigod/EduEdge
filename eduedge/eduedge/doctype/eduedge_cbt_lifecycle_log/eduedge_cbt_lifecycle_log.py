@@ -12,6 +12,11 @@ class EduEdgeCBTLifecycleLog(Document):
 				_("CBT Lifecycle Logs are append-only and cannot be edited."),
 				frappe.ValidationError,
 			)
+		if not getattr(self.flags, "eduedge_internal_lifecycle_log", False):
+			frappe.throw(
+				_("CBT Lifecycle Logs are created only by authorised Schedule and Candidate lifecycle actions."),
+				frappe.PermissionError,
+			)
 		for fieldname, label in (
 			("reference_doctype", _("Reference DocType")),
 			("reference_name", _("Reference Record")),
