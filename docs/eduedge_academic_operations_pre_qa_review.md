@@ -225,7 +225,16 @@ Verify:
 - mobile and tablet layouts remain usable;
 - rapid filter changes do not leave stale context visible.
 
-## 5. Release gate
+## 5. Automated validation
+
+The latest hardened branch passed EduEdge CI run 2071:
+
+- Python compilation;
+- JSON validation;
+- all registered frontend entry-script checks;
+- 320 pure contract tests.
+
+## 6. Release gate
 
 PR #14 must remain draft.
 
@@ -237,6 +246,6 @@ It may proceed to local QA because the latest CI run passed. It must not be merg
 - any runtime permission or SQL defects are fixed;
 - browser acceptance is recorded.
 
-## 6. Safety preserved
+## 7. Safety preserved
 
 The review did not introduce a schema migration and did not alter submitted accounting documents, submitted enrollments, CBT attempt truth or result-publication truth. Existing controller validation and native full forms remain authoritative.
