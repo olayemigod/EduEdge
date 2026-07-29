@@ -44,7 +44,22 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 	def test_operations_api_is_permission_branch_and_platform_guarded(self):
 		wrapper = (APP / "api/cbt_schedule_operations.py").read_text(encoding="utf-8")
 		api = (APP / "api/cbt_schedule_operations_hardened.py").read_text(encoding="utf-8")
-		self.assertIn("cbt_schedule_operations_hardened import *", wrapper)
+		self.assertIn("from eduedge.api.cbt_schedule_operations_hardened import (", wrapper)
+		self.assertIn("__all__", wrapper)
+		for method in (
+			"get_context",
+			"get_schedule",
+			"get_candidate",
+			"get_template_context",
+			"save_schedule",
+			"set_schedule_status",
+			"save_candidate",
+			"set_candidate_status",
+			"assign_template_student_group",
+			"record_intervention",
+			"search_options",
+		):
+			self.assertIn(method, wrapper)
 		for expected in (
 			"get_allowed_school_branches",
 			"assert_branch_access",
@@ -85,7 +100,10 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		self.assertIn('conditions.append(f"{branch_column} in ({values})")', permissions)
 		self.assertIn('conditions.append(f"{branch_column} is null")', permissions)
 		self.assertNotIn("if _has_public_record_access(doctype, resolved_user):\n\t\treturn \"\"", permissions)
-		self.assertIn("EduEdge CBT Lifecycle Log", permissions)
+		self.assertIn("def _lifecycle_log_condition", permissions)
+		self.assertIn("def _has_lifecycle_public_access", permissions)
+		self.assertIn("can_author_public_exams", permissions)
+		self.assertIn("can_assign_public_exams", permissions)
 
 	def test_schedule_controller_enforces_readiness_and_candidate_locking(self):
 		controller = (
@@ -111,6 +129,8 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 			"_assert_no_schedule_overlap",
 			"_assert_no_candidate_overlap",
 			"has_confirmed_candidates",
+			"initial_activation",
+			"Candidates cannot be released before the Scheduled Start",
 		):
 			self.assertIn(expected, governance)
 
@@ -140,7 +160,7 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		):
 			self.assertIn(expected, intervention)
 
-	def test_composite_uniqueness_patch_is_registered(self):
+	def test_composite_uniqueness_patch_is_registered_and_frappe_compatible(self):
 		patches = (APP / "patches.txt").read_text(encoding="utf-8")
 		patch = (APP / "patches/v0_8/add_cbt_candidate_assignment_unique_indexes.py").read_text(encoding="utf-8")
 		self.assertIn("add_cbt_candidate_assignment_unique_indexes", patches)
@@ -148,6 +168,9 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		self.assertIn("uniq_cbt_schedule_public_candidate", patch)
 		self.assertIn("frappe.db.add_unique", patch)
 		self.assertIn("_assert_no_duplicates", patch)
+		self.assertIn("group_by=", patch)
+		self.assertIn("cint(row.total) > 1", patch)
+		self.assertNotIn("having=", patch)
 
 	def test_lifecycle_log_is_append_only_and_branch_isolated(self):
 		meta_path = APP / "eduedge/doctype/eduedge_cbt_lifecycle_log/eduedge_cbt_lifecycle_log.json"
