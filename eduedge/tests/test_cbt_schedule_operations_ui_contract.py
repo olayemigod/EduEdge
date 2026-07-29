@@ -94,6 +94,13 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, api)
 
+	def test_bulk_assignment_retries_database_uniqueness_races(self):
+		wrapper = (APP / "api/cbt_schedule_operations.py").read_text(encoding="utf-8")
+		self.assertIn("@frappe.whitelist()", wrapper)
+		self.assertIn("frappe.DuplicateEntryError", wrapper)
+		self.assertIn("frappe.UniqueValidationError", wrapper)
+		self.assertGreaterEqual(wrapper.count("_assign_template_student_group(schedule)"), 2)
+
 	def test_public_capability_does_not_remove_school_branch_isolation(self):
 		permissions = (APP / "cbt/permissions.py").read_text(encoding="utf-8")
 		self.assertIn("public_allowed = _has_public_record_access", permissions)
@@ -128,9 +135,11 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 			"Examination Centre capacity",
 			"_assert_no_schedule_overlap",
 			"_assert_no_candidate_overlap",
+			"public_candidate_reference",
 			"has_confirmed_candidates",
 			"initial_activation",
 			"Candidates cannot be released before the Scheduled Start",
+			"if actual != expected",
 		):
 			self.assertIn(expected, governance)
 
@@ -148,6 +157,8 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 			"eduedge_time_extension",
 			"status_change_reason",
 			"write_lifecycle_log",
+			"def after_insert",
+			"Candidate Assignment Created",
 		):
 			self.assertIn(expected, candidate)
 		for expected in (
@@ -155,6 +166,7 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 			"Cumulative extra time exceeds",
 			"after_insert",
 			"eduedge_time_extension",
+			"for_update=self.intervention_type == \"Time Extension\"",
 			"self.previous_value = None",
 			"self.attempt_reference = None",
 		):
@@ -172,7 +184,7 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		self.assertIn("cint(row.total) > 1", patch)
 		self.assertNotIn("having=", patch)
 
-	def test_lifecycle_log_is_append_only_and_branch_isolated(self):
+	def test_lifecycle_log_is_server_created_append_only_and_branch_isolated(self):
 		meta_path = APP / "eduedge/doctype/eduedge_cbt_lifecycle_log/eduedge_cbt_lifecycle_log.json"
 		controller_path = APP / "eduedge/doctype/eduedge_cbt_lifecycle_log/eduedge_cbt_lifecycle_log.py"
 		self.assertTrue(meta_path.exists())
@@ -181,11 +193,26 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		fields = {row["fieldname"] for row in meta["fields"]}
 		for fieldname in ("exam_schedule", "candidate_assignment", "school_branch", "from_status", "to_status", "reason", "acted_by", "acted_on"):
 			self.assertIn(fieldname, fields)
+		self.assertTrue(all(not row.get("create") for row in meta["permissions"]))
 		controller = controller_path.read_text(encoding="utf-8")
 		self.assertIn("append-only and cannot be edited", controller)
 		self.assertIn("append-only and cannot be deleted", controller)
+		self.assertIn("eduedge_internal_lifecycle_log", controller)
+		self.assertIn("created only by authorised Schedule and Candidate lifecycle actions", controller)
+		governance = (APP / "cbt/schedule_governance.py").read_text(encoding="utf-8")
+		self.assertIn("doc.flags.eduedge_internal_lifecycle_log = True", governance)
+		self.assertIn("doc.insert(ignore_permissions=True)", governance)
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
 		self.assertIn('"EduEdge CBT Lifecycle Log": "eduedge.cbt.permissions.cbt_lifecycle_log_query"', hooks)
+
+	def test_lifecycle_reason_fields_are_read_only_outside_controlled_actions(self):
+		for path in (
+			APP / "eduedge/doctype/eduedge_cbt_exam_schedule/eduedge_cbt_exam_schedule.json",
+			APP / "eduedge/doctype/eduedge_cbt_candidate_assignment/eduedge_cbt_candidate_assignment.json",
+		):
+			meta = json.loads(path.read_text(encoding="utf-8"))
+			field = next(row for row in meta["fields"] if row["fieldname"] == "status_change_reason")
+			self.assertEqual(field.get("read_only"), 1)
 
 	def test_edgesuite_workbench_exposes_hardened_behaviour(self):
 		component = (APP / "public/js/eduedge_cbt_schedules/EduEdgeCBTSchedules.vue").read_text(encoding="utf-8")
