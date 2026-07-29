@@ -16,11 +16,13 @@ CBT_DOCTYPES = (
 	"EduEdge CBT Exam Schedule",
 	"EduEdge CBT Candidate Assignment",
 	"EduEdge CBT Intervention Log",
+	"EduEdge CBT Lifecycle Log",
 )
 
 PUBLIC_ASSIGNMENT_DOCTYPES = {
 	"EduEdge CBT Candidate Assignment",
 	"EduEdge CBT Intervention Log",
+	"EduEdge CBT Lifecycle Log",
 }
 
 SCHOOL_EXAM = "School Examination"
@@ -53,8 +55,12 @@ def cbt_intervention_log_query(user: str | None = None) -> str:
 	return _school_branch_condition("EduEdge CBT Intervention Log", user)
 
 
+def cbt_lifecycle_log_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Lifecycle Log", user)
+
+
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
-	"""Allow role permissions unless public-exam or branch isolation denies the record."""
+	"""Allow role permissions unless exact public capability or branch isolation denies the record."""
 	resolved_user = user or frappe.session.user
 	if not _is_cbt_operational_user(resolved_user):
 		return True
@@ -93,19 +99,25 @@ def _school_branch_condition(doctype: str, user: str | None) -> str:
 	resolved_user = user or frappe.session.user
 	if not _is_cbt_operational_user(resolved_user):
 		return ""
-	if _has_public_record_access(doctype, resolved_user):
-		return ""
 
+	public_allowed = _has_public_record_access(doctype, resolved_user)
+	branch_column = f"`tab{doctype}`.`school_branch`"
 	if not is_branch_access_enforced():
-		return f"`tab{doctype}`.`school_branch` is not null"
+		return "" if public_allowed else f"{branch_column} is not null"
 
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return f"`tab{doctype}`.`school_branch` is not null"
-	if not allowed:
+		return "" if public_allowed else f"{branch_column} is not null"
+
+	conditions: list[str] = []
+	if allowed:
+		values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+		conditions.append(f"{branch_column} in ({values})")
+	if public_allowed:
+		conditions.append(f"{branch_column} is null")
+	if not conditions:
 		return "1=0"
-	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
-	return f"`tab{doctype}`.`school_branch` in ({values})"
+	return "(" + " OR ".join(conditions) + ")"
 
 
 def _exam_template_condition(user: str | None) -> str:
@@ -113,23 +125,27 @@ def _exam_template_condition(user: str | None) -> str:
 	doctype = "EduEdge CBT Exam Template"
 	if not _is_cbt_operational_user(resolved_user):
 		return ""
-	if _has_public_record_access(doctype, resolved_user):
-		return ""
+
+	public_allowed = _has_public_record_access(doctype, resolved_user)
+	public_condition = (
+		f"`tab{doctype}`.`exam_scope` != {frappe.db.escape(SCHOOL_EXAM)}"
+		if public_allowed
+		else ""
+	)
 	if not is_branch_access_enforced():
-		return f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)}"
+		return "" if public_allowed else f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)}"
 
 	rows = _allowed_branch_rows(resolved_user)
 	if rows is None:
-		return f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)}"
-	if not rows:
-		return "1=0"
+		return "" if public_allowed else f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)}"
+
 	branches = sorted({row.get("name") for row in rows if row.get("name")})
 	institutions = sorted({row.get("institution") for row in rows if row.get("institution")})
 	companies = sorted({row.get("company") for row in rows if row.get("company")})
 	branch_values = ", ".join(frappe.db.escape(value) for value in branches) or "''"
 	institution_values = ", ".join(frappe.db.escape(value) for value in institutions) or "''"
 	company_values = ", ".join(frappe.db.escape(value) for value in companies) or "''"
-	return (
+	school_condition = (
 		f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)} AND ("
 		f"(`tab{doctype}`.`template_reuse_scope` = {frappe.db.escape(REUSE_UNIVERSAL)} "
 		f"AND `tab{doctype}`.`company` in ({company_values})) OR "
@@ -140,6 +156,9 @@ def _exam_template_condition(user: str | None) -> str:
 		f"AND `tab{doctype}`.`school_branch` in ({branch_values}))"
 		")"
 	)
+	if public_condition:
+		return f"({school_condition}) OR ({public_condition})"
+	return school_condition
 
 
 def _has_public_record_access(doctype: str | None, user: str) -> bool:
