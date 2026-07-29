@@ -30,7 +30,6 @@ export function buildEduEdgeMenuItems() {
 
 	const items = [
 		{ section: __("Overview"), sectionIcon: "home", label: __("Home"), route: "/app/eduedge-home", icon: "home", description: __("Education command centre") },
-		{ section: __("Account"), sectionIcon: "user", label: __("My Profile"), route: "/app/eduedge-my-profile", icon: "user", description: __("Photo, contact information, and teaching identity") },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Academic Operations"), route: "/app/eduedge-academic-operations", icon: "book", description: __(`${groupPlural}, ${sessionPlural}, and attendance`) },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Admissions"), route: "/app/eduedge-admissions", icon: "clipboard", description: __("Admission windows and availability") },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Applicants"), route: "/app/eduedge-applicants", icon: "user", description: __("Review prospective students") },
