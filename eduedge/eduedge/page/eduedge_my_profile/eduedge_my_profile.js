@@ -12,15 +12,48 @@ frappe.pages["eduedge-my-profile"].on_page_show = function (wrapper) {
 	const visitId = wrapper.current_visit_id;
 
 	if (wrapper.vue_app) {
-		try { wrapper.vue_app.unmount(); } catch (error) { console.error("Failed to unmount My Profile", error); }
+		try {
+			wrapper.vue_app.unmount();
+		} catch (error) {
+			console.error("Failed to unmount My Profile", error);
+		}
 		wrapper.vue_app = null;
 	}
 
 	$(page.body).empty();
-	const $loading = $(`<div class="p-6 text-center text-muted">${__("Loading My Profile...")}</div>`).appendTo(page.body);
+	const $loading = $(
+		`<div class="p-6 text-center text-muted">${__("Loading My Profile...")}</div>`
+	).appendTo(page.body);
 	const fail = (message) => {
 		$loading.remove();
-		$(`<div class="alert alert-danger p-6 text-center"><strong>${__("My Profile failed to load")}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`).appendTo(page.body);
+		$(
+			`<div class="alert alert-danger p-6 text-center"><strong>${__(
+				"My Profile failed to load"
+			)}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`
+		).appendTo(page.body);
+	};
+
+	const mountProfile = () => {
+		if (wrapper.current_visit_id !== visitId) return;
+		if (!window.EduEdgeMyProfile || typeof window.createEduEdgeMyProfileApp !== "function") {
+			fail(
+				__(
+					"The EduEdge profile runtime is unavailable. Rebuild EduEdge assets, clear cache, and hard-refresh the Desk."
+				)
+			);
+			return;
+		}
+		$loading.remove();
+		const root = $(
+			'<div class="eduedge-my-profile-root" data-edge-product="eduedge"></div>'
+		).appendTo(page.body);
+		try {
+			wrapper.vue_app = window.createEduEdgeMyProfileApp({ pageName: "eduedge-my-profile" });
+			wrapper.vue_app.mount(root[0]);
+		} catch (error) {
+			console.error("Failed to mount My Profile", error);
+			fail(error.message || String(error));
+		}
 	};
 
 	frappe.require("edgesuite_ui.bundle.js", () => {
@@ -30,21 +63,10 @@ frappe.pages["eduedge-my-profile"].on_page_show = function (wrapper) {
 			fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
 			return;
 		}
-		frappe.require("eduedge_my_profile.bundle.js", () => {
-			if (wrapper.current_visit_id !== visitId) return;
-			if (!window.EduEdgeMyProfile || typeof window.createEduEdgeMyProfileApp !== "function") {
-				fail(__("The EduEdge profile bundle is unavailable or incomplete."));
-				return;
-			}
-			$loading.remove();
-			const root = $('<div class="eduedge-my-profile-root" data-edge-product="eduedge"></div>').appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeMyProfileApp({ pageName: "eduedge-my-profile" });
-				wrapper.vue_app.mount(root[0]);
-			} catch (error) {
-				console.error("Failed to mount My Profile", error);
-				fail(error.message || String(error));
-			}
-		});
+		if (window.createEduEdgeMyProfileApp) {
+			mountProfile();
+			return;
+		}
+		frappe.require("eduedge_profile_identity.bundle.js", mountProfile);
 	});
 };
