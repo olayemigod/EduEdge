@@ -3,6 +3,7 @@
 **Review date:** 2026-07-29  
 **Branch:** `agent/eduedge-academic-operations-pages`  
 **Pull request:** #14  
+**Reviewed code head:** `5c4c10fb9e518eb7f6c13baea2b39627ffd7876c`  
 **Status:** Conditional pass for local QA; not approved for merge or production release.
 
 ## 1. Review scope
@@ -227,18 +228,20 @@ Verify:
 
 ## 5. Automated validation
 
-The latest hardened branch passed EduEdge CI run 2071:
+The reviewed code head passed EduEdge CI run 2071:
 
 - Python compilation;
 - JSON validation;
 - all registered frontend entry-script checks;
 - 320 pure contract tests.
 
+Subsequent commits only updated this review document.
+
 ## 6. Release gate
 
 PR #14 must remain draft.
 
-It may proceed to local QA because the latest CI run passed. It must not be merged into `agent/eduedge-integrated-foundation` until:
+It may proceed to local QA because the reviewed code head passed CI. It must not be merged into `agent/eduedge-integrated-foundation` until:
 
 - local build and migration pass;
 - the mandatory role and isolation matrix passes;
