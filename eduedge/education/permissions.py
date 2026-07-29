@@ -4,6 +4,11 @@ import frappe
 
 from eduedge.access_control import user_has_role_permission
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import (
+	get_user_instructor_names,
+	instructor_owns_schedule,
+	is_limited_instructor_user,
+)
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	is_branch_access_enforced,
@@ -73,11 +78,38 @@ def room_query(user: str | None = None) -> str:
 
 
 def course_schedule_query(user: str | None = None) -> str:
-	return _branch_condition("Course Schedule", user)
+	resolved_user = user or frappe.session.user
+	branch_condition = _branch_condition("Course Schedule", resolved_user)
+	if not is_limited_instructor_user(resolved_user):
+		return branch_condition
+	instructors = get_user_instructor_names(resolved_user)
+	if not instructors:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(instructors))
+	return _and_conditions(
+		branch_condition,
+		f"`tabCourse Schedule`.instructor in ({values})",
+	)
 
 
 def student_attendance_query(user: str | None = None) -> str:
-	return _branch_condition("Student Attendance", user)
+	resolved_user = user or frappe.session.user
+	branch_condition = _branch_condition("Student Attendance", resolved_user)
+	if not is_limited_instructor_user(resolved_user):
+		return branch_condition
+	instructors = get_user_instructor_names(resolved_user)
+	if not instructors:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(instructors))
+	ownership_condition = f"""
+		exists (
+			select 1
+			from `tabCourse Schedule` schedule
+			where schedule.name = `tabStudent Attendance`.course_schedule
+				and schedule.instructor in ({values})
+		)
+	"""
+	return _and_conditions(branch_condition, ownership_condition)
 
 
 def assessment_plan_query(user: str | None = None) -> str:
@@ -182,6 +214,31 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 	return branch in allowed
 
 
+def has_course_schedule_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	if not has_education_branch_permission(doc, resolved_user, permission_type):
+		return False
+	return instructor_owns_schedule(doc, resolved_user)
+
+
+def has_student_attendance_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	if not has_education_branch_permission(doc, resolved_user, permission_type):
+		return False
+	if not is_limited_instructor_user(resolved_user):
+		return True
+	course_schedule = doc.get("course_schedule") if doc else None
+	if not course_schedule:
+		return False
+	schedule = frappe.db.get_value(
+		"Course Schedule",
+		course_schedule,
+		["name", "instructor"],
+		as_dict=True,
+	)
+	return instructor_owns_schedule(schedule, resolved_user)
+
+
 def has_school_branch_record_permission(doc, user=None, permission_type=None) -> bool:
 	if not is_branch_access_enforced():
 		return True
@@ -244,6 +301,13 @@ def _branch_condition(
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
 	return f"`tab{doctype}`.`{fieldname}` in ({values})"
+
+
+def _and_conditions(*conditions: str) -> str:
+	parts = [condition.strip() for condition in conditions if condition and condition.strip()]
+	if not parts:
+		return ""
+	return " and ".join(f"({condition})" for condition in parts)
 
 
 def _allowed_branch_names(user: str) -> set[str] | None:
