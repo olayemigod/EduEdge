@@ -60,77 +60,35 @@ doctype_js = {
 }
 
 doc_events = {
-	"Company": {
-		"before_validate": "eduedge.education.institution_types.before_validate_company",
-	},
-	"Program": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_program",
-	},
-	"Course": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_course",
-	},
-	"Student Batch Name": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
-	},
-	"Student House": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
-	},
-	"Instructor": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
-	},
-	"Assessment Group": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
-	},
-	"Grading Scale": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
-	},
+	"Company": {"before_validate": "eduedge.education.institution_types.before_validate_company"},
+	"Program": {"before_validate": "eduedge.education.academic_validation.before_validate_program"},
+	"Course": {"before_validate": "eduedge.education.academic_validation.before_validate_course"},
+	"Student Batch Name": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
+	"Student House": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
+	"Instructor": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
+	"Assessment Group": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
+	"Grading Scale": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
 	"Student Admission": {
 		"before_naming": "eduedge.education.branching.before_naming_student_admission",
 		"before_validate": "eduedge.education.branching.before_validate_student_admission",
 	},
-	"Student Applicant": {
-		"before_validate": "eduedge.education.branching.before_validate_student_applicant",
-	},
-	"Student": {
-		"before_validate": "eduedge.education.branching.before_validate_student",
-	},
+	"Student Applicant": {"before_validate": "eduedge.education.branching.before_validate_student_applicant"},
+	"Student": {"before_validate": "eduedge.education.branching.before_validate_student"},
 	"Program Enrollment": {
 		"before_validate": "eduedge.education.branching.before_validate_program_enrollment",
 		"before_submit": "eduedge.education.enrollment_capacity.before_submit_program_enrollment",
 	},
-	"Student Group": {
-		"before_validate": "eduedge.education.branching.before_validate_student_group",
-	},
-	"Room": {
-		"before_validate": "eduedge.education.branching.before_validate_room",
-	},
-	"Course Schedule": {
-		"before_validate": "eduedge.education.branching.before_validate_course_schedule",
-	},
-	"Student Attendance": {
-		"before_validate": "eduedge.education.branching.before_validate_student_attendance",
-	},
-	"Assessment Plan": {
-		"before_validate": "eduedge.education.assessment_operations.before_validate_assessment_plan",
-	},
-	"Assessment Result": {
-		"before_validate": "eduedge.education.assessment_operations.before_validate_assessment_result",
-	},
-	"Fee Structure": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_fee_structure",
-	},
-	"Fee Schedule": {
-		"before_validate": "eduedge.education.academic_fee_context.before_validate_fee_schedule",
-	},
-	"Fees": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_fees",
-	},
-	"Student Leave Application": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_student_leave",
-	},
-	"Student Log": {
-		"before_validate": "eduedge.education.academic_validation.before_validate_student_log",
-	},
+	"Student Group": {"before_validate": "eduedge.education.branching.before_validate_student_group"},
+	"Room": {"before_validate": "eduedge.education.branching.before_validate_room"},
+	"Course Schedule": {"before_validate": "eduedge.education.branching.before_validate_course_schedule"},
+	"Student Attendance": {"before_validate": "eduedge.education.branching.before_validate_student_attendance"},
+	"Assessment Plan": {"before_validate": "eduedge.education.assessment_operations.before_validate_assessment_plan"},
+	"Assessment Result": {"before_validate": "eduedge.education.assessment_operations.before_validate_assessment_result"},
+	"Fee Structure": {"before_validate": "eduedge.education.academic_validation.before_validate_fee_structure"},
+	"Fee Schedule": {"before_validate": "eduedge.education.academic_fee_context.before_validate_fee_schedule"},
+	"Fees": {"before_validate": "eduedge.education.academic_validation.before_validate_fees"},
+	"Student Leave Application": {"before_validate": "eduedge.education.academic_validation.before_validate_student_leave"},
+	"Student Log": {"before_validate": "eduedge.education.academic_validation.before_validate_student_log"},
 	"EduEdge CBT Question": {
 		"validate": "eduedge.cbt.master_lifecycle.validate_master_docstatus",
 		"before_submit": "eduedge.cbt.master_lifecycle.block_master_submit",
@@ -198,17 +156,17 @@ has_permission = {
 	"Fee Structure": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"EduEdge Enrollment Status Log": "eduedge.education.academic_branch_permissions.has_enrollment_status_log_permission",
 	"EduEdge School Branch": "eduedge.education.permissions.has_school_branch_record_permission",
-	"Student Admission": "eduedge.education.permissions.has_education_branch_permission",
-	"Student Applicant": "eduedge.education.permissions.has_education_branch_permission",
-	"Student": "eduedge.education.permissions.has_education_branch_permission",
-	"Program Enrollment": "eduedge.education.permissions.has_education_branch_permission",
+	"Student Admission": "eduedge.education.permissions.has_student_admission_permission",
+	"Student Applicant": "eduedge.education.permissions.has_student_applicant_permission",
+	"Student": "eduedge.education.permissions.has_student_permission",
+	"Program Enrollment": "eduedge.education.permissions.has_program_enrollment_permission",
 	"Student Group": "eduedge.education.permissions.has_student_group_permission",
 	"Room": "eduedge.education.permissions.has_education_branch_permission",
 	"Course Schedule": "eduedge.education.permissions.has_course_schedule_permission",
 	"Student Attendance": "eduedge.education.permissions.has_student_attendance_permission",
 	"Assessment Plan": "eduedge.education.permissions.has_education_branch_permission",
 	"Assessment Result": "eduedge.education.permissions.has_education_branch_permission",
-	"Guardian": "eduedge.education.permissions.has_education_branch_permission",
+	"Guardian": "eduedge.education.permissions.has_guardian_permission",
 	"EduEdge Program Offering": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Instructor Branch Assignment": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Result Publication": "eduedge.education.permissions.has_school_branch_permission",
@@ -226,28 +184,11 @@ has_permission = {
 fixtures = [
 	{
 		"dt": "Role",
-		"filters": [
-			[
-				"role_name",
-				"in",
-				[
-					"EduEdge Super Administrator",
-					"EduEdge Public Exam Administrator",
-					"EduEdge Administrator",
-					"School Administrator",
-					"Academic Administrator",
-					"Bursar",
-					"Teacher",
-					"CBT Invigilator",
-					"Student Safety Officer",
-					"Registrar",
-					"Admission Officer",
-					"School HR Officer",
-					"Procurement Officer",
-					"School Operations Manager",
-					"EduEdge Parent",
-				],
-			]
-		],
+		"filters": [["role_name", "in", [
+			"EduEdge Super Administrator", "EduEdge Public Exam Administrator", "EduEdge Administrator",
+			"School Administrator", "Academic Administrator", "Bursar", "Teacher", "CBT Invigilator",
+			"Student Safety Officer", "Registrar", "Admission Officer", "School HR Officer",
+			"Procurement Officer", "School Operations Manager", "EduEdge Parent",
+		]]],
 	},
 ]
