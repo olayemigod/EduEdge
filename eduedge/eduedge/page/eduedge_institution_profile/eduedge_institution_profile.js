@@ -63,11 +63,6 @@ frappe.pages["eduedge-institution-profile"].on_page_show = function (wrapper) {
 
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		const runtime = window.EdgeSuiteUI || window.EdgeUI;
-		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
-			fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
-			return;
-		}
 		if (window.createEduEdgeInstitutionProfileApp) {
 			mountProfile();
 			return;
