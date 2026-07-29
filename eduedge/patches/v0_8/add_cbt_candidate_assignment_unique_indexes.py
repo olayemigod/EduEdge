@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 DOCTYPE = "EduEdge CBT Candidate Assignment"
 TABLE = "tabEduEdge CBT Candidate Assignment"
@@ -25,20 +26,21 @@ def execute() -> None:
 
 
 def _assert_no_duplicates(identity_field: str) -> None:
+	# DatabaseQuery supports aggregate fields and group_by, but not a `having`
+	# keyword. Filter the grouped totals in Python before creating the index.
 	rows = frappe.get_all(
 		DOCTYPE,
 		filters=[[identity_field, "is", "set"]],
 		fields=["exam_schedule", identity_field, "count(name) as total"],
 		group_by=f"exam_schedule, {identity_field}",
-		having="count(name) > 1",
-		limit_page_length=1,
+		limit_page_length=0,
 	)
-	if rows:
-		row = rows[0]
+	duplicate = next((row for row in rows if cint(row.total) > 1), None)
+	if duplicate:
 		frappe.throw(
 			_(
 				"Duplicate CBT Candidate Assignments exist for Schedule {0} and candidate identity {1}. Resolve them before migration."
-			).format(row.exam_schedule, row.get(identity_field)),
+			).format(duplicate.exam_schedule, duplicate.get(identity_field)),
 			frappe.ValidationError,
 		)
 
