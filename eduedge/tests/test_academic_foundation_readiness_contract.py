@@ -93,7 +93,7 @@ class TestAcademicFoundationReadinessContract(unittest.TestCase):
 		self.assertIn('termFromContext(context, "academic_term"', fixes)
 		self.assertIn("Academic Periods", fixes)
 		self.assertIn("get_terminology_map", editor)
-		self.assertIn("institution_doc.check_permission", editor)
+		self.assertIn('doc.check_permission("read")', editor)
 
 	def test_section_and_level_descriptions_round_trip_through_the_page_api(self):
 		api = (APP / "api" / "academic_foundation.py").read_text(encoding="utf-8")
