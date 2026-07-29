@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
 GLOBAL_DESK_BUNDLES = {
 	"eduedge_product_menu.bundle.js",
+	"eduedge_profile_identity.bundle.js",
 	"eduedge_shell_identity.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 	"eduedge_terminology.bundle.js",
