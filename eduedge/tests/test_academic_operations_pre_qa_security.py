@@ -14,7 +14,7 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		self.assertNotIn("or coalesce(`tab{doctype}`.`{fieldname}`, '') = ''", permissions)
 		self.assertIn("Fail closed for restricted users", permissions)
 
-	def test_attendance_http_paths_use_secure_overrides(self):
+	def test_attendance_http_paths_use_secure_overrides_and_specialised_permissions(self):
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
 		self.assertIn(
 			'"eduedge.api.academic_operations.get_attendance_register": "eduedge.api.academic_operations_safe.get_attendance_register"',
@@ -25,9 +25,14 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 			hooks,
 		)
 		for token in (
+			'"Student Admission": "eduedge.education.permissions.has_student_admission_permission"',
+			'"Student Applicant": "eduedge.education.permissions.has_student_applicant_permission"',
+			'"Student": "eduedge.education.permissions.has_student_permission"',
+			'"Program Enrollment": "eduedge.education.permissions.has_program_enrollment_permission"',
 			'"Student Group": "eduedge.education.permissions.has_student_group_permission"',
 			'"Course Schedule": "eduedge.education.permissions.has_course_schedule_permission"',
 			'"Student Attendance": "eduedge.education.permissions.has_student_attendance_permission"',
+			'"Guardian": "eduedge.education.permissions.has_guardian_permission"',
 		):
 			self.assertIn(token, hooks)
 
@@ -54,11 +59,16 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		self.assertIn('filters={"employee": ["in", employees], "status": "Active"}', scope)
 		self.assertIn("is_limited_instructor_user", permissions)
 		self.assertIn("schedule.student_group = `tabStudent Group`.name", permissions)
-		self.assertIn("schedule.instructor in", permissions)
+		self.assertIn("group_student.student = `tabStudent`.name", permissions)
+		self.assertIn("group_student.student = `tabProgram Enrollment`.student", permissions)
+		self.assertIn("has_student_permission", permissions)
+		self.assertIn("has_program_enrollment_permission", permissions)
+		self.assertIn("has_guardian_permission", permissions)
 		self.assertIn("has_student_group_permission", permissions)
 		self.assertIn("has_student_attendance_permission", permissions)
 		self.assertIn('schedule_filters["instructor"] = ["in", instructor_names]', safe)
 		self.assertIn("Attendance can only be recorded against a Course Schedule assigned", safe)
+		self.assertIn('if is_limited_instructor_user(resolved_user):\n\t\treturn "1=0"', permissions)
 
 	def test_native_attendance_enforces_schedule_identity_and_serialised_duplicate_check(self):
 		operations = (APP / "education" / "academic_operations.py").read_text(encoding="utf-8")
