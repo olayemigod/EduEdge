@@ -22,13 +22,15 @@ CBT_DOCTYPES = (
 PUBLIC_ASSIGNMENT_DOCTYPES = {
 	"EduEdge CBT Candidate Assignment",
 	"EduEdge CBT Intervention Log",
-	"EduEdge CBT Lifecycle Log",
 }
 
 SCHOOL_EXAM = "School Examination"
 REUSE_UNIVERSAL = "Universal"
 REUSE_INSTITUTION = "Institution-wide"
 REUSE_BRANCH = "Branch-wide"
+SCHEDULE_DOCTYPE = "EduEdge CBT Exam Schedule"
+ASSIGNMENT_DOCTYPE = "EduEdge CBT Candidate Assignment"
+LIFECYCLE_DOCTYPE = "EduEdge CBT Lifecycle Log"
 
 
 def examination_centre_query(user: str | None = None) -> str:
@@ -44,11 +46,11 @@ def cbt_exam_template_query(user: str | None = None) -> str:
 
 
 def cbt_exam_schedule_query(user: str | None = None) -> str:
-	return _school_branch_condition("EduEdge CBT Exam Schedule", user)
+	return _school_branch_condition(SCHEDULE_DOCTYPE, user)
 
 
 def cbt_candidate_assignment_query(user: str | None = None) -> str:
-	return _school_branch_condition("EduEdge CBT Candidate Assignment", user)
+	return _school_branch_condition(ASSIGNMENT_DOCTYPE, user)
 
 
 def cbt_intervention_log_query(user: str | None = None) -> str:
@@ -56,7 +58,7 @@ def cbt_intervention_log_query(user: str | None = None) -> str:
 
 
 def cbt_lifecycle_log_query(user: str | None = None) -> str:
-	return _school_branch_condition("EduEdge CBT Lifecycle Log", user)
+	return _lifecycle_log_condition(user)
 
 
 def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
@@ -69,6 +71,8 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 
 	branch = doc.get("school_branch") if doc else None
 	if not branch:
+		if doc and doc.doctype == LIFECYCLE_DOCTYPE:
+			return _has_lifecycle_public_access(doc, resolved_user)
 		return _has_public_record_access(doc.doctype if doc else None, resolved_user)
 	if not is_branch_access_enforced():
 		return True
@@ -121,6 +125,39 @@ def _school_branch_condition(doctype: str, user: str | None) -> str:
 	return "(" + " OR ".join(conditions) + ")"
 
 
+def _lifecycle_log_condition(user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+
+	doctype = LIFECYCLE_DOCTYPE
+	branch_column = f"`tab{doctype}`.`school_branch`"
+	reference_column = f"`tab{doctype}`.`reference_doctype`"
+	conditions: list[str] = []
+
+	if not is_branch_access_enforced():
+		conditions.append(f"{branch_column} is not null")
+	else:
+		allowed = _allowed_branch_names(resolved_user)
+		if allowed is None:
+			conditions.append(f"{branch_column} is not null")
+		elif allowed:
+			values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+			conditions.append(f"{branch_column} in ({values})")
+
+	if can_author_public_exams(resolved_user):
+		conditions.append(
+			f"({branch_column} is null AND {reference_column} = {frappe.db.escape(SCHEDULE_DOCTYPE)})"
+		)
+	if can_assign_public_exams(resolved_user):
+		conditions.append(
+			f"({branch_column} is null AND {reference_column} = {frappe.db.escape(ASSIGNMENT_DOCTYPE)})"
+		)
+	if not conditions:
+		return "1=0"
+	return "(" + " OR ".join(conditions) + ")"
+
+
 def _exam_template_condition(user: str | None) -> str:
 	resolved_user = user or frappe.session.user
 	doctype = "EduEdge CBT Exam Template"
@@ -160,6 +197,15 @@ def _exam_template_condition(user: str | None) -> str:
 	if public_condition:
 		return f"({school_condition}) OR ({public_condition})"
 	return school_condition
+
+
+def _has_lifecycle_public_access(doc, user: str) -> bool:
+	reference_doctype = doc.get("reference_doctype")
+	if reference_doctype == SCHEDULE_DOCTYPE:
+		return can_author_public_exams(user)
+	if reference_doctype == ASSIGNMENT_DOCTYPE:
+		return can_assign_public_exams(user)
+	return False
 
 
 def _has_public_record_access(doctype: str | None, user: str) -> bool:
