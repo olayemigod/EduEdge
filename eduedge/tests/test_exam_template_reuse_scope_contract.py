@@ -67,9 +67,9 @@ class TestExamTemplateReuseScopeContract(unittest.TestCase):
 			"_validate_template_applicability(template)",
 			"template.template_reuse_scope == REUSE_BRANCH",
 			"template.subject_applicability == SUBJECT_SPECIFIC",
-			"This Institution-wide template cannot be used outside its Institution",
-			"This Universal template cannot be used outside its Company",
-			"Select the actual Subject / Course for this schedule",
+			"This Institution-wide Template cannot be used outside its Institution",
+			"This Universal Template cannot be used outside its Company",
+			"Select the actual Subject / Course for this Schedule",
 			"for fieldname in SNAPSHOT_FIELDS",
 		):
 			self.assertIn(expected, source)
