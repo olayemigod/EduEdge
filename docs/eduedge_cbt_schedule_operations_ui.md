@@ -126,8 +126,8 @@ The uniqueness patch is idempotent and stops with a clear validation error when 
 
 Current hardened checkpoint:
 
-- branch head: `e8d669da2821784fcf5107583a7cb872166890e0`;
-- EduEdge CI run: `2168`;
+- branch head: `f6e9877b890a56c77eba5e1ba6a51d2a1ff6613d`;
+- EduEdge CI run: `2170`;
 - result: passed.
 
 ## Deployment
