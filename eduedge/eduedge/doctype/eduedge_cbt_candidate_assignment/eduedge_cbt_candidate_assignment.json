@@ -55,7 +55,7 @@
   {"fieldname":"access_end","fieldtype":"Datetime","label":"Candidate Access Ends","read_only":1},
   {"fieldname":"governance_section","fieldtype":"Section Break","label":"Assignment Status and Audit"},
   {"default":"Draft","fieldname":"assignment_status","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Assignment Status","options":"Draft\nEligible\nChecked In\nReleased\nCompleted\nWithdrawn\nDisqualified","reqd":1},
-  {"description":"Required when a candidate is Withdrawn or Disqualified. Every status change is copied to an append-only lifecycle log.","fieldname":"status_change_reason","fieldtype":"Small Text","label":"Lifecycle Action Reason"},
+  {"description":"Set only by controlled lifecycle actions. Withdrawal and disqualification require a reason and every transition is copied to an append-only lifecycle log.","fieldname":"status_change_reason","fieldtype":"Small Text","label":"Latest Lifecycle Action Reason","read_only":1},
   {"fieldname":"assigned_by","fieldtype":"Link","label":"Assigned By","options":"User","read_only":1},
   {"fieldname":"assigned_on","fieldtype":"Datetime","label":"Assigned On","read_only":1},
   {"fieldname":"checked_in_by","fieldtype":"Link","label":"Checked In By","options":"User","read_only":1},
