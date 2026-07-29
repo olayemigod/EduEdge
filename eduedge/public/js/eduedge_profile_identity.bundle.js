@@ -41,7 +41,7 @@ function normalizedMenuText(element) {
 }
 
 function isUserMenu(menu) {
-	if (!menu || menu.querySelector(`[${PROFILE_LINK_ATTRIBUTE}]`)) return false;
+	if (!menu) return false;
 	if (
 		menu.closest(
 			".dropdown-navbar-user, .navbar-user, .user-menu, .edge-topbar__user, .edge-topbar__profile, [data-user-menu]"
@@ -50,40 +50,38 @@ function isUserMenu(menu) {
 		return true;
 	}
 	const text = normalizedMenuText(menu);
-	return ["log out", "logout", "my settings", "session defaults", "user profile"].some((label) =>
+	return ["log out", "logout", "my settings", "user settings", "session defaults", "my profile"].some((label) =>
 		text.includes(label)
 	);
 }
 
-function createProfileMenuLink() {
-	const link = document.createElement("a");
-	link.className = "dropdown-item";
-	link.href = MY_PROFILE_ROUTE;
-	link.setAttribute(PROFILE_LINK_ATTRIBUTE, "1");
-	link.setAttribute("role", "menuitem");
-	link.textContent = globalThis.__ ? __("My Profile") : "My Profile";
-	return link;
+function removeInjectedProfileLinks(menu, keep = null) {
+	for (const injectedLink of menu.querySelectorAll(`[${PROFILE_LINK_ATTRIBUTE}]`)) {
+		if (injectedLink === keep) continue;
+		const removableItem = injectedLink.parentElement?.matches("li") ? injectedLink.parentElement : injectedLink;
+		removableItem.remove();
+	}
 }
 
-function installProfileLink(menu) {
+function configureExistingProfileLink(menu) {
 	if (!isUserMenu(menu)) return;
-	const link = createProfileMenuLink();
 	const menuItems = [...menu.querySelectorAll("a, button")];
-	const logoutItem = menuItems.find((item) => {
-		const text = normalizedMenuText(item);
-		return text === "log out" || text === "logout" || text.includes("log out");
-	});
-	const insertionTarget = logoutItem?.parentElement === menu ? logoutItem : logoutItem?.closest("li");
-	if (insertionTarget?.parentElement === menu) {
-		menu.insertBefore(link, insertionTarget);
-	} else {
-		menu.appendChild(link);
+	const profileLink = menuItems.find((item) => normalizedMenuText(item) === "my profile");
+
+	if (!profileLink) {
+		removeInjectedProfileLinks(menu);
+		return;
 	}
+
+	removeInjectedProfileLinks(menu, profileLink);
+	profileLink.setAttribute(PROFILE_LINK_ATTRIBUTE, "1");
+	profileLink.setAttribute("href", MY_PROFILE_ROUTE);
+	profileLink.setAttribute("role", profileLink.getAttribute("role") || "menuitem");
 }
 
 function ensureProfileAvatarLink(root = document) {
 	for (const menu of root.querySelectorAll?.(".dropdown-menu, [role='menu']") || []) {
-		installProfileLink(menu);
+		configureExistingProfileLink(menu);
 	}
 }
 
@@ -111,7 +109,7 @@ function startProfileAvatarIntegration() {
 		for (const mutation of mutations) {
 			for (const node of mutation.addedNodes) {
 				if (!(node instanceof Element)) continue;
-				if (node.matches?.(".dropdown-menu, [role='menu']")) installProfileLink(node);
+				if (node.matches?.(".dropdown-menu, [role='menu']")) configureExistingProfileLink(node);
 				ensureProfileAvatarLink(node);
 			}
 		}
