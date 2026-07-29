@@ -124,11 +124,7 @@ The uniqueness patch is idempotent and stops with a clear validation error when 
 
 ## Automated verification
 
-Current hardened checkpoint:
-
-- branch head: `f6e9877b890a56c77eba5e1ba6a51d2a1ff6613d`;
-- EduEdge CI run: `2170`;
-- result: passed.
+The exact branch head and CI run are recorded in PR #15 and should be confirmed before deployment.
 
 ## Deployment
 
