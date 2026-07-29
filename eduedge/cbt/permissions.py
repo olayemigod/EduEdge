@@ -102,12 +102,13 @@ def _school_branch_condition(doctype: str, user: str | None) -> str:
 
 	public_allowed = _has_public_record_access(doctype, resolved_user)
 	branch_column = f"`tab{doctype}`.`school_branch`"
+	school_records_only = f"`tab{doctype}`.`school_branch` is not null"
 	if not is_branch_access_enforced():
-		return "" if public_allowed else f"{branch_column} is not null"
+		return "" if public_allowed else school_records_only
 
 	allowed = _allowed_branch_names(resolved_user)
 	if allowed is None:
-		return "" if public_allowed else f"{branch_column} is not null"
+		return "" if public_allowed else school_records_only
 
 	conditions: list[str] = []
 	if allowed:
