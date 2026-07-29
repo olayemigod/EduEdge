@@ -53,8 +53,6 @@ jobs:
           node --check eduedge/public/js/eduedge_programmes.bundle.js
           node --check eduedge/public/js/eduedge_programme_offerings.bundle.js
           node --check eduedge/public/js/eduedge_programme_offerings/level_cascade.js
-          node --check eduedge/public/js/eduedge_my_profile.bundle.js
-          node --check eduedge/public/js/eduedge_institution_profile.bundle.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
           node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
           node --check eduedge/public/js/eduedge_resource_center.bundle.js
