@@ -5,7 +5,11 @@ import frappe
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.services.branch_context import get_allowed_institutions, is_branch_access_enforced
 
-PRIVILEGED_ROLES = {"System Manager", "EduEdge Administrator"}
+PRIVILEGED_ROLES = {
+	"System Manager",
+	"EduEdge Super Administrator",
+	"EduEdge Administrator",
+}
 DIRECT_INSTITUTION_DOCTYPES = {
 	"EduEdge Academic Section",
 	"EduEdge Academic Level",
@@ -77,7 +81,10 @@ def has_academic_institution_permission(doc, user=None, permission_type=None) ->
 		return True
 	institution = doc.get(fieldname)
 	if not institution:
-		return doc.doctype in LEGACY_OPTIONAL_DOCTYPES
+		# Blank legacy masters are intentionally visible only to privileged users.
+		# Allowing every institution-scoped user to see them can leak unclassified
+		# master names across tenants on a shared-hosted site.
+		return False
 	return institution in _allowed_institutions(resolved_user)
 
 
@@ -91,10 +98,9 @@ def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
 	if not institutions:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
-	condition = f"`tab{doctype}`.`{fieldname}` in ({values})"
-	if doctype in LEGACY_OPTIONAL_DOCTYPES:
-		condition = f"({condition} or coalesce(`tab{doctype}`.`{fieldname}`, '') = '')"
-	return condition
+	# Fail closed for restricted users. Privileged users bypass _should_scope and
+	# remain able to classify legacy records with a blank Institution.
+	return f"`tab{doctype}`.`{fieldname}` in ({values})"
 
 
 def _allowed_institutions(user: str) -> set[str]:
