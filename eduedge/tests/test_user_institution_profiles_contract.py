@@ -113,6 +113,10 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		self.assertIn("createEduEdgeInstitutionProfileApp", bridge)
 		self.assertIn("data-eduedge-my-profile-link", bridge)
 		self.assertIn("MY_PROFILE_ROUTE", bridge)
+		self.assertIn("isAvatarProfileMenuItem", bridge)
+		self.assertIn("event.stopImmediatePropagation()", bridge)
+		self.assertIn("window.location.assign(MY_PROFILE_ROUTE)", bridge)
+		self.assertIn("Frappe's existing User-profile handler", bridge)
 
 		report_api = (APP / "api" / "report_cards_profiled.py").read_text()
 		self.assertIn("_attach_institution_identity", report_api)
