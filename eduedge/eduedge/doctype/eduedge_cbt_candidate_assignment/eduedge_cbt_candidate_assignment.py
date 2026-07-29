@@ -64,6 +64,22 @@ class EduEdgeCBTCandidateAssignment(Document):
 		self._validate_status_transition()
 		self._prevent_identity_mutation()
 
+	def after_insert(self) -> None:
+		if self.assignment_status == "Draft":
+			return
+		write_lifecycle_log(
+			reference_doctype=self.doctype,
+			reference_name=self.name,
+			exam_schedule=self.exam_schedule,
+			candidate_assignment=self.name,
+			exam_scope=self.exam_scope,
+			school_branch=self.school_branch,
+			event_type="Candidate Assignment Created",
+			from_status="Draft",
+			to_status=self.assignment_status,
+			reason=getattr(self, "_lifecycle_reason", None) or self.status_change_reason,
+		)
+
 	def on_update(self) -> None:
 		before = self.get_doc_before_save()
 		if not before or before.assignment_status == self.assignment_status:
