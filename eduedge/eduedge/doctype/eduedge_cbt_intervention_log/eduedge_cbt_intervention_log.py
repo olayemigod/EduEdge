@@ -19,7 +19,6 @@ INTERVENTION_TYPES = {
 	"Candidate Reassignment",
 	"Other",
 }
-EXECUTABLE_TYPES = {"Time Extension"}
 
 
 class EduEdgeCBTInterventionLog(Document):
@@ -38,8 +37,7 @@ class EduEdgeCBTInterventionLog(Document):
 	def after_insert(self) -> None:
 		if self.intervention_type != "Time Extension":
 			return
-		assignment = frappe.get_doc("EduEdge CBT Candidate Assignment", self.candidate_assignment)
-		assignment.check_permission("write")
+		assignment = self._assignment_doc
 		assignment.flags.eduedge_time_extension = True
 		assignment.approved_extra_time_minutes = cint(self.new_value)
 		assignment.save()
@@ -53,8 +51,14 @@ class EduEdgeCBTInterventionLog(Document):
 	def _validate_assignment(self) -> None:
 		if not self.candidate_assignment:
 			frappe.throw(_("Candidate Assignment is required."), frappe.ValidationError)
-		assignment_doc = frappe.get_doc("EduEdge CBT Candidate Assignment", self.candidate_assignment)
+		assignment_doc = frappe.get_doc(
+			"EduEdge CBT Candidate Assignment",
+			self.candidate_assignment,
+			for_update=self.intervention_type == "Time Extension",
+		)
 		assignment_doc.check_permission("read")
+		if self.intervention_type == "Time Extension":
+			assignment_doc.check_permission("write")
 		assignment = assignment_doc.as_dict()
 		self.exam_schedule = assignment.exam_schedule
 		self.exam_scope = assignment.exam_scope
@@ -77,6 +81,7 @@ class EduEdgeCBTInterventionLog(Document):
 				_("The selected intervention is not allowed for a terminal Candidate Assignment."),
 				frappe.ValidationError,
 			)
+		self._assignment_doc = assignment_doc
 		self._assignment = assignment
 
 	def _validate_intervention(self) -> None:
