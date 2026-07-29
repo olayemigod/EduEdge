@@ -70,7 +70,23 @@ def program_enrollment_query(user: str | None = None) -> str:
 
 
 def student_group_query(user: str | None = None) -> str:
-	return _branch_condition("Student Group", user)
+	resolved_user = user or frappe.session.user
+	branch_condition = _branch_condition("Student Group", resolved_user)
+	if not is_limited_instructor_user(resolved_user):
+		return branch_condition
+	instructors = get_user_instructor_names(resolved_user)
+	if not instructors:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(instructors))
+	ownership_condition = f"""
+		exists (
+			select 1
+			from `tabCourse Schedule` schedule
+			where schedule.student_group = `tabStudent Group`.name
+				and schedule.instructor in ({values})
+		)
+	"""
+	return _and_conditions(branch_condition, ownership_condition)
 
 
 def room_query(user: str | None = None) -> str:
@@ -212,6 +228,28 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 		return True
 	branch = doc.get(BRANCH_FIELD)
 	return branch in allowed
+
+
+def has_student_group_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	if not has_education_branch_permission(doc, resolved_user, permission_type):
+		return False
+	if not is_limited_instructor_user(resolved_user):
+		return True
+	if not doc or doc.is_new():
+		return False
+	instructors = get_user_instructor_names(resolved_user)
+	if not instructors:
+		return False
+	return bool(
+		frappe.db.exists(
+			"Course Schedule",
+			{
+				"student_group": doc.name,
+				"instructor": ["in", instructors],
+			},
+		)
+	)
 
 
 def has_course_schedule_permission(doc, user=None, permission_type=None) -> bool:
