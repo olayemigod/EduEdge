@@ -26,12 +26,17 @@ def execute() -> None:
 
 
 def _assert_no_duplicates(identity_field: str) -> None:
-	# DatabaseQuery supports aggregate fields and group_by, but not a `having`
-	# keyword. Filter the grouped totals in Python before creating the index.
+	# Frappe's query-builder-backed get_all rejects SQL function strings such
+	# as "count(name) as total". Use the supported aggregate dictionary syntax
+	# and filter grouped totals in Python before creating the unique index.
 	rows = frappe.get_all(
 		DOCTYPE,
 		filters=[[identity_field, "is", "set"]],
-		fields=["exam_schedule", identity_field, "count(name) as total"],
+		fields=[
+			"exam_schedule",
+			identity_field,
+			{"COUNT": "name", "as": "total"},
+		],
 		group_by=f"exam_schedule, {identity_field}",
 		limit_page_length=0,
 	)
