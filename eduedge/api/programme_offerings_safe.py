@@ -27,7 +27,7 @@ def get_programme_offering_options(
 	return payload
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_programme_offering(
 	school_branch: str,
 	program: str,
