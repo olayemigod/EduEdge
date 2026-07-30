@@ -31,6 +31,8 @@ SCHEDULE_DOCTYPE = "EduEdge CBT Exam Schedule"
 ASSIGNMENT_DOCTYPE = "EduEdge CBT Candidate Assignment"
 SCHOOL_EXAM = "School Examination"
 MAX_OPTIONS = 50
+RESERVATION_SCHEDULE_STATUSES = {"Ready", "Active"}
+RESERVATION_CANDIDATE_STATUSES = {"Eligible", "Checked In", "Released"}
 
 
 def _parse_values(value: str | dict | None) -> dict[str, Any]:
@@ -61,6 +63,15 @@ def _lock_schedule_row(schedule: str) -> None:
 	frappe.get_doc(SCHEDULE_DOCTYPE, schedule, for_update=True)
 
 
+def _lock_cbt_reservation_governance_row() -> None:
+	"""Hold one shared database row lock until Frappe commits the request."""
+	frappe.get_doc("DocType", SCHEDULE_DOCTYPE, for_update=True)
+
+
+def _reservation_context(required: bool):
+	return schedule_operation_lock("reservation-governance") if required else nullcontext()
+
+
 def _institution_owned_options(
 	*,
 	doctype: str,
@@ -82,7 +93,7 @@ def _institution_owned_options(
 		["institution", "company", "enabled"],
 		as_dict=True,
 	)
-	if not branch or not branch.enabled:
+	if not branch or not frappe.utils.cint(branch.enabled):
 		return []
 	meta = frappe.get_meta(doctype)
 	filters: dict[str, Any] = {}
@@ -95,6 +106,8 @@ def _institution_owned_options(
 	else:
 		# Fail closed when the master has no ownership field.
 		return []
+	if meta.has_field("disabled"):
+		filters["disabled"] = 0
 	pattern = f"%{str(query or '').strip()}%"
 	or_filters = [["name", "like", pattern]]
 	fields = ["name"]
@@ -158,10 +171,10 @@ def save_schedule(values: str | dict, name: str | None = None) -> dict:
 
 @frappe.whitelist()
 def set_schedule_status(name: str, status: str, reason: str | None = None) -> dict:
-	# One site-wide activation lock prevents concurrent phantom collision checks
-	# for different Schedules sharing a Centre, Invigilator or candidate.
-	activation_lock = schedule_operation_lock("activation-governance") if status == "Active" else nullcontext()
-	with activation_lock:
+	reservation_required = status in RESERVATION_SCHEDULE_STATUSES
+	with _reservation_context(reservation_required):
+		if reservation_required:
+			_lock_cbt_reservation_governance_row()
 		with schedule_operation_lock(name):
 			locked = frappe.get_doc(SCHEDULE_DOCTYPE, name, for_update=True)
 			locked.check_permission("write")
@@ -178,40 +191,51 @@ def save_candidate(values: str | dict, name: str | None = None) -> dict:
 	# Extra time is exclusively an audited Time Extension intervention.
 	payload.pop("approved_extra_time_minutes", None)
 	schedule = _candidate_schedule(name=name, values=payload)
-	with schedule_operation_lock(schedule):
-		_lock_schedule_row(schedule)
-		with controlled_cbt_operation(
-			"eduedge_access_guarded",
-			"eduedge_controlled_status_action",
-		):
-			return _save_candidate(values=payload, name=name)
+	initial_status = str(payload.get("assignment_status") or "Eligible") if not name else ""
+	reservation_required = not name and initial_status in RESERVATION_CANDIDATE_STATUSES
+	with _reservation_context(reservation_required):
+		if reservation_required:
+			_lock_cbt_reservation_governance_row()
+		with schedule_operation_lock(schedule):
+			_lock_schedule_row(schedule)
+			with controlled_cbt_operation(
+				"eduedge_access_guarded",
+				"eduedge_controlled_status_action",
+			):
+				return _save_candidate(values=payload, name=name)
 
 
 @frappe.whitelist()
 def set_candidate_status(name: str, status: str, reason: str | None = None) -> dict:
 	schedule = _candidate_schedule(name=name)
-	with schedule_operation_lock(schedule):
-		_lock_schedule_row(schedule)
-		with controlled_cbt_operation(
-			"eduedge_access_guarded",
-			"eduedge_controlled_status_action",
-		):
-			return _set_candidate_status(name=name, status=status, reason=reason)
+	reservation_required = status in RESERVATION_CANDIDATE_STATUSES
+	with _reservation_context(reservation_required):
+		if reservation_required:
+			_lock_cbt_reservation_governance_row()
+		with schedule_operation_lock(schedule):
+			_lock_schedule_row(schedule)
+			with controlled_cbt_operation(
+				"eduedge_access_guarded",
+				"eduedge_controlled_status_action",
+			):
+				return _set_candidate_status(name=name, status=status, reason=reason)
 
 
 @frappe.whitelist()
 def assign_template_student_group(schedule: str) -> dict:
-	"""Assign one Schedule Class idempotently under a Schedule mutation lock."""
-	with schedule_operation_lock(schedule):
-		_lock_schedule_row(schedule)
-		with controlled_cbt_operation(
-			"eduedge_access_guarded",
-			"eduedge_controlled_status_action",
-		):
-			try:
-				return _assign_template_student_group(schedule)
-			except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
-				return _assign_template_student_group(schedule)
+	"""Assign one Schedule Class idempotently under reservation and Schedule locks."""
+	with _reservation_context(True):
+		_lock_cbt_reservation_governance_row()
+		with schedule_operation_lock(schedule):
+			_lock_schedule_row(schedule)
+			with controlled_cbt_operation(
+				"eduedge_access_guarded",
+				"eduedge_controlled_status_action",
+			):
+				try:
+					return _assign_template_student_group(schedule)
+				except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+					return _assign_template_student_group(schedule)
 
 
 @frappe.whitelist()
