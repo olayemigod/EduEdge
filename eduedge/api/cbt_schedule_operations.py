@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Any
 
 import frappe
@@ -24,9 +25,12 @@ from eduedge.cbt.schedule_governance import (
 	schedule_operation_lock,
 	withdraw_non_started_candidates_for_cancellation,
 )
+from eduedge.education.offerings import assert_branch_access
 
 SCHEDULE_DOCTYPE = "EduEdge CBT Exam Schedule"
 ASSIGNMENT_DOCTYPE = "EduEdge CBT Candidate Assignment"
+SCHOOL_EXAM = "School Examination"
+MAX_OPTIONS = 50
 
 
 def _parse_values(value: str | dict | None) -> dict[str, Any]:
@@ -55,6 +59,60 @@ def _candidate_schedule(name: str | None = None, values: str | dict | None = Non
 
 def _lock_schedule_row(schedule: str) -> None:
 	frappe.get_doc(SCHEDULE_DOCTYPE, schedule, for_update=True)
+
+
+def _institution_owned_options(
+	*,
+	doctype: str,
+	title_field: str,
+	payload: dict[str, Any],
+	query: str,
+) -> list[dict]:
+	if not frappe.has_permission(doctype, "read"):
+		frappe.throw(_("You do not have read permission for {0}.").format(doctype), frappe.PermissionError)
+	if (payload.get("exam_scope") or SCHOOL_EXAM) != SCHOOL_EXAM:
+		return []
+	branch_name = str(payload.get("school_branch") or payload.get("page_branch") or "").strip()
+	if not branch_name:
+		return []
+	assert_branch_access(branch_name)
+	branch = frappe.db.get_value(
+		"EduEdge School Branch",
+		branch_name,
+		["institution", "company", "enabled"],
+		as_dict=True,
+	)
+	if not branch or not branch.enabled:
+		return []
+	meta = frappe.get_meta(doctype)
+	filters: dict[str, Any] = {}
+	if meta.has_field("eduedge_institution"):
+		filters["eduedge_institution"] = branch.institution
+	elif meta.has_field("institution"):
+		filters["institution"] = branch.institution
+	elif meta.has_field("company"):
+		filters["company"] = branch.company
+	else:
+		# Fail closed when the master has no ownership field.
+		return []
+	pattern = f"%{str(query or '').strip()}%"
+	or_filters = [["name", "like", pattern]]
+	fields = ["name"]
+	if meta.has_field(title_field):
+		fields.append(title_field)
+		or_filters.append([title_field, "like", pattern])
+	rows = frappe.get_list(
+		doctype,
+		filters=filters,
+		or_filters=or_filters,
+		fields=fields,
+		order_by=f"{title_field} asc" if meta.has_field(title_field) else "name asc",
+		limit_page_length=MAX_OPTIONS,
+	)
+	return [
+		{"value": row.name, "label": row.get(title_field) or row.name}
+		for row in rows
+	]
 
 
 @frappe.whitelist()
@@ -100,14 +158,18 @@ def save_schedule(values: str | dict, name: str | None = None) -> dict:
 
 @frappe.whitelist()
 def set_schedule_status(name: str, status: str, reason: str | None = None) -> dict:
-	with schedule_operation_lock(name):
-		locked = frappe.get_doc(SCHEDULE_DOCTYPE, name, for_update=True)
-		locked.check_permission("write")
-		with controlled_cbt_operation("eduedge_controlled_status_action"):
-			if status == "Cancelled":
-				withdraw_non_started_candidates_for_cancellation(name, str(reason or "").strip())
-			with controlled_cbt_operation("eduedge_access_guarded"):
-				return _set_schedule_status(name=name, status=status, reason=reason)
+	# One site-wide activation lock prevents concurrent phantom collision checks
+	# for different Schedules sharing a Centre, Invigilator or candidate.
+	activation_lock = schedule_operation_lock("activation-governance") if status == "Active" else nullcontext()
+	with activation_lock:
+		with schedule_operation_lock(name):
+			locked = frappe.get_doc(SCHEDULE_DOCTYPE, name, for_update=True)
+			locked.check_permission("write")
+			with controlled_cbt_operation("eduedge_controlled_status_action"):
+				if status == "Cancelled":
+					withdraw_non_started_candidates_for_cancellation(name, str(reason or "").strip())
+				with controlled_cbt_operation("eduedge_access_guarded"):
+					return _set_schedule_status(name=name, status=status, reason=reason)
 
 
 @frappe.whitelist()
@@ -171,35 +233,31 @@ def record_intervention(values: str | dict) -> dict:
 @frappe.whitelist()
 def search_options(fieldname: str, txt: str | None = None, values: str | dict | None = None) -> list[dict]:
 	payload = _parse_values(values)
-	if fieldname == "primary_invigilator" and not any(
-		frappe.has_permission(SCHEDULE_DOCTYPE, permission_type)
-		for permission_type in ("create", "write")
-	):
-		frappe.throw(_("Schedule management permission is required to search Invigilators."), frappe.PermissionError)
-
-	options = _search_options(fieldname=fieldname, txt=txt, values=payload)
-	if fieldname != "program" or not options:
-		return options
-
-	branch_name = payload.get("school_branch") or payload.get("page_branch") or ""
-	if not branch_name:
-		return []
-	branch = frappe.db.get_value(
-		"EduEdge School Branch",
-		branch_name,
-		["institution", "company"],
-		as_dict=True,
-	)
-	if not branch:
-		return []
-	meta = frappe.get_meta("Program")
-	filters: dict[str, Any] = {"name": ["in", [row.get("value") for row in options if row.get("value")]]}
-	if meta.has_field("eduedge_institution"):
-		filters["eduedge_institution"] = branch.institution
-	if meta.has_field("company"):
-		filters["company"] = branch.company
-	allowed = set(frappe.get_list("Program", filters=filters, pluck="name"))
-	return [row for row in options if row.get("value") in allowed]
+	if fieldname == "primary_invigilator":
+		if not any(
+			frappe.has_permission(SCHEDULE_DOCTYPE, permission_type)
+			for permission_type in ("create", "write")
+		):
+			frappe.throw(_("Schedule management permission is required to search Invigilators."), frappe.PermissionError)
+		if (payload.get("exam_scope") or SCHOOL_EXAM) == SCHOOL_EXAM and not (
+			payload.get("school_branch") or payload.get("page_branch")
+		):
+			frappe.throw(_("Select a School Branch / Campus before searching Invigilators."), frappe.ValidationError)
+	if fieldname == "program":
+		return _institution_owned_options(
+			doctype="Program",
+			title_field="program_name",
+			payload=payload,
+			query=str(txt or ""),
+		)
+	if fieldname == "assessment_group":
+		return _institution_owned_options(
+			doctype="Assessment Group",
+			title_field="assessment_group_name",
+			payload=payload,
+			query=str(txt or ""),
+		)
+	return _search_options(fieldname=fieldname, txt=txt, values=payload)
 
 
 __all__ = (
