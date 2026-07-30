@@ -101,6 +101,7 @@ def before_validate_native_master_identity(doc, method=None) -> None:
 	friendly = _clean_display_name(doc.get(DISPLAY_FIELD) or doc.get(config["source"]))
 	if friendly:
 		doc.set(DISPLAY_FIELD, friendly)
+		_validate_friendly_scope(doc, friendly, config["label"])
 	if doc.is_new() or not doc.meta.has_field(config["source"]):
 		return
 	old_source = doc.get_db_value(config["source"])
@@ -109,6 +110,28 @@ def before_validate_native_master_identity(doc, method=None) -> None:
 		frappe.throw(
 			_("The technical identity of this {0} cannot be edited directly. Use Rename if the document identity must change.").format(doc.doctype),
 			frappe.ValidationError,
+		)
+
+
+def _validate_friendly_scope(doc, friendly: str, label: str) -> None:
+	filters: dict = {DISPLAY_FIELD: friendly}
+	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
+	if institution:
+		filters[INSTITUTION_FIELD] = institution
+	elif doc.doctype in {"Department", "Program", "Course", "Student Group", "Student Batch Name"}:
+		# The existing business validators provide the clearer missing-Institution error.
+		return
+	if doc.doctype == "Student Group":
+		for fieldname in (BRANCH_FIELD, "program", "academic_year", "academic_term"):
+			if doc.meta.has_field(fieldname):
+				value = doc.get(fieldname)
+				filters[fieldname] = value if value else ["is", "not set"]
+	if doc.name:
+		filters["name"] = ["!=", doc.name]
+	if frappe.db.exists(doc.doctype, filters):
+		frappe.throw(
+			_("{0} {1} already exists in this Institution and academic context.").format(label, friendly),
+			frappe.DuplicateEntryError,
 		)
 
 
