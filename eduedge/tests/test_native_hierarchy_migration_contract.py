@@ -14,6 +14,9 @@ class TestNativeHierarchyMigrationContract(unittest.TestCase):
 		self.assertIn("ensure_native_academic_context_foundation", install)
 		self.assertEqual(install.count("ensure_native_academic_context_foundation()"), 2)
 		self.assertIn("academic_fields.ensure_academic_context_foundation()", helper)
+		self.assertIn("ensure_academic_progression_foundation()", helper)
+		self.assertIn("ensure_enrollment_progression_fields()", helper)
+		self.assertIn("ensure_progression_terminology()", helper)
 		self.assertIn("canonical_backfill", fields)
 		self.assertNotIn("backfill_legacy_sections_to_departments =", helper)
 		self.assertNotIn("original =", helper)
@@ -39,6 +42,19 @@ class TestNativeHierarchyMigrationContract(unittest.TestCase):
 		self.assertIn("DISPLAY_FIELD", patch)
 		self.assertNotIn("frappe.delete_doc", patch)
 		self.assertIn("eduedge.patches.v0_9.migrate_native_academic_hierarchy", patches)
+
+	def test_tertiary_level_classification_is_unambiguous_and_non_destructive(self):
+		patch = (APP / "patches" / "v0_9" / "classify_tertiary_academic_levels.py").read_text(encoding="utf-8")
+		patches = (APP / "patches.txt").read_text(encoding="utf-8")
+		self.assertIn('LEVEL_TYPES = {"TERTIARY", "TRAINING_CENTRE"}', patch)
+		self.assertIn('filters={"program": ["is", "not set"]}', patch)
+		self.assertIn("len(programmes) != 1", patch)
+		self.assertIn("program_institution != level.institution", patch)
+		self.assertIn("EduEdge Program Offering", patch)
+		self.assertIn("Student Group", patch)
+		self.assertNotIn("delete_doc", patch)
+		self.assertNotIn("Program Enrollment", patch)
+		self.assertIn("eduedge.patches.v0_9.classify_tertiary_academic_levels", patches)
 
 	def test_legacy_operational_assets_are_removed(self):
 		self.assertFalse((APP / "public" / "js" / "eduedge_programme_offerings" / "level_cascade.js").exists())
