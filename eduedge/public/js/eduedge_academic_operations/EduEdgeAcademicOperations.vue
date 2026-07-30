@@ -13,9 +13,9 @@
 			<template #header>
 				<EdgePageHeader
 					eyebrow="Academic Operations"
-					:title="`${term('student_group', true, 'Classes')}, ${term('class_session', true, 'Schedules')} and attendance`"
+					:title="`${term('student_group', true, 'Student Groups')}, ${term('class_session', true, 'Schedules')} and attendance`"
 					:subtitle="`Run daily academic activity for ${activeInstitutionName || 'the selected Institution'} and ${activeBranchName || 'Branch / Campus'}.`"
-					:action-label="canCreateStudentGroup ? `New ${term('student_group', false, 'Class / Student Group')}` : ''"
+					:action-label="canCreateStudentGroup ? `New ${term('student_group', false, 'Student Group / Class Arm')}` : ''"
 					@action="openRoute('/app/student-group/new-student-group')"
 				/>
 			</template>
@@ -48,11 +48,11 @@
 							<input v-model="filters.date" type="date" class="form-control" @change="dateChanged" />
 						</label>
 						<label>
-							<span>{{ term('student_group', false, 'Class / Student Group') }}</span>
+							<span>{{ term('student_group', false, 'Student Group / Class Arm') }}</span>
 							<select v-model="filters.student_group" class="form-control" @change="groupChanged">
-								<option value="">All {{ term('student_group', true, 'classes') }}</option>
+								<option value="">All {{ term('student_group', true, 'student groups').toLowerCase() }}</option>
 								<option v-for="group in context.student_groups" :key="group.name" :value="group.name">
-									{{ group.student_group_name }} · {{ group.student_count || 0 }} {{ term('student', true, 'students') }}
+									{{ group.student_group_name }} · {{ group.academic_level_name || group.program || group.course || "No class / level" }} · {{ group.student_count || 0 }} {{ term('student', true, 'students') }}
 								</option>
 							</select>
 						</label>
@@ -64,17 +64,26 @@
 
 				<section class="eduedge-context-strip">
 					<div><span>Institution</span><strong>{{ activeInstitutionName || "Not configured" }}</strong></div>
-					<div><span>{{ term('academic_year', false, 'Academic Year') }}</span><strong>{{ context.filters?.academic_year || "Not resolved" }}</strong></div>
+					<div><span>{{ term('academic_year', false, 'Academic Session') }}</span><strong>{{ context.filters?.academic_year || "Not resolved" }}</strong></div>
 					<div><span>{{ term('academic_term', false, 'Academic Period') }}</span><strong>{{ calendarPeriodLabel }}</strong></div>
 					<EdgeStatusBadge
 						:label="calendarSourceLabel"
 						:status="context.academic_calendar?.source || 'unknown'"
-						:tone="context.academic_calendar?.calendar_gap ? 'warning' : 'success'"
+						:tone="calendarReady ? 'success' : 'warning'"
 					/>
 				</section>
 
 				<EdgeActionBar
-					v-if="context.academic_calendar?.calendar_gap"
+					v-if="context.academic_calendar?.blocking_issue"
+					:label="context.academic_calendar.blocking_issue"
+				>
+					<template #actions>
+						<button type="button" class="edge-button" @click="openRoute('/app/eduedge-academic-foundation')">Configure Academic Session</button>
+					</template>
+				</EdgeActionBar>
+
+				<EdgeActionBar
+					v-else-if="context.academic_calendar?.calendar_gap"
 					label="This date is inside the Institution calendar but outside every configured academic period. EduEdge has intentionally left the period blank."
 				>
 					<template #actions>
@@ -83,7 +92,7 @@
 				</EdgeActionBar>
 
 				<EdgeDashboardLayout min-column-width="12rem">
-					<EdgeStatCard :label="term('student_group', true, 'Classes')" :value="context.counts.student_groups" helper="Active groups in the resolved session" />
+					<EdgeStatCard :label="term('student_group', true, 'Student Groups')" :value="context.counts.student_groups" helper="Active groups in the resolved session and period" />
 					<EdgeStatCard :label="`Assigned ${term('instructor', true, 'Instructors')}`" :value="context.counts.assigned_instructors" :helper="canReadInstructorAssignments ? 'Enabled Branch assignments' : 'Assignment count hidden by permission'" />
 					<EdgeStatCard :label="`Today's ${term('class_session', true, 'Schedules')}`" :value="context.counts.schedules" helper="Filtered by selected date" />
 					<EdgeStatCard label="Rooms Used" :value="context.counts.rooms_used" :helper="`${context.counts.unassigned_room_sessions || 0} sessions without rooms`" />
@@ -103,13 +112,13 @@
 				<section class="eduedge-operations-grid">
 					<article class="eduedge-panel">
 						<div class="eduedge-panel-header">
-							<div><p class="edge-eyebrow">{{ term('class_session', false, 'Schedule') }}</p><h2>{{ term('student_group', true, 'Classes') }} for {{ filters.date }}</h2></div>
+							<div><p class="edge-eyebrow">{{ term('class_session', false, 'Schedule') }}</p><h2>{{ term('student_group', true, 'Student Groups') }} for {{ filters.date }}</h2></div>
 							<button v-if="canCreateCourseSchedule" type="button" class="edge-button" @click="openRoute('/app/course-schedule/new-course-schedule')">Add {{ term('class_session', false, 'schedule') }}</button>
 						</div>
 						<EdgeEmptyState
 							v-if="!context.schedules.length"
-							:title="`No ${term('student_group', true, 'classes').toLowerCase()} scheduled`"
-							:description="canCreateCourseSchedule ? 'Create a Course Schedule or choose another date.' : 'Choose another date or contact an academic administrator.'"
+							:title="`No ${term('student_group', true, 'student groups').toLowerCase()} scheduled`"
+							:description="canCreateCourseSchedule ? 'Create a Course Schedule or choose another date.' : calendarReady ? 'Choose another date or contact an academic administrator.' : 'Configure the Institution Academic Session and Terms first.'"
 						/>
 						<div v-else class="eduedge-schedule-list">
 							<button
@@ -130,7 +139,7 @@
 
 					<article class="eduedge-panel">
 						<div class="eduedge-panel-header">
-							<div><p class="edge-eyebrow">Attendance</p><h2>{{ term('student_group', false, 'Class') }} register</h2></div>
+							<div><p class="edge-eyebrow">Attendance</p><h2>{{ term('student_group', false, 'Student Group / Class Arm') }} register</h2></div>
 							<button type="button" class="edge-button" :disabled="!canReadAttendance || !filters.student_group || registerLoading" @click="loadRegister">Load register</button>
 						</div>
 
@@ -144,8 +153,8 @@
 						<EdgeErrorState v-else-if="registerError" title="Register could not load" :message="registerError" action-label="Try again" @retry="loadRegister" />
 						<EdgeEmptyState
 							v-else-if="!register.students.length"
-							:title="canReadAttendance ? `Select a ${term('student_group', false, 'class')}` : 'Attendance is not available for this role'"
-							:description="canReadAttendance ? `Choose a ${term('student_group', false, 'Class / Student Group')} or a schedule to open the register.` : 'Your role does not have Student Attendance read permission.'"
+							:title="canReadAttendance ? `Select a ${term('student_group', false, 'student group')}` : 'Attendance is not available for this role'"
+							:description="canReadAttendance ? `Choose a ${term('student_group', false, 'Student Group / Class Arm')} or a schedule to open the register.` : 'Your role does not have Student Attendance read permission.'"
 						/>
 						<template v-else>
 							<div class="eduedge-register-summary">
@@ -247,9 +256,13 @@ export default {
 		activeBranchName() { return this.context.selected_branch?.branch_name || this.context.allowed_branches.find((item) => item.name === this.filters.branch)?.branch_name || this.context.current_branch?.branch_name || ""; },
 		activeInstitutionName() { return this.context.selected_branch?.institution_name || ""; },
 		calendarPeriodLabel() { return this.context.academic_calendar?.period_label || this.context.filters?.academic_term || "Not resolved"; },
+		calendarReady() { return Boolean(this.context.academic_calendar?.ready && !this.context.academic_calendar?.blocking_issue); },
 		calendarSourceLabel() {
+			if (this.context.academic_calendar?.blocking_issue) return "Institution calendar required";
 			if (this.context.academic_calendar?.calendar_gap) return "Calendar period gap";
-			return this.context.academic_calendar?.source === "institution_calendar" ? "Institution calendar" : "Education Settings fallback";
+			if (this.context.academic_calendar?.source === "institution_calendar") return "Institution calendar";
+			if (this.context.academic_calendar?.source === "education_settings_legacy") return "Legacy Education Settings";
+			return "Not resolved";
 		},
 		selectedSchedule() { return this.context.schedules.find((row) => row.name === this.filters.course_schedule) || null; },
 		permissions() { return this.context.permissions || emptyPermissions(); },
@@ -257,8 +270,8 @@ export default {
 		canReadAttendance() { return Boolean(this.permissions.can_read_attendance); },
 		canManageAttendance() { return Boolean(this.registerPermissions.can_create_attendance || this.registerPermissions.can_write_attendance); },
 		canSubmitAttendance() { return Boolean(this.registerPermissions.can_submit_attendance); },
-		canCreateStudentGroup() { return Boolean(this.permissions.can_create_student_group); },
-		canCreateCourseSchedule() { return Boolean(this.permissions.can_create_course_schedule); },
+		canCreateStudentGroup() { return Boolean(this.calendarReady && this.permissions.can_create_student_group); },
+		canCreateCourseSchedule() { return Boolean(this.calendarReady && this.permissions.can_create_course_schedule); },
 		canReadRooms() { return Boolean(this.permissions.can_read_rooms); },
 		canReadInstructorAssignments() { return Boolean(this.permissions.can_read_instructor_assignments); },
 	},
@@ -274,6 +287,9 @@ export default {
 				this.context = response.message || this.context;
 				this.filters.branch = this.context.filters?.branch || this.filters.branch;
 				this.filters.date = this.context.filters?.date || this.filters.date;
+				if (!this.context.student_groups.some((row) => row.name === this.filters.student_group)) {
+					this.filters.student_group = "";
+				}
 			} catch (error) { this.error = error?.message || "Academic operations context could not be loaded."; }
 			finally { this.loading = false; }
 		},
@@ -285,7 +301,7 @@ export default {
 				await this.loadContext();
 			} catch (error) { frappe.msgprint({ title: __("Unable to switch branch"), message: error?.message || __("The selected branch could not be activated."), indicator: "red" }); }
 		},
-		async dateChanged() { this.filters.course_schedule = ""; this.register = emptyRegister(); await this.loadContext(); },
+		async dateChanged() { this.filters.student_group = ""; this.filters.course_schedule = ""; this.register = emptyRegister(); await this.loadContext(); },
 		async groupChanged() { this.filters.course_schedule = ""; this.register = emptyRegister(); await this.loadContext(); },
 		selectSchedule(schedule) { this.filters.student_group = schedule.student_group; this.filters.course_schedule = schedule.name; this.loadRegister(); },
 		selectCoverage(row) { this.filters.student_group = row.student_group; this.filters.course_schedule = row.course_schedule; this.loadRegister(); },
