@@ -181,7 +181,9 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		self.assertIn("frappe.db.add_unique", patch)
 		self.assertIn("_assert_no_duplicates", patch)
 		self.assertIn("group_by=", patch)
+		self.assertIn('{"COUNT": "name", "as": "total"}', patch)
 		self.assertIn("cint(row.total) > 1", patch)
+		self.assertNotIn('"count(name) as total"', patch)
 		self.assertNotIn("having=", patch)
 
 	def test_lifecycle_log_is_server_created_append_only_and_branch_isolated(self):
