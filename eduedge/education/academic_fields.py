@@ -68,33 +68,58 @@ def legacy_section_field() -> dict:
 	}
 
 
-def legacy_level_field(*, read_only: bool = True) -> dict:
+def legacy_level_field() -> dict:
 	return {
 		"fieldname": ACADEMIC_LEVEL_FIELD,
 		"fieldtype": "Link",
 		"label": "Legacy Academic Level",
 		"options": "EduEdge Academic Level",
 		"hidden": 1,
-		"read_only": int(read_only),
+		"read_only": 1,
 		"description": "Deprecated migration reference. Use Program and Student Group.",
 	}
 
 
+def _display_field(*, insert_after: str, label: str, description: str) -> dict:
+	# Imported lazily by the installer as well, avoiding an import cycle with the
+	# identity helper which depends on the constants in this module.
+	from eduedge.education.native_identity import display_name_field
+
+	return display_name_field(insert_after=insert_after, label=label, description=description)
+
+
 ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 	"Department": [
+		_display_field(
+			insert_after="department_name",
+			label="Department / School Section Display Name",
+			description="Friendly Institution-facing name. The native Department identity may be namespaced when another Institution uses the same name.",
+		),
 		institution_field(
 			"Institution that owns this Faculty, School, Department, or School Section.",
 			insert_after="company",
 		),
 	],
 	"Program": [
+		_display_field(
+			insert_after="program_name",
+			label="Programme / Class Display Name",
+			description="Friendly name shown to users. The native Program identity is namespaced only when required on a shared site.",
+		),
 		institution_field(
 			"Institution that owns this Programme or Class.",
 			insert_after="department",
 		),
 		legacy_section_field(),
 	],
-	"Course": [institution_field("Institution that owns this Subject, Course, or Module.")],
+	"Course": [
+		_display_field(
+			insert_after="course_name",
+			label="Course / Subject Display Name",
+			description="Friendly name shown to users. The native Course identity is namespaced only when required on a shared site.",
+		),
+		institution_field("Institution that owns this Subject, Course, or Module.", insert_after="department"),
+	],
 	"Student Applicant": [
 		{
 			**offering_field("Exact Class Intake, Programme Intake, or Training Intake selected by the applicant."),
@@ -113,11 +138,23 @@ ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 		branch_field("Derived from the selected Programme Offering; not from the Student's current profile.", read_only=True),
 	],
 	"Student Group": [
+		_display_field(
+			insert_after="student_group_name",
+			label="Class Arm / Level Display Name",
+			description="Friendly class arm, level, lecture group, or training class name. Native identity is namespaced when reused across Institutions or Sessions.",
+		),
 		offering_field("Offering that this Class Arm, Level, Lecture Group, or Training Class belongs to."),
-		institution_field("Derived from the selected Programme Offering.", read_only=True),
+		institution_field("Derived from the selected Programme Offering or Programme.", read_only=True),
 		legacy_level_field(),
 	],
-	"Student Batch Name": [institution_field("Institution that owns this Admission Set, Cohort, or Batch.")],
+	"Student Batch Name": [
+		_display_field(
+			insert_after="batch_name",
+			label="Student Batch / Cohort Display Name",
+			description="Friendly Admission Set, Cohort, or Batch name shown to users.",
+		),
+		institution_field("Institution that owns this Admission Set, Cohort, or Batch."),
+	],
 	"Student House": [institution_field("Institution that owns this Student House.")],
 	"Instructor": [institution_field("Institution that primarily assigns this Instructor.")],
 	"Assessment Group": [institution_field("Institution that owns this Assessment Group.")],
@@ -126,7 +163,7 @@ ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 		institution_field("Institution that owns this fee structure."),
 		branch_field("Optional Branch-specific fee structure."),
 		offering_field("Optional exact Offering for this fee structure."),
-		legacy_level_field(read_only=False),
+		legacy_level_field(),
 	],
 	"Fee Schedule": [
 		institution_field("Derived from Fee Structure or Programme Offering.", read_only=True),
@@ -201,6 +238,9 @@ def ensure_academic_context_foundation() -> None:
 	}
 	if available:
 		create_custom_fields(available, update=True)
+	from eduedge.education.native_identity import ensure_native_identity_foundation
+
+	ensure_native_identity_foundation()
 	ensure_academic_terminology()
 	backfill_legacy_sections_to_departments()
 	backfill_program_offering_identity()
@@ -244,59 +284,9 @@ def ensure_academic_terminology() -> None:
 
 
 def backfill_legacy_sections_to_departments() -> None:
-	if not (
-		frappe.db.exists("DocType", "Department")
-		and frappe.db.exists("DocType", "EduEdge Academic Section")
-		and frappe.get_meta("Department").has_field(INSTITUTION_FIELD)
-	):
-		return
-	sections = frappe.get_all(
-		"EduEdge Academic Section",
-		fields=["name", "section_name", "institution", "enabled"],
-		order_by="creation asc",
-	)
-	mapping: dict[str, str] = {}
-	for section in sections:
-		company = frappe.db.get_value("EduEdge Institution", section.institution, "company")
-		if not company or not section.section_name:
-			continue
-		department = frappe.db.get_value(
-			"Department",
-			{"department_name": section.section_name, "company": company},
-			"name",
-		)
-		if department:
-			owner = frappe.db.get_value("Department", department, INSTITUTION_FIELD)
-			if not owner:
-				frappe.db.set_value("Department", department, INSTITUTION_FIELD, section.institution, update_modified=False)
-			elif owner != section.institution:
-				department = None
-		if not department:
-			doc = frappe.get_doc(
-				{
-					"doctype": "Department",
-					"department_name": section.section_name,
-					"company": company,
-					"is_group": 1,
-					INSTITUTION_FIELD: section.institution,
-				}
-			)
-			doc.insert(ignore_permissions=True)
-			department = doc.name
-		mapping[section.name] = department
+	from eduedge.education.native_hierarchy_migration import backfill_legacy_sections_to_departments as canonical_backfill
 
-	if mapping and frappe.get_meta("Program").has_field(ACADEMIC_SECTION_FIELD):
-		programmes = frappe.get_all(
-			"Program",
-			filters={ACADEMIC_SECTION_FIELD: ["is", "set"]},
-			fields=["name", "department", ACADEMIC_SECTION_FIELD],
-		)
-		for programme in programmes:
-			department = mapping.get(programme.get(ACADEMIC_SECTION_FIELD))
-			if department and not programme.department:
-				frappe.db.set_value("Program", programme.name, "department", department, update_modified=False)
-	frappe.clear_cache(doctype="Department")
-	frappe.clear_cache(doctype="Program")
+	canonical_backfill()
 
 
 def backfill_program_offering_identity() -> None:
@@ -325,7 +315,7 @@ def backfill_program_offering_identity() -> None:
 			updates["institution"] = frappe.db.get_value("EduEdge School Branch", row.school_branch, "institution")
 		if meta.has_field("department") and not row.get("department") and row.program:
 			updates["department"] = frappe.db.get_value("Program", row.program, "department")
-		if meta.has_field("academic_section") and not row.get("academic_section") and row.program and program_meta.has_field(ACADEMIC_SECTION_FIELD):
+		if meta.has_field("academic_section") and not row.get("academic_section") and row.program and program_meta.has_field(ACAMIC_SECTION_FIELD):
 			updates["academic_section"] = frappe.db.get_value("Program", row.program, ACADEMIC_SECTION_FIELD)
 		updates = {key: value for key, value in updates.items() if value not in (None, "")}
 		if updates:
