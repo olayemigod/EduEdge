@@ -1,27 +1,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import re
 
 import frappe
 
 from eduedge.education import academic_fields
 from eduedge.education.academic_fields import ACADEMIC_SECTION_FIELD, INSTITUTION_FIELD
+from eduedge.education.native_identity import DISPLAY_FIELD
 
 
 def ensure_native_academic_context_foundation() -> None:
-	"""Run the normal foundation installer with a collision-safe Section backfill.
-
-	The temporary replacement keeps the canonical installer as the single schema and
-	terminology entrypoint while preventing same-name Departments in a shared Company
-	from being claimed by the wrong Institution.
-	"""
-	original = academic_fields.backfill_legacy_sections_to_departments
-	academic_fields.backfill_legacy_sections_to_departments = backfill_legacy_sections_to_departments
-	try:
-		academic_fields.ensure_academic_context_foundation()
-	finally:
-		academic_fields.backfill_legacy_sections_to_departments = original
+	"""Install the canonical native academic schema, identity, and migration layer."""
+	academic_fields.ensure_academic_context_foundation()
 
 
 def backfill_legacy_sections_to_departments() -> None:
@@ -61,23 +51,22 @@ def backfill_legacy_sections_to_departments() -> None:
 			unowned = _unowned_department(section.section_name, institution.company)
 			unambiguous = len(owners_by_key[(institution.company, _normalise(section.section_name))]) == 1
 			if unowned and unambiguous:
-				frappe.db.set_value("Department", unowned, INSTITUTION_FIELD, section.institution, update_modified=False)
+				updates = {INSTITUTION_FIELD: section.institution}
+				if frappe.get_meta("Department").has_field(DISPLAY_FIELD):
+					updates[DISPLAY_FIELD] = section.section_name
+				frappe.db.set_value("Department", unowned, updates, update_modified=False)
 				department = unowned
 		if not department:
-			department_name = _available_department_name(
-				section.section_name,
-				institution.institution_code or section.institution,
-				institution.company,
-			)
-			doc = frappe.get_doc(
-				{
-					"doctype": "Department",
-					"department_name": department_name,
-					"company": institution.company,
-					"is_group": 1,
-					INSTITUTION_FIELD: section.institution,
-				}
-			)
+			values = {
+				"doctype": "Department",
+				"department_name": section.section_name,
+				"company": institution.company,
+				"is_group": 1,
+				INSTITUTION_FIELD: section.institution,
+			}
+			if frappe.get_meta("Department").has_field(DISPLAY_FIELD):
+				values[DISPLAY_FIELD] = section.section_name
+			doc = frappe.get_doc(values)
 			doc.insert(ignore_permissions=True)
 			department = doc.name
 		mapping[section.name] = department
@@ -96,32 +85,38 @@ def backfill_legacy_sections_to_departments() -> None:
 	frappe.clear_cache(doctype="Program")
 
 
-def _exact_owned_department(department_name: str, company: str, institution: str) -> str | None:
+def _exact_owned_department(display_name: str, company: str, institution: str) -> str | None:
+	meta = frappe.get_meta("Department")
+	if meta.has_field(DISPLAY_FIELD):
+		name = frappe.db.get_value(
+			"Department",
+			{DISPLAY_FIELD: display_name, "company": company, INSTITUTION_FIELD: institution},
+			"name",
+		)
+		if name:
+			return name
 	return frappe.db.get_value(
 		"Department",
-		{"department_name": department_name, "company": company, INSTITUTION_FIELD: institution},
+		{"department_name": display_name, "company": company, INSTITUTION_FIELD: institution},
 		"name",
 	)
 
 
-def _unowned_department(department_name: str, company: str) -> str | None:
+def _unowned_department(display_name: str, company: str) -> str | None:
+	meta = frappe.get_meta("Department")
+	if meta.has_field(DISPLAY_FIELD):
+		name = frappe.db.get_value(
+			"Department",
+			{DISPLAY_FIELD: display_name, "company": company, INSTITUTION_FIELD: ["is", "not set"]},
+			"name",
+		)
+		if name:
+			return name
 	return frappe.db.get_value(
 		"Department",
-		{"department_name": department_name, "company": company, INSTITUTION_FIELD: ["is", "not set"]},
+		{"department_name": display_name, "company": company, INSTITUTION_FIELD: ["is", "not set"]},
 		"name",
 	)
-
-
-def _available_department_name(base_name: str, institution_code: str, company: str) -> str:
-	base_name = str(base_name or "").strip()
-	code = re.sub(r"[^A-Za-z0-9]+", "-", str(institution_code or "").strip()).strip("-") or "Institution"
-	candidate = base_name
-	counter = 1
-	while frappe.db.exists("Department", {"department_name": candidate, "company": company}):
-		suffix = f" ({code})" if counter == 1 else f" ({code}-{counter})"
-		candidate = f"{base_name}{suffix}"
-		counter += 1
-	return candidate
 
 
 def _normalise(value: str) -> str:
