@@ -16,6 +16,7 @@ DIRECT_INSTITUTION_DOCTYPES = {
 	"EduEdge Institution Academic Calendar",
 }
 LEGACY_OPTIONAL_DOCTYPES = {
+	"Department",
 	"Program",
 	"Course",
 	"Student Batch Name",
@@ -37,6 +38,10 @@ def academic_level_query(user: str | None = None) -> str:
 
 def academic_calendar_query(user: str | None = None) -> str:
 	return _institution_query("EduEdge Institution Academic Calendar", "institution", user)
+
+
+def department_query(user: str | None = None) -> str:
+	return _institution_query("Department", INSTITUTION_FIELD, user)
 
 
 def program_query(user: str | None = None) -> str:
@@ -81,9 +86,8 @@ def has_academic_institution_permission(doc, user=None, permission_type=None) ->
 		return True
 	institution = doc.get(fieldname)
 	if not institution:
-		# Blank legacy masters are intentionally visible only to privileged users.
-		# Allowing every institution-scoped user to see them can leak unclassified
-		# master names across tenants on a shared-hosted site.
+		# Blank legacy masters are visible only to privileged users. Restricted users
+		# must not see unclassified records on a shared-hosted site.
 		return False
 	return institution in _allowed_institutions(resolved_user)
 
