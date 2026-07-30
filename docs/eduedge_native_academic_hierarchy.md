@@ -10,7 +10,7 @@ The authoritative hierarchy is:
 
 Native Frappe Education records remain authoritative for Academic Year, Academic Term, Course, Student Batch, Student Group, Course Schedule, Student Attendance, Program Enrollment and assessment records.
 
-EduEdge adds Institution, Branch, Programme Offering, calendar, access and terminology controls around those native records.
+EduEdge adds Institution, Branch, Programme Offering, calendar, access, terminology and shared-site identity controls around those native records.
 
 ## Institution-type mappings
 
@@ -67,6 +67,30 @@ EduEdge does not auto-create tertiary Student Groups from legacy Academic Levels
 - Course: Module.
 - Academic Year: Training Year.
 - Academic Term: Training Session.
+
+## Shared-site native identities
+
+Frappe uses globally unique technical names for several native Education masters. A shared EduEdge site must therefore allow two Institutions to use the same normal school-facing labels without sharing one academic record.
+
+EduEdge adds `eduedge_display_name` to these collision-prone native masters:
+
+- Department;
+- Program;
+- Course;
+- Student Group;
+- Student Batch Name.
+
+The friendly display name is what users see in Links, lists and EduEdge pages. The native technical name remains the document identity used by Frappe references and audit trails.
+
+When a technical name is available, EduEdge keeps it unchanged. When another Institution or Session already uses it, EduEdge generates a deterministic namespaced technical identity while preserving the friendly label. For example, two schools may both see `JSS 1`, `Mathematics` and `JSS 1A`, even though their internal document identities differ.
+
+Friendly-name uniqueness still applies inside the appropriate academic scope:
+
+- Department, Program, Course and Student Batch names are unique within an Institution;
+- Student Group names are unique within Institution, Branch, Program, Academic Year and Academic Term;
+- the same Class Arm or Level may be reused in a different Institution or Academic Session.
+
+Existing records are not renamed by migration. Their friendly names are backfilled from their current native names. Standard Program, Course and Student Group forms hide the technical identity during normal editing and use the friendly name as the operational field.
 
 ## Programme Offering
 
@@ -134,31 +158,44 @@ The selected Student Group determines the Branch and Program. A Course Schedule 
 
 ### Attendance
 
-Attendance requires the exact Course Schedule and Student Group context. Submitted attendance is immutable. Duplicate creation is serialised and rejected.
+Attendance uses the exact Course Schedule and Student Group context.
+
+- When one Course Schedule exists for the selected Student Group and date, a direct attendance form may resolve it automatically.
+- When more than one Course Schedule exists, the exact schedule must be selected.
+- When no Course Schedule exists, explicitly unscheduled attendance remains allowed.
+- Submitted attendance is immutable.
+- Duplicate creation is serialised and rejected.
 
 ## Migration and backward compatibility
 
 The migration is idempotent and non-destructive.
 
 - Legacy `EduEdge Academic Section` records are preserved and mapped to native Departments.
-- Same-name Sections in a shared Company are mapped collision-safely using Institution ownership and, only when needed, an Institution-code suffix.
+- Same-name Sections in a shared Company are mapped collision-safely using Institution ownership and the shared native identity layer.
 - Primary and Secondary legacy Academic Levels are migrated to native Programs because they represent Classes such as `JSS 1` or `Nursery 1`.
 - Blank Student Group Program links are filled only where the legacy mapping is unambiguous.
 - Tertiary legacy Levels are preserved for review and are not guessed into Student Groups.
 - Legacy Section and Level custom fields remain hidden/read-only for traceability.
 - Existing submitted enrollment, attendance, assessment, fee and accounting documents are not rewritten.
+- Existing native document identities are not renamed.
 
 ## Required QA
 
-1. Run migration twice and confirm the second run creates no duplicate Departments, Programs or calendars.
-2. Primary: `Nursery Section → Nursery 1 → Nursery 1A/Nursery 1B`.
-3. Secondary: `Junior Secondary School → JSS 1 → JSS 1A/JSS 1B`.
-4. Tertiary: `School of Agriculture → BSc Agriculture → 100 Level/200 Level`.
-5. Verify Institution and Branch changes clear invalid dependent fields.
-6. Verify Programs cannot use another Institution's Department.
-7. Verify Offerings cannot use another Institution's Program, Batch, Session or Term.
-8. Verify Student Groups cannot use a Course outside their Program.
-9. Verify Course Schedules cannot use another Branch's Room or Instructor.
-10. Verify Academic Operations blocks dates outside the Institution calendar or its Terms.
-11. Verify limited Teachers see only their assigned schedules, groups, students and attendance.
-12. Verify submitted attendance remains immutable and duplicate attendance is rejected.
+1. Build EduEdge and run migration twice; confirm the second run creates no duplicate Departments, Programs, Courses, Student Groups, Batches, calendars or Property Setters.
+2. Create the same friendly Department, Program, Course and Batch names in two Institutions; confirm both save and Link fields show the friendly labels.
+3. Create the same friendly Student Group in two Institutions and reuse it in a later Academic Session; confirm each technical identity remains distinct.
+4. Confirm duplicate friendly names are rejected inside the same Institution and academic scope.
+5. Confirm a top-level Department remains editable after ERPNext assigns its global framework root.
+6. Primary: `Nursery Section → Nursery 1 → Nursery 1A/Nursery 1B`.
+7. Secondary: `Junior Secondary School → JSS 1 → JSS 1A/JSS 1B`.
+8. Tertiary: `School of Agriculture → BSc Agriculture → 100 Level/200 Level`.
+9. Verify Institution and Branch changes clear invalid dependent fields.
+10. Verify Programs cannot use another Institution's Department.
+11. Verify Offerings cannot use another Institution's Program, Batch, Session or Term.
+12. Verify Student Groups cannot use a Course outside their Program.
+13. Verify Course Schedules cannot use another Branch's Room or Instructor.
+14. Verify Academic Operations blocks dates outside the Institution calendar or its Terms.
+15. Verify direct attendance auto-resolves one schedule, blocks ambiguous schedules and permits unscheduled attendance only when no schedule exists.
+16. Verify limited Teachers see only their assigned schedules, groups, students and attendance.
+17. Verify submitted attendance remains immutable and duplicate attendance is rejected.
+18. Verify a genuine profile image is accepted and a renamed non-image file is rejected.
