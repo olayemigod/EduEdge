@@ -33,7 +33,7 @@ def _parse_values(value: str | dict | None) -> dict[str, Any]:
 	if not value:
 		return {}
 	if isinstance(value, dict):
-		return value
+		return dict(value)
 	parsed = frappe.parse_json(value)
 	if not isinstance(parsed, dict):
 		frappe.throw(_("Expected a JSON object."), frappe.ValidationError)
@@ -95,7 +95,7 @@ def save_schedule(values: str | dict, name: str | None = None) -> dict:
 		if name:
 			_lock_schedule_row(name)
 		with controlled_cbt_operation("eduedge_access_guarded"):
-			return _save_schedule(values=values, name=name)
+			return _save_schedule(values=payload, name=name)
 
 
 @frappe.whitelist()
@@ -112,14 +112,17 @@ def set_schedule_status(name: str, status: str, reason: str | None = None) -> di
 
 @frappe.whitelist()
 def save_candidate(values: str | dict, name: str | None = None) -> dict:
-	schedule = _candidate_schedule(name=name, values=values)
+	payload = _parse_values(values)
+	# Extra time is exclusively an audited Time Extension intervention.
+	payload.pop("approved_extra_time_minutes", None)
+	schedule = _candidate_schedule(name=name, values=payload)
 	with schedule_operation_lock(schedule):
 		_lock_schedule_row(schedule)
 		with controlled_cbt_operation(
 			"eduedge_access_guarded",
 			"eduedge_controlled_status_action",
 		):
-			return _save_candidate(values=values, name=name)
+			return _save_candidate(values=payload, name=name)
 
 
 @frappe.whitelist()
@@ -162,7 +165,7 @@ def record_intervention(values: str | dict) -> dict:
 			"eduedge_access_guarded",
 			"eduedge_controlled_intervention",
 		):
-			return _record_intervention(values=values)
+			return _record_intervention(values=payload)
 
 
 @frappe.whitelist()
@@ -174,7 +177,7 @@ def search_options(fieldname: str, txt: str | None = None, values: str | dict | 
 	):
 		frappe.throw(_("Schedule management permission is required to search Invigilators."), frappe.PermissionError)
 
-	options = _search_options(fieldname=fieldname, txt=txt, values=values)
+	options = _search_options(fieldname=fieldname, txt=txt, values=payload)
 	if fieldname != "program" or not options:
 		return options
 
