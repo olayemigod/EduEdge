@@ -8,6 +8,7 @@ from frappe.utils import cint
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.academic_hierarchy import _validate_department
+from eduedge.education.native_identity import DISPLAY_FIELD
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.institution_context import get_effective_institution_context
 
@@ -60,11 +61,12 @@ def get_programmes_page(
 		or_filters = {
 			"name": ["like", like],
 			"program_name": ["like", like],
+			DISPLAY_FIELD: ["like", like],
 			"program_abbreviation": ["like", like],
 			"department": ["like", like],
 		}
 
-	fields = ["name", "program_name", "program_abbreviation", "department", INSTITUTION_FIELD, "modified"]
+	fields = ["name", "program_name", DISPLAY_FIELD, "program_abbreviation", "department", INSTITUTION_FIELD, "modified"]
 	meta = frappe.get_meta("Program")
 	if meta.has_field("enabled"):
 		fields.append("enabled")
@@ -73,12 +75,14 @@ def get_programmes_page(
 		filters=filters,
 		or_filters=or_filters,
 		fields=fields,
-		order_by="department asc, program_name asc, name asc",
+		order_by=f"department asc, {DISPLAY_FIELD} asc, program_name asc, name asc",
 		start=start,
 		page_length=page_length + 1,
 	)
 	has_more = len(rows) > page_length
 	rows = rows[:page_length]
+	for row in rows:
+		row["display_name"] = row.get(DISPLAY_FIELD) or row.program_name or row.name
 	_attach_programme_counts(rows)
 	institutions = _list_institutions()
 	departments = _list_departments(institution)
@@ -175,15 +179,20 @@ def _list_departments(institution: str | None = None) -> list[dict]:
 	elif institution and meta.has_field("company"):
 		filters["company"] = _institution_company(institution)
 	fields = ["name", "department_name", "parent_department", "is_group", "company"]
+	if meta.has_field(DISPLAY_FIELD):
+		fields.append(DISPLAY_FIELD)
 	if meta.has_field(INSTITUTION_FIELD):
 		fields.append(INSTITUTION_FIELD)
-	return frappe.get_list(
+	rows = frappe.get_list(
 		"Department",
 		filters=filters,
 		fields=fields,
 		order_by="lft asc, department_name asc",
 		page_length=MAX_OPTION_ROWS,
 	)
+	for row in rows:
+		row["display_name"] = row.get(DISPLAY_FIELD) or row.department_name or row.name
+	return rows
 
 
 def _assert_institution_access(institution: str) -> None:
@@ -220,11 +229,12 @@ def search_departments(txt: str | None = None, institution: str | None = None) -
 			row for row in rows
 			if needle in str(row.get("name") or "").casefold()
 			or needle in str(row.get("department_name") or "").casefold()
+			or needle in str(row.get("display_name") or "").casefold()
 		]
 	return [
 		{
 			"value": row.name,
-			"label": row.get("department_name") or row.name,
+			"label": row.get("display_name") or row.get("department_name") or row.name,
 			"parent_department": row.get("parent_department") or "",
 			"is_group": cint(row.get("is_group")),
 		}
@@ -245,21 +255,27 @@ def save_programme(
 	require_eduedge_access(feature_key="academics", action="save_programme")
 	_assert_institution_access(institution)
 	_assert_department_context(department, institution)
+	friendly = " ".join(str(program_name or "").split())
+	if not friendly:
+		frappe.throw(_("Programme / Class Name is required."), frappe.ValidationError)
 	if programme:
 		doc = frappe.get_doc("Program", programme)
 		doc.check_permission("write")
+		doc.set(DISPLAY_FIELD, friendly)
 	else:
 		if not frappe.has_permission("Program", "create"):
 			frappe.throw(_("You are not permitted to create Programmes / Classes."), frappe.PermissionError)
 		doc = frappe.new_doc("Program")
-	doc.program_name = str(program_name or "").strip()
+		doc.program_name = friendly
+		doc.set(DISPLAY_FIELD, friendly)
 	doc.program_abbreviation = str(program_abbreviation or "").strip() or None
 	doc.department = str(department or "").strip()
 	doc.set(INSTITUTION_FIELD, institution)
 	doc.save()
 	return {
 		"name": doc.name,
-		"program_name": doc.program_name,
+		"program_name": doc.get(DISPLAY_FIELD) or doc.program_name,
+		"technical_name": doc.program_name,
 		"institution": doc.get(INSTITUTION_FIELD),
 		"department": doc.department,
 	}
