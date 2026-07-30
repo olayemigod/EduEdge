@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import frappe
+from frappe import _
 from frappe.utils import getdate, nowdate
 
 from eduedge.api import academic_foundation as base
 
 
-@base.frappe.whitelist()
+@frappe.whitelist()
 def get_academic_foundation() -> dict:
 	"""Return the existing permission-aware foundation payload with consistent calendar readiness.
 
@@ -40,7 +42,7 @@ def get_academic_foundation() -> dict:
 				{
 					"code": "calendar_without_periods",
 					"severity": "danger",
-					"message": "The current calendar has no Academic Periods.",
+					"message": _("The current calendar has no Academic Periods."),
 				}
 			)
 		readiness["ready"] = not any(
