@@ -153,6 +153,9 @@ doc_events = {
 	"EduEdge CBT Exam Schedule": {
 		"validate": "eduedge.cbt.schedule_context_validation.validate_schedule_academic_scope",
 	},
+	"EduEdge CBT Candidate Assignment": {
+		"validate": "eduedge.cbt.schedule_context_validation.validate_candidate_reservation",
+	},
 }
 
 permission_query_conditions = {
