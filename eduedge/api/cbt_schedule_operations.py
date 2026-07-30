@@ -33,6 +33,7 @@ SCHOOL_EXAM = "School Examination"
 MAX_OPTIONS = 50
 RESERVATION_SCHEDULE_STATUSES = {"Ready", "Active"}
 RESERVATION_CANDIDATE_STATUSES = {"Eligible", "Checked In", "Released"}
+STARTED_CANDIDATE_STATUSES = {"Checked In", "Released", "Completed"}
 
 
 def _parse_values(value: str | dict | None) -> dict[str, Any]:
@@ -70,6 +71,25 @@ def _lock_cbt_reservation_governance_row() -> None:
 
 def _reservation_context(required: bool):
 	return schedule_operation_lock("reservation-governance") if required else nullcontext()
+
+
+def _assert_schedule_cancellable(schedule: str) -> None:
+	started = frappe.get_all(
+		ASSIGNMENT_DOCTYPE,
+		filters={
+			"exam_schedule": schedule,
+			"assignment_status": ["in", list(STARTED_CANDIDATE_STATUSES)],
+		},
+		fields=["name", "assignment_status"],
+		limit_page_length=1,
+	)
+	if started:
+		frappe.throw(
+			_(
+				"This Schedule has a candidate who checked in, was released, or completed the sitting. Suspend and resolve the examination instead of cancelling it."
+			),
+			frappe.ValidationError,
+		)
 
 
 def _institution_owned_options(
@@ -180,6 +200,7 @@ def set_schedule_status(name: str, status: str, reason: str | None = None) -> di
 			locked.check_permission("write")
 			with controlled_cbt_operation("eduedge_controlled_status_action"):
 				if status == "Cancelled":
+					_assert_schedule_cancellable(name)
 					withdraw_non_started_candidates_for_cancellation(name, str(reason or "").strip())
 				with controlled_cbt_operation("eduedge_access_guarded"):
 					return _set_schedule_status(name=name, status=status, reason=reason)
