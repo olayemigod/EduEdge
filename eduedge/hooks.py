@@ -81,11 +81,11 @@ doc_events = {
 	},
 	"Course": {
 		"before_naming": _NATIVE_NAMING,
-		"before_validate": "eduedge.education.academic_validation.before_validate_course",
+		"before_validate": "eduedge.education.native_identity.before_validate_course",
 	},
 	"Student Batch Name": {
 		"before_naming": _NATIVE_NAMING,
-		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
+		"before_validate": "eduedge.education.native_identity.before_validate_institution_owned_master",
 	},
 	"Student House": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
 	"Instructor": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
@@ -103,7 +103,7 @@ doc_events = {
 	},
 	"Student Group": {
 		"before_naming": _NATIVE_NAMING,
-		"before_validate": "eduedge.education.branching.before_validate_student_group",
+		"before_validate": "eduedge.education.native_identity.before_validate_student_group",
 	},
 	"Room": {"before_validate": "eduedge.education.branching.before_validate_room"},
 	"Course Schedule": {"before_validate": "eduedge.education.branching.before_validate_course_schedule"},
