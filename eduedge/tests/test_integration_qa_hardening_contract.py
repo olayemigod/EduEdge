@@ -42,13 +42,29 @@ class IntegrationQAHardeningContractTest(unittest.TestCase):
 		self.assertIn("registerEduEdgeResourcePage", content)
 		self.assertIn('resourceKey: "school_branches"', content)
 
+	def test_friendly_name_pipeline_covers_sidebar_waffle_workspace_and_branch_action(self):
+		navigation = self.read("public/js/eduedge_ui/navigation.js")
+		product_menu = self.read("public/js/eduedge_product_menu.bundle.js")
+		workspace = self.read("eduedge/workspace/eduedge/eduedge.json")
+		self.assertIn('term("student"', navigation)
+		self.assertIn('term("student_applicant"', navigation)
+		self.assertIn("refreshEduEdgeMenuItems", navigation)
+		self.assertIn('window.addEventListener("eduedge:institution-context-changed"', navigation)
+		self.assertIn('term("programme"', product_menu)
+		self.assertIn('term("student_group"', product_menu)
+		self.assertIn('path === "/app/eduedge"', product_menu)
+		self.assertIn('["Add School Branche", "Add School Branch"]', product_menu)
+		self.assertIn('"label":"Student Groups"', workspace)
+		self.assertNotIn("Student Groups / Classes", workspace)
+
 	def test_attempt_review_loader_has_edgesuite_runtime_and_visible_timeout(self):
-		content = self.read("eduedge/page/eduedge_cbt_attempt_review/eduedge_cbt_attempt_review.js")
+		content = self.read("eduedge/page/eduedge_cbt_review_workbench/eduedge_cbt_review_workbench.js")
 		self.assertIn('frappe.require("edgesuite_ui.bundle.js"', content)
 		self.assertIn('frappe.require("eduedge_cbt_attempt_review.bundle.js"', content)
 		self.assertIn("createEduEdgeCBTAttemptReviewApp", content)
 		self.assertIn("setTimeout", content)
 		self.assertIn("failed to load", content)
+		self.assertIn("eduedge-cbt-review-workbench", content)
 
 	def test_cbt_branch_filters_fail_closed(self):
 		content = self.read("cbt/integration_hardening.py")
