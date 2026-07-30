@@ -20,6 +20,8 @@ class TestCBTScheduleAuditHardeningContract(unittest.TestCase):
 			"frappe.get_doc(SCHEDULE_DOCTYPE, schedule, for_update=True)",
 			'payload.pop("approved_extra_time_minutes", None)',
 			"Schedule management permission is required to search Invigilators",
+			'schedule_operation_lock("activation-governance")',
+			"Select a School Branch / Campus before searching Invigilators",
 		):
 			self.assertIn(token, wrapper)
 		for method in (
@@ -104,6 +106,30 @@ class TestCBTScheduleAuditHardeningContract(unittest.TestCase):
 			"At least one non-terminal candidate is required",
 		):
 			self.assertIn(token, governance)
+
+	def test_academic_options_and_payloads_are_institution_safe(self):
+		wrapper = (APP / "api" / "cbt_schedule_operations.py").read_text(encoding="utf-8")
+		validator = (APP / "cbt" / "schedule_context_validation.py").read_text(encoding="utf-8")
+		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
+		for token in (
+			"_institution_owned_options",
+			'doctype="Program"',
+			'doctype="Assessment Group"',
+			"Fail closed when the master has no ownership field",
+		):
+			self.assertIn(token, wrapper)
+		for token in (
+			"validate_schedule_academic_scope",
+			'("Program", "program"',
+			'("Assessment Group", "assessment_group"',
+			"does not belong to the Schedule Institution context",
+		):
+			self.assertIn(token, validator)
+		self.assertIn(
+			'"EduEdge CBT Exam Schedule": {\n\t\t"validate": '
+			'"eduedge.cbt.schedule_context_validation.validate_schedule_academic_scope"',
+			hooks,
+		)
 
 	def test_native_schema_cannot_import_or_directly_edit_governed_fields(self):
 		schedule = json.loads(
