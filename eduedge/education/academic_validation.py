@@ -4,16 +4,11 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
-from eduedge.education.academic_fields import (
-	ACADEMIC_LEVEL_FIELD,
-	ACADEMIC_SECTION_FIELD,
-	INSTITUTION_FIELD,
-	OFFERING_FIELD,
-)
+from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access
 
-CONTEXT_FIELDS = (OFFERING_FIELD, INSTITUTION_FIELD, BRANCH_FIELD, ACADEMIC_LEVEL_FIELD)
+CONTEXT_FIELDS = (OFFERING_FIELD, INSTITUTION_FIELD, BRANCH_FIELD)
 
 
 def get_offering(
@@ -29,7 +24,7 @@ def get_offering(
 		name,
 		[
 			"name", "offering_title", "offering_code", "school_branch", "institution", "program",
-			"academic_section", "academic_level", "academic_year", "academic_term", "student_batch",
+			"department", "academic_year", "academic_term", "student_batch",
 			"capacity", "is_active", "admission_enabled", "enrollment_enabled",
 			"application_start_date", "application_end_date",
 		],
@@ -59,7 +54,6 @@ def offering_context(offering: frappe._dict | None) -> frappe._dict:
 			OFFERING_FIELD: offering.name,
 			INSTITUTION_FIELD: offering.institution,
 			BRANCH_FIELD: offering.school_branch,
-			ACADEMIC_LEVEL_FIELD: offering.academic_level,
 		}
 	)
 
@@ -125,7 +119,6 @@ def apply_offering_context(doc, offering: frappe._dict) -> None:
 		"student_batch": "student_batch",
 		"student_batch_name": "student_batch",
 		"batch": "student_batch",
-		ACADEMIC_LEVEL_FIELD: "academic_level",
 	}
 	for target, source in mapping.items():
 		if doc.meta.has_field(target):
@@ -134,14 +127,9 @@ def apply_offering_context(doc, offering: frappe._dict) -> None:
 
 def before_validate_program(doc, method=None) -> None:
 	validate_master_institution(doc, required=doc.is_new())
-	section = doc.get(ACADEMIC_SECTION_FIELD) if doc.meta.has_field(ACADEMIC_SECTION_FIELD) else None
-	if section:
-		section_institution = frappe.db.get_value("EduEdge Academic Section", section, "institution")
-		if section_institution != doc.get(INSTITUTION_FIELD):
-			frappe.throw(_("Academic Section must belong to the selected Institution."), frappe.ValidationError)
 	if not doc.is_new() and frappe.db.exists("EduEdge Program Offering", {"program": doc.name}):
 		_block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
-		_block_reassignment(doc, ACADEMIC_SECTION_FIELD, _("Academic Section"))
+		_block_reassignment(doc, "department", _("Department / School Section"))
 
 
 def before_validate_course(doc, method=None) -> None:
@@ -164,7 +152,7 @@ def before_validate_program_enrollment_context(doc, method=None) -> None:
 	offering = resolve_exact_offering(doc, purpose="enrollment")
 	if not offering or not doc.get("student"):
 		return
-	_duplicate = frappe.db.exists(
+	duplicate = frappe.db.exists(
 		"Program Enrollment",
 		{
 			"student": doc.student,
@@ -173,7 +161,7 @@ def before_validate_program_enrollment_context(doc, method=None) -> None:
 			"name": ["!=", doc.name or ""],
 		},
 	)
-	if _duplicate:
+	if duplicate:
 		frappe.throw(
 			_("Student {0} already has an enrollment for Programme Offering {1}.").format(doc.student, offering.name),
 			frappe.DuplicateEntryError,
@@ -208,7 +196,6 @@ def before_validate_fee_structure(doc, method=None) -> None:
 		apply_offering_context(doc, offering)
 	validate_master_institution(doc, required=doc.is_new())
 	_validate_branch_institution(doc)
-	_validate_level_institution(doc)
 
 
 def before_validate_fee_schedule(doc, method=None) -> None:
@@ -295,7 +282,7 @@ def _block_reassignment(doc, fieldname: str, label: str) -> None:
 	old_value = doc.get_db_value(fieldname)
 	new_value = doc.get(fieldname)
 	# Initial classification of a legacy blank master is allowed. Once classified,
-	# the record cannot be moved silently to another Institution or structure.
+	# the record cannot be moved silently to another Institution or hierarchy.
 	if old_value and old_value != new_value:
 		frappe.throw(_("{0} cannot be changed after this record has been classified.").format(label), frappe.ValidationError)
 
@@ -309,17 +296,8 @@ def _validate_branch_institution(doc) -> None:
 			frappe.throw(_("School Branch / Campus must belong to the selected Institution."), frappe.ValidationError)
 
 
-def _validate_level_institution(doc) -> None:
-	level = doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None
-	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
-	if level and institution:
-		level_institution = frappe.db.get_value("EduEdge Academic Level", level, "institution")
-		if level_institution != institution:
-			frappe.throw(_("Academic Level must belong to the selected Institution."), frappe.ValidationError)
-
-
 def _assert_context_compatible(doc, context: dict, *, label: str) -> None:
-	for field in (INSTITUTION_FIELD, BRANCH_FIELD, ACADEMIC_LEVEL_FIELD):
+	for field in (INSTITUTION_FIELD, BRANCH_FIELD):
 		if doc.meta.has_field(field) and doc.get(field) and context.get(field) and doc.get(field) != context.get(field):
 			frappe.throw(_("{0} conflicts with the selected academic context.").format(label), frappe.ValidationError)
 
