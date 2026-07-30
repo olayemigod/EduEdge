@@ -9,18 +9,20 @@ from frappe.model.document import Document
 from frappe.utils import getdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
+from eduedge.education.academic_hierarchy import _validate_department
 from eduedge.education.offerings import assert_branch_access
+from eduedge.services.academic_calendar import assert_institution_calendar_context
 from eduedge.services.enrollment_lifecycle import count_capacity_consuming_enrollments
 
 IDENTITY_FIELDS = (
 	"school_branch",
 	"program",
+	"department",
 	"academic_year",
 	"academic_term",
 	"student_batch",
 	"study_mode",
 	"delivery_mode",
-	"academic_level",
 )
 
 
@@ -47,7 +49,7 @@ class EduEdgeProgramOffering(Document):
 			frappe.throw(_("Offering Code cannot change after creation."), frappe.ValidationError)
 		self._validate_identity_changes()
 		self._validate_term()
-		self._validate_institution_calendar_period()
+		self._validate_institution_calendar()
 		self._validate_institution_context()
 		self._validate_capacity()
 		self._validate_dates()
@@ -67,9 +69,8 @@ class EduEdgeProgramOffering(Document):
 		if not branch or not branch.enabled:
 			frappe.throw(_("Select an enabled School Branch / Campus."), frappe.ValidationError)
 		self.institution = branch.institution
-		program_meta = frappe.get_meta("Program")
-		if self.program and program_meta.has_field("eduedge_academic_section"):
-			self.academic_section = frappe.db.get_value("Program", self.program, "eduedge_academic_section")
+		if self.program:
+			self.department = frappe.db.get_value("Program", self.program, "department")
 
 	def _normalize_or_generate_code(self) -> str:
 		code = re.sub(r"[^A-Z0-9]+", "-", str(self.offering_code or "").strip().upper()).strip("-")
@@ -125,101 +126,50 @@ class EduEdgeProgramOffering(Document):
 				frappe.ValidationError,
 			)
 
-	def _validate_institution_calendar_period(self) -> None:
-		"""Protect new or re-contextualised Offerings from global-term leakage.
-
-		Legacy Offerings are not blocked when only non-identity fields are edited.
-		When the Branch, year or period is selected or changed, the period must be
-		configured on an enabled calendar owned by the resolved Institution.
-		"""
-		if not self.academic_term or not frappe.db.exists(
-			"DocType", "EduEdge Institution Academic Calendar"
-		):
-			return
+	def _validate_institution_calendar(self) -> None:
 		context_changed = self.is_new() or any(
 			self.has_value_changed(fieldname)
 			for fieldname in ("school_branch", "academic_year", "academic_term")
 		)
 		if not context_changed:
 			return
-		calendars = frappe.get_all(
-			"EduEdge Institution Academic Calendar",
-			filters={
-				"institution": self.institution,
-				"academic_year": self.academic_year,
-				"enabled": 1,
-			},
-			pluck="name",
+		assert_institution_calendar_context(
+			branch=self.school_branch,
+			academic_year=self.academic_year,
+			academic_term=self.academic_term or None,
 		)
-		if not calendars:
-			frappe.throw(
-				_("Configure an enabled Institution Academic Calendar for Academic Year {0} before selecting an Academic Period.").format(
-					self.academic_year
-				),
-				frappe.ValidationError,
-			)
-		period_exists = frappe.db.exists(
-			"EduEdge Academic Calendar Period",
-			{
-				"parent": ["in", calendars],
-				"parenttype": "EduEdge Institution Academic Calendar",
-				"academic_term": self.academic_term,
-			},
-		)
-		if not period_exists:
-			frappe.throw(
-				_("Academic Period {0} is not configured on this Institution's Academic Calendar for {1}.").format(
-					self.academic_term, self.academic_year
-				),
-				frappe.ValidationError,
-			)
 
 	def _validate_institution_context(self) -> None:
 		if not self.institution:
 			frappe.throw(_("The selected Branch must belong to an Institution."), frappe.ValidationError)
-
-		program_meta = frappe.get_meta("Program")
 		context_changed = self.is_new() or any(
 			self.has_value_changed(fieldname)
-			for fieldname in ("school_branch", "program", "academic_level", "student_batch")
+			for fieldname in ("school_branch", "program", "department", "student_batch")
 		)
 		if not self.program or not frappe.db.exists("Program", self.program):
-			frappe.throw(_("Select a valid Programme."), frappe.ValidationError)
+			frappe.throw(_("Select a valid Programme / Class."), frappe.ValidationError)
+		program_meta = frappe.get_meta("Program")
+		program_fields = ["department"]
 		if program_meta.has_field(INSTITUTION_FIELD):
-			program_institution = frappe.db.get_value("Program", self.program, INSTITUTION_FIELD)
+			program_fields.append(INSTITUTION_FIELD)
+		program = frappe.db.get_value("Program", self.program, program_fields, as_dict=True)
+		program_institution = program.get(INSTITUTION_FIELD) if program else None
+		if program_meta.has_field(INSTITUTION_FIELD):
 			if context_changed and not program_institution:
 				frappe.throw(
-					_("Assign the selected Programme to an Institution before creating or re-contextualising an Offering."),
+					_("Assign the selected Programme / Class to an Institution before creating or re-contextualising an Offering."),
 					frappe.ValidationError,
 				)
 			if program_institution and program_institution != self.institution:
-				frappe.throw(_("Program must belong to the same Institution as the selected Branch."), frappe.ValidationError)
-
-		if self.academic_section:
-			section = frappe.db.get_value(
-				"EduEdge Academic Section",
-				self.academic_section,
-				["institution", "enabled"],
-				as_dict=True,
+				frappe.throw(_("Programme / Class must belong to the same Institution as the selected Branch."), frappe.ValidationError)
+		if not program or not program.department:
+			frappe.throw(
+				_("Assign the selected Programme / Class to a Department, Faculty, School, or School Section."),
+				frappe.ValidationError,
 			)
-			if not section or section.institution != self.institution:
-				frappe.throw(_("Academic Section must belong to the selected Institution."), frappe.ValidationError)
-			if context_changed and not section.enabled:
-				frappe.throw(_("Select an enabled Academic Section."), frappe.ValidationError)
-
-		if self.academic_level:
-			level = frappe.db.get_value(
-				"EduEdge Academic Level",
-				self.academic_level,
-				["institution", "academic_section", "enabled"],
-				as_dict=True,
-			)
-			if not level or level.institution != self.institution:
-				frappe.throw(_("Academic Level must belong to the selected Institution."), frappe.ValidationError)
-			if context_changed and not level.enabled:
-				frappe.throw(_("Select an enabled Academic Level."), frappe.ValidationError)
-			if level.academic_section and self.academic_section and level.academic_section != self.academic_section:
-				frappe.throw(_("Academic Level must belong to the Program's Academic Section."), frappe.ValidationError)
+		if self.department != program.department:
+			frappe.throw(_("Offering Department must match the selected Programme / Class."), frappe.ValidationError)
+		_validate_department(self.department, self.institution)
 
 		if self.student_batch:
 			batch_meta = frappe.get_meta("Student Batch Name")
@@ -261,7 +211,6 @@ class EduEdgeProgramOffering(Document):
 				frappe.throw(_("{0} End Date cannot be earlier than Start Date.").format(label), frappe.ValidationError)
 
 	def _validate_duplicate(self) -> None:
-		# Serialize identity checks for a Branch to prevent concurrent duplicate Offerings.
 		frappe.db.sql(
 			"select name from `tabEduEdge School Branch` where name = %s for update",
 			(self.school_branch,),
@@ -293,6 +242,6 @@ class EduEdgeProgramOffering(Document):
 		)
 		if duplicate:
 			frappe.throw(
-				_("A matching Programme Offering already exists for this Branch, Program, period, cohort, and delivery mode."),
+				_("A matching Programme Offering already exists for this Branch, Programme, period, cohort, and delivery mode."),
 				frappe.DuplicateEntryError,
 			)
