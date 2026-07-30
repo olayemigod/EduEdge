@@ -24,7 +24,7 @@ class TestNativeHierarchyMigrationContract(unittest.TestCase):
 		self.assertIn("unambiguous", helper)
 		self.assertIn("_available_department_name", helper)
 		self.assertIn("institution.institution_code", helper)
-		self.assertIn('filters[INSTITUTION_FIELD] = section.institution', helper)
+		self.assertIn('{"department_name": department_name, "company": company, INSTITUTION_FIELD: institution}', helper)
 
 	def test_one_time_patch_preserves_legacy_and_avoids_tertiary_guessing(self):
 		patch = (APP / "patches" / "v0_9" / "migrate_native_academic_hierarchy.py").read_text(encoding="utf-8")
