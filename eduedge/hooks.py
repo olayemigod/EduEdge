@@ -67,12 +67,26 @@ doctype_js = {
 	"Assessment Result": "public/js/education/assessment_result.js",
 }
 
+_NATIVE_NAMING = "eduedge.education.native_identity.before_naming_native_master"
+
 doc_events = {
 	"Company": {"before_validate": "eduedge.education.institution_types.before_validate_company"},
-	"Department": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_department"},
-	"Program": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_program"},
-	"Course": {"before_validate": "eduedge.education.academic_validation.before_validate_course"},
-	"Student Batch Name": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
+	"Department": {
+		"before_naming": _NATIVE_NAMING,
+		"before_validate": "eduedge.education.academic_hierarchy.before_validate_department",
+	},
+	"Program": {
+		"before_naming": _NATIVE_NAMING,
+		"before_validate": "eduedge.education.academic_hierarchy.before_validate_program",
+	},
+	"Course": {
+		"before_naming": _NATIVE_NAMING,
+		"before_validate": "eduedge.education.academic_validation.before_validate_course",
+	},
+	"Student Batch Name": {
+		"before_naming": _NATIVE_NAMING,
+		"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master",
+	},
 	"Student House": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
 	"Instructor": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
 	"Assessment Group": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
@@ -87,7 +101,10 @@ doc_events = {
 		"before_validate": "eduedge.education.branching.before_validate_program_enrollment",
 		"before_submit": "eduedge.education.enrollment_capacity.before_submit_program_enrollment",
 	},
-	"Student Group": {"before_validate": "eduedge.education.branching.before_validate_student_group"},
+	"Student Group": {
+		"before_naming": _NATIVE_NAMING,
+		"before_validate": "eduedge.education.branching.before_validate_student_group",
+	},
 	"Room": {"before_validate": "eduedge.education.branching.before_validate_room"},
 	"Course Schedule": {"before_validate": "eduedge.education.branching.before_validate_course_schedule"},
 	"Student Attendance": {"before_validate": "eduedge.education.branching.before_validate_student_attendance"},
