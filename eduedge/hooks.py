@@ -31,6 +31,17 @@ override_whitelisted_methods = {
 	"eduedge.api.resource_center.delete_resource_record": "eduedge.api.resource_center_safe.delete_resource_record",
 	"eduedge.api.modal_records.save_modal_record": "eduedge.api.modal_records_safe.save_modal_record",
 	"eduedge.api.academic_operations.get_operations_context": "eduedge.api.academic_operations_safe.get_operations_context",
+	"eduedge.api.cbt_schedule_operations_hardened.get_context": "eduedge.api.cbt_schedule_operations.get_context",
+	"eduedge.api.cbt_schedule_operations_hardened.get_schedule": "eduedge.api.cbt_schedule_operations.get_schedule",
+	"eduedge.api.cbt_schedule_operations_hardened.get_candidate": "eduedge.api.cbt_schedule_operations.get_candidate",
+	"eduedge.api.cbt_schedule_operations_hardened.get_template_context": "eduedge.api.cbt_schedule_operations.get_template_context",
+	"eduedge.api.cbt_schedule_operations_hardened.save_schedule": "eduedge.api.cbt_schedule_operations.save_schedule",
+	"eduedge.api.cbt_schedule_operations_hardened.set_schedule_status": "eduedge.api.cbt_schedule_operations.set_schedule_status",
+	"eduedge.api.cbt_schedule_operations_hardened.save_candidate": "eduedge.api.cbt_schedule_operations.save_candidate",
+	"eduedge.api.cbt_schedule_operations_hardened.set_candidate_status": "eduedge.api.cbt_schedule_operations.set_candidate_status",
+	"eduedge.api.cbt_schedule_operations_hardened.assign_template_student_group": "eduedge.api.cbt_schedule_operations.assign_template_student_group",
+	"eduedge.api.cbt_schedule_operations_hardened.record_intervention": "eduedge.api.cbt_schedule_operations.record_intervention",
+	"eduedge.api.cbt_schedule_operations_hardened.search_options": "eduedge.api.cbt_schedule_operations.search_options",
 }
 
 add_to_apps_screen = [
