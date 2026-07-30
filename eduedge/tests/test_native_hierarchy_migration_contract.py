@@ -25,7 +25,7 @@ class TestNativeHierarchyMigrationContract(unittest.TestCase):
 		self.assertIn("_exact_owned_department", helper)
 		self.assertIn("_unowned_department", helper)
 		self.assertIn("unambiguous", helper)
-		self.assertIn("eduedge_display_name", helper)
+		self.assertIn("DISPLAY_FIELD", helper)
 		self.assertIn("_available_native_name", identity)
 		self.assertIn("_context_token", identity)
 		self.assertIn("INSTITUTION_FIELD", identity)
