@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.education.academic_fields import ACADEMIC_LEVEL_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access, parse_query_filters
 
@@ -38,6 +38,7 @@ def student_group_student_query(doctype, txt, searchfield, start, page_len, filt
 	params = {
 		"branch": branch,
 		"offering": filters.get(OFFERING_FIELD),
+		"academic_level": filters.get(ACADEMIC_LEVEL_FIELD),
 		"academic_year": filters.get("academic_year"),
 		"academic_term": filters.get("academic_term"),
 		"program": filters.get("program"),
@@ -55,6 +56,8 @@ def student_group_student_query(doctype, txt, searchfield, start, page_len, filt
 		for fieldname in ("academic_year", "academic_term", "program"):
 			if filters.get(fieldname):
 				conditions.append(f"enrollment.`{fieldname}` = %({fieldname})s")
+		if filters.get(ACADEMIC_LEVEL_FIELD) and frappe.get_meta("Program Enrollment").has_field(ACADEMIC_LEVEL_FIELD):
+			conditions.append(f"enrollment.`{ACADEMIC_LEVEL_FIELD}` = %(academic_level)s")
 		if filters.get("batch"):
 			conditions.append("enrollment.student_batch_name = %(batch)s")
 	if filters.get("student_category"):
