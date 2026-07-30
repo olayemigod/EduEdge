@@ -1,3 +1,16 @@
+function configureProgrammeIdentity(frm) {
+	const label = frappe.eduedge?.term?.('programme', { fallback: __('Program') }) || __('Program');
+	if (frm.fields_dict.eduedge_display_name) {
+		frm.set_df_property('eduedge_display_name', 'label', `${label} Name`);
+		frm.set_df_property('eduedge_display_name', 'reqd', 1);
+	}
+	if (frm.fields_dict.program_name) {
+		frm.set_df_property('program_name', 'label', __('Technical Programme / Class ID'));
+		frm.set_df_property('program_name', 'hidden', 1);
+	}
+	frm.set_df_property('eduedge_academic_section', 'label', frappe.eduedge?.term?.('academic_section', { fallback: __('Academic Section') }) || __('Academic Section'));
+}
+
 frappe.ui.form.on('Program', {
 	setup(frm) {
 		frm.set_query('eduedge_academic_section', () => ({
@@ -7,9 +20,19 @@ frappe.ui.form.on('Program', {
 	},
 
 	refresh(frm) {
-		const label = frappe.eduedge?.term?.('programme', { fallback: __('Program') }) || __('Program');
-		frm.set_df_property('program_name', 'label', `${label} Name`);
-		frm.set_df_property('eduedge_academic_section', 'label', frappe.eduedge?.term?.('academic_section', { fallback: __('Academic Section') }) || __('Academic Section'));
+		configureProgrammeIdentity(frm);
+	},
+
+	eduedge_display_name(frm) {
+		if (frm.is_new() && frm.doc.eduedge_display_name) {
+			frm.set_value('program_name', frm.doc.eduedge_display_name);
+		}
+	},
+
+	validate(frm) {
+		if (frm.is_new() && frm.doc.eduedge_display_name && !frm.doc.program_name) {
+			frm.doc.program_name = frm.doc.eduedge_display_name;
+		}
 	},
 
 	eduedge_institution(frm) {
