@@ -7,6 +7,7 @@ from frappe.utils.nestedset import get_root_of
 
 from eduedge.education import academic_validation as base
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.academic_progression import validate_program_progression
 from eduedge.education.native_identity import before_validate_native_master_identity
 
 
@@ -39,9 +40,6 @@ def before_validate_department(doc, method=None) -> None:
 		parent_row = frappe.db.get_value("Department", parent, fields, as_dict=True)
 		if not parent_row:
 			frappe.throw(_("Select a valid Parent Department."), frappe.ValidationError)
-		# ERPNext assigns one global framework root to top-level Departments during
-		# its standard validation. That root is not an EduEdge academic parent and
-		# must not be forced into a tenant Institution.
 		framework_root = get_root_of("Department")
 		is_framework_root = bool(parent == framework_root and not parent_row.get(INSTITUTION_FIELD))
 		if not is_framework_root:
@@ -79,6 +77,8 @@ def before_validate_program(doc, method=None) -> None:
 		)
 	if department:
 		_validate_department(department, institution)
+
+	validate_program_progression(doc)
 
 	if not doc.is_new() and frappe.db.exists("EduEdge Program Offering", {"program": doc.name}):
 		base._block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
