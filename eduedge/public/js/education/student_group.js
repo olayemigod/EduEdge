@@ -1,3 +1,15 @@
+function configureStudentGroupIdentity(frm) {
+	const label = frappe.eduedge?.term?.("student_group", { fallback: __("Student Group / Class Arm / Level") }) || __("Student Group / Class Arm / Level");
+	if (frm.fields_dict.eduedge_display_name) {
+		frm.set_df_property("eduedge_display_name", "label", `${label} Name`);
+		frm.set_df_property("eduedge_display_name", "reqd", 1);
+	}
+	if (frm.fields_dict.student_group_name) {
+		frm.set_df_property("student_group_name", "label", __("Technical Class Arm / Level ID"));
+		frm.set_df_property("student_group_name", "hidden", 1);
+	}
+}
+
 function setStudentGroupQueries(frm) {
 	frm.set_query("eduedge_school_branch", () => ({ query: "eduedge.api.education.school_branch_query" }));
 	frm.set_query("eduedge_program_offering", () => ({
@@ -89,11 +101,11 @@ async function clearStudentGroupContext(frm, fields, { clearInstructors = false 
 frappe.ui.form.on("Student Group", {
 	setup(frm) { setStudentGroupQueries(frm); },
 	refresh(frm) {
+		configureStudentGroupIdentity(frm);
 		frm.set_df_property("eduedge_program_offering", "label", frappe.eduedge?.term?.("programme_offering", { fallback: __("Programme Offering") }) || __("Programme Offering"));
 		frm.set_df_property("program", "label", frappe.eduedge?.term?.("programme", { fallback: __("Programme / Class") }) || __("Programme / Class"));
 		frm.set_df_property("academic_year", "label", frappe.eduedge?.term?.("academic_year", { fallback: __("Academic Session") }) || __("Academic Session"));
 		frm.set_df_property("academic_term", "label", frappe.eduedge?.term?.("academic_term", { fallback: __("Term / Semester") }) || __("Term / Semester"));
-		frm.set_df_property("student_group_name", "label", frappe.eduedge?.term?.("student_group", { fallback: __("Student Group / Class Arm / Level") }) || __("Student Group / Class Arm / Level"));
 		frm.set_df_property("course", "label", frappe.eduedge?.term?.("course", { fallback: __("Course / Subject") }) || __("Course / Subject"));
 		if (frm.fields_dict.eduedge_academic_level) frm.set_df_property("eduedge_academic_level", "hidden", 1);
 		setStudentGroupQueries(frm);
@@ -103,6 +115,16 @@ frappe.ui.form.on("Student Group", {
 		frappe.call("eduedge.api.branch_context.get_current_school_branch").then(({ message }) => {
 			if (message?.name) frm.set_value("eduedge_school_branch", message.name);
 		});
+	},
+	eduedge_display_name(frm) {
+		if (frm.is_new() && frm.doc.eduedge_display_name) {
+			frm.set_value("student_group_name", frm.doc.eduedge_display_name);
+		}
+	},
+	validate(frm) {
+		if (frm.is_new() && frm.doc.eduedge_display_name && !frm.doc.student_group_name) {
+			frm.doc.student_group_name = frm.doc.eduedge_display_name;
+		}
 	},
 	eduedge_program_offering(frm) { applyStudentGroupOffering(frm); },
 	eduedge_school_branch(frm) {
