@@ -12,6 +12,7 @@ INSTITUTION_FIELD = "eduedge_institution"
 OFFERING_FIELD = "eduedge_program_offering"
 ACADEMIC_SECTION_FIELD = "eduedge_academic_section"  # legacy compatibility only
 ACADEMIC_LEVEL_FIELD = "eduedge_academic_level"  # legacy compatibility only
+DISPLAY_FIELD = "eduedge_display_name"
 
 
 def institution_field(description: str, *, read_only: bool = False, insert_after: str | None = None) -> dict:
@@ -80,17 +81,21 @@ def legacy_level_field() -> dict:
 	}
 
 
-def _display_field(*, insert_after: str, label: str, description: str) -> dict:
-	# Imported lazily by the installer as well, avoiding an import cycle with the
-	# identity helper which depends on the constants in this module.
-	from eduedge.education.native_identity import display_name_field
-
-	return display_name_field(insert_after=insert_after, label=label, description=description)
+def display_field(*, insert_after: str, label: str, description: str) -> dict:
+	return {
+		"fieldname": DISPLAY_FIELD,
+		"fieldtype": "Data",
+		"label": label,
+		"insert_after": insert_after,
+		"in_list_view": 1,
+		"in_standard_filter": 1,
+		"description": description,
+	}
 
 
 ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 	"Department": [
-		_display_field(
+		display_field(
 			insert_after="department_name",
 			label="Department / School Section Display Name",
 			description="Friendly Institution-facing name. The native Department identity may be namespaced when another Institution uses the same name.",
@@ -101,19 +106,16 @@ ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 		),
 	],
 	"Program": [
-		_display_field(
+		display_field(
 			insert_after="program_name",
 			label="Programme / Class Display Name",
 			description="Friendly name shown to users. The native Program identity is namespaced only when required on a shared site.",
 		),
-		institution_field(
-			"Institution that owns this Programme or Class.",
-			insert_after="department",
-		),
+		institution_field("Institution that owns this Programme or Class.", insert_after="department"),
 		legacy_section_field(),
 	],
 	"Course": [
-		_display_field(
+		display_field(
 			insert_after="course_name",
 			label="Course / Subject Display Name",
 			description="Friendly name shown to users. The native Course identity is namespaced only when required on a shared site.",
@@ -121,24 +123,18 @@ ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 		institution_field("Institution that owns this Subject, Course, or Module.", insert_after="department"),
 	],
 	"Student Applicant": [
-		{
-			**offering_field("Exact Class Intake, Programme Intake, or Training Intake selected by the applicant."),
-			"insert_after": "program",
-		},
+		{**offering_field("Exact Class Intake, Programme Intake, or Training Intake selected by the applicant."), "insert_after": "program"},
 		institution_field("Derived from the selected Programme Offering.", read_only=True),
 		legacy_level_field(),
 	],
 	"Program Enrollment": [
-		{
-			**offering_field("Exact Class Intake, Programme Intake, or Training Intake for this enrollment."),
-			"insert_after": "program",
-		},
+		{**offering_field("Exact Class Intake, Programme Intake, or Training Intake for this enrollment."), "insert_after": "program"},
 		institution_field("Derived from the selected Programme Offering.", read_only=True),
 		legacy_level_field(),
 		branch_field("Derived from the selected Programme Offering; not from the Student's current profile.", read_only=True),
 	],
 	"Student Group": [
-		_display_field(
+		display_field(
 			insert_after="student_group_name",
 			label="Class Arm / Level Display Name",
 			description="Friendly class arm, level, lecture group, or training class name. Native identity is namespaced when reused across Institutions or Sessions.",
@@ -148,7 +144,7 @@ ACADEMIC_CONTEXT_CUSTOM_FIELDS = {
 		legacy_level_field(),
 	],
 	"Student Batch Name": [
-		_display_field(
+		display_field(
 			insert_after="batch_name",
 			label="Student Batch / Cohort Display Name",
 			description="Friendly Admission Set, Cohort, or Batch name shown to users.",
@@ -315,7 +311,12 @@ def backfill_program_offering_identity() -> None:
 			updates["institution"] = frappe.db.get_value("EduEdge School Branch", row.school_branch, "institution")
 		if meta.has_field("department") and not row.get("department") and row.program:
 			updates["department"] = frappe.db.get_value("Program", row.program, "department")
-		if meta.has_field("academic_section") and not row.get("academic_section") and row.program and program_meta.has_field(ACAMIC_SECTION_FIELD):
+		if (
+			meta.has_field("academic_section")
+			and not row.get("academic_section")
+			and row.program
+			and program_meta.has_field(ACADEMIC_SECTION_FIELD)
+		):
 			updates["academic_section"] = frappe.db.get_value("Program", row.program, ACADEMIC_SECTION_FIELD)
 		updates = {key: value for key, value in updates.items() if value not in (None, "")}
 		if updates:
