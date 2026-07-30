@@ -120,18 +120,21 @@ def get_terminology_map(institution_type: str | None) -> dict[str, dict]:
 			order_by="sequence asc, idx asc",
 		)
 		if rows:
-			return {
-				row.canonical_key: {
-					"singular": row.singular_label,
-					"plural": row.plural_label,
-					"short": row.short_label or row.singular_label,
-					"help_text": row.help_text or "",
-					"show_feature": int(row.show_feature or 0),
-					"sequence": int(row.sequence or 0),
-				}
-				for row in rows
-			}
-	return _seed_terminology_map(code)
+			return _augment_academic_hierarchy_terms(
+				code,
+				{
+					row.canonical_key: {
+						"singular": row.singular_label,
+						"plural": row.plural_label,
+						"short": row.short_label or row.singular_label,
+						"help_text": row.help_text or "",
+						"show_feature": int(row.show_feature or 0),
+						"sequence": int(row.sequence or 0),
+					}
+					for row in rows
+				},
+			)
+	return _augment_academic_hierarchy_terms(code, _seed_terminology_map(code))
 
 
 def get_term(
@@ -177,7 +180,7 @@ def get_institution_type_options() -> list[dict]:
 			"value": code,
 			"label": definition["name"],
 			"description": definition["description"],
-			"terms": _seed_terminology_map(code),
+			"terms": _augment_academic_hierarchy_terms(code, _seed_terminology_map(code)),
 		}
 		for code, definition in sorted(INSTITUTION_TYPE_SEEDS.items(), key=lambda item: item[1]["sequence"])
 	]
@@ -259,3 +262,41 @@ def _seed_terminology_map(code: str) -> dict[str, dict]:
 		}
 		for sequence, (key, (singular, plural)) in enumerate(definition["terms"].items(), start=1)
 	}
+
+
+def _term_row(singular: str, plural: str, *, sequence: int) -> dict:
+	return {
+		"singular": singular,
+		"plural": plural,
+		"short": singular,
+		"help_text": "",
+		"show_feature": 1,
+		"sequence": sequence,
+	}
+
+
+def _augment_academic_hierarchy_terms(code: str, terms: dict[str, dict]) -> dict[str, dict]:
+	"""Expose distinct labels for Section → Level/Class → Student Group/Class Arm.
+
+	The database DocTypes retain their stable technical identities. These aliases keep
+	all EdgeSuite pages aligned and prevent the ERPNext Program record from being
+	mislabelled as the same School Section represented by EduEdge Academic Section.
+	"""
+	resolved = {key: dict(value) for key, value in (terms or {}).items()}
+	if code in {"PRIMARY", "SECONDARY"}:
+		resolved["academic_section"] = _term_row("School Section", "School Sections", sequence=35)
+		resolved["academic_level"] = _term_row("Class", "Classes", sequence=75)
+		resolved["programme"] = _term_row("Programme", "Programmes", sequence=30)
+	elif code == "TERTIARY":
+		resolved["academic_section"] = _term_row("Faculty / School", "Faculties / Schools", sequence=35)
+		resolved["academic_level"] = _term_row("Level", "Levels", sequence=75)
+	elif code == "TRAINING_CENTRE":
+		resolved["academic_section"] = _term_row("Training Category", "Training Categories", sequence=35)
+		resolved["academic_level"] = _term_row("Training Level", "Training Levels", sequence=75)
+	else:
+		resolved["academic_section"] = _term_row("Academic Section", "Academic Sections", sequence=35)
+		resolved["academic_level"] = dict(
+			resolved.get("class_level") or _term_row("Academic Level", "Academic Levels", sequence=75)
+		)
+	resolved.setdefault("class_level", dict(resolved["academic_level"]))
+	return resolved
