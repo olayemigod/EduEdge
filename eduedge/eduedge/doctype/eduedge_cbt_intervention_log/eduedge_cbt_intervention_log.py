@@ -3,10 +3,12 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, now_datetime
+from frappe.utils import cint, get_datetime, now_datetime
 
 from eduedge.cbt.public_access import require_public_exam_assignment
+from eduedge.cbt.schedule_governance import cbt_operation_flag
 from eduedge.education.offerings import assert_branch_access
+from eduedge.platform.access import require_eduedge_access
 
 INTERVENTION_TYPES = {
 	"Device Change",
@@ -28,11 +30,17 @@ class EduEdgeCBTInterventionLog(Document):
 				_("CBT Intervention Logs are append-only and cannot be edited."),
 				frappe.ValidationError,
 			)
+		if not cbt_operation_flag("eduedge_controlled_intervention", self):
+			frappe.throw(
+				_("Record CBT interventions only through the controlled Schedule Operations action."),
+				frappe.PermissionError,
+			)
+		self._require_platform_access()
 		self._validate_assignment()
 		self._validate_intervention()
 		self.acted_by = frappe.session.user
 		self.acted_on = now_datetime()
-		self.requires_attempt_review = 1
+		self.requires_attempt_review = 0 if self.intervention_type == "Time Extension" else 1
 
 	def after_insert(self) -> None:
 		if self.intervention_type != "Time Extension":
@@ -47,6 +55,17 @@ class EduEdgeCBTInterventionLog(Document):
 			_("CBT Intervention Logs are append-only and cannot be deleted."),
 			frappe.ValidationError,
 		)
+
+	def _require_platform_access(self) -> None:
+		if cbt_operation_flag("eduedge_access_guarded", self):
+			return
+		require_eduedge_access(
+			feature_key="cbt",
+			action="record_cbt_intervention",
+			reference_doctype="EduEdge CBT Candidate Assignment",
+			reference_name=self.candidate_assignment,
+		)
+		self.flags.eduedge_access_guarded = True
 
 	def _validate_assignment(self) -> None:
 		if not self.candidate_assignment:
@@ -117,6 +136,11 @@ class EduEdgeCBTInterventionLog(Document):
 		additional = cint(self.additional_minutes)
 		if additional <= 0:
 			frappe.throw(_("Additional Minutes must be greater than zero."), frappe.ValidationError)
+		if self._assignment.access_end and now_datetime() > get_datetime(self._assignment.access_end):
+			frappe.throw(
+				_("Candidate access has already closed. Do not reopen an expired sitting through a Time Extension."),
+				frappe.ValidationError,
+			)
 		policy = frappe.db.get_value(
 			"EduEdge CBT Exam Schedule",
 			self.exam_schedule,
