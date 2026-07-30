@@ -21,9 +21,6 @@ def get_operations_context(
 	institution = selected_branch.get("institution")
 
 	if institution and calendar.get("source") != "institution_calendar":
-		# Never expose every active Student Group merely because a Branch-specific
-		# Session could not be resolved. Existing schedules remain visible for the
-		# selected date so historical operational records are not hidden.
 		payload["student_groups"] = []
 		payload.setdefault("counts", {})["student_groups"] = 0
 		payload.setdefault("filters", {})["student_group"] = None
@@ -31,7 +28,7 @@ def get_operations_context(
 			**calendar,
 			"ready": False,
 			"blocking_issue": _(
-				"No enabled Institution Academic Calendar covers the selected date. Configure the Academic Session and its Terms before creating or selecting a Class Arm."
+				"No enabled Institution Academic Calendar covers the selected date. Configure the Academic Session and its Terms before creating or selecting a Class Arm / Level."
 			),
 		}
 	elif institution and not calendar.get("academic_term"):
@@ -42,7 +39,7 @@ def get_operations_context(
 			**calendar,
 			"ready": False,
 			"blocking_issue": _(
-				"The selected date is inside the Academic Session but outside every configured Term / Academic Period."
+				"The selected date is inside the Academic Session but outside every configured Term / Semester."
 			),
 		}
 	else:
@@ -54,36 +51,46 @@ def get_operations_context(
 def _annotate_group_hierarchy(groups: list[dict]) -> None:
 	if not groups:
 		return
-	meta = frappe.get_meta("Student Group")
-	level_field = "eduedge_academic_level"
-	if not meta.has_field(level_field):
-		return
+	names = [row.get("name") for row in groups if row.get("name")]
 	rows = frappe.get_all(
 		"Student Group",
-		filters={"name": ["in", [row.get("name") for row in groups if row.get("name")]]},
-		fields=["name", level_field],
-		page_length=len(groups),
+		filters={"name": ["in", names]},
+		fields=["name", "student_group_name", "program", "course", "group_based_on", "academic_year", "academic_term", "batch", BRANCH_FIELD],
+		page_length=len(names),
 	)
-	levels = {row.name: row.get(level_field) for row in rows}
-	level_names = {
-		row.name: row.level_name
+	program_names = list({row.program for row in rows if row.program})
+	programmes = {
+		row.name: row
 		for row in frappe.get_all(
-			"EduEdge Academic Level",
-			filters={"name": ["in", list({value for value in levels.values() if value})]},
-			fields=["name", "level_name"],
-			page_length=max(len(levels), 1),
+			"Program",
+			filters={"name": ["in", program_names]},
+			fields=["name", "program_name", "department"],
+			page_length=max(len(program_names), 1),
 		)
-	} if any(levels.values()) else {}
+	} if program_names else {}
+	by_name = {row.name: row for row in rows}
 	for group in groups:
-		level = levels.get(group.get("name"))
-		group["academic_level"] = level or ""
-		group["academic_level_name"] = level_names.get(level) or level or ""
+		row = by_name.get(group.get("name"))
+		if not row:
+			continue
+		programme = programmes.get(row.program)
+		group["program"] = row.program or ""
+		group["program_name"] = (programme or {}).get("program_name") or row.program or ""
+		group["department"] = (programme or {}).get("department") or ""
+		group["course"] = row.course or ""
+		group["group_based_on"] = row.group_based_on or ""
+		group["academic_year"] = row.academic_year or ""
+		group["academic_term"] = row.academic_term or ""
+		group["batch"] = row.batch or ""
+		group["hierarchy_label"] = " → ".join(
+			value for value in (group["department"], group["program_name"], row.student_group_name or row.name) if value
+		)
 
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def student_group_query(doctype, txt, searchfield, start, page_len, filters):
-	"""Return only Class Arms valid for the Branch and selected lesson date."""
+	"""Return only Student Groups valid for the Branch and selected lesson date."""
 	safe.base._require_academic_operator()
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	branch = safe.base._resolve_branch(filters.get(BRANCH_FIELD))
@@ -102,9 +109,8 @@ def student_group_query(doctype, txt, searchfield, start, page_len, filters):
 	academic_term = filters.get("academic_term") or calendar.get("academic_term")
 	if academic_year:
 		group_filters["academic_year"] = academic_year
-	fields = ["name", "student_group_name", "program", "course", "academic_year", "academic_term"]
-	if frappe.get_meta("Student Group").has_field("eduedge_academic_level"):
-		fields.append("eduedge_academic_level")
+	if filters.get("program"):
+		group_filters["program"] = filters.get("program")
 	rows = frappe.get_list(
 		"Student Group",
 		filters=group_filters,
@@ -114,27 +120,36 @@ def student_group_query(doctype, txt, searchfield, start, page_len, filters):
 			"program": ["like", f"%{txt}%"],
 			"course": ["like", f"%{txt}%"],
 		},
-		fields=fields,
+		fields=["name", "student_group_name", "program", "course", "academic_year", "academic_term"],
 		start=int(start),
 		page_length=int(page_len),
 		order_by="student_group_name asc",
 	)
 	if academic_term:
 		rows = [row for row in rows if not row.academic_term or row.academic_term == academic_term]
-	level_names = {
-		row.name: row.level_name
+	program_names = list({row.program for row in rows if row.program})
+	programmes = {
+		row.name: row
 		for row in frappe.get_all(
-			"EduEdge Academic Level",
-			filters={"name": ["in", list({row.get("eduedge_academic_level") for row in rows if row.get("eduedge_academic_level")})]},
-			fields=["name", "level_name"],
-			page_length=max(len(rows), 1),
+			"Program",
+			filters={"name": ["in", program_names]},
+			fields=["name", "program_name", "department"],
+			page_length=max(len(program_names), 1),
 		)
-	} if any(row.get("eduedge_academic_level") for row in rows) else {}
+	} if program_names else {}
 	return [
 		[
 			row.name,
 			row.student_group_name,
-			level_names.get(row.get("eduedge_academic_level")) or row.program or row.course or "",
+			" → ".join(
+				value
+				for value in (
+					(programmes.get(row.program) or {}).get("department"),
+					(programmes.get(row.program) or {}).get("program_name") or row.program,
+					row.course,
+				)
+				if value
+			),
 			row.academic_term or row.academic_year or "",
 		]
 		for row in rows
