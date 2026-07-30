@@ -3,13 +3,13 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.academic_fields import ACADEMIC_LEVEL_FIELD, INSTITUTION_FIELD
+from eduedge.education.academic_progression import OFFERING_LEVEL_FIELD
 from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access, parse_query_filters
 
 ALLOWED_SCOPED_QUERY_DOCTYPES = {
 	"EduEdge Institution",
 	"Department",
-	# Deprecated masters remain allowlisted for privileged migration screens only.
 	"EduEdge Academic Section",
 	"EduEdge Academic Level",
 }
@@ -35,17 +35,19 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 	purpose_field = PURPOSE_FIELD[purpose]
 	params = {"branch": branch, "txt": f"%{txt or ''}%", "start": int(start), "page_len": int(page_len)}
 	conditions = ["offering.school_branch = %(branch)s", "offering.is_active = 1", f"offering.`{purpose_field}` = 1"]
-	for fieldname in ("program", "department", "academic_year"):
-		if filters.get(fieldname):
+	for fieldname in ("program", "department", OFFERING_LEVEL_FIELD, "academic_year"):
+		filter_key = ACADEMIC_LEVEL_FIELD if fieldname == OFFERING_LEVEL_FIELD else fieldname
+		if filters.get(filter_key):
 			conditions.append(f"offering.`{fieldname}` = %({fieldname})s")
-			params[fieldname] = filters[fieldname]
+			params[fieldname] = filters[filter_key]
 	if filters.get("academic_term"):
 		conditions.append("(coalesce(offering.academic_term, '') = '' or offering.academic_term = %(academic_term)s)")
 		params["academic_term"] = filters["academic_term"]
 	rows = frappe.db.sql(
 		f"""
 		select offering.name, offering.offering_title, offering.offering_code,
-			offering.program, offering.department, offering.academic_year, offering.academic_term,
+			offering.program, offering.department, offering.academic_level,
+			offering.academic_year, offering.academic_term,
 			offering.study_mode, offering.delivery_mode
 		from `tabEduEdge Program Offering` offering
 		where {' and '.join(conditions)}
@@ -54,6 +56,7 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 				or coalesce(offering.offering_title, '') like %(txt)s
 				or coalesce(offering.offering_code, '') like %(txt)s
 				or coalesce(offering.department, '') like %(txt)s
+				or coalesce(offering.academic_level, '') like %(txt)s
 			)
 		order by offering.offering_title asc, offering.modified desc
 		limit %(start)s, %(page_len)s
@@ -66,7 +69,7 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 			row.name,
 			row.offering_title or row.name,
 			row.offering_code,
-			" · ".join(value for value in (row.department, row.program, row.academic_year, row.academic_term, row.study_mode, row.delivery_mode) if value),
+			" · ".join(value for value in (row.department, row.program, row.academic_level, row.academic_year, row.academic_term, row.study_mode, row.delivery_mode) if value),
 		]
 		for row in rows
 	]
@@ -87,6 +90,8 @@ def institution_scoped_query(doctype, txt, searchfield, start, page_len, filters
 	institution_fieldname = "institution" if meta.has_field("institution") else INSTITUTION_FIELD
 	if institution and meta.has_field(institution_fieldname):
 		query_filters[institution_fieldname] = institution
+	if doctype == "EduEdge Academic Level" and filters.get("program"):
+		query_filters["program"] = filters.get("program")
 	if meta.has_field("disabled"):
 		query_filters["disabled"] = 0
 	fields = ["name"]
@@ -117,6 +122,8 @@ def get_programme_offering_context(offering: str) -> dict:
 		"institution": doc.institution,
 		"program": doc.program,
 		"department": doc.department,
+		"academic_level": doc.get(OFFERING_LEVEL_FIELD),
+		ACADEMIC_LEVEL_FIELD: doc.get(OFFERING_LEVEL_FIELD),
 		"academic_year": doc.academic_year,
 		"academic_term": doc.academic_term,
 		"student_batch": doc.student_batch,
