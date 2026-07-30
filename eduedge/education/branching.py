@@ -6,9 +6,9 @@ from frappe import _
 from eduedge.education.academic_operations import (
 	before_validate_course_schedule,
 	before_validate_room,
-	before_validate_student_attendance,
 	before_validate_student_group as _before_validate_student_group,
 )
+from eduedge.education.attendance_validation import before_validate_student_attendance
 from eduedge.education.academic_validation import (
 	before_validate_program_enrollment_context,
 	before_validate_student_applicant_context,
