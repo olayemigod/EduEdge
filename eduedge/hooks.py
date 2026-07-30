@@ -32,9 +32,13 @@ override_whitelisted_methods = {
 	"eduedge.api.resource_center.delete_resource_record": "eduedge.api.resource_center_safe.delete_resource_record",
 	"eduedge.api.modal_records.save_modal_record": "eduedge.api.modal_records_safe.save_modal_record",
 	"eduedge.api.academic_foundation.get_academic_foundation": "eduedge.api.academic_foundation_safe.get_academic_foundation",
-	"eduedge.api.academic_operations.get_operations_context": "eduedge.api.academic_operations_safe.get_operations_context",
+	"eduedge.api.academic_operations.get_operations_context": "eduedge.api.academic_operations_review.get_operations_context",
 	"eduedge.api.academic_operations.get_attendance_register": "eduedge.api.academic_operations_safe.get_attendance_register",
 	"eduedge.api.academic_operations.save_attendance_register": "eduedge.api.academic_operations_safe.save_attendance_register",
+	"eduedge.api.academic_operations.student_group_query": "eduedge.api.academic_operations_review.student_group_query",
+	"eduedge.api.programme_offerings.get_programme_offerings_page": "eduedge.api.programme_offerings_safe.get_programme_offerings_page",
+	"eduedge.api.programme_offerings.get_programme_offering_options": "eduedge.api.programme_offerings_safe.get_programme_offering_options",
+	"eduedge.api.programme_offerings.save_programme_offering": "eduedge.api.programme_offerings_safe.save_programme_offering",
 	"eduedge.api.report_cards.get_report_card": "eduedge.api.report_cards_profiled.get_report_card",
 	"eduedge.api.report_cards.preview_report_card": "eduedge.api.report_cards_profiled.preview_report_card",
 }
@@ -65,7 +69,7 @@ doctype_js = {
 
 doc_events = {
 	"Company": {"before_validate": "eduedge.education.institution_types.before_validate_company"},
-	"Program": {"before_validate": "eduedge.education.academic_validation.before_validate_program"},
+	"Program": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_program"},
 	"Course": {"before_validate": "eduedge.education.academic_validation.before_validate_course"},
 	"Student Batch Name": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
 	"Student House": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
@@ -93,6 +97,7 @@ doc_events = {
 	"Fees": {"before_validate": "eduedge.education.academic_validation.before_validate_fees"},
 	"Student Leave Application": {"before_validate": "eduedge.education.academic_validation.before_validate_student_leave"},
 	"Student Log": {"before_validate": "eduedge.education.academic_validation.before_validate_student_log"},
+	"EduEdge Program Offering": {"validate": "eduedge.education.offering_calendar_validation.validate_programme_offering_calendar"},
 	"EduEdge CBT Question": {
 		"validate": "eduedge.cbt.master_lifecycle.validate_master_docstatus",
 		"before_submit": "eduedge.cbt.master_lifecycle.block_master_submit",
