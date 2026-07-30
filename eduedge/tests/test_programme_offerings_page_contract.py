@@ -56,7 +56,7 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 	def test_dedicated_page_exposes_capacity_availability_identity_and_native_department(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text(encoding="utf-8")
 		for token in (
-			"<EdgeAppShell", "Occupied Seats", "Admission Open", "Enrollment Open",
+			"<EdgeAppShell", "Occupied Seats", "admission_status", "enrollment_status",
 			"identity_locked", "draftBranchChanged", "draftProgramChanged", "draftYearChanged",
 			"Zero means no configured limit", "Current active Branch", "draftDepartmentName",
 		):
