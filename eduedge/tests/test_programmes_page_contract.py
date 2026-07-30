@@ -61,7 +61,8 @@ class TestProgrammesPageContract(unittest.TestCase):
 		self.assertIn("draftInstitutionChanged", component)
 		self.assertIn('this.draft.department = ""', component)
 		self.assertIn('frappe.set_route("Form", "Program", name)', component)
-		self.assertIn("Course rows and curriculum rules remain", component)
+		self.assertIn("Junior Secondary School → JSS 1", component)
+		self.assertIn("School of Agriculture → BSc Agriculture", component)
 		self.assertNotIn("eduedge_academic_section", component)
 
 	def test_ci_checks_programmes_entry_scripts(self):
