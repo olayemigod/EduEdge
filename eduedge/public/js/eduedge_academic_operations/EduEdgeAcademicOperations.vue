@@ -34,13 +34,7 @@
 						<label>
 							<span>Branch / Campus</span>
 							<select v-model="filters.branch" class="form-control" @change="changeBranch">
-								<option
-									v-for="branch in context.allowed_branches"
-									:key="branch.name"
-									:value="branch.name"
-								>
-									{{ branch.branch_name }}
-								</option>
+								<option v-for="branch in context.allowed_branches" :key="branch.name" :value="branch.name">{{ branch.branch_name }}</option>
 							</select>
 						</label>
 						<label>
@@ -48,11 +42,11 @@
 							<input v-model="filters.date" type="date" class="form-control" @change="dateChanged" />
 						</label>
 						<label>
-							<span>{{ term('student_group', false, 'Student Group / Class Arm') }}</span>
+							<span>{{ term('student_group', false, 'Student Group / Class Arm / Level') }}</span>
 							<select v-model="filters.student_group" class="form-control" @change="groupChanged">
 								<option value="">All {{ term('student_group', true, 'student groups').toLowerCase() }}</option>
 								<option v-for="group in context.student_groups" :key="group.name" :value="group.name">
-									{{ group.student_group_name }} · {{ group.academic_level_name || group.program || group.course || "No class / level" }} · {{ group.student_count || 0 }} {{ term('student', true, 'students') }}
+									{{ group.hierarchy_label || group.student_group_name || group.name }} · {{ group.student_count || 0 }} {{ term('student', true, 'students') }}
 								</option>
 							</select>
 						</label>
@@ -65,34 +59,19 @@
 				<section class="eduedge-context-strip">
 					<div><span>Institution</span><strong>{{ activeInstitutionName || "Not configured" }}</strong></div>
 					<div><span>{{ term('academic_year', false, 'Academic Session') }}</span><strong>{{ context.filters?.academic_year || "Not resolved" }}</strong></div>
-					<div><span>{{ term('academic_term', false, 'Academic Period') }}</span><strong>{{ calendarPeriodLabel }}</strong></div>
-					<EdgeStatusBadge
-						:label="calendarSourceLabel"
-						:status="context.academic_calendar?.source || 'unknown'"
-						:tone="calendarReady ? 'success' : 'warning'"
-					/>
+					<div><span>{{ term('academic_term', false, 'Term / Semester') }}</span><strong>{{ calendarPeriodLabel }}</strong></div>
+					<EdgeStatusBadge :label="calendarSourceLabel" :status="context.academic_calendar?.source || 'unknown'" :tone="calendarReady ? 'success' : 'warning'" />
 				</section>
 
-				<EdgeActionBar
-					v-if="context.academic_calendar?.blocking_issue"
-					:label="context.academic_calendar.blocking_issue"
-				>
-					<template #actions>
-						<button type="button" class="edge-button" @click="openRoute('/app/eduedge-academic-foundation')">Configure Academic Session</button>
-					</template>
+				<EdgeActionBar v-if="context.academic_calendar?.blocking_issue" :label="context.academic_calendar.blocking_issue">
+					<template #actions><button type="button" class="edge-button" @click="openRoute('/app/eduedge-academic-foundation')">Configure Academic Session</button></template>
 				</EdgeActionBar>
-
-				<EdgeActionBar
-					v-else-if="context.academic_calendar?.calendar_gap"
-					label="This date is inside the Institution calendar but outside every configured academic period. EduEdge has intentionally left the period blank."
-				>
-					<template #actions>
-						<button type="button" class="edge-button" @click="openRoute('/app/eduedge-academic-foundation')">Review Academic Calendar</button>
-					</template>
+				<EdgeActionBar v-else-if="context.academic_calendar?.calendar_gap" label="This date is inside the Institution Academic Session but outside every configured Term / Semester. EduEdge has intentionally left the period blank.">
+					<template #actions><button type="button" class="edge-button" @click="openRoute('/app/eduedge-academic-foundation')">Review Academic Calendar</button></template>
 				</EdgeActionBar>
 
 				<EdgeDashboardLayout min-column-width="12rem">
-					<EdgeStatCard :label="term('student_group', true, 'Student Groups')" :value="context.counts.student_groups" helper="Active groups in the resolved session and period" />
+					<EdgeStatCard :label="term('student_group', true, 'Student Groups')" :value="context.counts.student_groups" helper="Active groups in the resolved session and term" />
 					<EdgeStatCard :label="`Assigned ${term('instructor', true, 'Instructors')}`" :value="context.counts.assigned_instructors" :helper="canReadInstructorAssignments ? 'Enabled Branch assignments' : 'Assignment count hidden by permission'" />
 					<EdgeStatCard :label="`Today's ${term('class_session', true, 'Schedules')}`" :value="context.counts.schedules" helper="Filtered by selected date" />
 					<EdgeStatCard label="Rooms Used" :value="context.counts.rooms_used" :helper="`${context.counts.unassigned_room_sessions || 0} sessions without rooms`" />
@@ -115,20 +94,9 @@
 							<div><p class="edge-eyebrow">{{ term('class_session', false, 'Schedule') }}</p><h2>{{ term('student_group', true, 'Student Groups') }} for {{ filters.date }}</h2></div>
 							<button v-if="canCreateCourseSchedule" type="button" class="edge-button" @click="openRoute('/app/course-schedule/new-course-schedule')">Add {{ term('class_session', false, 'schedule') }}</button>
 						</div>
-						<EdgeEmptyState
-							v-if="!context.schedules.length"
-							:title="`No ${term('student_group', true, 'student groups').toLowerCase()} scheduled`"
-							:description="canCreateCourseSchedule ? 'Create a Course Schedule or choose another date.' : calendarReady ? 'Choose another date or contact an academic administrator.' : 'Configure the Institution Academic Session and Terms first.'"
-						/>
+						<EdgeEmptyState v-if="!context.schedules.length" :title="`No ${term('student_group', true, 'student groups').toLowerCase()} scheduled`" :description="canCreateCourseSchedule ? 'Create a Course Schedule or choose another date.' : calendarReady ? 'Choose another date or contact an academic administrator.' : 'Configure the Institution Academic Session and Terms first.'" />
 						<div v-else class="eduedge-schedule-list">
-							<button
-								v-for="schedule in context.schedules"
-								:key="schedule.name"
-								type="button"
-								class="eduedge-schedule-card"
-								:class="{ 'is-selected': filters.course_schedule === schedule.name }"
-								@click="selectSchedule(schedule)"
-							>
+							<button v-for="schedule in context.schedules" :key="schedule.name" type="button" class="eduedge-schedule-card" :class="{ 'is-selected': filters.course_schedule === schedule.name }" @click="selectSchedule(schedule)">
 								<strong>{{ schedule.course }}</strong>
 								<span>{{ schedule.student_group }}</span>
 								<span>{{ schedule.instructor_name || schedule.instructor || `No ${term('instructor', false, 'instructor')}` }}</span>
@@ -139,23 +107,17 @@
 
 					<article class="eduedge-panel">
 						<div class="eduedge-panel-header">
-							<div><p class="edge-eyebrow">Attendance</p><h2>{{ term('student_group', false, 'Student Group / Class Arm') }} register</h2></div>
+							<div><p class="edge-eyebrow">Attendance</p><h2>{{ term('student_group', false, 'Student Group / Class Arm / Level') }} register</h2></div>
 							<button type="button" class="edge-button" :disabled="!canReadAttendance || !filters.student_group || registerLoading" @click="loadRegister">Load register</button>
 						</div>
-
 						<div v-if="selectedSchedule" class="eduedge-selected-schedule">
 							<div><span>{{ term('course', false, 'Course') }}</span><strong>{{ selectedSchedule.course }}</strong></div>
 							<div><span>{{ term('instructor', false, 'Instructor') }}</span><strong>{{ selectedSchedule.instructor_name || selectedSchedule.instructor || "Not assigned" }}</strong></div>
 							<div><span>Time and Room</span><strong>{{ formatTime(selectedSchedule.from_time) }} – {{ formatTime(selectedSchedule.to_time) }} · {{ selectedSchedule.room || "Not assigned" }}</strong></div>
 						</div>
-
 						<EdgeLoadingState v-if="registerLoading" message="Loading class register..." />
 						<EdgeErrorState v-else-if="registerError" title="Register could not load" :message="registerError" action-label="Try again" @retry="loadRegister" />
-						<EdgeEmptyState
-							v-else-if="!register.students.length"
-							:title="canReadAttendance ? `Select a ${term('student_group', false, 'student group')}` : 'Attendance is not available for this role'"
-							:description="canReadAttendance ? `Choose a ${term('student_group', false, 'Student Group / Class Arm')} or a schedule to open the register.` : 'Your role does not have Student Attendance read permission.'"
-						/>
+						<EdgeEmptyState v-else-if="!register.students.length" :title="canReadAttendance ? `Select a ${term('student_group', false, 'student group')}` : 'Attendance is not available for this role'" :description="canReadAttendance ? `Choose a ${term('student_group', false, 'Student Group / Class Arm / Level')} or a schedule to open the register.` : 'Your role does not have Student Attendance read permission.'" />
 						<template v-else>
 							<div class="eduedge-register-summary">
 								<EdgeStatusBadge :label="`${register.submitted_count} submitted`" :status="register.submitted_count ? 'submitted' : 'none'" :tone="register.submitted_count ? 'success' : 'neutral'" />
@@ -168,11 +130,7 @@
 										<tr v-for="student in register.students" :key="student.student">
 											<td>{{ student.group_roll_number || "—" }}</td>
 											<td><strong>{{ student.student_name }}</strong><div class="text-muted">{{ student.student }}</div></td>
-											<td>
-												<select v-model="student.status" class="form-control input-sm" :disabled="student.locked || saving || !canManageAttendance">
-													<option value="Present">Present</option><option value="Absent">Absent</option><option value="Leave">Leave</option>
-												</select>
-											</td>
+											<td><select v-model="student.status" class="form-control input-sm" :disabled="student.locked || saving || !canManageAttendance"><option value="Present">Present</option><option value="Absent">Absent</option><option value="Leave">Leave</option></select></td>
 											<td><EdgeStatusBadge :label="student.locked ? 'Submitted' : student.attendance_name ? 'Draft' : 'New'" :status="student.locked ? 'submitted' : 'draft'" :tone="student.locked ? 'success' : 'neutral'" /></td>
 										</tr>
 									</tbody>
@@ -259,7 +217,7 @@ export default {
 		calendarReady() { return Boolean(this.context.academic_calendar?.ready && !this.context.academic_calendar?.blocking_issue); },
 		calendarSourceLabel() {
 			if (this.context.academic_calendar?.blocking_issue) return "Institution calendar required";
-			if (this.context.academic_calendar?.calendar_gap) return "Calendar period gap";
+			if (this.context.academic_calendar?.calendar_gap) return "Calendar term gap";
 			if (this.context.academic_calendar?.source === "institution_calendar") return "Institution calendar";
 			if (this.context.academic_calendar?.source === "education_settings_legacy") return "Legacy Education Settings";
 			return "Not resolved";
@@ -287,9 +245,7 @@ export default {
 				this.context = response.message || this.context;
 				this.filters.branch = this.context.filters?.branch || this.filters.branch;
 				this.filters.date = this.context.filters?.date || this.filters.date;
-				if (!this.context.student_groups.some((row) => row.name === this.filters.student_group)) {
-					this.filters.student_group = "";
-				}
+				if (!this.context.student_groups.some((row) => row.name === this.filters.student_group)) this.filters.student_group = "";
 			} catch (error) { this.error = error?.message || "Academic operations context could not be loaded."; }
 			finally { this.loading = false; }
 		},
