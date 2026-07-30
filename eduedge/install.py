@@ -3,7 +3,6 @@ from __future__ import annotations
 import frappe
 from frappe.permissions import add_permission, update_permission_property
 
-from eduedge.education.academic_fields import ensure_academic_context_foundation
 from eduedge.education.custom_fields import (
 	backfill_education_branch_context,
 	ensure_education_custom_fields,
@@ -11,6 +10,7 @@ from eduedge.education.custom_fields import (
 from eduedge.education.enrollment_field_setup import ensure_program_enrollment_branch_selector
 from eduedge.education.institution_type_defaults import apply_institution_type_defaults
 from eduedge.education.institution_types import ensure_institution_type_foundation
+from eduedge.education.native_hierarchy_migration import ensure_native_academic_context_foundation
 from eduedge.permissions_baseline import (
 	apply_default_permission_baseline,
 	ensure_eduedge_page_role_baseline,
@@ -88,7 +88,7 @@ def after_install() -> None:
 	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
-	ensure_academic_context_foundation()
+	ensure_native_academic_context_foundation()
 	ensure_program_enrollment_branch_selector()
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
@@ -104,7 +104,7 @@ def after_migrate() -> None:
 	apply_institution_type_defaults()
 	ensure_roles()
 	ensure_education_custom_fields()
-	ensure_academic_context_foundation()
+	ensure_native_academic_context_foundation()
 	ensure_program_enrollment_branch_selector()
 	ensure_admission_manager_permissions()
 	ensure_training_progress_permissions()
