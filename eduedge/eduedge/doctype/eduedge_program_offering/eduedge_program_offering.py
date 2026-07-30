@@ -8,8 +8,14 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate
 
-from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
+from eduedge.education.academic_fields import ACADEMIC_LEVEL_FIELD, INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_hierarchy import _validate_department
+from eduedge.education.academic_progression import (
+	LEVEL_PROGRESSION,
+	PROGRAM_PROMOTION,
+	get_program_progression,
+	validate_level_for_program,
+)
 from eduedge.education.offerings import assert_branch_access
 from eduedge.services.academic_calendar import assert_institution_calendar_context
 from eduedge.services.enrollment_lifecycle import count_capacity_consuming_enrollments
@@ -18,6 +24,7 @@ IDENTITY_FIELDS = (
 	"school_branch",
 	"program",
 	"department",
+	ACADEMIC_LEVEL_FIELD,
 	"academic_year",
 	"academic_term",
 	"student_batch",
@@ -35,6 +42,7 @@ class EduEdgeProgramOffering(Document):
 				value
 				for value in (
 					self.program,
+					self.get(ACADEMIC_LEVEL_FIELD),
 					self.academic_year,
 					self.academic_term,
 					self.study_mode,
@@ -82,6 +90,7 @@ class EduEdgeProgramOffering(Document):
 				self.name,
 				self.school_branch,
 				self.program,
+				self.get(ACADEMIC_LEVEL_FIELD),
 				self.academic_year,
 				self.academic_term,
 				self.student_batch,
@@ -144,24 +153,19 @@ class EduEdgeProgramOffering(Document):
 			frappe.throw(_("The selected Branch must belong to an Institution."), frappe.ValidationError)
 		context_changed = self.is_new() or any(
 			self.has_value_changed(fieldname)
-			for fieldname in ("school_branch", "program", "department", "student_batch")
+			for fieldname in ("school_branch", "program", "department", ACADEMIC_LEVEL_FIELD, "student_batch")
 		)
 		if not self.program or not frappe.db.exists("Program", self.program):
 			frappe.throw(_("Select a valid Programme / Class."), frappe.ValidationError)
-		program_meta = frappe.get_meta("Program")
-		program_fields = ["department"]
-		if program_meta.has_field(INSTITUTION_FIELD):
-			program_fields.append(INSTITUTION_FIELD)
-		program = frappe.db.get_value("Program", self.program, program_fields, as_dict=True)
+		program = get_program_progression(self.program)
 		program_institution = program.get(INSTITUTION_FIELD) if program else None
-		if program_meta.has_field(INSTITUTION_FIELD):
-			if context_changed and not program_institution:
-				frappe.throw(
-					_("Assign the selected Programme / Class to an Institution before creating or re-contextualising an Offering."),
-					frappe.ValidationError,
-				)
-			if program_institution and program_institution != self.institution:
-				frappe.throw(_("Programme / Class must belong to the same Institution as the selected Branch."), frappe.ValidationError)
+		if context_changed and not program_institution:
+			frappe.throw(
+				_("Assign the selected Programme / Class to an Institution before creating or re-contextualising an Offering."),
+				frappe.ValidationError,
+			)
+		if program_institution and program_institution != self.institution:
+			frappe.throw(_("Programme / Class must belong to the same Institution as the selected Branch."), frappe.ValidationError)
 		if not program or not program.department:
 			frappe.throw(
 				_("Assign the selected Programme / Class to a Department, Faculty, School, or School Section."),
@@ -170,6 +174,20 @@ class EduEdgeProgramOffering(Document):
 		if self.department != program.department:
 			frappe.throw(_("Offering Department must match the selected Programme / Class."), frappe.ValidationError)
 		_validate_department(self.department, self.institution)
+
+		mode = program.get("eduedge_progression_mode")
+		level = self.get(ACADEMIC_LEVEL_FIELD)
+		if mode == LEVEL_PROGRESSION:
+			validate_level_for_program(level, program=self.program, institution=self.institution, required=True)
+			if not self.academic_term:
+				frappe.throw(_("Academic Term / Semester is required for a Level-progression Programme Offering."), frappe.ValidationError)
+		elif mode == PROGRAM_PROMOTION:
+			if level:
+				frappe.throw(_("Primary and Secondary Class Offerings must not use a separate Academic Level."), frappe.ValidationError)
+			if self.academic_term:
+				frappe.throw(_("Primary and Secondary Class Offerings are Academic-Session-wide. Leave Academic Term blank."), frappe.ValidationError)
+		elif level:
+			frappe.throw(_("Academic Level is not valid for this Programme's progression mode."), frappe.ValidationError)
 
 		if self.student_batch:
 			batch_meta = frappe.get_meta("Student Batch Name")
@@ -221,6 +239,7 @@ class EduEdgeProgramOffering(Document):
 			from `tabEduEdge Program Offering`
 			where school_branch = %s
 				and program = %s
+				and coalesce(academic_level, '') = %s
 				and academic_year = %s
 				and coalesce(academic_term, '') = %s
 				and coalesce(student_batch, '') = %s
@@ -232,6 +251,7 @@ class EduEdgeProgramOffering(Document):
 			(
 				self.school_branch,
 				self.program,
+				self.get(ACADEMIC_LEVEL_FIELD) or "",
 				self.academic_year,
 				self.academic_term or "",
 				self.student_batch or "",
@@ -242,6 +262,6 @@ class EduEdgeProgramOffering(Document):
 		)
 		if duplicate:
 			frappe.throw(
-				_("A matching Programme Offering already exists for this Branch, Programme, period, cohort, and delivery mode."),
+				_("A matching Programme Offering already exists for this Branch, Programme, Level, period, cohort, and delivery mode."),
 				frappe.DuplicateEntryError,
 			)
