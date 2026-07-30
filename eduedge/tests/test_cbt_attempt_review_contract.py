@@ -101,14 +101,10 @@ class TestCBTAttemptReviewContract(unittest.TestCase):
 			hooks,
 		)
 
-	def test_review_workspace_exposes_evidence_not_answers(self):
-		loader = (
-			APP
-			/ "eduedge"
-			/ "page"
-			/ "eduedge_cbt_attempt_review"
-			/ "eduedge_cbt_attempt_review.js"
-		).read_text()
+	def test_review_workbench_uses_collision_free_edgesuite_page(self):
+		page_root = APP / "eduedge" / "page" / "eduedge_cbt_review_workbench"
+		loader = (page_root / "eduedge_cbt_review_workbench.js").read_text()
+		page_meta = json.loads((page_root / "eduedge_cbt_review_workbench.json").read_text())
 		component = (
 			APP
 			/ "public"
@@ -116,10 +112,13 @@ class TestCBTAttemptReviewContract(unittest.TestCase):
 			/ "eduedge_cbt_attempt_review"
 			/ "EduEdgeCBTAttemptReview.vue"
 		).read_text()
+		self.assertEqual(page_meta["name"], "eduedge-cbt-review-workbench")
+		self.assertNotEqual(page_meta["name"], "eduedge-cbt-attempt-review")
 		for token in (
 			"edgesuite_ui.bundle.js",
 			"eduedge_cbt_attempt_review.bundle.js",
 			"createEduEdgeCBTAttemptReviewApp",
+			"eduedge-cbt-review-workbench",
 		):
 			self.assertIn(token, loader)
 		for token in (
@@ -143,15 +142,17 @@ class TestCBTAttemptReviewContract(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, component)
 
-	def test_access_manifest_and_menus_register_review_route(self):
+	def test_access_manifest_and_menus_register_review_resource_and_workbench(self):
 		access = (APP / "access_control.py").read_text()
 		navigation = (APP / "public" / "js" / "eduedge_ui" / "navigation.js").read_text()
 		product_menu = (APP / "public" / "js" / "eduedge_product_menu.bundle.js").read_text()
+		workspace = (APP / "eduedge" / "workspace" / "eduedge" / "eduedge.json").read_text()
 		self.assertIn('"cbt_attempt_review": "EduEdge CBT Attempt Review"', access)
-		self.assertIn('"/app/eduedge-cbt-attempt-review"', access)
-		self.assertIn('route: "/app/eduedge-cbt-attempt-review"', navigation)
-		self.assertIn('route: "/app/eduedge-cbt-attempt-review"', product_menu)
+		self.assertIn('route: "/app/eduedge-cbt-review-workbench"', navigation)
+		self.assertIn('"/app/eduedge-cbt-review-workbench"', navigation)
+		self.assertIn('"/app/eduedge-cbt-review-workbench"', product_menu)
 		self.assertIn('resource: "cbt_attempt_review"', product_menu)
+		self.assertIn('"link_to":"eduedge-cbt-review-workbench"', workspace)
 
 
 if __name__ == "__main__":
