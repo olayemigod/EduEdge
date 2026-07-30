@@ -6,12 +6,14 @@ import frappe
 
 from eduedge.education import academic_fields
 from eduedge.education.academic_fields import ACADEMIC_SECTION_FIELD, INSTITUTION_FIELD
+from eduedge.education.academic_progression import ensure_academic_progression_foundation
 from eduedge.education.native_identity import DISPLAY_FIELD
 
 
 def ensure_native_academic_context_foundation() -> None:
-	"""Install the canonical native academic schema, identity, and migration layer."""
+	"""Install the canonical native academic schema, identity, progression, and migration layer."""
 	academic_fields.ensure_academic_context_foundation()
+	ensure_academic_progression_foundation()
 
 
 def backfill_legacy_sections_to_departments() -> None:
