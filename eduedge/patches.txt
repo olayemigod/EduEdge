@@ -11,3 +11,4 @@ eduedge.patches.v0_8.backfill_exam_template_reuse_scope
 eduedge.patches.v0_8.backfill_user_access_scope
 eduedge.patches.v0_9.ensure_current_academic_calendars
 eduedge.patches.v0_9.migrate_native_academic_hierarchy
+eduedge.patches.v0_9.classify_tertiary_academic_levels
