@@ -11,8 +11,10 @@ from eduedge.cbt.public_access import require_public_exam_authoring
 from eduedge.cbt.schedule_governance import (
 	assert_fields_mutable_after_candidate_confirmation,
 	assert_user_branch_access,
+	cbt_operation_flag,
 	validate_activation_readiness,
 	validate_course_scope,
+	validate_terminal_schedule_readiness,
 	write_lifecycle_log,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -27,6 +29,7 @@ from eduedge.eduedge.doctype.eduedge_cbt_exam_template.eduedge_cbt_exam_template
 	SUBJECT_ANY,
 	SUBJECT_SPECIFIC,
 )
+from eduedge.platform.access import require_eduedge_access
 
 SCHOOL_CENTRE = "School Examination Centre"
 PLATFORM_CENTRE = "EduEdge Exam Centre"
@@ -133,6 +136,8 @@ INVIGILATOR_ROLES = {
 
 class EduEdgeCBTExamSchedule(Document):
 	def validate(self) -> None:
+		self._lock_existing_schedule_row()
+		self._require_platform_access()
 		self.schedule_code = (self.schedule_code or "").strip().upper()
 		self.schedule_title = (self.schedule_title or "").strip()
 		self._validate_identity()
@@ -152,6 +157,7 @@ class EduEdgeCBTExamSchedule(Document):
 		)
 		self._prevent_active_schedule_mutation()
 		validate_activation_readiness(self)
+		validate_terminal_schedule_readiness(self)
 
 	def on_update(self) -> None:
 		before = self.get_doc_before_save()
@@ -170,16 +176,53 @@ class EduEdgeCBTExamSchedule(Document):
 		)
 
 	def on_trash(self) -> None:
-		if self.status not in {"Draft", "Cancelled"}:
+		if not cbt_operation_flag("eduedge_access_guarded", self):
+			require_eduedge_access(
+				feature_key="cbt",
+				action="delete_cbt_exam_schedule",
+				reference_doctype=self.doctype,
+				reference_name=self.name,
+			)
+		if self.status != "Draft":
 			frappe.throw(
-				_("Only Draft or Cancelled examination schedules can be deleted."),
+				_("Only a Draft examination schedule with no audit history can be deleted."),
 				frappe.ValidationError,
 			)
-		if frappe.db.exists("EduEdge CBT Candidate Assignment", {"exam_schedule": self.name}):
-			frappe.throw(
-				_("Delete or resolve Candidate Assignments before deleting this Schedule."),
-				frappe.ValidationError,
-			)
+		for doctype, filters, message in (
+			(
+				"EduEdge CBT Candidate Assignment",
+				{"exam_schedule": self.name},
+				_("Delete Draft Candidate Assignments before deleting this Schedule."),
+			),
+			(
+				"EduEdge CBT Intervention Log",
+				{"exam_schedule": self.name},
+				_("A Schedule with intervention evidence cannot be deleted."),
+			),
+			(
+				"EduEdge CBT Lifecycle Log",
+				{"exam_schedule": self.name},
+				_("A Schedule with lifecycle evidence cannot be deleted."),
+			),
+		):
+			if frappe.db.exists(doctype, filters):
+				frappe.throw(message, frappe.ValidationError)
+
+	def _lock_existing_schedule_row(self) -> None:
+		if self.is_new() or not self.name:
+			return
+		frappe.get_doc(self.doctype, self.name, for_update=True)
+
+	def _require_platform_access(self) -> None:
+		if cbt_operation_flag("eduedge_access_guarded", self):
+			return
+		require_eduedge_access(
+			feature_key="cbt",
+			action="create_cbt_exam_schedule" if self.is_new() else "update_cbt_exam_schedule",
+			reference_doctype=self.doctype,
+			reference_name=None if self.is_new() else self.name,
+		)
+		self.flags.eduedge_access_guarded = True
 
 	def _validate_identity(self) -> None:
 		if not self.schedule_code:
@@ -305,6 +348,7 @@ class EduEdgeCBTExamSchedule(Document):
 	def _validate_academic_context(self) -> None:
 		if self.exam_scope != SCHOOL_EXAM:
 			return
+		self._validate_program_scope()
 		if self.academic_term:
 			if not self.academic_year:
 				frappe.throw(_("Select Academic Year before Academic Term."), frappe.ValidationError)
@@ -335,6 +379,31 @@ class EduEdgeCBTExamSchedule(Document):
 				self.set(fieldname, group_value)
 		if group.course and group.course != self.course:
 			frappe.throw(_("Student Group / Class Subject must match the Schedule Subject / Course."), frappe.ValidationError)
+
+	def _validate_program_scope(self) -> None:
+		if not self.program:
+			return
+		branch = frappe.db.get_value(
+			"EduEdge School Branch",
+			self.school_branch,
+			["institution", "company"],
+			as_dict=True,
+		)
+		if not branch:
+			frappe.throw(_("Select a valid School Branch / Campus."), frappe.ValidationError)
+		meta = frappe.get_meta("Program")
+		for fieldname, expected, label in (
+			("eduedge_institution", branch.institution, _("Institution")),
+			("company", branch.company, _("Company")),
+		):
+			if not expected or not meta.has_field(fieldname):
+				continue
+			actual = frappe.db.get_value("Program", self.program, fieldname)
+			if actual != expected:
+				frappe.throw(
+					_("The selected Programme does not belong to the Schedule {0}.").format(label),
+					frappe.ValidationError,
+				)
 
 	def _validate_centre(self) -> None:
 		if not self.examination_centre:
@@ -427,6 +496,11 @@ class EduEdgeCBTExamSchedule(Document):
 			)
 		if self.status == previous_status:
 			return
+		if not cbt_operation_flag("eduedge_controlled_status_action", self):
+			frappe.throw(
+				_("Change Schedule status only through the controlled CBT Schedule Operations lifecycle actions."),
+				frappe.PermissionError,
+			)
 		transition = (previous_status, self.status)
 		if transition in REASONED_TRANSITIONS:
 			reason = (self.status_change_reason or "").strip()
