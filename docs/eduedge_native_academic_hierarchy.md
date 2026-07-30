@@ -1,39 +1,73 @@
-# EduEdge Native Academic Hierarchy
+# EduEdge Native Academic Hierarchy and Progression
 
 ## Decision
 
 EduEdge extends Frappe Education instead of replacing its academic masters.
 
-The authoritative hierarchy is:
+The shared authoritative hierarchy is:
 
-`EduEdge Institution → EduEdge School Branch → Department → Program → Student Group`
+`EduEdge Institution → EduEdge School Branch → Department → Program`
 
-Native Frappe Education records remain authoritative for Academic Year, Academic Term, Course, Student Batch, Student Group, Course Schedule, Student Attendance, Program Enrollment and assessment records.
+The layers below Program depend on the Institution type:
 
-EduEdge adds Institution, Branch, Programme Offering, calendar, access, terminology and shared-site identity controls around those native records.
+- Primary/Secondary: `Program/Class → Student Group/Class Arm`;
+- Tertiary/Training: `Program/Qualification → EduEdge Academic Level/Stage → Student Group/Lecture or Training Group`.
+
+Native Frappe records remain authoritative for Department, Program, Course, Academic Year, Academic Term, Program Enrollment, Student Group, Course Schedule, Student Attendance and assessment records.
+
+EduEdge adds Institution, Branch, Programme Offering, formal progression, calendar, access and terminology controls around those records.
+
+## Master records versus period records
+
+### Reusable masters
+
+These are configured once and reused:
+
+- Department: School Section, Faculty, School or Academic Department;
+- Program: Class/Grade or qualification curriculum;
+- Course: Subject, Course or Module;
+- EduEdge Academic Level: formal tertiary/training progression stage;
+- Student Batch: admission cohort or entry set.
+
+A Primary/Secondary Institution should have one reusable `JSS 1` Program, not one Program per Academic Session. A tertiary Institution should have one reusable `BSc Agriculture` Program and formal Levels such as `100 Level`, `200 Level` and `300 Level` beneath it.
+
+### Period-specific operational records
+
+These are created for a delivery period:
+
+- Programme Offering;
+- Program Enrollment;
+- Student Group;
+- Course Schedule;
+- Student Attendance;
+- Assessment Plan and Result Publication.
+
+A Student Group is a roster, not a permanent academic Level. `JSS 1A` may be created again for the next Academic Session, while another `JSS 1A` in the same Branch, Program, Session and Term context is blocked.
 
 ## Institution-type mappings
 
 ### Primary School
 
-- Department: School Section, for example `Nursery Section` or `Primary Section`.
-- Program: Class, for example `Nursery 1` or `Primary 4`.
-- Student Group: Class Arm, for example `Nursery 1A` or `Primary 4B`.
-- Course: Subject.
-- Academic Year: Academic Session.
+- Department: School Section, for example `Nursery Section` or `Primary Section`;
+- Program: Class, for example `Nursery 1` or `Primary 4`;
+- Student Group: Class Arm, for example `Nursery 1A` or `Primary 4B`;
+- Course: Subject;
+- Academic Year: Academic Session;
 - Academic Term: Term.
 
 Example:
 
 `Nursery Section → Nursery 1 → Nursery 1A`
 
+The Class Arm is Academic-Session-wide. It is not recreated separately for First, Second and Third Term.
+
 ### Secondary School
 
-- Department: School Section, for example `Junior Secondary School` or `Senior Secondary School`.
-- Program: Class, for example `JSS 1` or `SSS 2`.
-- Student Group: Class Arm, for example `JSS 1A`, `JSS 1B`, or `SSS 2 Science`.
-- Course: Subject.
-- Academic Year: Academic Session.
+- Department: School Section, for example `Junior Secondary School` or `Senior Secondary School`;
+- Program: Class, for example `JSS 1` or `SSS 2`;
+- Student Group: Class Arm, for example `JSS 1A`, `JSS 1B` or `SSS 2 Science`;
+- Course: Subject;
+- Academic Year: Academic Session;
 - Academic Term: Term.
 
 Example:
@@ -42,160 +76,224 @@ Example:
 
 ### Tertiary Institution
 
-- Department tree: Faculty, School and optional child Department.
-- Program: Degree, diploma or certificate programme, for example `BSc Agriculture`.
-- Student Group: Level or Lecture Group, for example `100 Level`, `100L Group A`, or `AGR 101 Lecture Group A`.
-- Course: Course or module, for example `AGR 101`.
-- Academic Year: Academic Session.
+- Department tree: Faculty, School and optional child Academic Department;
+- Program: qualification curriculum, for example `BSc Agriculture`;
+- EduEdge Academic Level: formal progression stage, for example `100 Level` or `200 Level`;
+- Student Group: Lecture, practical or administrative group, for example `200L Group A` or `AGR 201 Lecture Group A`;
+- Course: Course or Module, for example `AGR 201`;
+- Academic Year: Academic Session;
 - Academic Term: Semester.
 
 Example:
 
-`School of Agriculture → BSc Agriculture → 100 Level`
+`School of Agriculture → BSc Agriculture → 200 Level → 200L Group A`
 
 A more detailed Department tree may be:
 
-`School of Agriculture → Department of Animal Science → BSc Animal Science → 200 Level`
+`Faculty of Agriculture → Department of Animal Science → BSc Animal Science → 300 Level → ANS 301 Lecture Group A`
 
-EduEdge does not auto-create tertiary Student Groups from legacy Academic Levels because a valid tertiary group requires Branch, Academic Session and Semester context.
+`BSc`, `MSc` and `PhD` are separate Programs. Moving from BSc to MSc or MSc to PhD is a new admission/enrollment, not ordinary Level promotion.
 
 ### Training Centre
 
-- Department: Training Department.
-- Program: Programme.
-- Student Group: Training Class.
-- Course: Module.
-- Academic Year: Training Year.
+- Department: Training Department;
+- Program: Programme;
+- EduEdge Academic Level: Training Stage;
+- Student Group: Training Group;
+- Course: Module;
+- Academic Year: Training Year;
 - Academic Term: Training Session.
 
-## Shared-site native identities
+## Program progression modes
 
-Frappe uses globally unique technical names for several native Education masters. A shared EduEdge site must therefore allow two Institutions to use the same normal school-facing labels without sharing one academic record.
+Every Program has one progression mode.
 
-EduEdge adds `eduedge_display_name` to these collision-prone native masters:
+### Program Promotion
 
-- Department;
-- Program;
-- Course;
-- Student Group;
-- Student Batch Name.
+Used for Primary and Secondary Classes.
 
-The friendly display name is what users see in Links, lists and EduEdge pages. The native technical name remains the document identity used by Frappe references and audit trails.
+Example:
 
-When a technical name is available, EduEdge keeps it unchanged. When another Institution or Session already uses it, EduEdge generates a deterministic namespaced technical identity while preserving the friendly label. For example, two schools may both see `JSS 1`, `Mathematics` and `JSS 1A`, even though their internal document identities differ.
+`JSS 1 → JSS 2 → JSS 3 → SSS 1`
 
-Friendly-name uniqueness still applies inside the appropriate academic scope:
+Program fields include:
 
-- Department, Program, Course and Student Batch names are unique within an Institution;
-- Student Group names are unique within Institution, Branch, Program, Academic Year and Academic Term;
-- the same Class Arm or Level may be reused in a different Institution or Academic Session.
+- progression sequence;
+- next Program/Class;
+- terminal Program flag;
+- allow repetition.
 
-Existing records are not renamed by migration. Their friendly names are backfilled from their current native names. Standard Program, Course and Student Group forms hide the technical identity during normal editing and use the friendly name as the operational field.
+A promotion creates a new Program Enrollment for the next Class and later Academic Session. The submitted source enrollment is not edited.
 
-## Programme Offering
+### Level Progression
+
+Used for tertiary and training Programs.
+
+Example:
+
+`BSc Agriculture: 100 Level → 200 Level → 300 Level → 400 Level`
+
+Each Level belongs to exactly one Program and Institution. Level fields include:
+
+- sequence;
+- next Level;
+- terminal Level flag;
+- enabled status.
+
+A promotion retains the Program and creates a new enrollment for the next Level and later Academic Session.
+
+### No Automatic Progression
+
+Used where progression requires manual review or does not follow a fixed chain.
+
+## Programme Offering identity
 
 `EduEdge Program Offering` is the Branch- and period-specific delivery identity for a native Program.
 
-Its authoritative identity is:
+### Program Promotion Offering
 
-- Institution, derived from Branch;
-- School Branch / Campus;
-- native Program;
-- native Department, derived from Program;
-- native Academic Year;
-- optional native Academic Term;
-- optional Student Batch / Cohort;
-- study mode;
-- delivery mode.
+Identity:
 
-Department is read-only on the Offering. Legacy Academic Section and Academic Level fields remain hidden and read-only only for migration traceability.
+`Branch + Program/Class + Academic Session`
 
-An Offering identity cannot be changed after an Applicant, Student Group or submitted Program Enrollment references it. A replacement Offering must be created instead.
+Academic Level and Academic Term must be blank. The Class Offering covers the full Academic Session.
+
+Example:
+
+`Main Campus + JSS 1 + 2026/2027`
+
+Student Groups beneath it may be `JSS 1A` and `JSS 1B`.
+
+### Level Progression Offering
+
+Identity:
+
+`Branch + Program + Academic Level + Academic Session + Academic Term`
+
+Example:
+
+`Main Campus + BSc Agriculture + 200 Level + 2026/2027 + First Semester`
+
+Student Groups beneath it may be `200L Group A` or `AGR 201 Lecture Group A`.
+
+Institution is derived from Branch. Department is derived from Program. An Offering identity cannot be changed after an Applicant, Student Group or submitted Program Enrollment references it; a replacement Offering must be created.
+
+## Level-aware curriculum
+
+Native `Program Course` remains authoritative but EduEdge extends each row with:
+
+- Academic Level;
+- curriculum period number;
+- course type: Core, Elective or Optional;
+- credit units.
+
+Primary/Secondary Programs normally leave Academic Level and period number blank. Tertiary/training Programs use them to filter valid Courses for a Level and Semester.
+
+Generic legacy Program Course rows with no Level remain available across Levels for backward compatibility.
+
+## Enrollment progression workflow
+
+The guided workflow supports:
+
+- Promote;
+- Repeat;
+- Transfer within the same Institution;
+- Complete;
+- Graduate;
+- Withdraw;
+- Hold for Review;
+- Suspend and Reactivate.
+
+Promotion, repetition and transfer create a new draft Program Enrollment from an exact target Programme Offering. The target draft records:
+
+- source Program Enrollment;
+- planned outcome;
+- reason or approval note.
+
+After the target enrollment is reviewed and submitted, EduEdge creates an append-only Enrollment Status Log against the source. Submitted historical enrollments are never mutated.
+
+A transfer to another Institution requires a new admission rather than automatic internal progression.
+
+## Student Group rollover
+
+A Student Group is rolled over to an eligible target Offering.
+
+Examples:
+
+- `JSS 1A → JSS 2A` in the next Academic Session;
+- `200L Group A → 300L Group A` in the next Academic Session.
+
+The new group inherits the target Program, Level, Branch, Session, Term, Batch and valid Course context. Students and instructors are deliberately not copied; membership and teaching assignments must be confirmed for the new period.
 
 ## Institution Academic Calendar
 
 The Institution Academic Calendar is an EduEdge isolation wrapper, not a replacement Academic Session master.
 
-- Native `Academic Year` is shown as Academic Session, Training Year or the configured Institution label.
-- Native `Academic Term` is shown as Term, Semester, Training Session or the configured Institution label.
-- `EduEdge Institution Academic Calendar` binds one Institution to one native Academic Year and its dated native Academic Terms.
+- Native `Academic Year` is shown as Academic Session or Training Year;
+- Native `Academic Term` is shown as Term, Semester or Training Session;
+- the Calendar binds one Institution to one native Academic Year and its dated native Terms.
 
-The first enabled calendar for an Institution becomes Current automatically. Existing enabled calendars without a Current row are repaired by an idempotent patch.
+The first enabled calendar becomes Current automatically. Existing enabled calendars without a Current row are repaired by an idempotent patch.
 
 Academic Operations fails closed when:
 
 - no enabled Institution calendar covers the selected date;
-- the selected date is inside the Academic Session but outside all configured Terms or Semesters;
+- the selected date is inside the Academic Session but outside all configured Terms;
 - the requested Academic Year or Term does not belong to the selected Institution calendar.
 
 Site-wide Education Settings are retained only as a legacy fallback where no EduEdge Institution context exists.
 
 ## Cascading filters
 
-### Programme catalogue
+### Program catalogue
 
-`Institution → Department / School Section → Program / Class`
-
-Changing Institution clears an invalid Department. Changing Department clears an invalid Program filter.
+`Institution → Department/School Section → Program/Class → Progression Mode`
 
 ### Programme Offering
 
-`Branch → Institution → Department filter → Program → Academic Year → Academic Term → Student Batch`
-
-Institution and Department are derived where appropriate. The backend repeats all ownership and calendar checks.
+- Program Promotion: `Branch → Program/Class → Academic Session`;
+- Level Progression: `Branch → Program → Academic Level → Academic Session → Academic Term`.
 
 ### Student Group
 
-`Branch / Offering → Program → Academic Year → Academic Term → Batch → Course → Students and Instructors`
+`Programme Offering → Program → Academic Level where applicable → Academic Session → Academic Term where applicable → Batch → Course → Students and Instructors`
 
-Changing any parent clears invalid dependent values and student rows. Courses are limited to Program Course rows belonging to the same Institution.
+Changing any parent clears invalid dependent values and student rows.
 
 ### Course Schedule
 
-`Date → Student Group → Branch / Program → Course → Instructor → Room`
+`Date → Student Group → Branch/Program/Level → Course → Instructor → Room`
 
-The selected Student Group determines the Branch and Program. A Course Schedule date must fall inside the Student Group's Institution calendar. The Course must belong to the Program, and the Instructor and Room must belong to the Branch.
+The selected Student Group determines the Branch, Program and formal Level. Course, Instructor and Room are validated on the server.
 
-### Attendance
+### Assessment and report cards
 
-Attendance uses the exact Course Schedule and Student Group context.
-
-- When one Course Schedule exists for the selected Student Group and date, a direct attendance form may resolve it automatically.
-- When more than one Course Schedule exists, the exact schedule must be selected.
-- When no Course Schedule exists, explicitly unscheduled attendance remains allowed.
-- Submitted attendance is immutable.
-- Duplicate creation is serialised and rejected.
+Assessment Plan, Assessment Result and Result Publication derive formal Academic Level from the selected Student Group. Report cards display Level only where a Level is present.
 
 ## Migration and backward compatibility
 
 The migration is idempotent and non-destructive.
 
-- Legacy `EduEdge Academic Section` records are preserved and mapped to native Departments.
-- Same-name Sections in a shared Company are mapped collision-safely using Institution ownership and the shared native identity layer.
-- Primary and Secondary legacy Academic Levels are migrated to native Programs because they represent Classes such as `JSS 1` or `Nursery 1`.
-- Blank Student Group Program links are filled only where the legacy mapping is unambiguous.
-- Tertiary legacy Levels are preserved for review and are not guessed into Student Groups.
-- Legacy Section and Level custom fields remain hidden/read-only for traceability.
-- Existing submitted enrollment, attendance, assessment, fee and accounting documents are not rewritten.
-- Existing native document identities are not renamed.
+- Legacy Academic Sections are preserved and mapped to native Departments;
+- Primary/Secondary legacy Levels continue to map to native Programs/Classes;
+- existing native document identities are not renamed;
+- blank tertiary/training Levels are attached to a Program only when existing Offering or Student Group history resolves exactly one Program in the same Institution;
+- ambiguous Levels remain preserved for administrator review;
+- existing legacy Offerings, Student Groups and Course Schedules remain editable for non-context changes;
+- once academic identity/context is deliberately changed, the corrected progression rules apply;
+- submitted enrollment, attendance, assessment, fee, payroll and accounting documents are not rewritten.
 
-## Required QA
+## Required audit and QA
 
-1. Build EduEdge and run migration twice; confirm the second run creates no duplicate Departments, Programs, Courses, Student Groups, Batches, calendars or Property Setters.
-2. Create the same friendly Department, Program, Course and Batch names in two Institutions; confirm both save and Link fields show the friendly labels.
-3. Create the same friendly Student Group in two Institutions and reuse it in a later Academic Session; confirm each technical identity remains distinct.
-4. Confirm duplicate friendly names are rejected inside the same Institution and academic scope.
-5. Confirm a top-level Department remains editable after ERPNext assigns its global framework root.
-6. Primary: `Nursery Section → Nursery 1 → Nursery 1A/Nursery 1B`.
-7. Secondary: `Junior Secondary School → JSS 1 → JSS 1A/JSS 1B`.
-8. Tertiary: `School of Agriculture → BSc Agriculture → 100 Level/200 Level`.
-9. Verify Institution and Branch changes clear invalid dependent fields.
-10. Verify Programs cannot use another Institution's Department.
-11. Verify Offerings cannot use another Institution's Program, Batch, Session or Term.
-12. Verify Student Groups cannot use a Course outside their Program.
-13. Verify Course Schedules cannot use another Branch's Room or Instructor.
-14. Verify Academic Operations blocks dates outside the Institution calendar or its Terms.
-15. Verify direct attendance auto-resolves one schedule, blocks ambiguous schedules and permits unscheduled attendance only when no schedule exists.
-16. Verify limited Teachers see only their assigned schedules, groups, students and attendance.
-17. Verify submitted attendance remains immutable and duplicate attendance is rejected.
-18. Verify a genuine profile image is accepted and a renamed non-image file is rejected.
+1. Run migration twice and confirm idempotency.
+2. Confirm one reusable `JSS 1` Program per Institution and session-specific `JSS 1A` groups.
+3. Confirm `JSS 1 → JSS 2` promotion creates a new target enrollment.
+4. Confirm `BSc Agriculture · 200 Level → 300 Level` retains the Program and changes Level.
+5. Confirm Program Promotion Offerings reject Level and Term.
+6. Confirm Level Progression Offerings require valid Program-owned Level and Term.
+7. Confirm Course queries honour Program, Level and curriculum period.
+8. Confirm group rollover does not copy students or instructors.
+9. Confirm source submitted enrollment is unchanged after progression.
+10. Confirm target enrollment must be submitted before progression finalisation.
+11. Confirm ambiguous legacy Levels are not guessed.
+12. Confirm Primary/Secondary report cards omit a separate Level and tertiary report cards show it.
