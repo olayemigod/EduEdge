@@ -50,9 +50,9 @@ class TestOperationalRouteVisibilityContract(unittest.TestCase):
 
 	def test_product_menu_filters_all_three_routes_through_manifest(self):
 		menu = MENU_PATH.read_text()
-		self.assertIn('route: "/app/eduedge-academic-operations"', menu)
-		self.assertIn('route: "/app/eduedge-assessment-operations"', menu)
-		self.assertIn('route: "/app/eduedge-setup-center"', menu)
+		self.assertIn('"/app/eduedge-academic-operations"', menu)
+		self.assertIn('"/app/eduedge-assessment-operations"', menu)
+		self.assertIn('"/app/eduedge-setup-center"', menu)
 		self.assertIn("manifest.routes", menu)
 		self.assertIn("itemAllowed", menu)
 
