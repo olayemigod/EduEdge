@@ -44,7 +44,28 @@ def _attach_institution_identity(payload: dict) -> dict:
 	payload["branding"] = branding
 	if branding.get("address"):
 		payload["address"] = branding["address"]
+	_attach_academic_level(payload)
 	return payload
+
+
+def _attach_academic_level(payload: dict) -> None:
+	publication = payload.get("publication") or {}
+	publication_name = publication.get("name")
+	level = None
+	if publication_name and frappe.get_meta("EduEdge Result Publication").has_field("academic_level"):
+		level = frappe.db.get_value("EduEdge Result Publication", publication_name, "academic_level")
+	level_name = frappe.db.get_value("EduEdge Academic Level", level, "level_name") if level else None
+	publication["academic_level"] = level
+	publication["academic_level_name"] = level_name
+	payload["publication"] = publication
+	payload["academic_identity"] = {
+		"program": publication.get("program"),
+		"academic_level": level,
+		"academic_level_name": level_name,
+		"student_group": publication.get("student_group"),
+		"academic_year": publication.get("academic_year"),
+		"academic_term": publication.get("academic_term"),
+	}
 
 
 @frappe.whitelist()
