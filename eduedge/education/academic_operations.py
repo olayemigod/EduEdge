@@ -19,6 +19,25 @@ from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.services.academic_calendar import assert_institution_calendar_context
 
 ASSIGNMENT_DOCTYPE = "EduEdge Instructor Branch Assignment"
+GROUP_CONTEXT_FIELDS = (
+	OFFERING_FIELD,
+	BRANCH_FIELD,
+	"program",
+	ACADEMIC_LEVEL_FIELD,
+	"academic_year",
+	"academic_term",
+	"batch",
+	"course",
+	"group_based_on",
+)
+SCHEDULE_CONTEXT_FIELDS = ("student_group", "course", "schedule_date", BRANCH_FIELD)
+
+
+def _context_changed(doc, fieldnames: tuple[str, ...]) -> bool:
+	return doc.is_new() or any(
+		doc.meta.has_field(fieldname) and doc.has_value_changed(fieldname)
+		for fieldname in fieldnames
+	)
 
 
 def before_validate_student_group(doc, method=None) -> None:
@@ -28,21 +47,24 @@ def before_validate_student_group(doc, method=None) -> None:
 	_validate_term_year(doc.academic_year, doc.academic_term)
 	if not doc.program:
 		frappe.throw(_("Select a Programme / Class for this Student Group / Class Arm / Lecture Group."), frappe.ValidationError)
-	_validate_group_program_context(doc, offering)
-	_validate_group_course_context(doc)
-	if doc.academic_year:
+	strict_context = _context_changed(doc, GROUP_CONTEXT_FIELDS)
+	_validate_group_program_context(doc, offering, strict_context=strict_context)
+	_validate_group_course_context(doc, strict_context=strict_context)
+	if strict_context and doc.academic_year:
 		assert_institution_calendar_context(
 			branch=doc.get(BRANCH_FIELD),
 			academic_year=doc.academic_year,
 			academic_term=doc.academic_term or None,
 		)
-	validate_program_offering(
-		branch=doc.get(BRANCH_FIELD),
-		program=doc.program,
-		academic_year=doc.academic_year,
-		academic_term=doc.academic_term,
-		purpose="enrollment",
-	)
+	if strict_context:
+		validate_program_offering(
+			branch=doc.get(BRANCH_FIELD),
+			program=doc.program,
+			academic_level=doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None,
+			academic_year=doc.academic_year,
+			academic_term=doc.academic_term,
+			purpose="enrollment",
+		)
 	for row in doc.get("students") or []:
 		if row.student and getattr(row, "active", 1):
 			_validate_student_group_enrollment(doc, row.student)
@@ -51,7 +73,7 @@ def before_validate_student_group(doc, method=None) -> None:
 			assert_instructor_assignment(row.instructor, doc.get(BRANCH_FIELD), reference_date=nowdate())
 
 
-def _validate_group_program_context(doc, offering) -> None:
+def _validate_group_program_context(doc, offering, *, strict_context: bool) -> None:
 	branch = doc.get(BRANCH_FIELD)
 	institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
 	program = get_program_progression(doc.program)
@@ -66,17 +88,20 @@ def _validate_group_program_context(doc, offering) -> None:
 
 	mode = program.get("eduedge_progression_mode")
 	level = doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None
-	if mode == LEVEL_PROGRESSION:
-		validate_level_for_program(level, program=doc.program, institution=institution, required=True)
-		if not doc.academic_term:
-			frappe.throw(_("Academic Term / Semester is required for a Level-progression Student Group."), frappe.ValidationError)
-	elif mode == PROGRAM_PROMOTION:
-		if level:
-			frappe.throw(_("Primary and Secondary Class Arms must not use a separate Academic Level."), frappe.ValidationError)
-		if doc.academic_term:
-			frappe.throw(_("Primary and Secondary Class Arms are Academic-Session-wide. Leave Academic Term blank."), frappe.ValidationError)
+	if strict_context:
+		if mode == LEVEL_PROGRESSION:
+			validate_level_for_program(level, program=doc.program, institution=institution, required=True)
+			if not doc.academic_term:
+				frappe.throw(_("Academic Term / Semester is required for a Level-progression Student Group."), frappe.ValidationError)
+		elif mode == PROGRAM_PROMOTION:
+			if level:
+				frappe.throw(_("Primary and Secondary Class Arms must not use a separate Academic Level."), frappe.ValidationError)
+			if doc.academic_term:
+				frappe.throw(_("Primary and Secondary Class Arms are Academic-Session-wide. Leave Academic Term blank."), frappe.ValidationError)
+		elif level:
+			frappe.throw(_("Academic Level is not valid for this Programme's progression mode."), frappe.ValidationError)
 	elif level:
-		frappe.throw(_("Academic Level is not valid for this Programme's progression mode."), frappe.ValidationError)
+		validate_level_for_program(level, program=doc.program, institution=institution, required=False)
 
 	if offering:
 		if offering.program != doc.program:
@@ -93,23 +118,24 @@ def _validate_group_program_context(doc, offering) -> None:
 			frappe.throw(_("Student Group Academic Level must match its Programme Offering."), frappe.ValidationError)
 
 
-def _validate_group_course_context(doc) -> None:
+def _validate_group_course_context(doc, *, strict_context: bool) -> None:
 	if not doc.course:
 		return
 	if not frappe.db.exists("Course", doc.course):
 		frappe.throw(_("Select a valid Course / Subject."), frappe.ValidationError)
-	allowed = _allowed_course_names(
-		doc.program,
-		doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None,
-		doc.get(BRANCH_FIELD),
-		doc.academic_year,
-		doc.academic_term,
-	)
-	if doc.program and doc.course not in allowed:
-		frappe.throw(
-			_("Course / Subject {0} is not configured for this Programme, Level and curriculum period.").format(doc.course),
-			frappe.ValidationError,
+	if strict_context:
+		allowed = _allowed_course_names(
+			doc.program,
+			doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None,
+			doc.get(BRANCH_FIELD),
+			doc.academic_year,
+			doc.academic_term,
 		)
+		if doc.program and doc.course not in allowed:
+			frappe.throw(
+				_("Course / Subject {0} is not configured for this Programme, Level and curriculum period.").format(doc.course),
+				frappe.ValidationError,
+			)
 	course_meta = frappe.get_meta("Course")
 	if course_meta.has_field(INSTITUTION_FIELD):
 		course_institution = frappe.db.get_value("Course", doc.course, INSTITUTION_FIELD)
@@ -203,17 +229,19 @@ def before_validate_course_schedule(doc, method=None) -> None:
 		frappe.throw(_("The selected Student Group is disabled."), frappe.ValidationError)
 	if not group_context.academic_year:
 		frappe.throw(_("The selected Student Group has no Academic Session. Correct the group before scheduling a lesson."), frappe.ValidationError)
-	if doc.meta.has_field(ACADEMIC_LEVEL_FIELD):
+	strict_context = _context_changed(doc, SCHEDULE_CONTEXT_FIELDS)
+	if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) and (strict_context or not doc.get(ACADEMIC_LEVEL_FIELD)):
 		doc.set(ACADEMIC_LEVEL_FIELD, group_context.get(ACADEMIC_LEVEL_FIELD) or None)
 	if not doc.schedule_date:
 		frappe.throw(_("Schedule Date is required."), frappe.ValidationError)
-	assert_institution_calendar_context(
-		branch=doc.get(BRANCH_FIELD),
-		academic_year=group_context.academic_year,
-		academic_term=group_context.academic_term or None,
-		reference_date=doc.schedule_date,
-	)
-	_validate_schedule_course(doc, group_context)
+	if strict_context:
+		assert_institution_calendar_context(
+			branch=doc.get(BRANCH_FIELD),
+			academic_year=group_context.academic_year,
+			academic_term=group_context.academic_term or None,
+			reference_date=doc.schedule_date,
+		)
+		_validate_schedule_course(doc, group_context)
 	room_branch = _linked_branch("Room", doc.room)
 	if room_branch and room_branch != doc.get(BRANCH_FIELD):
 		frappe.throw(_("Room {0} belongs to another School Branch / Campus.").format(doc.room), frappe.ValidationError)
