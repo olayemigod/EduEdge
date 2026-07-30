@@ -105,8 +105,6 @@ class TestExamTemplateReuseEdgeSuiteContract(unittest.TestCase):
 		):
 			self.assertIn(marker, api)
 
-		# Question text may be searched server-side while selecting an approved
-		# question, but it must not be returned by the template list payload.
 		list_query_start = api.index("rows = frappe.get_list(\n\t\tTEMPLATE_DOCTYPE")
 		list_query_end = api.index("\n\tall_institutions =", list_query_start)
 		list_query = api[list_query_start:list_query_end]
@@ -130,10 +128,10 @@ class TestExamTemplateReuseEdgeSuiteContract(unittest.TestCase):
 			"template.template_reuse_scope == REUSE_UNIVERSAL",
 			"template.subject_applicability == SUBJECT_SPECIFIC",
 			"template.subject_applicability == SUBJECT_ANY",
-			"Select the actual Subject / Course for this schedule",
-			"This Universal template cannot be used outside its Company",
-			"This Institution-wide template cannot be used outside its Institution",
-			"This Branch-wide template cannot be used by another Branch",
+			"Select the actual Subject / Course for this Schedule",
+			"This Universal Template cannot be used outside its Company",
+			"This Institution-wide Template cannot be used outside its Institution",
+			"This Branch-wide Template cannot be used by another Branch",
 			"SNAPSHOT_FIELDS",
 		):
 			self.assertIn(marker, schedule)
@@ -146,9 +144,9 @@ class TestExamTemplateReuseEdgeSuiteContract(unittest.TestCase):
 			"REUSE_UNIVERSAL",
 			"REUSE_INSTITUTION",
 			"REUSE_BRANCH",
-			"doc.get(\"company\") in",
-			"doc.get(\"institution\") in",
-			"doc.get(\"school_branch\") in",
+			'doc.get("company") in',
+			'doc.get("institution") in',
+			'doc.get("school_branch") in',
 			"`company` in",
 			"`institution` in",
 			"`school_branch` in",
