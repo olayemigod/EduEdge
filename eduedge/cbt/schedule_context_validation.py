@@ -7,6 +7,7 @@ from frappe.utils import cint
 from eduedge.cbt.schedule_governance import (
 	OPEN_SCHEDULE_STATUSES,
 	TERMINAL_CANDIDATE_STATUSES,
+	_assert_no_candidate_overlap,
 )
 
 SCHOOL_EXAM = "School Examination"
@@ -176,17 +177,15 @@ def _validate_schedule_candidate_reservations(doc) -> None:
 			"exam_schedule": doc.name,
 			"assignment_status": ["in", list(RESERVED_CANDIDATE_STATUSES)],
 		},
-		fields=["name", "student", "public_candidate_reference"],
-		limit_page_length=1000,
+		fields=["student", "public_candidate_reference"],
+		limit_page_length=5000,
 	)
-	for row in assignments:
-		probe = frappe._dict(
-			{
-				"name": row.name,
-				"exam_schedule": doc.name,
-				"assignment_status": "Eligible",
-				"student": row.student,
-				"public_candidate_reference": row.public_candidate_reference,
-			}
-		)
-		validate_candidate_reservation(probe)
+	_assert_no_candidate_overlap(
+		doc,
+		[row.student for row in assignments if row.student],
+		[
+			row.public_candidate_reference
+			for row in assignments
+			if row.public_candidate_reference
+		],
+	)
