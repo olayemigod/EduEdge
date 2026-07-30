@@ -7,6 +7,7 @@ import frappe
 from eduedge.education import academic_fields
 from eduedge.education.academic_fields import ACADEMIC_SECTION_FIELD, INSTITUTION_FIELD
 from eduedge.education.academic_progression import ensure_academic_progression_foundation
+from eduedge.education.enrollment_progression_fields import ensure_enrollment_progression_fields
 from eduedge.education.native_identity import DISPLAY_FIELD
 from eduedge.education.progression_terminology import ensure_progression_terminology
 
@@ -15,6 +16,7 @@ def ensure_native_academic_context_foundation() -> None:
 	"""Install the canonical native academic schema, identity, progression, and migration layer."""
 	academic_fields.ensure_academic_context_foundation()
 	ensure_academic_progression_foundation()
+	ensure_enrollment_progression_fields()
 	ensure_progression_terminology()
 
 
