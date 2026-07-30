@@ -150,6 +150,9 @@ doc_events = {
 		"before_submit": "eduedge.cbt.master_lifecycle.block_master_submit",
 		"before_cancel": "eduedge.cbt.master_lifecycle.block_master_cancel",
 	},
+	"EduEdge CBT Exam Schedule": {
+		"validate": "eduedge.cbt.schedule_context_validation.validate_schedule_academic_scope",
+	},
 }
 
 permission_query_conditions = {
