@@ -26,9 +26,9 @@ def execute() -> None:
 
 
 def _assert_no_duplicates(identity_field: str) -> None:
-	# Frappe's query-builder-backed get_all rejects SQL function strings such
-	# as "count(name) as total". Use the supported aggregate dictionary syntax
-	# and filter grouped totals in Python before creating the unique index.
+	# Frappe's query-builder-backed get_all rejects raw SQL aggregate strings.
+	# Use the supported aggregate dictionary syntax and filter grouped totals
+	# in Python before creating the unique index.
 	rows = frappe.get_all(
 		DOCTYPE,
 		filters=[[identity_field, "is", "set"]],
