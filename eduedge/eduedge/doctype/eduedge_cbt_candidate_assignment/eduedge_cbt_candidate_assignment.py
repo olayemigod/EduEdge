@@ -11,10 +11,12 @@ from eduedge.cbt.public_access import require_public_exam_assignment
 from eduedge.cbt.schedule_governance import (
 	assert_check_in_window,
 	assert_manual_release_window,
+	cbt_operation_flag,
 	write_lifecycle_log,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
+from eduedge.platform.access import require_eduedge_access
 
 SCHOOL_EXAM = "School Examination"
 PUBLIC_EXAM = "EduEdge Public Examination"
@@ -54,6 +56,7 @@ REASONED_STATUSES = {"Withdrawn", "Disqualified"}
 
 class EduEdgeCBTCandidateAssignment(Document):
 	def validate(self) -> None:
+		self._require_platform_access()
 		self._validate_schedule()
 		self._apply_schedule_context()
 		self._validate_candidate_identity()
@@ -98,50 +101,83 @@ class EduEdgeCBTCandidateAssignment(Document):
 		)
 
 	def on_trash(self) -> None:
-		if self.assignment_status not in {"Draft", "Withdrawn"}:
+		if not cbt_operation_flag("eduedge_access_guarded", self):
+			require_eduedge_access(
+				feature_key="cbt",
+				action="delete_cbt_candidate_assignment",
+				reference_doctype=self.doctype,
+				reference_name=self.name,
+			)
+		if self.assignment_status != "Draft":
 			frappe.throw(
-				_("Only Draft or Withdrawn candidate assignments can be deleted."),
+				_("Only a Draft Candidate Assignment with no audit history can be deleted."),
 				frappe.ValidationError,
 			)
 		schedule_status = frappe.db.get_value("EduEdge CBT Exam Schedule", self.exam_schedule, "status")
-		if schedule_status in {"Active", "Suspended", "Completed"}:
+		if schedule_status not in {"Draft", "Ready"}:
 			frappe.throw(
-				_("Candidate assignments cannot be deleted after the Examination Schedule is activated."),
+				_("Candidate Assignments cannot be deleted after the Examination Schedule is activated or closed."),
 				frappe.ValidationError,
 			)
+		for doctype, filters, message in (
+			(
+				"EduEdge CBT Intervention Log",
+				{"candidate_assignment": self.name},
+				_("A Candidate Assignment with intervention evidence cannot be deleted."),
+			),
+			(
+				"EduEdge CBT Lifecycle Log",
+				{"candidate_assignment": self.name},
+				_("A Candidate Assignment with lifecycle evidence cannot be deleted."),
+			),
+		):
+			if frappe.db.exists(doctype, filters):
+				frappe.throw(message, frappe.ValidationError)
+
+	def _require_platform_access(self) -> None:
+		if cbt_operation_flag("eduedge_access_guarded", self):
+			return
+		require_eduedge_access(
+			feature_key="cbt",
+			action="create_cbt_candidate_assignment" if self.is_new() else "update_cbt_candidate_assignment",
+			reference_doctype=self.doctype,
+			reference_name=None if self.is_new() else self.name,
+		)
+		self.flags.eduedge_access_guarded = True
 
 	def _validate_schedule(self) -> None:
 		if not self.exam_schedule:
 			frappe.throw(_("Examination Schedule is required."), frappe.ValidationError)
-		schedule = frappe.db.get_value(
-			"EduEdge CBT Exam Schedule",
-			self.exam_schedule,
-			[
-				"name",
-				"status",
-				"exam_template",
-				"exam_scope",
-				"school_branch",
-				"course",
-				"student_group",
-				"scheduled_start",
-				"scheduled_end",
-				"check_in_opens_at",
-				"require_candidate_check_in",
-				"candidate_start_mode",
-				"allow_late_entry",
-				"late_entry_grace_minutes",
-			],
-			as_dict=True,
+		schedule_doc = frappe.get_doc("EduEdge CBT Exam Schedule", self.exam_schedule, for_update=True)
+		schedule_doc.check_permission("read")
+		schedule = frappe._dict(
+			{
+				fieldname: schedule_doc.get(fieldname)
+				for fieldname in (
+					"name",
+					"status",
+					"exam_template",
+					"exam_scope",
+					"school_branch",
+					"course",
+					"student_group",
+					"scheduled_start",
+					"scheduled_end",
+					"check_in_opens_at",
+					"require_candidate_check_in",
+					"candidate_start_mode",
+					"allow_late_entry",
+					"late_entry_grace_minutes",
+				)
+			}
 		)
-		if not schedule:
-			frappe.throw(_("The selected Examination Schedule does not exist."), frappe.ValidationError)
 		before = self.get_doc_before_save()
 		if not before and schedule.status not in {"Draft", "Ready"}:
 			frappe.throw(
 				_("New candidates can be assigned only while the Examination Schedule is Draft or Ready."),
 				frappe.ValidationError,
 			)
+		self._schedule_doc = schedule_doc
 		self._schedule = schedule
 
 	def _apply_schedule_context(self) -> None:
@@ -212,8 +248,22 @@ class EduEdgeCBTCandidateAssignment(Document):
 			)
 
 	def _validate_extra_time(self) -> None:
-		if cint(self.approved_extra_time_minutes) < 0:
+		current = cint(self.approved_extra_time_minutes)
+		if current < 0:
 			frappe.throw(_("Approved Extra Time cannot be negative."), frappe.ValidationError)
+		before = self.get_doc_before_save()
+		if not before and current and not cbt_operation_flag("eduedge_initial_extra_time", self):
+			frappe.throw(
+				_("Initial extra time cannot be entered directly. Record an approved Time Extension intervention."),
+				frappe.PermissionError,
+			)
+		if before and current != cint(before.approved_extra_time_minutes) and not cbt_operation_flag(
+			"eduedge_time_extension", self
+		):
+			frappe.throw(
+				_("Approved Extra Time can change only through an Applied Time Extension intervention."),
+				frappe.PermissionError,
+			)
 
 	def _calculate_access_window(self) -> None:
 		schedule = self._schedule
@@ -248,6 +298,14 @@ class EduEdgeCBTCandidateAssignment(Document):
 			)
 		if self.assignment_status == previous_status:
 			return
+		if not (
+			cbt_operation_flag("eduedge_controlled_status_action", self)
+			or cbt_operation_flag("eduedge_attempt_engine_release", self)
+		):
+			frappe.throw(
+				_("Change Candidate status only through controlled CBT lifecycle actions."),
+				frappe.PermissionError,
+			)
 
 		schedule_status = self._schedule.status
 		if self.assignment_status == "Eligible" and schedule_status not in {"Draft", "Ready"}:
@@ -257,7 +315,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 				frappe.throw(_("Candidate check-in requires a Ready or Active Schedule."), frappe.ValidationError)
 			assert_check_in_window(self._schedule)
 		if self.assignment_status == "Released":
-			if not getattr(self.flags, "eduedge_attempt_engine_release", False):
+			if not cbt_operation_flag("eduedge_attempt_engine_release", self):
 				assert_manual_release_window(self._schedule, previous_status)
 		if self.assignment_status == "Completed" and schedule_status not in {"Active", "Suspended", "Completed"}:
 			frappe.throw(_("Candidate completion requires an activated Schedule."), frappe.ValidationError)
@@ -287,7 +345,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 		before = self.get_doc_before_save()
 		if not before or before.assignment_status == "Draft":
 			return
-		controlled_extension = bool(getattr(self.flags, "eduedge_time_extension", False))
+		controlled_extension = cbt_operation_flag("eduedge_time_extension", self)
 		for fieldname in IDENTITY_FIELDS:
 			if before.get(fieldname) == self.get(fieldname):
 				continue
