@@ -8,8 +8,8 @@ from eduedge.education.academic_fields import (
 	ACADEMIC_LEVEL_FIELD,
 	ACADEMIC_SECTION_FIELD,
 	INSTITUTION_FIELD,
-	ensure_academic_context_foundation,
 )
+from eduedge.education.native_hierarchy_migration import ensure_native_academic_context_foundation
 
 SCHOOL_TYPES = {"PRIMARY", "SECONDARY"}
 
@@ -17,15 +17,15 @@ SCHOOL_TYPES = {"PRIMARY", "SECONDARY"}
 def execute() -> None:
 	"""Migrate unambiguous legacy hierarchy records without deleting history.
 
-	- Legacy Academic Sections become native Departments through the idempotent
-	  foundation installer.
+	- Legacy Academic Sections become native Departments through the idempotent,
+	  collision-safe foundation installer.
 	- Primary/Secondary Academic Levels become native Programs beneath the mapped
 	  Department because JSS 1 / Nursery 1 are Classes in the agreed native model.
 	- Blank Student Group.program values linked to those legacy Levels are filled.
 	- Tertiary Levels are deliberately not auto-created because 100/200 Level needs
 	  Branch, Session and Term context as a native Student Group.
 	"""
-	ensure_academic_context_foundation()
+	ensure_native_academic_context_foundation()
 	if not (
 		frappe.db.exists("DocType", "EduEdge Academic Section")
 		and frappe.db.exists("DocType", "EduEdge Academic Level")
@@ -71,6 +71,14 @@ def _section_department_map() -> dict[str, str]:
 		else:
 			filters["company"] = frappe.db.get_value("EduEdge Institution", section.institution, "company")
 		department = frappe.db.get_value("Department", filters, "name")
+		if not department and department_meta.has_field(INSTITUTION_FIELD):
+			# Collision-safe migration may append the Institution code to the visible
+			# Department name. The ownership field remains the authoritative lookup.
+			department = frappe.db.get_value(
+				"Department",
+				{INSTITUTION_FIELD: section.institution, "department_name": ["like", f"{section.section_name}%"]},
+				"name",
+			)
 		if department:
 			mapping[section.name] = department
 	return mapping
