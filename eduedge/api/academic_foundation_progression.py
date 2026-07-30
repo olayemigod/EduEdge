@@ -29,6 +29,7 @@ def get_academic_foundation(institution: str | None = None) -> dict:
 	programmes = payload.get("programmes") or []
 	student_groups = payload.get("student_groups") or []
 	_enrich_programmes(programmes)
+	_enrich_student_groups(student_groups)
 	levels = _levels(selected)
 	payload["academic_levels"] = levels
 	payload["hierarchy"] = _build_progression_hierarchy(payload.get("departments") or [], programmes, levels, student_groups)
@@ -46,6 +47,23 @@ def _enrich_programmes(programmes: list[dict]) -> None:
 		row[PROGRAM_NEXT_FIELD] = progression.get(PROGRAM_NEXT_FIELD) or ""
 		row[PROGRAM_TERMINAL_FIELD] = cint(progression.get(PROGRAM_TERMINAL_FIELD))
 		row[PROGRAM_ALLOW_REPETITION_FIELD] = cint(progression.get(PROGRAM_ALLOW_REPETITION_FIELD))
+
+
+def _enrich_student_groups(groups: list[dict]) -> None:
+	names = [row.get("name") for row in groups if row.get("name")]
+	if not names or not frappe.get_meta("Student Group").has_field(ACADEMIC_LEVEL_FIELD):
+		return
+	values = {
+		row.name: row.get(ACADEMIC_LEVEL_FIELD)
+		for row in frappe.get_all(
+			"Student Group",
+			filters={"name": ["in", names]},
+			fields=["name", ACADEMIC_LEVEL_FIELD],
+			page_length=max(len(names), 1),
+		)
+	}
+	for row in groups:
+		row[ACADEMIC_LEVEL_FIELD] = values.get(row.get("name")) or ""
 
 
 def _levels(institution: str | None) -> list[dict]:
