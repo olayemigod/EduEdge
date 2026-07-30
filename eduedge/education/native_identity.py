@@ -112,6 +112,27 @@ def before_validate_native_master_identity(doc, method=None) -> None:
 		)
 
 
+def before_validate_course(doc, method=None) -> None:
+	before_validate_native_master_identity(doc, method)
+	from eduedge.education.academic_validation import before_validate_course as validate_course
+
+	validate_course(doc, method)
+
+
+def before_validate_institution_owned_master(doc, method=None) -> None:
+	before_validate_native_master_identity(doc, method)
+	from eduedge.education.academic_validation import before_validate_institution_owned_master as validate_master
+
+	validate_master(doc, method)
+
+
+def before_validate_student_group(doc, method=None) -> None:
+	before_validate_native_master_identity(doc, method)
+	from eduedge.education.branching import before_validate_student_group as validate_group
+
+	validate_group(doc, method)
+
+
 def friendly_name(row: dict | frappe._dict | None, source_field: str = "name") -> str:
 	if not row:
 		return ""
