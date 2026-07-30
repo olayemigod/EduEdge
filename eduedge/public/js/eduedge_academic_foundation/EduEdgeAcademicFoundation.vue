@@ -1,113 +1,78 @@
 <template>
-	<EdgeAppShell
-		product="eduedge"
-		title="EduEdge"
-		:tenant-name="activeContext.institution_name || ''"
-		:branch-name="activeContext.branch_name || 'Academic Foundation'"
-		:menu-items="menuItems"
-		active-route="/app/eduedge-academic-foundation"
-		@navigate="openRoute"
-	>
+	<EdgeAppShell product="eduedge" title="EduEdge" :tenant-name="activeContext.institution_name || ''" :branch-name="activeContext.branch_name || 'Academic Foundation'" :menu-items="menuItems" active-route="/app/eduedge-academic-foundation" @navigate="openRoute">
 		<EdgePageLayout>
-			<template #header>
-				<EdgePageHeader
-					eyebrow="Academic Foundation"
-					:title="`${departmentPlural}, ${programmePlural}, ${studentGroupPlural} and ${academicYearPlural}`"
-					:subtitle="`Use Frappe Education's native ${departmentSingular} → ${programmeSingular} → ${studentGroupSingular} hierarchy. EduEdge adds Institution, Branch and calendar isolation without replacing the native masters.`"
-				/>
-			</template>
-
+			<template #header><EdgePageHeader eyebrow="Academic Foundation" :title="foundationTitle" :subtitle="foundationSubtitle" /></template>
 			<EdgeLoadingState v-if="loading" message="Loading academic foundation..." :skeleton="true" />
 			<EdgeErrorState v-else-if="error" title="Academic Foundation could not load" :message="error" action-label="Try again" @retry="load" />
 			<template v-else>
 				<EdgeFilterBar title="Institution context">
 					<div class="eduedge-foundation-context-grid">
-						<label>
-							<span>Institution</span>
-							<select v-model="selectedInstitution" class="form-control" @change="institutionChanged">
-								<option value="">Select Institution</option>
-								<option v-for="institution in data.institutions" :key="institution.name" :value="institution.name">{{ institution.institution_name }} · {{ institution.institution_type }}</option>
-							</select>
-						</label>
-						<div class="eduedge-context-summary"><span>Native hierarchy</span><strong>{{ departmentSingular }} → {{ programmeSingular }} → {{ studentGroupSingular }}</strong><small>{{ activeContext.institution_type_name || "Institution type not selected" }}</small></div>
+						<label><span>Institution</span><select v-model="selectedInstitution" class="form-control" @change="institutionChanged"><option value="">Select Institution</option><option v-for="institution in data.institutions" :key="institution.name" :value="institution.name">{{ institution.institution_name }} · {{ institution.institution_type }}</option></select></label>
+						<div class="eduedge-context-summary"><span>Academic hierarchy</span><strong>{{ hierarchySummary }}</strong><small>{{ activeContext.institution_type_name || "Institution type not selected" }}</small></div>
 					</div>
-					<template #actions>
-						<button type="button" class="edge-button" @click="openDepartmentTree">{{ departmentPlural }}</button>
-						<button type="button" class="edge-button" @click="openProgrammeList">{{ programmePlural }}</button>
-						<button type="button" class="edge-button" @click="openCalendarList">All calendars</button>
-						<button v-if="permissions.can_create_calendar" type="button" class="edge-button edge-button--primary" :disabled="!selectedInstitution" @click="createCalendar">New {{ academicYearSingular }} calendar</button>
-					</template>
+					<template #actions><button type="button" class="edge-button" @click="openDepartmentTree">{{ departmentPlural }}</button><button type="button" class="edge-button" @click="openProgrammeList">{{ programmePlural }}</button><button v-if="showAcademicLevels" type="button" class="edge-button" @click="openLevelList">{{ academicLevelPlural }}</button><button type="button" class="edge-button" @click="openCalendarList">All calendars</button><button v-if="permissions.can_create_calendar" type="button" class="edge-button edge-button--primary" :disabled="!selectedInstitution" @click="createCalendar">New {{ academicYearSingular }} calendar</button></template>
 				</EdgeFilterBar>
 
-				<EdgeEmptyState v-if="!selectedInstitution" title="Select an Institution" description="Choose an Institution to review its native academic hierarchy and calendar readiness." />
+				<EdgeEmptyState v-if="!selectedInstitution" title="Select an Institution" description="Choose an Institution to review its academic hierarchy, progression and calendar readiness." />
 				<template v-else>
 					<EdgeDashboardLayout min-column-width="11rem">
 						<EdgeStatCard :label="departmentPlural" :value="data.readiness.department_count" helper="Native Department tree" />
-						<EdgeStatCard :label="programmePlural" :value="data.readiness.programme_count" :helper="`Native ${programmePlural.toLowerCase()}`" />
-						<EdgeStatCard :label="studentGroupPlural" :value="data.readiness.student_group_count" :helper="`Native ${studentGroupPlural.toLowerCase()}`" />
+						<EdgeStatCard :label="programmePlural" :value="data.readiness.programme_count" :helper="`Reusable ${programmePlural.toLowerCase()}`" />
+						<EdgeStatCard v-if="showAcademicLevels" :label="academicLevelPlural" :value="data.readiness.academic_level_count || 0" helper="Formal progression stages" />
+						<EdgeStatCard :label="studentGroupPlural" :value="data.readiness.student_group_count" :helper="`Session-specific ${studentGroupPlural.toLowerCase()}`" />
 						<EdgeStatCard :label="academicYearPlural" :value="data.readiness.calendar_count" helper="Institution calendars" />
 						<EdgeStatCard label="Foundation Readiness" :value="data.readiness.ready ? 'Ready' : 'Needs attention'" :tone="data.readiness.ready ? 'success' : 'warning'" :helper="`${data.readiness.issues.length} issue(s)`" />
 					</EdgeDashboardLayout>
 
 					<section class="eduedge-foundation-readiness">
-						<div class="eduedge-card-heading">
-							<div><p class="edge-eyebrow">Readiness</p><h2>{{ selectedInstitutionLabel }}</h2></div>
-							<EdgeStatusBadge :label="data.readiness.ready ? 'Ready for academic operations' : 'Setup needs attention'" :status="data.readiness.ready ? 'ready' : 'attention'" :tone="data.readiness.ready ? 'success' : 'warning'" />
-						</div>
-						<div v-if="data.readiness.issues.length" class="eduedge-issue-list">
-							<div v-for="issue in data.readiness.issues" :key="issue.code" class="eduedge-issue-row">
-								<EdgeStatusBadge :label="issue.severity === 'danger' ? 'Required' : 'Review'" :status="issue.severity" :tone="issue.severity === 'danger' ? 'danger' : 'warning'" />
-								<span>{{ issue.message }}</span>
-							</div>
-						</div>
-						<p v-else class="eduedge-ready-copy">The native hierarchy and current Institution calendar are ready.</p>
+						<div class="eduedge-card-heading"><div><p class="edge-eyebrow">Readiness</p><h2>{{ selectedInstitutionLabel }}</h2></div><EdgeStatusBadge :label="data.readiness.ready ? 'Ready for academic operations' : 'Setup needs attention'" :status="data.readiness.ready ? 'ready' : 'attention'" :tone="data.readiness.ready ? 'success' : 'warning'" /></div>
+						<div v-if="data.readiness.issues.length" class="eduedge-issue-list"><div v-for="issue in data.readiness.issues" :key="issue.code" class="eduedge-issue-row"><EdgeStatusBadge :label="issue.severity === 'danger' ? 'Required' : 'Review'" :status="issue.severity" :tone="issue.severity === 'danger' ? 'danger' : 'warning'" /><span>{{ issue.message }}</span></div></div>
+						<p v-else class="eduedge-ready-copy">The academic hierarchy, progression and current Institution calendar are ready.</p>
 					</section>
 
-					<div class="eduedge-foundation-editor-grid">
+					<div class="eduedge-foundation-editor-grid" :class="{ 'has-level-editor': showAcademicLevels }">
 						<section class="eduedge-foundation-card">
 							<div class="eduedge-card-heading"><div><p class="edge-eyebrow">{{ departmentSingular }}</p><h2>{{ departmentDraft.name ? "Edit" : "Create" }} {{ departmentSingular }}</h2></div><button type="button" class="edge-button" @click="newDepartment">New</button></div>
 							<EdgeEmptyState v-if="!permissions.can_create_department && !permissions.can_write_department" title="Read-only hierarchy" :description="`Your role can view ${departmentPlural.toLowerCase()} but cannot maintain them.`" />
-							<template v-else>
-								<label><span>Name</span><input v-model.trim="departmentDraft.department_name" class="form-control" /></label>
-								<label><span>Parent {{ departmentSingular }}</span><select v-model="departmentDraft.parent_department" class="form-control"><option value="">Root of Institution</option><option v-for="row in parentDepartmentOptions" :key="row.name" :value="row.name">{{ indentedDepartmentName(row) }}</option></select></label>
-								<label class="eduedge-check"><input v-model="departmentDraft.is_group" type="checkbox" /> Can contain child {{ departmentPlural.toLowerCase() }}</label>
-								<button type="button" class="edge-button edge-button--primary" :disabled="!canSaveDepartment || saving === 'department'" @click="saveDepartment">{{ saving === "department" ? "Saving..." : `Save ${departmentSingular}` }}</button>
-							</template>
+							<template v-else><label><span>Name</span><input v-model.trim="departmentDraft.department_name" class="form-control" /></label><label><span>Parent {{ departmentSingular }}</span><select v-model="departmentDraft.parent_department" class="form-control"><option value="">Root of Institution</option><option v-for="row in parentDepartmentOptions" :key="row.name" :value="row.name">{{ indentedDepartmentName(row) }}</option></select></label><label class="eduedge-check"><input v-model="departmentDraft.is_group" type="checkbox" /> Can contain child {{ departmentPlural.toLowerCase() }}</label><button type="button" class="edge-button edge-button--primary" :disabled="!canSaveDepartment || saving === 'department'" @click="saveDepartment">{{ saving === "department" ? "Saving..." : `Save ${departmentSingular}` }}</button></template>
 						</section>
 
 						<section class="eduedge-foundation-card">
 							<div class="eduedge-card-heading"><div><p class="edge-eyebrow">{{ programmeSingular }}</p><h2>{{ programmeDraft.name ? "Edit" : "Create" }} {{ programmeSingular }}</h2></div><button type="button" class="edge-button" @click="newProgramme">New</button></div>
 							<EdgeEmptyState v-if="!permissions.can_create_programme && !permissions.can_write_programme" title="Read-only catalogue" :description="`Your role can view ${programmePlural.toLowerCase()} but cannot maintain them.`" />
 							<template v-else>
-								<label><span>Name</span><input v-model.trim="programmeDraft.program_name" class="form-control" /></label>
-								<label><span>Abbreviation</span><input v-model.trim="programmeDraft.program_abbreviation" class="form-control" /></label>
-								<label><span>{{ departmentSingular }}</span><select v-model="programmeDraft.department" class="form-control"><option value="">Select {{ departmentSingular }}</option><option v-for="row in data.departments" :key="row.name" :value="row.name">{{ indentedDepartmentName(row) }}</option></select></label>
-								<button type="button" class="edge-button edge-button--primary" :disabled="!canSaveProgramme || saving === 'programme'" @click="saveProgramme">{{ saving === "programme" ? "Saving..." : `Save ${programmeSingular}` }}</button>
-								<p class="text-muted">Course rows and curriculum rules remain on the full native Program form.</p>
+								<label><span>Name</span><input v-model.trim="programmeDraft.program_name" class="form-control" /></label><label><span>Abbreviation</span><input v-model.trim="programmeDraft.program_abbreviation" class="form-control" /></label><label><span>{{ departmentSingular }}</span><select v-model="programmeDraft.department" class="form-control"><option value="">Select {{ departmentSingular }}</option><option v-for="row in data.departments" :key="row.name" :value="row.name">{{ indentedDepartmentName(row) }}</option></select></label>
+								<label><span>Progression Mode</span><select v-model="programmeDraft.eduedge_progression_mode" class="form-control" @change="programmeProgressionChanged"><option value="Program Promotion">Program Promotion</option><option value="Level Progression">Level Progression</option><option value="No Automatic Progression">No Automatic Progression</option></select><small>{{ progressionHelp }}</small></label>
+								<div class="eduedge-two-column"><label><span>Sequence</span><input v-model.number="programmeDraft.eduedge_progression_sequence" type="number" min="0" class="form-control" /></label><label v-if="programmeDraft.eduedge_progression_mode === 'Program Promotion' && !programmeDraft.eduedge_terminal_program"><span>Next {{ programmeSingular }}</span><select v-model="programmeDraft.eduedge_next_program" class="form-control"><option value="">Not configured</option><option v-for="row in nextProgrammeOptions" :key="row.name" :value="row.name">{{ row.display_name || row.program_name }}</option></select></label></div>
+								<div class="eduedge-checks"><label class="eduedge-check"><input v-model="programmeDraft.eduedge_terminal_program" type="checkbox" /> Terminal</label><label class="eduedge-check"><input v-model="programmeDraft.eduedge_allow_repetition" type="checkbox" /> Allow repetition</label></div>
+								<button type="button" class="edge-button edge-button--primary" :disabled="!canSaveProgramme || saving === 'programme'" @click="saveProgramme">{{ saving === "programme" ? "Saving..." : `Save ${programmeSingular}` }}</button><p class="text-muted">Course rows and Level/Semester curriculum classification remain on the full native Program form.</p>
+							</template>
+						</section>
+
+						<section v-if="showAcademicLevels" class="eduedge-foundation-card">
+							<div class="eduedge-card-heading"><div><p class="edge-eyebrow">{{ academicLevelSingular }}</p><h2>{{ levelDraft.name ? "Edit" : "Create" }} {{ academicLevelSingular }}</h2></div><button type="button" class="edge-button" @click="newLevel">New</button></div>
+							<EdgeEmptyState v-if="!permissions.can_create_academic_level && !permissions.can_write_academic_level" title="Read-only levels" :description="`Your role can view ${academicLevelPlural.toLowerCase()} but cannot maintain them.`" />
+							<template v-else>
+								<label><span>{{ programmeSingular }}</span><select v-model="levelDraft.program" class="form-control" @change="levelProgrammeChanged"><option value="">Select {{ programmeSingular }}</option><option v-for="row in levelProgressionProgrammes" :key="row.name" :value="row.name">{{ row.display_name || row.program_name }}</option></select></label><label><span>Name</span><input v-model.trim="levelDraft.level_name" class="form-control" placeholder="100 Level" /></label><label><span>Code</span><input v-model.trim="levelDraft.level_code" class="form-control" placeholder="100L" /></label><div class="eduedge-two-column"><label><span>Sequence</span><input v-model.number="levelDraft.sequence" type="number" min="0" class="form-control" /></label><label v-if="!levelDraft.is_terminal"><span>Next {{ academicLevelSingular }}</span><select v-model="levelDraft.next_level" class="form-control"><option value="">Not configured</option><option v-for="row in nextLevelOptions" :key="row.name" :value="row.name">{{ row.level_name }}</option></select></label></div><div class="eduedge-checks"><label class="eduedge-check"><input v-model="levelDraft.is_terminal" type="checkbox" @change="levelTerminalChanged" /> Terminal</label><label class="eduedge-check"><input v-model="levelDraft.enabled" type="checkbox" /> Enabled</label></div><label><span>Description</span><textarea v-model.trim="levelDraft.description" class="form-control" rows="2"></textarea></label><button type="button" class="edge-button edge-button--primary" :disabled="!canSaveLevel || saving === 'level'" @click="saveLevel">{{ saving === "level" ? "Saving..." : `Save ${academicLevelSingular}` }}</button>
 							</template>
 						</section>
 					</div>
 
 					<section class="eduedge-foundation-list">
-						<div class="eduedge-card-heading">
-							<div><p class="edge-eyebrow">Configured native hierarchy</p><h2>{{ selectedInstitutionLabel }}</h2></div>
-							<EdgeStatusBadge :label="`${data.departments.length} ${departmentPlural.toLowerCase()} · ${data.programmes.length} ${programmePlural.toLowerCase()} · ${data.student_groups.length} ${studentGroupPlural.toLowerCase()}`" status="hierarchy" tone="neutral" />
-						</div>
-						<EdgeEmptyState v-if="!flatDepartments.length" title="No native academic hierarchy" :description="`Create the first ${departmentSingular}, then add ${programmePlural.toLowerCase()} and ${studentGroupPlural.toLowerCase()}.`" />
+						<div class="eduedge-card-heading"><div><p class="edge-eyebrow">Configured hierarchy</p><h2>{{ selectedInstitutionLabel }}</h2></div><EdgeStatusBadge :label="hierarchyCounts" status="hierarchy" tone="neutral" /></div>
+						<EdgeEmptyState v-if="!flatDepartments.length" title="No academic hierarchy" :description="`Create the first ${departmentSingular}, then add ${programmePlural.toLowerCase()}.`" />
 						<div v-else class="eduedge-hierarchy-list">
 							<article v-for="department in flatDepartments" :key="department.name" class="eduedge-hierarchy-department" :style="{ '--hierarchy-depth': department.depth }">
-								<div class="eduedge-hierarchy-heading">
-									<button type="button" class="eduedge-hierarchy-name" @click="editDepartment(department)"><strong>{{ department.department_name || department.name }}</strong><small>{{ department.parent_department ? `Child of ${department.parent_department}` : `Root ${departmentSingular}` }}</small></button>
-									<div class="eduedge-hierarchy-actions"><EdgeStatusBadge :label="department.is_group ? 'Group' : 'Leaf'" status="department" tone="neutral" /><button type="button" class="edge-button" @click="newProgrammeForDepartment(department)">Add {{ programmeSingular }}</button><button type="button" class="edge-button" @click="openDepartment(department.name)">Full form</button></div>
-								</div>
+								<div class="eduedge-hierarchy-heading"><button type="button" class="eduedge-hierarchy-name" @click="editDepartment(department)"><strong>{{ department.display_name || department.department_name || department.name }}</strong><small>{{ department.parent_department ? `Child of ${department.parent_department}` : `Root ${departmentSingular}` }}</small></button><div class="eduedge-hierarchy-actions"><EdgeStatusBadge :label="department.is_group ? 'Group' : 'Leaf'" status="department" tone="neutral" /><button type="button" class="edge-button" @click="newProgrammeForDepartment(department)">Add {{ programmeSingular }}</button><button type="button" class="edge-button" @click="openDepartment(department.name)">Full form</button></div></div>
 								<EdgeEmptyState v-if="!department.programmes.length" :title="`No ${programmePlural.toLowerCase()}`" :description="`Add a ${programmeSingular} beneath this ${departmentSingular}.`" />
 								<div v-else class="eduedge-hierarchy-programmes">
 									<div v-for="programme in department.programmes" :key="programme.name" class="eduedge-hierarchy-programme">
-										<div class="eduedge-hierarchy-heading"><button type="button" class="eduedge-hierarchy-name" @click="editProgramme(programme)"><strong>{{ programme.program_name || programme.name }}</strong><small>{{ programme.program_abbreviation || programme.name }} · {{ programme.course_count }} course row(s)</small></button><div class="eduedge-hierarchy-actions"><EdgeStatusBadge :label="`${programme.active_offering_count} active offering(s)`" status="offering" :tone="programme.active_offering_count ? 'success' : 'neutral'" /><button type="button" class="edge-button" @click="createStudentGroup(programme)">Add {{ studentGroupSingular }}</button><button type="button" class="edge-button" @click="openProgramme(programme.name)">Full form</button></div></div>
-										<div v-if="programme.student_groups.length" class="eduedge-hierarchy-groups">
-											<button v-for="group in programme.student_groups" :key="group.name" type="button" class="eduedge-hierarchy-group" @click="openStudentGroup(group.name)"><span><strong>{{ group.student_group_name || group.name }}</strong><small>{{ branchName(group.eduedge_school_branch) }} · {{ group.academic_year }}{{ group.academic_term ? ` · ${group.academic_term}` : "" }}</small></span><EdgeStatusBadge :label="`${group.student_count} student(s)`" status="students" tone="neutral" /></button>
+										<div class="eduedge-hierarchy-heading"><button type="button" class="eduedge-hierarchy-name" @click="editProgramme(programme)"><strong>{{ programme.display_name || programme.program_name || programme.name }}</strong><small>{{ programme.program_abbreviation || programme.name }} · {{ programme.eduedge_progression_mode }} · {{ programme.course_count }} course row(s)</small></button><div class="eduedge-hierarchy-actions"><EdgeStatusBadge v-if="programme.eduedge_next_program" :label="`Next: ${programmeName(programme.eduedge_next_program)}`" status="next" tone="neutral" /><EdgeStatusBadge :label="`${programme.active_offering_count} active offering(s)`" status="offering" :tone="programme.active_offering_count ? 'success' : 'neutral'" /><button v-if="programme.eduedge_progression_mode === 'Level Progression'" type="button" class="edge-button" @click="newLevelForProgramme(programme)">Add {{ academicLevelSingular }}</button><button v-else type="button" class="edge-button" @click="createStudentGroup(programme, null)">Add {{ studentGroupSingular }}</button><button type="button" class="edge-button" @click="openProgramme(programme.name)">Full form</button></div></div>
+										<div v-if="programme.eduedge_progression_mode === 'Level Progression'" class="eduedge-level-list">
+											<p v-if="!programme.academic_levels.length" class="text-muted">No {{ academicLevelPlural.toLowerCase() }} configured.</p>
+											<div v-for="level in programme.academic_levels" :key="level.name" class="eduedge-level-row"><div class="eduedge-hierarchy-heading"><button type="button" class="eduedge-hierarchy-name" @click="editLevel(level)"><strong>{{ level.level_name }}</strong><small>{{ level.level_code }} · Sequence {{ level.sequence }}{{ level.next_level ? ` · Next ${levelName(level.next_level)}` : level.is_terminal ? ' · Terminal' : '' }}</small></button><div class="eduedge-hierarchy-actions"><button type="button" class="edge-button" @click="createStudentGroup(programme, level)">Add {{ studentGroupSingular }}</button><button type="button" class="edge-button" @click="openLevel(level.name)">Full form</button></div></div><div v-if="level.student_groups.length" class="eduedge-hierarchy-groups"><button v-for="group in level.student_groups" :key="group.name" type="button" class="eduedge-hierarchy-group" @click="openStudentGroup(group.name)"><span><strong>{{ group.display_name || group.student_group_name || group.name }}</strong><small>{{ branchName(group.eduedge_school_branch) }} · {{ group.academic_year }}{{ group.academic_term ? ` · ${group.academic_term}` : '' }}</small></span><EdgeStatusBadge :label="`${group.student_count} student(s)`" status="students" tone="neutral" /></button></div><p v-else class="text-muted">No {{ studentGroupPlural.toLowerCase() }} configured at this {{ academicLevelSingular.toLowerCase() }}.</p></div>
 										</div>
-										<p v-else class="text-muted">No {{ studentGroupPlural.toLowerCase() }} configured for this {{ programmeSingular.toLowerCase() }}.</p>
+										<div v-else-if="programme.student_groups.length" class="eduedge-hierarchy-groups"><button v-for="group in programme.student_groups" :key="group.name" type="button" class="eduedge-hierarchy-group" @click="openStudentGroup(group.name)"><span><strong>{{ group.display_name || group.student_group_name || group.name }}</strong><small>{{ branchName(group.eduedge_school_branch) }} · {{ group.academic_year }}</small></span><EdgeStatusBadge :label="`${group.student_count} student(s)`" status="students" tone="neutral" /></button></div><p v-else-if="programme.eduedge_progression_mode !== 'Level Progression'" class="text-muted">No {{ studentGroupPlural.toLowerCase() }} configured for this {{ programmeSingular.toLowerCase() }}.</p>
 									</div>
 								</div>
 							</article>
@@ -117,15 +82,8 @@
 					<section class="eduedge-foundation-list">
 						<div class="eduedge-card-heading"><div><p class="edge-eyebrow">Institution calendar</p><h2>{{ academicYearPlural }} and {{ academicTermPlural }}</h2></div><button v-if="permissions.can_create_calendar" type="button" class="edge-button edge-button--primary" @click="createCalendar">New calendar</button></div>
 						<EdgeEmptyState v-if="!data.calendars.length" title="No Institution calendar" :description="`Create an Institution calendar that links a native ${academicYearSingular} to its native ${academicTermPlural}.`" />
-						<div v-else class="eduedge-calendar-list">
-							<article v-for="calendar in data.calendars" :key="calendar.name" class="eduedge-calendar-row">
-								<div><strong>{{ calendar.academic_year }}</strong><small>{{ formatDate(calendar.start_date) }} – {{ formatDate(calendar.end_date) }} · {{ calendar.period_count }} {{ academicTermPlural.toLowerCase() }}</small></div>
-								<div class="eduedge-hierarchy-actions"><EdgeStatusBadge v-if="calendar.is_current" label="Current" status="current" tone="success" /><EdgeStatusBadge v-else-if="calendar.contains_today" label="Covers today" status="today" tone="success" /><EdgeStatusBadge v-if="calendar.has_calendar_gap_today" label="Current date gap" status="gap" tone="warning" /><button type="button" class="edge-button" @click="editCalendar(calendar)">Edit</button><button type="button" class="edge-button" @click="openCalendar(calendar.name)">Full form</button></div>
-								<div v-if="calendar.periods.length" class="eduedge-calendar-periods"><span v-for="period in calendar.periods" :key="period.name"><strong>{{ period.academic_term }}</strong><small>{{ formatDate(period.start_date) }} – {{ formatDate(period.end_date) }}</small></span></div>
-							</article>
-						</div>
+						<div v-else class="eduedge-calendar-list"><article v-for="calendar in data.calendars" :key="calendar.name" class="eduedge-calendar-row"><div><strong>{{ calendar.academic_year }}</strong><small>{{ formatDate(calendar.start_date) }} – {{ formatDate(calendar.end_date) }} · {{ calendar.period_count }} {{ academicTermPlural.toLowerCase() }}</small></div><div class="eduedge-hierarchy-actions"><EdgeStatusBadge v-if="calendar.is_current" label="Current" status="current" tone="success" /><EdgeStatusBadge v-else-if="calendar.contains_today" label="Covers today" status="today" tone="success" /><EdgeStatusBadge v-if="calendar.has_calendar_gap_today" label="Current date gap" status="gap" tone="warning" /><button type="button" class="edge-button" @click="editCalendar(calendar)">Edit</button><button type="button" class="edge-button" @click="openCalendar(calendar.name)">Full form</button></div><div v-if="calendar.periods.length" class="eduedge-calendar-periods"><span v-for="period in calendar.periods" :key="period.name"><strong>{{ period.academic_term }}</strong><small>{{ formatDate(period.start_date) }} – {{ formatDate(period.end_date) }}</small></span></div></article></div>
 					</section>
-
 					<p v-if="saveError" class="eduedge-foundation-error">{{ saveError }}</p>
 				</template>
 			</template>
@@ -135,112 +93,62 @@
 
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
-
+const PROGRAM_PROMOTION = "Program Promotion";
+const LEVEL_PROGRESSION = "Level Progression";
 const emptyDepartment = () => ({ name: "", department_name: "", parent_department: "", is_group: true });
-const emptyProgramme = () => ({ name: "", program_name: "", program_abbreviation: "", department: "", course_count: 0, active_offering_count: 0 });
-const emptyData = () => ({ active_context: {}, selected_institution: "", terms: {}, institutions: [], departments: [], programmes: [], branches: [], student_groups: [], calendars: [], hierarchy: [], readiness: { ready: false, issues: [], department_count: 0, programme_count: 0, student_group_count: 0, calendar_count: 0 }, permissions: {} });
-
+const emptyProgramme = () => ({ name: "", program_name: "", program_abbreviation: "", department: "", course_count: 0, active_offering_count: 0, eduedge_progression_mode: "No Automatic Progression", eduedge_progression_sequence: 10, eduedge_next_program: "", eduedge_terminal_program: false, eduedge_allow_repetition: true });
+const emptyLevel = () => ({ name: "", program: "", level_name: "", level_code: "", sequence: 10, next_level: "", is_terminal: false, enabled: true, description: "" });
+const emptyData = () => ({ active_context: {}, selected_institution: "", terms: {}, institutions: [], departments: [], programmes: [], academic_levels: [], branches: [], student_groups: [], calendars: [], hierarchy: [], readiness: { ready: false, issues: [], department_count: 0, programme_count: 0, academic_level_count: 0, student_group_count: 0, calendar_count: 0 }, permissions: {} });
 export default {
 	name: "EduEdgeAcademicFoundation",
-	data() { return { menuItems: EDUEDGE_MENU_ITEMS, loading: true, error: "", saving: "", saveError: "", selectedInstitution: "", departmentDraft: emptyDepartment(), programmeDraft: emptyProgramme(), data: emptyData() }; },
+	data() { return { menuItems: EDUEDGE_MENU_ITEMS, loading: true, error: "", saving: "", saveError: "", selectedInstitution: "", departmentDraft: emptyDepartment(), programmeDraft: emptyProgramme(), levelDraft: emptyLevel(), data: emptyData() }; },
 	computed: {
-		activeContext() { return this.data.active_context || {}; },
-		permissions() { return this.data.permissions || {}; },
-		departmentSingular() { return this.term("department", false, "Department / School Section"); },
-		departmentPlural() { return this.term("department", true, "Departments / School Sections"); },
-		programmeSingular() { return this.term("programme", false, "Programme / Class"); },
-		programmePlural() { return this.term("programme", true, "Programmes / Classes"); },
-		studentGroupSingular() { return this.term("student_group", false, "Student Group / Class Arm / Level"); },
-		studentGroupPlural() { return this.term("student_group", true, "Student Groups / Class Arms / Levels"); },
-		academicYearSingular() { return this.term("academic_year", false, "Academic Session"); },
-		academicYearPlural() { return this.term("academic_year", true, "Academic Sessions"); },
-		academicTermSingular() { return this.term("academic_term", false, "Term / Semester"); },
-		academicTermPlural() { return this.term("academic_term", true, "Terms / Semesters"); },
-		selectedInstitutionLabel() { return this.data.institutions.find((row) => row.name === this.selectedInstitution)?.institution_name || this.selectedInstitution; },
-		flatDepartments() {
-			const result = [];
-			const visit = (rows, depth = 0) => { for (const row of rows || []) { result.push({ ...row, depth }); visit(row.children, depth + 1); } };
-			visit(this.data.hierarchy || []);
-			return result;
-		},
-		parentDepartmentOptions() { return this.flatDepartments.filter((row) => row.name !== this.departmentDraft.name && row.is_group); },
-		canSaveDepartment() { const allowed = this.departmentDraft.name ? this.permissions.can_write_department : this.permissions.can_create_department; return Boolean(allowed && this.selectedInstitution && this.departmentDraft.department_name); },
-		canSaveProgramme() { const allowed = this.programmeDraft.name ? this.permissions.can_write_programme : this.permissions.can_create_programme; return Boolean(allowed && this.selectedInstitution && this.programmeDraft.program_name && this.programmeDraft.department); },
+		activeContext() { return this.data.active_context || {}; }, permissions() { return this.data.permissions || {}; }, departmentSingular() { return this.term("department", false, "Department / School Section"); }, departmentPlural() { return this.term("department", true, "Departments / School Sections"); }, programmeSingular() { return this.term("programme", false, "Programme / Class"); }, programmePlural() { return this.term("programme", true, "Programmes / Classes"); }, academicLevelSingular() { return this.term("academic_level", false, "Academic Level"); }, academicLevelPlural() { return this.term("academic_level", true, "Academic Levels"); }, studentGroupSingular() { return this.term("student_group", false, "Student Group / Class Arm / Lecture Group"); }, studentGroupPlural() { return this.term("student_group", true, "Student Groups / Class Arms / Lecture Groups"); }, academicYearSingular() { return this.term("academic_year", false, "Academic Session"); }, academicYearPlural() { return this.term("academic_year", true, "Academic Sessions"); }, academicTermSingular() { return this.term("academic_term", false, "Term / Semester"); }, academicTermPlural() { return this.term("academic_term", true, "Terms / Semesters"); }, showAcademicLevels() { return ["TERTIARY", "TRAINING_CENTRE"].includes(String(this.activeContext.institution_type || "").toUpperCase()) || (this.data.readiness.level_progression_programme_count || 0) > 0; }, hierarchySummary() { return this.showAcademicLevels ? `${this.departmentSingular} → ${this.programmeSingular} → ${this.academicLevelSingular} → ${this.studentGroupSingular}` : `${this.departmentSingular} → ${this.programmeSingular} → ${this.studentGroupSingular}`; }, foundationTitle() { return [this.departmentPlural, this.programmePlural, this.showAcademicLevels ? this.academicLevelPlural : "", this.studentGroupPlural, this.academicYearPlural].filter(Boolean).join(", "); }, foundationSubtitle() { return this.showAcademicLevels ? `Use ${this.departmentSingular} → ${this.programmeSingular} → ${this.academicLevelSingular} → ${this.studentGroupSingular}. Levels are reusable progression stages; groups are period-specific rosters.` : `Use ${this.departmentSingular} → ${this.programmeSingular} → ${this.studentGroupSingular}. Classes are reusable masters; Class Arms are session-specific rosters.`; }, selectedInstitutionLabel() { return this.data.institutions.find((row) => row.name === this.selectedInstitution)?.institution_name || this.selectedInstitution; }, flatDepartments() { const result = []; const visit = (rows, depth = 0) => { for (const row of rows || []) { result.push({ ...row, depth }); visit(row.children, depth + 1); } }; visit(this.data.hierarchy || []); return result; }, parentDepartmentOptions() { return this.flatDepartments.filter((row) => row.name !== this.departmentDraft.name && row.is_group); }, levelProgressionProgrammes() { return this.data.programmes.filter((row) => row.eduedge_progression_mode === LEVEL_PROGRESSION); }, nextProgrammeOptions() { return this.data.programmes.filter((row) => row.name !== this.programmeDraft.name); }, nextLevelOptions() { return this.data.academic_levels.filter((row) => row.program === this.levelDraft.program && row.name !== this.levelDraft.name); }, canSaveDepartment() { const allowed = this.departmentDraft.name ? this.permissions.can_write_department : this.permissions.can_create_department; return Boolean(allowed && this.selectedInstitution && this.departmentDraft.department_name); }, canSaveProgramme() { const allowed = this.programmeDraft.name ? this.permissions.can_write_programme : this.permissions.can_create_programme; return Boolean(allowed && this.selectedInstitution && this.programmeDraft.program_name && this.programmeDraft.department); }, canSaveLevel() { const allowed = this.levelDraft.name ? this.permissions.can_write_academic_level : this.permissions.can_create_academic_level; return Boolean(allowed && this.selectedInstitution && this.levelDraft.program && this.levelDraft.level_name && this.levelDraft.level_code); }, selectedInstitutionType() { return String(this.data.institutions.find((row) => row.name === this.selectedInstitution)?.institution_type || "").toUpperCase(); }, progressionHelp() { if (this.programmeDraft.eduedge_progression_mode === PROGRAM_PROMOTION) return "Use for Primary/Secondary Classes: JSS 1 progresses to JSS 2."; if (this.programmeDraft.eduedge_progression_mode === LEVEL_PROGRESSION) return "Use for tertiary/training Programmes: BSc Agriculture progresses through 100L, 200L and later Levels."; return "No automatic next Class or Level will be suggested."; }, hierarchyCounts() { return `${this.data.departments.length} ${this.departmentPlural.toLowerCase()} · ${this.data.programmes.length} ${this.programmePlural.toLowerCase()} · ${this.data.academic_levels.length} ${this.academicLevelPlural.toLowerCase()} · ${this.data.student_groups.length} ${this.studentGroupPlural.toLowerCase()}`; },
 	},
 	mounted() { this.load(); },
 	methods: {
-		openRoute: openEduEdgeRoute,
-		term(key, plural = false, fallback = "") { const row = this.data.terms?.[key] || this.activeContext.terms?.[key] || {}; return row[plural ? "plural" : "singular"] || fallback; },
-		async load() {
-			this.loading = true; this.error = "";
-			try { const response = await frappe.call("eduedge.api.academic_foundation.get_academic_foundation", { institution: this.selectedInstitution || undefined }); this.data = response.message || emptyData(); this.selectedInstitution = this.data.selected_institution || this.selectedInstitution; this.syncDraftValidity(); }
-			catch (error) { this.error = error?.message || "Academic Foundation could not be loaded."; }
-			finally { this.loading = false; }
-		},
-		async institutionChanged() { this.newDepartment(); this.newProgramme(); await this.load(); },
-		syncDraftValidity() { if (this.departmentDraft.name && !this.data.departments.some((row) => row.name === this.departmentDraft.name)) this.newDepartment(); if (this.programmeDraft.name && !this.data.programmes.some((row) => row.name === this.programmeDraft.name)) this.newProgramme(); },
-		indentedDepartmentName(row) { const depth = this.flatDepartments.find((item) => item.name === row.name)?.depth || 0; return `${"— ".repeat(depth)}${row.department_name || row.name}`; },
-		branchName(name) { return this.data.branches.find((row) => row.name === name)?.branch_name || name || "No Branch"; },
-		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "Not set"; },
-		newDepartment() { this.departmentDraft = emptyDepartment(); this.saveError = ""; },
-		editDepartment(row) { this.departmentDraft = { ...emptyDepartment(), ...row, is_group: Boolean(row.is_group) }; this.saveError = ""; },
-		newProgramme() { this.programmeDraft = emptyProgramme(); this.saveError = ""; },
-		newProgrammeForDepartment(department) { this.programmeDraft = { ...emptyProgramme(), department: department.name }; this.saveError = ""; },
-		editProgramme(row) { this.programmeDraft = { ...emptyProgramme(), ...row }; this.saveError = ""; },
-		async saveDepartment() {
-			if (!this.canSaveDepartment) return; this.saving = "department"; this.saveError = "";
-			try { await frappe.call("eduedge.api.academic_foundation_safe.save_department", { institution: this.selectedInstitution, department: this.departmentDraft.name || undefined, department_name: this.departmentDraft.department_name, parent_department: this.departmentDraft.parent_department || undefined, is_group: this.departmentDraft.is_group ? 1 : 0 }); frappe.show_alert({ message: __(`${this.departmentSingular} saved`), indicator: "green" }); this.newDepartment(); await this.load(); }
-			catch (error) { this.saveError = error?.message || `${this.departmentSingular} could not be saved.`; }
-			finally { this.saving = ""; }
-		},
-		async saveProgramme() {
-			if (!this.canSaveProgramme) return; this.saving = "programme"; this.saveError = "";
-			try { await frappe.call("eduedge.api.programmes.save_programme", { institution: this.selectedInstitution, programme: this.programmeDraft.name || undefined, program_name: this.programmeDraft.program_name, program_abbreviation: this.programmeDraft.program_abbreviation || undefined, department: this.programmeDraft.department }); frappe.show_alert({ message: __(`${this.programmeSingular} saved`), indicator: "green" }); this.newProgramme(); await this.load(); }
-			catch (error) { this.saveError = error?.message || `${this.programmeSingular} could not be saved.`; }
-			finally { this.saving = ""; }
-		},
-		createStudentGroup(programme) {
-			const calendar = this.data.calendars.find((row) => row.name === this.data.readiness.current_calendar) || this.data.calendars[0] || {};
-			const branch = this.data.branches[0] || {};
-			frappe.new_doc("Student Group", { program: programme.name, eduedge_school_branch: branch.name || undefined, academic_year: calendar.academic_year || undefined, academic_term: calendar.current_period?.academic_term || undefined, eduedge_institution: this.selectedInstitution });
-		},
-		createCalendar() { frappe.new_doc("EduEdge Institution Academic Calendar", { institution: this.selectedInstitution }); },
-		editCalendar(calendar) { this.openCalendar(calendar.name); },
-		openDepartment(name) { frappe.set_route("Form", "Department", name); },
-		openProgramme(name) { frappe.set_route("Form", "Program", name); },
-		openStudentGroup(name) { frappe.set_route("Form", "Student Group", name); },
-		openCalendar(name) { frappe.set_route("Form", "EduEdge Institution Academic Calendar", name); },
-		openDepartmentTree() { window.open("/app/department/view/tree", "_blank", "noopener,noreferrer"); },
-		openProgrammeList() { window.open("/app/program", "_blank", "noopener,noreferrer"); },
-		openCalendarList() { window.open("/app/eduedge-institution-academic-calendar", "_blank", "noopener,noreferrer"); },
+		openRoute: openEduEdgeRoute, term(key, plural = false, fallback = "") { const row = this.data.terms?.[key] || this.activeContext.terms?.[key] || {}; return row[plural ? "plural" : "singular"] || fallback; },
+		async load() { this.loading = true; this.error = ""; try { const response = await frappe.call("eduedge.api.academic_foundation_progression.get_academic_foundation", { institution: this.selectedInstitution || undefined }); this.data = response.message || emptyData(); this.selectedInstitution = this.data.selected_institution || this.selectedInstitution; this.syncDraftValidity(); } catch (error) { this.error = error?.message || "Academic Foundation could not be loaded."; } finally { this.loading = false; } },
+		async institutionChanged() { this.newDepartment(); this.newProgramme(); this.newLevel(); await this.load(); }, syncDraftValidity() { if (this.departmentDraft.name && !this.data.departments.some((row) => row.name === this.departmentDraft.name)) this.newDepartment(); if (this.programmeDraft.name && !this.data.programmes.some((row) => row.name === this.programmeDraft.name)) this.newProgramme(); if (this.levelDraft.name && !this.data.academic_levels.some((row) => row.name === this.levelDraft.name)) this.newLevel(); }, indentedDepartmentName(row) { const depth = this.flatDepartments.find((item) => item.name === row.name)?.depth || 0; return `${"— ".repeat(depth)}${row.display_name || row.department_name || row.name}`; }, branchName(name) { return this.data.branches.find((row) => row.name === name)?.branch_name || name || "No Branch"; }, programmeName(name) { const row = this.data.programmes.find((item) => item.name === name); return row?.display_name || row?.program_name || name; }, levelName(name) { return this.data.academic_levels.find((item) => item.name === name)?.level_name || name; }, formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "Not set"; },
+		newDepartment() { this.departmentDraft = emptyDepartment(); this.saveError = ""; }, editDepartment(row) { this.departmentDraft = { ...emptyDepartment(), ...row, department_name: row.display_name || row.department_name, is_group: Boolean(row.is_group) }; this.saveError = ""; }, newProgramme() { const defaultMode = ["PRIMARY", "SECONDARY"].includes(this.selectedInstitutionType) ? PROGRAM_PROMOTION : ["TERTIARY", "TRAINING_CENTRE"].includes(this.selectedInstitutionType) ? LEVEL_PROGRESSION : "No Automatic Progression"; this.programmeDraft = { ...emptyProgramme(), eduedge_progression_mode: defaultMode }; this.saveError = ""; }, newProgrammeForDepartment(department) { this.newProgramme(); this.programmeDraft.department = department.name; }, editProgramme(row) { this.programmeDraft = { ...emptyProgramme(), ...row, program_name: row.display_name || row.program_name, eduedge_terminal_program: Boolean(row.eduedge_terminal_program), eduedge_allow_repetition: Boolean(row.eduedge_allow_repetition) }; this.saveError = ""; }, programmeProgressionChanged() { if (this.programmeDraft.eduedge_progression_mode !== PROGRAM_PROMOTION) this.programmeDraft.eduedge_next_program = ""; }, newLevel() { this.levelDraft = emptyLevel(); this.saveError = ""; }, newLevelForProgramme(programme) { this.levelDraft = { ...emptyLevel(), program: programme.name, sequence: ((programme.academic_levels || []).length + 1) * 10 }; this.saveError = ""; }, editLevel(row) { this.levelDraft = { ...emptyLevel(), ...row, is_terminal: Boolean(row.is_terminal), enabled: Boolean(row.enabled) }; this.saveError = ""; }, levelProgrammeChanged() { if (!this.nextLevelOptions.some((row) => row.name === this.levelDraft.next_level)) this.levelDraft.next_level = ""; }, levelTerminalChanged() { if (this.levelDraft.is_terminal) this.levelDraft.next_level = ""; },
+		async saveDepartment() { if (!this.canSaveDepartment) return; this.saving = "department"; this.saveError = ""; try { await frappe.call("eduedge.api.academic_foundation_safe.save_department", { institution: this.selectedInstitution, department: this.departmentDraft.name || undefined, department_name: this.departmentDraft.department_name, parent_department: this.departmentDraft.parent_department || undefined, is_group: this.departmentDraft.is_group ? 1 : 0 }); frappe.show_alert({ message: __(`${this.departmentSingular} saved`), indicator: "green" }); this.newDepartment(); await this.load(); } catch (error) { this.saveError = error?.message || `${this.departmentSingular} could not be saved.`; } finally { this.saving = ""; } },
+		async saveProgramme() { if (!this.canSaveProgramme) return; this.saving = "programme"; this.saveError = ""; try { await frappe.call("eduedge.api.programmes_progression.save_programme", { institution: this.selectedInstitution, programme: this.programmeDraft.name || undefined, program_name: this.programmeDraft.program_name, program_abbreviation: this.programmeDraft.program_abbreviation || undefined, department: this.programmeDraft.department, progression_mode: this.programmeDraft.eduedge_progression_mode, progression_sequence: this.programmeDraft.eduedge_progression_sequence || 0, next_program: this.programmeDraft.eduedge_next_program || undefined, terminal_program: this.programmeDraft.eduedge_terminal_program ? 1 : 0, allow_repetition: this.programmeDraft.eduedge_allow_repetition ? 1 : 0 }); frappe.show_alert({ message: __(`${this.programmeSingular} saved`), indicator: "green" }); this.newProgramme(); await this.load(); } catch (error) { this.saveError = error?.message || `${this.programmeSingular} could not be saved.`; } finally { this.saving = ""; } },
+		async saveLevel() { if (!this.canSaveLevel) return; this.saving = "level"; this.saveError = ""; try { await frappe.call("eduedge.api.academic_foundation_progression.save_academic_level", { institution: this.selectedInstitution, academic_level: this.levelDraft.name || undefined, program: this.levelDraft.program, level_name: this.levelDraft.level_name, level_code: this.levelDraft.level_code, sequence: this.levelDraft.sequence || 0, next_level: this.levelDraft.next_level || undefined, is_terminal: this.levelDraft.is_terminal ? 1 : 0, enabled: this.levelDraft.enabled ? 1 : 0, description: this.levelDraft.description || undefined }); frappe.show_alert({ message: __(`${this.academicLevelSingular} saved`), indicator: "green" }); this.newLevel(); await this.load(); } catch (error) { this.saveError = error?.message || `${this.academicLevelSingular} could not be saved.`; } finally { this.saving = ""; } },
+		createStudentGroup(programme, level) { const calendar = this.data.calendars.find((row) => row.name === this.data.readiness.current_calendar) || this.data.calendars[0] || {}; const branch = this.data.branches[0] || {}; const levelMode = programme.eduedge_progression_mode === LEVEL_PROGRESSION; frappe.new_doc("Student Group", { program: programme.name, eduedge_academic_level: level?.name || undefined, eduedge_school_branch: branch.name || undefined, academic_year: calendar.academic_year || undefined, academic_term: levelMode ? calendar.current_period?.academic_term || undefined : undefined, eduedge_institution: this.selectedInstitution }); }, createCalendar() { frappe.new_doc("EduEdge Institution Academic Calendar", { institution: this.selectedInstitution }); }, editCalendar(calendar) { this.openCalendar(calendar.name); }, openDepartment(name) { frappe.set_route("Form", "Department", name); }, openProgramme(name) { frappe.set_route("Form", "Program", name); }, openLevel(name) { frappe.set_route("Form", "EduEdge Academic Level", name); }, openStudentGroup(name) { frappe.set_route("Form", "Student Group", name); }, openCalendar(name) { frappe.set_route("Form", "EduEdge Institution Academic Calendar", name); }, openDepartmentTree() { window.open("/app/department/view/tree", "_blank", "noopener,noreferrer"); }, openProgrammeList() { window.open("/app/program", "_blank", "noopener,noreferrer"); }, openLevelList() { window.open("/app/eduedge-academic-level", "_blank", "noopener,noreferrer"); }, openCalendarList() { window.open("/app/eduedge-institution-academic-calendar", "_blank", "noopener,noreferrer"); },
 	},
 };
 </script>
 
 <style scoped>
-.eduedge-foundation-context-grid,.eduedge-foundation-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; width:100%; }
+.eduedge-foundation-context-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; width:100%; }
+.eduedge-foundation-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; width:100%; }
+.eduedge-foundation-editor-grid.has-level-editor { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .eduedge-foundation-context-grid label,.eduedge-foundation-card label { display:grid; gap:.35rem; font-weight:600; }
 .eduedge-context-summary { display:grid; gap:.2rem; padding:.7rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--control-bg); }
 .eduedge-context-summary span,.eduedge-context-summary small { color:var(--text-muted); }
 .eduedge-foundation-readiness,.eduedge-foundation-card,.eduedge-foundation-list { display:grid; gap:1rem; margin-top:1rem; padding:1rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-lg,12px); background:var(--card-bg); }
-.eduedge-card-heading,.eduedge-hierarchy-heading,.eduedge-hierarchy-actions,.eduedge-calendar-row { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+.eduedge-card-heading,.eduedge-hierarchy-heading,.eduedge-hierarchy-actions,.eduedge-calendar-row,.eduedge-checks { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
 .eduedge-card-heading h2 { margin:0; }
-.eduedge-issue-list,.eduedge-hierarchy-list,.eduedge-hierarchy-programmes,.eduedge-hierarchy-groups,.eduedge-calendar-list { display:grid; gap:.65rem; }
+.eduedge-issue-list,.eduedge-hierarchy-list,.eduedge-hierarchy-programmes,.eduedge-hierarchy-groups,.eduedge-calendar-list,.eduedge-level-list { display:grid; gap:.65rem; }
 .eduedge-issue-row { display:flex; align-items:flex-start; gap:.65rem; padding:.65rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--control-bg); }
 .eduedge-ready-copy { margin:0; }
 .eduedge-check { display:flex!important; align-items:center; grid-template-columns:auto 1fr; }
+.eduedge-checks { justify-content:flex-start; flex-wrap:wrap; }
+.eduedge-two-column { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; }
 .eduedge-hierarchy-department { display:grid; gap:.75rem; margin-left:calc(var(--hierarchy-depth) * 1.25rem); padding:.85rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--control-bg); }
 .eduedge-hierarchy-programme { display:grid; gap:.65rem; padding:.75rem; border-left:3px solid var(--border-color); background:var(--card-bg); }
+.eduedge-level-row { display:grid; gap:.65rem; padding:.65rem; border-left:3px solid var(--blue-300,#84caff); background:var(--control-bg); }
 .eduedge-hierarchy-name { display:grid; gap:.15rem; padding:0; border:0; background:transparent; text-align:left; }
 .eduedge-hierarchy-name small,.eduedge-calendar-row small,.eduedge-calendar-periods small { color:var(--text-muted); }
 .eduedge-hierarchy-actions { justify-content:flex-end; flex-wrap:wrap; }
-.eduedge-hierarchy-group { display:flex; justify-content:space-between; gap:.75rem; padding:.65rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--control-bg); text-align:left; }
+.eduedge-hierarchy-group { display:flex; justify-content:space-between; gap:.75rem; padding:.65rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--card-bg); text-align:left; }
 .eduedge-hierarchy-group span { display:grid; gap:.15rem; }
 .eduedge-calendar-row { align-items:flex-start; flex-wrap:wrap; padding:.8rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--control-bg); }
 .eduedge-calendar-row>div:first-child { display:grid; gap:.2rem; }
 .eduedge-calendar-periods { display:grid; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr)); gap:.5rem; width:100%; }
 .eduedge-calendar-periods span { display:grid; gap:.15rem; padding:.55rem; border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); background:var(--card-bg); }
 .eduedge-foundation-error { color:var(--red-600,#b42318); }
-@media (max-width:850px) { .eduedge-foundation-context-grid,.eduedge-foundation-editor-grid { grid-template-columns:1fr; } }
-@media (max-width:650px) { .eduedge-card-heading,.eduedge-hierarchy-heading,.eduedge-calendar-row,.eduedge-hierarchy-group { align-items:stretch; flex-direction:column; } .eduedge-hierarchy-actions { justify-content:flex-start; } .eduedge-hierarchy-department { margin-left:0; } }
+@media (max-width:1150px) { .eduedge-foundation-editor-grid.has-level-editor { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:850px) { .eduedge-foundation-context-grid,.eduedge-foundation-editor-grid,.eduedge-foundation-editor-grid.has-level-editor { grid-template-columns:1fr; } }
+@media (max-width:650px) { .eduedge-card-heading,.eduedge-hierarchy-heading,.eduedge-calendar-row,.eduedge-hierarchy-group { align-items:stretch; flex-direction:column; } .eduedge-hierarchy-actions { justify-content:flex-start; } .eduedge-hierarchy-department { margin-left:0; } .eduedge-two-column { grid-template-columns:1fr; } }
 </style>
