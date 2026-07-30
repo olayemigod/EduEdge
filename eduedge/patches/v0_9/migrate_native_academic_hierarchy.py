@@ -10,6 +10,7 @@ from eduedge.education.academic_fields import (
 	INSTITUTION_FIELD,
 )
 from eduedge.education.native_hierarchy_migration import ensure_native_academic_context_foundation
+from eduedge.education.native_identity import DISPLAY_FIELD
 
 SCHOOL_TYPES = {"PRIMARY", "SECONDARY"}
 
@@ -61,24 +62,16 @@ def _section_department_map() -> dict[str, str]:
 		fields=["name", "section_name", "institution"],
 		order_by="creation asc",
 	)
+	department_meta = frappe.get_meta("Department")
 	for section in sections:
 		if not section.section_name or not section.institution:
 			continue
-		filters = {"department_name": section.section_name}
-		department_meta = frappe.get_meta("Department")
-		if department_meta.has_field(INSTITUTION_FIELD):
-			filters[INSTITUTION_FIELD] = section.institution
+		filters = {INSTITUTION_FIELD: section.institution}
+		if department_meta.has_field(DISPLAY_FIELD):
+			filters[DISPLAY_FIELD] = section.section_name
 		else:
-			filters["company"] = frappe.db.get_value("EduEdge Institution", section.institution, "company")
+			filters["department_name"] = section.section_name
 		department = frappe.db.get_value("Department", filters, "name")
-		if not department and department_meta.has_field(INSTITUTION_FIELD):
-			# Collision-safe migration may append the Institution code to the visible
-			# Department name. The ownership field remains the authoritative lookup.
-			department = frappe.db.get_value(
-				"Department",
-				{INSTITUTION_FIELD: section.institution, "department_name": ["like", f"{section.section_name}%"]},
-				"name",
-			)
 		if department:
 			mapping[section.name] = department
 	return mapping
@@ -86,9 +79,11 @@ def _section_department_map() -> dict[str, str]:
 
 def _get_or_create_program(level, department: str) -> str:
 	program_meta = frappe.get_meta("Program")
-	filters = {"program_name": level.level_name}
-	if program_meta.has_field(INSTITUTION_FIELD):
-		filters[INSTITUTION_FIELD] = level.institution
+	filters = {INSTITUTION_FIELD: level.institution}
+	if program_meta.has_field(DISPLAY_FIELD):
+		filters[DISPLAY_FIELD] = level.level_name
+	else:
+		filters["program_name"] = level.level_name
 	program = frappe.db.get_value("Program", filters, "name")
 	if program:
 		updates = {}
@@ -102,16 +97,17 @@ def _get_or_create_program(level, department: str) -> str:
 		return program
 
 	abbreviation = str(level.level_code or "").strip() or _abbreviation(level.level_name)
-	doc = frappe.get_doc(
-		{
-			"doctype": "Program",
-			"program_name": level.level_name,
-			"program_abbreviation": abbreviation,
-			"department": department,
-			INSTITUTION_FIELD: level.institution,
-			ACADEMIC_SECTION_FIELD: level.academic_section,
-		}
-	)
+	values = {
+		"doctype": "Program",
+		"program_name": level.level_name,
+		"program_abbreviation": abbreviation,
+		"department": department,
+		INSTITUTION_FIELD: level.institution,
+		ACADEMIC_SECTION_FIELD: level.academic_section,
+	}
+	if program_meta.has_field(DISPLAY_FIELD):
+		values[DISPLAY_FIELD] = level.level_name
+	doc = frappe.get_doc(values)
 	doc.insert(ignore_permissions=True)
 	return doc.name
 
