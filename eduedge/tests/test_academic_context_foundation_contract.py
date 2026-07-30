@@ -23,14 +23,16 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		fields = (APP / "education" / "academic_fields.py").read_text()
 		hierarchy = (APP / "education" / "academic_hierarchy.py").read_text()
 		hooks = (APP / "hooks.py").read_text()
-		self.assertIn('"Department": [', fields)
-		self.assertIn('"Program": [', fields)
-		self.assertIn('"Student Group": [', fields)
+		for doctype in ("Department", "Program", "Student Group"):
+			self.assertIn(f'"{doctype}": [', fields)
+		self.assertIn('DISPLAY_FIELD = "eduedge_display_name"', fields)
 		self.assertIn('"hidden": 1', fields)
 		self.assertIn("before_validate_department", hierarchy)
 		self.assertIn("Select the Programme's Department, Faculty, School, or School Section", hierarchy)
-		self.assertIn('"Department": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_department"}', hooks)
-		self.assertIn('"Program": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_program"}', hooks)
+		self.assertIn('"Department": {', hooks)
+		self.assertIn('"before_naming": _NATIVE_NAMING', hooks)
+		self.assertIn('"before_validate": "eduedge.education.academic_hierarchy.before_validate_department"', hooks)
+		self.assertIn('"before_validate": "eduedge.education.academic_hierarchy.before_validate_program"', hooks)
 
 	def test_programme_offering_is_a_protected_native_delivery_identity(self):
 		offering = json.loads((APP / "eduedge" / "doctype" / "eduedge_program_offering" / "eduedge_program_offering.json").read_text())
@@ -75,9 +77,11 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 	def test_fee_context_is_derived_without_mutating_accounting_truth(self):
 		validation = (APP / "education" / "academic_validation.py").read_text()
 		hooks = (APP / "hooks.py").read_text()
+		fields = (APP / "education" / "academic_fields.py").read_text()
 		self.assertIn("clear_context(doc)", validation)
 		self.assertIn("academic_fee_context.before_validate_fee_schedule", hooks)
 		self.assertNotIn("on_submit", hooks)
+		self.assertIn('"read_only": 1', fields)
 
 	def test_migration_backfills_only_unambiguous_context_and_permissions_fail_closed(self):
 		fields = (APP / "education" / "academic_fields.py").read_text()
@@ -99,7 +103,7 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		self.assertIn('"source": "institution_calendar" if calendar else "institution_calendar_missing"', resolver)
 		self.assertIn('"academic_term": period.academic_term if period else None', resolver)
 		self.assertIn("assert_institution_calendar_context", resolver)
-		self.assertIn("academic_operations_review.get_operations_context", hooks)
+		self.assertIn("academic_operations_display.get_operations_context", hooks)
 
 	def test_academic_lookup_api_is_allowlisted_and_permission_aware(self):
 		api = (APP / "api" / "academic_context.py").read_text()
@@ -118,6 +122,7 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		self.assertIn("eduedge.api.programmes.save_programme", foundation)
 		self.assertIn("departmentSingular", offering)
 		self.assertIn("draftProgramChanged", offering)
+		self.assertIn("program_display_name", offering)
 		self.assertNotIn("academicLevel", offering)
 		self.assertLess(loader.index("edgesuite_ui.bundle.js"), loader.index("eduedge_academic_foundation.bundle.js"))
 
