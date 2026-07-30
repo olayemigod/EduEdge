@@ -29,6 +29,20 @@ class EduEdgeInstitutionAcademicCalendar(Document):
 		)
 		if duplicate:
 			frappe.throw(_("An academic calendar already exists for this Institution and Academic Year."), frappe.DuplicateEntryError)
+
+		# The first enabled calendar becomes current automatically. This prevents a
+		# configured Session from remaining unusable merely because the checkbox was
+		# missed in the quick editor or native form.
+		if self.enabled and not self.is_current and not frappe.db.exists(
+			"EduEdge Institution Academic Calendar",
+			{
+				"institution": self.institution,
+				"enabled": 1,
+				"is_current": 1,
+				"name": ["!=", self.name or ""],
+			},
+		):
+			self.is_current = 1
 		if self.is_current and not self.enabled:
 			frappe.throw(_("The current academic calendar must be enabled."), frappe.ValidationError)
 		self._validate_periods()
