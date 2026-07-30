@@ -8,6 +8,48 @@ from eduedge.education import academic_validation as base
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 
 
+def before_validate_department(doc, method=None) -> None:
+	if not doc.meta.has_field(INSTITUTION_FIELD):
+		return
+	institution = doc.get(INSTITUTION_FIELD)
+	if not institution:
+		if doc.is_new():
+			frappe.throw(_("Institution is required for an academic Department / School Section."), frappe.ValidationError)
+		return
+	institution_row = frappe.db.get_value(
+		"EduEdge Institution", institution, ["company", "enabled"], as_dict=True
+	)
+	if not institution_row or not cint(institution_row.enabled):
+		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+	if doc.meta.has_field("company"):
+		if doc.company and institution_row.company and doc.company != institution_row.company:
+			frappe.throw(
+				_("Department / School Section must use the same Company as its Institution."),
+				frappe.ValidationError,
+			)
+		doc.company = institution_row.company
+	parent = doc.get("parent_department") if doc.meta.has_field("parent_department") else None
+	if parent:
+		fields = ["company"]
+		if frappe.get_meta("Department").has_field(INSTITUTION_FIELD):
+			fields.append(INSTITUTION_FIELD)
+		parent_row = frappe.db.get_value("Department", parent, fields, as_dict=True)
+		if not parent_row:
+			frappe.throw(_("Select a valid Parent Department."), frappe.ValidationError)
+		if parent_row.get(INSTITUTION_FIELD) != institution:
+			frappe.throw(
+				_("Parent Department must belong to the same Institution."),
+				frappe.ValidationError,
+			)
+		if parent_row.company and institution_row.company and parent_row.company != institution_row.company:
+			frappe.throw(
+				_("Parent Department must belong to the same Company."),
+				frappe.ValidationError,
+			)
+	if not doc.is_new():
+		base._block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
+
+
 def before_validate_program(doc, method=None) -> None:
 	base.validate_master_institution(doc, required=doc.is_new())
 	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
