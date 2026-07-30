@@ -7,24 +7,28 @@ APP = ROOT / "eduedge"
 
 
 class TestNativeHierarchyMigrationContract(unittest.TestCase):
-	def test_install_and_migrate_use_collision_safe_wrapper(self):
+	def test_install_and_migrate_use_one_canonical_foundation(self):
 		install = (APP / "install.py").read_text(encoding="utf-8")
+		fields = (APP / "education" / "academic_fields.py").read_text(encoding="utf-8")
 		helper = (APP / "education" / "native_hierarchy_migration.py").read_text(encoding="utf-8")
 		self.assertIn("ensure_native_academic_context_foundation", install)
 		self.assertEqual(install.count("ensure_native_academic_context_foundation()"), 2)
-		self.assertIn("academic_fields.backfill_legacy_sections_to_departments = backfill_legacy_sections_to_departments", helper)
-		self.assertIn("finally:", helper)
-		self.assertIn("academic_fields.backfill_legacy_sections_to_departments = original", helper)
+		self.assertIn("academic_fields.ensure_academic_context_foundation()", helper)
+		self.assertIn("canonical_backfill", fields)
+		self.assertNotIn("backfill_legacy_sections_to_departments =", helper)
+		self.assertNotIn("original =", helper)
 
 	def test_same_name_sections_are_isolated_by_institution(self):
 		helper = (APP / "education" / "native_hierarchy_migration.py").read_text(encoding="utf-8")
+		identity = (APP / "education" / "native_identity.py").read_text(encoding="utf-8")
 		self.assertIn("owners_by_key", helper)
 		self.assertIn("_exact_owned_department", helper)
 		self.assertIn("_unowned_department", helper)
 		self.assertIn("unambiguous", helper)
-		self.assertIn("_available_department_name", helper)
-		self.assertIn("institution.institution_code", helper)
-		self.assertIn('{"department_name": department_name, "company": company, INSTITUTION_FIELD: institution}', helper)
+		self.assertIn("eduedge_display_name", helper)
+		self.assertIn("_available_native_name", identity)
+		self.assertIn("_context_token", identity)
+		self.assertIn("INSTITUTION_FIELD", identity)
 
 	def test_one_time_patch_preserves_legacy_and_avoids_tertiary_guessing(self):
 		patch = (APP / "patches" / "v0_9" / "migrate_native_academic_hierarchy.py").read_text(encoding="utf-8")
@@ -32,6 +36,7 @@ class TestNativeHierarchyMigrationContract(unittest.TestCase):
 		self.assertIn("ensure_native_academic_context_foundation", patch)
 		self.assertIn('SCHOOL_TYPES = {"PRIMARY", "SECONDARY"}', patch)
 		self.assertIn("Tertiary Levels are deliberately not auto-created", patch)
+		self.assertIn("DISPLAY_FIELD", patch)
 		self.assertNotIn("frappe.delete_doc", patch)
 		self.assertIn("eduedge.patches.v0_9.migrate_native_academic_hierarchy", patches)
 
