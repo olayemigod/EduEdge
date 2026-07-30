@@ -108,6 +108,13 @@ def _calendar_values(doc) -> dict:
 	}
 
 
+def _has_enabled_current_calendar(institution: str, *, exclude: str | None = None) -> bool:
+	filters: dict = {"institution": institution, "enabled": 1, "is_current": 1}
+	if exclude:
+		filters["name"] = ["!=", exclude]
+	return bool(frappe.db.exists(CALENDAR_DOCTYPE, filters))
+
+
 @frappe.whitelist()
 def get_institution_terminology(institution: str) -> dict:
 	_require_login()
@@ -136,6 +143,7 @@ def get_academic_calendar_editor(
 		doc = frappe.new_doc(CALENDAR_DOCTYPE)
 		doc.institution = institution_doc.name
 		doc.enabled = 1
+		doc.is_current = int(not _has_enabled_current_calendar(institution_doc.name))
 		can_save = True
 
 	return {
@@ -167,6 +175,8 @@ def save_academic_calendar(
 	if calendar_name:
 		doc = frappe.get_doc(CALENDAR_DOCTYPE, calendar_name)
 		doc.check_permission("write")
+		if doc.institution != institution_doc.name:
+			frappe.throw(_("Calendar Institution cannot change after creation."), frappe.ValidationError)
 	else:
 		if not frappe.has_permission(CALENDAR_DOCTYPE, "create"):
 			frappe.throw(_("You are not permitted to create Institution Academic Calendars."), frappe.PermissionError)
@@ -187,8 +197,13 @@ def save_academic_calendar(
 
 	doc.institution = institution_doc.name
 	doc.academic_year = academic_year_name
-	doc.is_current = cint(is_current)
 	doc.enabled = cint(enabled)
+	doc.is_current = cint(is_current)
+	if doc.enabled and not doc.is_current and not _has_enabled_current_calendar(
+		institution_doc.name,
+		exclude=doc.name if not doc.is_new() else None,
+	):
+		doc.is_current = 1
 	doc.start_date = _clean(start_date, limit=20)
 	doc.end_date = _clean(end_date, limit=20)
 	doc.notes = _clean(notes, limit=2000)
