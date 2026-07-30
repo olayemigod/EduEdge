@@ -3,12 +3,15 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.utils import cint
+from frappe.utils.nestedset import get_root_of
 
 from eduedge.education import academic_validation as base
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.native_identity import before_validate_native_master_identity
 
 
 def before_validate_department(doc, method=None) -> None:
+	before_validate_native_master_identity(doc, method)
 	if not doc.meta.has_field(INSTITUTION_FIELD):
 		return
 	institution = doc.get(INSTITUTION_FIELD)
@@ -36,21 +39,28 @@ def before_validate_department(doc, method=None) -> None:
 		parent_row = frappe.db.get_value("Department", parent, fields, as_dict=True)
 		if not parent_row:
 			frappe.throw(_("Select a valid Parent Department."), frappe.ValidationError)
-		if parent_row.get(INSTITUTION_FIELD) != institution:
-			frappe.throw(
-				_("Parent Department must belong to the same Institution."),
-				frappe.ValidationError,
-			)
-		if parent_row.company and institution_row.company and parent_row.company != institution_row.company:
-			frappe.throw(
-				_("Parent Department must belong to the same Company."),
-				frappe.ValidationError,
-			)
+		# ERPNext assigns one global framework root to top-level Departments during
+		# its standard validation. That root is not an EduEdge academic parent and
+		# must not be forced into a tenant Institution.
+		framework_root = get_root_of("Department")
+		is_framework_root = bool(parent == framework_root and not parent_row.get(INSTITUTION_FIELD))
+		if not is_framework_root:
+			if parent_row.get(INSTITUTION_FIELD) != institution:
+				frappe.throw(
+					_("Parent Department must belong to the same Institution."),
+					frappe.ValidationError,
+				)
+			if parent_row.company and institution_row.company and parent_row.company != institution_row.company:
+				frappe.throw(
+					_("Parent Department must belong to the same Company."),
+					frappe.ValidationError,
+				)
 	if not doc.is_new():
 		base._block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
 
 
 def before_validate_program(doc, method=None) -> None:
+	before_validate_native_master_identity(doc, method)
 	base.validate_master_institution(doc, required=doc.is_new())
 	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
 	department = doc.get("department") if doc.meta.has_field("department") else None
