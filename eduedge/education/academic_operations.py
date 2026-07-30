@@ -12,6 +12,7 @@ from eduedge.education.offerings import (
 	get_context_branch,
 	validate_program_offering,
 )
+from eduedge.services.academic_calendar import assert_institution_calendar_context
 
 ASSIGNMENT_DOCTYPE = "EduEdge Instructor Branch Assignment"
 
@@ -21,6 +22,12 @@ def before_validate_student_group(doc, method=None) -> None:
 	resolve_exact_offering(doc, purpose="enrollment")
 	_validate_branch(doc)
 	_validate_term_year(doc.academic_year, doc.academic_term)
+	if doc.academic_year:
+		assert_institution_calendar_context(
+			branch=doc.get(BRANCH_FIELD),
+			academic_year=doc.academic_year,
+			academic_term=doc.academic_term or None,
+		)
 
 	if doc.program:
 		validate_program_offering(
@@ -79,7 +86,17 @@ def before_validate_room(doc, method=None) -> None:
 
 
 def before_validate_course_schedule(doc, method=None) -> None:
-	group_branch = _linked_branch("Student Group", doc.student_group)
+	group_context = (
+		frappe.db.get_value(
+			"Student Group",
+			doc.student_group,
+			[BRANCH_FIELD, "academic_year", "academic_term", "disabled"],
+			as_dict=True,
+		)
+		if doc.student_group
+		else None
+	)
+	group_branch = (group_context or {}).get(BRANCH_FIELD)
 	_assign_branch(doc, preferred_branch=group_branch)
 	_validate_branch(doc)
 
@@ -89,8 +106,23 @@ def before_validate_course_schedule(doc, method=None) -> None:
 			frappe.ValidationError,
 		)
 
-	if frappe.db.get_value("Student Group", doc.student_group, "disabled"):
+	if not group_context:
+		frappe.throw(_("Select a valid Student Group."), frappe.ValidationError)
+	if group_context.disabled:
 		frappe.throw(_("The selected Student Group is disabled."), frappe.ValidationError)
+	if not group_context.academic_year:
+		frappe.throw(
+			_("The selected Student Group has no Academic Session. Correct the group before scheduling a lesson."),
+			frappe.ValidationError,
+		)
+	if not doc.schedule_date:
+		frappe.throw(_("Schedule Date is required."), frappe.ValidationError)
+	assert_institution_calendar_context(
+		branch=doc.get(BRANCH_FIELD),
+		academic_year=group_context.academic_year,
+		academic_term=group_context.academic_term or None,
+		reference_date=doc.schedule_date,
+	)
 
 	room_branch = _linked_branch("Room", doc.room)
 	if room_branch and room_branch != doc.get(BRANCH_FIELD):
