@@ -7,6 +7,8 @@ from frappe.utils import cint, flt
 
 from eduedge.education.academic_fields import ACADEMIC_LEVEL_FIELD, INSTITUTION_FIELD, OFFERING_FIELD
 
+OFFERING_LEVEL_FIELD = "academic_level"
+
 PROGRAM_PROGRESSION_MODE_FIELD = "eduedge_progression_mode"
 PROGRAM_SEQUENCE_FIELD = "eduedge_progression_sequence"
 PROGRAM_NEXT_FIELD = "eduedge_next_program"
@@ -290,11 +292,30 @@ def progression_target(source_program: str, source_level: str | None = None) -> 
 	return {"mode": mode, "program": None, "academic_level": None}
 
 
-def programme_course_filters(program: str, academic_level: str | None = None, period_number: int | None = None) -> dict:
-	filters: dict = {"parent": program, "parenttype": "Program"}
+def get_programme_course_rows(
+	program: str,
+	*,
+	academic_level: str | None = None,
+	period_number: int | None = None,
+) -> list[frappe._dict]:
 	meta = frappe.get_meta("Program Course")
+	fields = ["name", "course", "required", "idx"]
+	for fieldname in (
+		ACADEMIC_LEVEL_FIELD,
+		PROGRAM_COURSE_PERIOD_FIELD,
+		PROGRAM_COURSE_TYPE_FIELD,
+		PROGRAM_COURSE_CREDIT_FIELD,
+	):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
+	rows = frappe.get_all(
+		"Program Course",
+		filters={"parent": program, "parenttype": "Program"},
+		fields=fields,
+		order_by="idx asc",
+	)
 	if academic_level and meta.has_field(ACADEMIC_LEVEL_FIELD):
-		filters[ACADEMIC_LEVEL_FIELD] = ["in", ["", academic_level]]
+		rows = [row for row in rows if not row.get(ACADEMIC_LEVEL_FIELD) or row.get(ACADEMIC_LEVEL_FIELD) == academic_level]
 	if period_number and meta.has_field(PROGRAM_COURSE_PERIOD_FIELD):
-		filters[PROGRAM_COURSE_PERIOD_FIELD] = ["in", [0, cint(period_number)]]
-	return filters
+		rows = [row for row in rows if not cint(row.get(PROGRAM_COURSE_PERIOD_FIELD)) or cint(row.get(PROGRAM_COURSE_PERIOD_FIELD)) == cint(period_number)]
+	return rows
