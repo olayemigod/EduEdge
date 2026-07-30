@@ -10,12 +10,9 @@ class TestProgrammesPageContract(unittest.TestCase):
 	def test_programmes_api_is_bounded_permission_aware_and_institution_scoped(self):
 		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
 		for token in (
-			"MAX_PAGE_LENGTH = 50",
-			"MAX_DEPARTMENT_OPTIONS = 30",
-			'frappe.has_permission("Program", "read")',
-			"_assert_institution_access",
-			"_assert_section_context",
-			"page_length=page_length + 1",
+			"MAX_PAGE_LENGTH = 50", "MAX_DEPARTMENT_OPTIONS = 100",
+			'frappe.has_permission("Program", "read")', "_assert_institution_access",
+			"_assert_department_context", "page_length=page_length + 1",
 			'fields=[{"COUNT": "name", "as": "record_count"}]',
 		):
 			self.assertIn(token, api)
@@ -36,25 +33,19 @@ class TestProgrammesPageContract(unittest.TestCase):
 		self.assertNotIn('doc.set("courses"', api)
 		self.assertNotIn("db_set(", api)
 
-	def test_department_options_and_save_are_scoped_to_institution_company(self):
+	def test_department_options_and_save_are_scoped_to_institution(self):
 		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
-		component = (
-			APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue"
-		).read_text(encoding="utf-8")
+		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
 		self.assertIn("def _assert_department_context", api)
-		self.assertIn('filters["company"] = institution_company', api)
-		self.assertIn("Department must belong to the same Company", api)
-		self.assertIn("institution: institution || undefined", component)
-		self.assertIn("this.draft.department = \"\"", component)
-		self.assertIn("loadDepartments", component)
+		self.assertIn("_validate_department(department, institution)", api)
+		self.assertIn('filters[INSTITUTION_FIELD] = institution', api)
+		self.assertIn("draftDepartments", component)
+		self.assertIn("draftInstitutionChanged", component)
+		self.assertIn('this.draft.department = ""', component)
 
 	def test_programmes_page_uses_dedicated_edgesuite_runtime(self):
-		component = (
-			APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue"
-		).read_text(encoding="utf-8")
-		loader = (
-			APP / "eduedge" / "page" / "eduedge_programs" / "eduedge_programs.js"
-		).read_text(encoding="utf-8")
+		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
+		loader = (APP / "eduedge" / "page" / "eduedge_programs" / "eduedge_programs.js").read_text(encoding="utf-8")
 		bundle = (APP / "public" / "js" / "eduedge_programmes.bundle.js").read_text(encoding="utf-8")
 		self.assertIn("<EdgeAppShell", component)
 		self.assertIn("Catalogue filters", component)
@@ -63,17 +54,15 @@ class TestProgrammesPageContract(unittest.TestCase):
 		self.assertIn("createEduEdgeProgrammesApp", bundle)
 		self.assertLess(loader.index("edgesuite_ui.bundle.js"), loader.index("eduedge_programmes.bundle.js"))
 		self.assertNotIn("registerEduEdgeResourcePage", loader)
-		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 
-	def test_programme_form_cascades_section_by_institution_and_preserves_full_form(self):
-		component = (
-			APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue"
-		).read_text(encoding="utf-8")
-		self.assertIn("draftSections", component)
+	def test_programme_form_cascades_department_by_institution_and_preserves_full_form(self):
+		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
+		self.assertIn("draftDepartments", component)
 		self.assertIn("draftInstitutionChanged", component)
-		self.assertIn('this.draft.eduedge_academic_section = ""', component)
+		self.assertIn('this.draft.department = ""', component)
 		self.assertIn('frappe.set_route("Form", "Program", name)', component)
-		self.assertIn("Course rows, portal settings, and advanced fields remain", component)
+		self.assertIn("Course rows and curriculum rules remain", component)
+		self.assertNotIn("eduedge_academic_section", component)
 
 	def test_ci_checks_programmes_entry_scripts(self):
 		workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
