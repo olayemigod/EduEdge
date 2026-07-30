@@ -18,9 +18,11 @@ class TestCBTScheduleAuditHardeningContract(unittest.TestCase):
 			"controlled_cbt_operation",
 			"withdraw_non_started_candidates_for_cancellation",
 			"frappe.get_doc(SCHEDULE_DOCTYPE, schedule, for_update=True)",
+			'frappe.get_doc("DocType", SCHEDULE_DOCTYPE, for_update=True)',
+			"_lock_cbt_reservation_governance_row",
+			'reservation-governance',
 			'payload.pop("approved_extra_time_minutes", None)',
 			"Schedule management permission is required to search Invigilators",
-			'schedule_operation_lock("activation-governance")',
 			"Select a School Branch / Campus before searching Invigilators",
 		):
 			self.assertIn(token, wrapper)
@@ -107,7 +109,7 @@ class TestCBTScheduleAuditHardeningContract(unittest.TestCase):
 		):
 			self.assertIn(token, governance)
 
-	def test_academic_options_and_payloads_are_institution_safe(self):
+	def test_academic_options_payloads_and_reservations_are_context_safe(self):
 		wrapper = (APP / "api" / "cbt_schedule_operations.py").read_text(encoding="utf-8")
 		validator = (APP / "cbt" / "schedule_context_validation.py").read_text(encoding="utf-8")
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
@@ -120,14 +122,24 @@ class TestCBTScheduleAuditHardeningContract(unittest.TestCase):
 			self.assertIn(token, wrapper)
 		for token in (
 			"validate_schedule_academic_scope",
+			"validate_candidate_reservation",
+			"_validate_schedule_reservation",
+			"_validate_schedule_candidate_reservations",
 			'("Program", "program"',
 			'("Assessment Group", "assessment_group"',
 			"does not belong to the Schedule Institution context",
+			"already has an overlapping reserved Examination Schedule",
+			"is already reserved by",
 		):
 			self.assertIn(token, validator)
 		self.assertIn(
 			'"EduEdge CBT Exam Schedule": {\n\t\t"validate": '
 			'"eduedge.cbt.schedule_context_validation.validate_schedule_academic_scope"',
+			hooks,
+		)
+		self.assertIn(
+			'"EduEdge CBT Candidate Assignment": {\n\t\t"validate": '
+			'"eduedge.cbt.schedule_context_validation.validate_candidate_reservation"',
 			hooks,
 		)
 
