@@ -69,6 +69,7 @@ doctype_js = {
 
 doc_events = {
 	"Company": {"before_validate": "eduedge.education.institution_types.before_validate_company"},
+	"Department": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_department"},
 	"Program": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_program"},
 	"Course": {"before_validate": "eduedge.education.academic_validation.before_validate_course"},
 	"Student Batch Name": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
@@ -116,6 +117,7 @@ permission_query_conditions = {
 	"EduEdge Academic Section": "eduedge.education.academic_permissions.academic_section_query",
 	"EduEdge Academic Level": "eduedge.education.academic_permissions.academic_level_query",
 	"EduEdge Institution Academic Calendar": "eduedge.education.academic_permissions.academic_calendar_query",
+	"Department": "eduedge.education.academic_permissions.department_query",
 	"Program": "eduedge.education.academic_permissions.program_query",
 	"Course": "eduedge.education.academic_permissions.course_query",
 	"Student Batch Name": "eduedge.education.academic_permissions.student_batch_query",
@@ -157,6 +159,7 @@ has_permission = {
 	"EduEdge Academic Section": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"EduEdge Academic Level": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"EduEdge Institution Academic Calendar": "eduedge.education.academic_permissions.has_academic_institution_permission",
+	"Department": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"Program": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"Course": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"Student Batch Name": "eduedge.education.academic_permissions.has_academic_institution_permission",
