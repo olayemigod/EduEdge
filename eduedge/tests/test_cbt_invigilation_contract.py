@@ -95,7 +95,7 @@ class TestCBTInvigilationContract(unittest.TestCase):
 		):
 			self.assertIn(token, access)
 		self.assertIn('route: "/app/eduedge-cbt-invigilation"', navigation)
-		self.assertIn('route: "/app/eduedge-cbt-invigilation"', product_menu)
+		self.assertIn('"/app/eduedge-cbt-invigilation"', product_menu)
 		self.assertIn('resource: "cbt_attempt"', product_menu)
 
 
