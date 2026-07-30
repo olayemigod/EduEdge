@@ -1,3 +1,5 @@
+import { reactive } from "vue";
+
 function term(key, { plural = false, fallback = "" } = {}) {
 	return frappe.eduedge?.term?.(key, { plural, fallback }) || fallback;
 }
@@ -27,14 +29,17 @@ export function buildEduEdgeMenuItems() {
 	const sectionPlural = term("academic_section", { plural: true, fallback: __("Academic Sections") });
 	const levelPlural = term("academic_level", { plural: true, fallback: __("Academic Levels") });
 	const assessmentPlural = term("assessment", { plural: true, fallback: __("Assessments") });
+	const studentSingular = term("student", { fallback: __("Student") });
+	const studentPlural = term("student", { plural: true, fallback: __("Students") });
+	const applicantPlural = term("student_applicant", { plural: true, fallback: __("Applicants") });
 
 	const items = [
 		{ section: __("Overview"), sectionIcon: "home", label: __("Home"), route: "/app/eduedge-home", icon: "home", description: __("Education command centre") },
 		{ section: __("Overview"), sectionIcon: "home", label: __("My Profile"), route: "/app/eduedge-my-profile", icon: "user", description: __("Your EduEdge identity and account profile") },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Academic Operations"), route: "/app/eduedge-academic-operations", icon: "book", description: __(`${groupPlural}, ${sessionPlural}, and attendance`) },
 		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Admissions"), route: "/app/eduedge-admissions", icon: "clipboard", description: __("Admission windows and availability") },
-		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Applicants"), route: "/app/eduedge-applicants", icon: "user", description: __("Review prospective students") },
-		{ section: __("Academic Operations"), sectionIcon: "graduation", label: __("Students"), route: "/app/eduedge-students", icon: "students", description: __("Student records and profiles") },
+		{ section: __("Academic Operations"), sectionIcon: "graduation", label: applicantPlural, route: "/app/eduedge-applicants", icon: "user", description: __(`Review prospective ${studentPlural.toLowerCase()}`) },
+		{ section: __("Academic Operations"), sectionIcon: "graduation", label: studentPlural, route: "/app/eduedge-students", icon: "students", description: __(`${studentSingular} records and profiles`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: programmePlural, route: "/app/eduedge-programs", icon: "book", description: __(`${programmePlural} catalogue`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: offeringPlural, route: "/app/eduedge-program-offerings", icon: "layers", description: __(`${programmePlural} by campus and ${academicYear}`) },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Academic Foundation"), route: "/app/eduedge-academic-foundation", icon: "book", description: __(`${sectionPlural}, ${levelPlural}, and calendars`) },
@@ -42,7 +47,7 @@ export function buildEduEdgeMenuItems() {
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("CBT Schedules"), route: "/app/eduedge-cbt-schedules", icon: "calendar", description: __("Schedules, candidates, check-in, release, and interventions") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("CBT Invigilation"), route: "/app/eduedge-cbt-invigilation", icon: "monitor", description: __("Live candidates, sync health, and result readiness") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("CBT Scoring & Marking"), route: "/app/eduedge-cbt-marking", icon: "edit", description: __("Objective scoring, written-response marking, and approval") },
-		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("CBT Attempt Review"), route: "/app/eduedge-cbt-attempt-review", icon: "shield", description: __("Resolve integrity flags before scoring") },
+		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("CBT Attempt Review"), route: "/app/eduedge-cbt-review-workbench", icon: "shield", description: __("Resolve integrity flags before scoring") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Exam Templates"), route: "/app/eduedge-exam-templates", icon: "layers", description: __("Reusable Universal, Institution, Branch, and Subject exam designs") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Question Bank"), route: "/app/eduedge-question-bank", icon: "book", description: __("Search and review governed CBT questions") },
 		{ section: __("Academics and Outcomes"), sectionIcon: "assessment", label: __("Question Responsibilities"), route: "/app/eduedge-question-responsibilities", icon: "shield", description: __("Scoped question authors, subject reviewers, and final approvers") },
@@ -61,41 +66,30 @@ export function buildEduEdgeMenuItems() {
 		{ section: __("Help & Training"), sectionIcon: "book", label: __("Training Centre"), route: "/app/eduedge-training-centre", icon: "book", description: __("Role-based guided learning") },
 	];
 
-	return Object.freeze(items.filter((item) => hasEduEdgeRouteAccess(item.route)));
+	return items.filter((item) => hasEduEdgeRouteAccess(item.route));
 }
 
-export const EDUEDGE_MENU_ITEMS = buildEduEdgeMenuItems();
+export const EDUEDGE_MENU_ITEMS = reactive([]);
+
+export function refreshEduEdgeMenuItems() {
+	EDUEDGE_MENU_ITEMS.splice(0, EDUEDGE_MENU_ITEMS.length, ...buildEduEdgeMenuItems());
+	return EDUEDGE_MENU_ITEMS;
+}
+
+refreshEduEdgeMenuItems();
+window.addEventListener("eduedge:institution-context-changed", refreshEduEdgeMenuItems);
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
-	"/app/eduedge-home",
-	"/app/eduedge-my-profile",
-	"/app/eduedge-academic-operations",
-	"/app/eduedge-admissions",
-	"/app/eduedge-applicants",
-	"/app/eduedge-students",
-	"/app/eduedge-programs",
-	"/app/eduedge-program-offerings",
-	"/app/eduedge-academic-foundation",
-	"/app/eduedge-cbt-operations",
-	"/app/eduedge-cbt-schedules",
-	"/app/eduedge-cbt-invigilation",
-	"/app/eduedge-cbt-marking",
-	"/app/eduedge-cbt-attempt-review",
-	"/app/eduedge-exam-templates",
-	"/app/eduedge-exam-template-builder",
-	"/app/eduedge-question-bank",
-	"/app/eduedge-question-responsibilities",
-	"/app/eduedge-question-builder",
-	"/app/eduedge-question-batch",
-	"/app/eduedge-assessment-operations",
-	"/app/eduedge-report-cards",
-	"/app/eduedge-institution-profile",
-	"/app/eduedge-school-branches",
-	"/app/eduedge-institution-structure",
-	"/app/eduedge-institution-operations-settings",
-	"/app/eduedge-branch-governance",
-	"/app/eduedge-setup-center",
-	"/app/eduedge-settings-center",
+	"/app/eduedge-home", "/app/eduedge-my-profile", "/app/eduedge-academic-operations",
+	"/app/eduedge-admissions", "/app/eduedge-applicants", "/app/eduedge-students",
+	"/app/eduedge-programs", "/app/eduedge-program-offerings", "/app/eduedge-academic-foundation",
+	"/app/eduedge-cbt-operations", "/app/eduedge-cbt-schedules", "/app/eduedge-cbt-invigilation",
+	"/app/eduedge-cbt-marking", "/app/eduedge-cbt-review-workbench", "/app/eduedge-exam-templates",
+	"/app/eduedge-exam-template-builder", "/app/eduedge-question-bank", "/app/eduedge-question-responsibilities",
+	"/app/eduedge-question-builder", "/app/eduedge-question-batch", "/app/eduedge-assessment-operations",
+	"/app/eduedge-report-cards", "/app/eduedge-institution-profile", "/app/eduedge-school-branches",
+	"/app/eduedge-institution-structure", "/app/eduedge-institution-operations-settings",
+	"/app/eduedge-branch-governance", "/app/eduedge-setup-center", "/app/eduedge-settings-center",
 	"/app/eduedge-training-centre",
 ]);
 
@@ -117,7 +111,6 @@ export function openEduEdgeRoute(route) {
 		window.location.href = route;
 		return;
 	}
-
 	const opened = window.open(route, "_blank", "noopener,noreferrer");
 	if (opened) opened.opener = null;
 }
