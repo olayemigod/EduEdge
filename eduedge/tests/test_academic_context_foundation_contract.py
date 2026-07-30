@@ -99,7 +99,7 @@ class AcademicContextFoundationContractTest(unittest.TestCase):
 		self.assertIn('"source": "institution_calendar" if calendar else "institution_calendar_missing"', resolver)
 		self.assertIn('"academic_term": period.academic_term if period else None', resolver)
 		self.assertIn("assert_institution_calendar_context", resolver)
-		self.assertIn("academic_operations_review.get_operations_context", hooks)
+		self.assertIn("integration_qa_hardening.get_operations_context", hooks)
 
 	def test_academic_lookup_api_is_allowlisted_and_permission_aware(self):
 		api = (APP / "api" / "academic_context.py").read_text()

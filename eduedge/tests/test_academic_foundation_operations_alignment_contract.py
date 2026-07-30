@@ -33,7 +33,7 @@ class TestAcademicFoundationOperationsAlignmentContract(unittest.TestCase):
 		self.assertIn("def _effective_calendar", api)
 		self.assertIn("covering =", api)
 		self.assertIn('"current_calendar": effective.get("name") if effective else None', api)
-		self.assertIn('"eduedge.api.academic_foundation.get_academic_foundation": "eduedge.api.academic_foundation_safe.get_academic_foundation"', hooks)
+		self.assertIn('"eduedge.api.academic_foundation.get_academic_foundation": "eduedge.api.integration_qa_hardening.get_academic_foundation"', hooks)
 
 	def test_native_hierarchy_terminology_distinguishes_section_class_and_arm(self):
 		fields = (APP / "education" / "academic_fields.py").read_text()
@@ -83,7 +83,7 @@ class TestAcademicFoundationOperationsAlignmentContract(unittest.TestCase):
 		self.assertIn("calendarReady", component)
 		self.assertIn("hierarchy_label", component)
 		self.assertNotIn("academic_level_name", component)
-		self.assertIn("academic_operations_review.get_operations_context", hooks)
+		self.assertIn("integration_qa_hardening.get_operations_context", hooks)
 
 	def test_native_forms_clear_invalid_dependent_context(self):
 		group_js = (APP / "public" / "js" / "education" / "student_group.js").read_text()

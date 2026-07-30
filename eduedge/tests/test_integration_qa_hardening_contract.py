@@ -42,9 +42,9 @@ class IntegrationQAHardeningContractTest(unittest.TestCase):
 		self.assertIn("registerEduEdgeResourcePage", content)
 		self.assertIn('resourceKey: "school_branches"', content)
 
-	def test_attempt_review_loader_has_canonical_runtime_and_visible_timeout(self):
+	def test_attempt_review_loader_has_edgesuite_runtime_and_visible_timeout(self):
 		content = self.read("eduedge/page/eduedge_cbt_attempt_review/eduedge_cbt_attempt_review.js")
-		self.assertIn('frappe.require("edgeui.bundle.js"', content)
+		self.assertIn('frappe.require("edgesuite_ui.bundle.js"', content)
 		self.assertIn('frappe.require("eduedge_cbt_attempt_review.bundle.js"', content)
 		self.assertIn("createEduEdgeCBTAttemptReviewApp", content)
 		self.assertIn("setTimeout", content)

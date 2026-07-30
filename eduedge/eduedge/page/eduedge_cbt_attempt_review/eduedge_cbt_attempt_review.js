@@ -36,7 +36,7 @@ frappe.pages["eduedge-cbt-attempt-review"].on_page_show = function (wrapper) {
 		15000
 	);
 
-	frappe.require("edgeui.bundle.js", () => {
+	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId || completed) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {
