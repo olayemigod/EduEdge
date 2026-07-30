@@ -4,8 +4,12 @@ function programmeSection(programmes, programmeName) {
 
 function levelsForProgramme(levels, programmes, programmeName) {
 	const section = programmeSection(programmes, programmeName);
-	if (!section) return [...levels];
-	return levels.filter((row) => !row.academic_section || row.academic_section === section);
+	if (!programmeName) return [...levels];
+	// A classified Programme may only use Classes / Levels in its own School
+	// Section. An unclassified legacy Programme may use only unclassified levels;
+	// it must never expose every section's hierarchy as a fallback.
+	if (!section) return levels.filter((row) => !row.academic_section);
+	return levels.filter((row) => row.academic_section === section);
 }
 
 function clearInvalidLevel(target, levels) {
