@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import getdate, nowdate
 
 from eduedge.education.academic_fields import ACADEMIC_LEVEL_FIELD, INSTITUTION_FIELD, OFFERING_FIELD
+from eduedge.education.academic_progression import OFFERING_LEVEL_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access
 
@@ -24,7 +25,7 @@ def get_offering(
 		name,
 		[
 			"name", "offering_title", "offering_code", "school_branch", "institution", "program",
-			"department", ACADEMIC_LEVEL_FIELD, "academic_year", "academic_term", "student_batch",
+			"department", OFFERING_LEVEL_FIELD, "academic_year", "academic_term", "student_batch",
 			"capacity", "is_active", "admission_enabled", "enrollment_enabled",
 			"application_start_date", "application_end_date",
 		],
@@ -54,7 +55,7 @@ def offering_context(offering: frappe._dict | None) -> frappe._dict:
 			OFFERING_FIELD: offering.name,
 			INSTITUTION_FIELD: offering.institution,
 			BRANCH_FIELD: offering.school_branch,
-			ACADEMIC_LEVEL_FIELD: offering.get(ACADEMIC_LEVEL_FIELD),
+			ACADEMIC_LEVEL_FIELD: offering.get(OFFERING_LEVEL_FIELD),
 		}
 	)
 
@@ -101,7 +102,7 @@ def _matching_offerings(doc, *, purpose: str) -> list[frappe._dict]:
 		PURPOSE_FIELD[purpose]: 1,
 	}
 	if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) and doc.get(ACADEMIC_LEVEL_FIELD):
-		filters[ACADEMIC_LEVEL_FIELD] = doc.get(ACADEMIC_LEVEL_FIELD)
+		filters[OFFERING_LEVEL_FIELD] = doc.get(ACADEMIC_LEVEL_FIELD)
 	rows = frappe.get_all(
 		"EduEdge Program Offering",
 		filters=filters,
@@ -117,7 +118,7 @@ def apply_offering_context(doc, offering: frappe._dict) -> None:
 	mapping = {
 		BRANCH_FIELD: "school_branch",
 		INSTITUTION_FIELD: "institution",
-		ACADEMIC_LEVEL_FIELD: ACADEMIC_LEVEL_FIELD,
+		ACADEMIC_LEVEL_FIELD: OFFERING_LEVEL_FIELD,
 		"program": "program",
 		"academic_year": "academic_year",
 		"academic_term": "academic_term",
