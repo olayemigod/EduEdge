@@ -8,6 +8,8 @@ from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access, par
 
 ALLOWED_SCOPED_QUERY_DOCTYPES = {
 	"EduEdge Institution",
+	"Department",
+	# Deprecated masters remain allowlisted for privileged migration screens only.
 	"EduEdge Academic Section",
 	"EduEdge Academic Level",
 }
@@ -31,18 +33,9 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 		return []
 	assert_branch_access(branch)
 	purpose_field = PURPOSE_FIELD[purpose]
-	params = {
-		"branch": branch,
-		"txt": f"%{txt or ''}%",
-		"start": int(start),
-		"page_len": int(page_len),
-	}
-	conditions = [
-		"offering.school_branch = %(branch)s",
-		"offering.is_active = 1",
-		f"offering.`{purpose_field}` = 1",
-	]
-	for fieldname in ("program", "academic_year"):
+	params = {"branch": branch, "txt": f"%{txt or ''}%", "start": int(start), "page_len": int(page_len)}
+	conditions = ["offering.school_branch = %(branch)s", "offering.is_active = 1", f"offering.`{purpose_field}` = 1"]
+	for fieldname in ("program", "department", "academic_year"):
 		if filters.get(fieldname):
 			conditions.append(f"offering.`{fieldname}` = %({fieldname})s")
 			params[fieldname] = filters[fieldname]
@@ -52,7 +45,7 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 	rows = frappe.db.sql(
 		f"""
 		select offering.name, offering.offering_title, offering.offering_code,
-			offering.program, offering.academic_year, offering.academic_term,
+			offering.program, offering.department, offering.academic_year, offering.academic_term,
 			offering.study_mode, offering.delivery_mode
 		from `tabEduEdge Program Offering` offering
 		where {' and '.join(conditions)}
@@ -60,6 +53,7 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 				offering.name like %(txt)s
 				or coalesce(offering.offering_title, '') like %(txt)s
 				or coalesce(offering.offering_code, '') like %(txt)s
+				or coalesce(offering.department, '') like %(txt)s
 			)
 		order by offering.offering_title asc, offering.modified desc
 		limit %(start)s, %(page_len)s
@@ -72,17 +66,7 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 			row.name,
 			row.offering_title or row.name,
 			row.offering_code,
-			" · ".join(
-				value
-				for value in (
-					row.program,
-					row.academic_year,
-					row.academic_term,
-					row.study_mode,
-					row.delivery_mode,
-				)
-				if value
-			),
+			" · ".join(value for value in (row.department, row.program, row.academic_year, row.academic_term, row.study_mode, row.delivery_mode) if value),
 		]
 		for row in rows
 	]
@@ -100,10 +84,13 @@ def institution_scoped_query(doctype, txt, searchfield, start, page_len, filters
 	institution = filters.get(INSTITUTION_FIELD) or filters.get("institution")
 	meta = frappe.get_meta(doctype)
 	query_filters = {"enabled": 1} if meta.has_field("enabled") else {}
-	if institution and meta.has_field("institution"):
-		query_filters["institution"] = institution
+	institution_fieldname = "institution" if meta.has_field("institution") else INSTITUTION_FIELD
+	if institution and meta.has_field(institution_fieldname):
+		query_filters[institution_fieldname] = institution
+	if meta.has_field("disabled"):
+		query_filters["disabled"] = 0
 	fields = ["name"]
-	for candidate in ("section_name", "level_name", "institution_name", "title"):
+	for candidate in ("department_name", "section_name", "level_name", "institution_name", "title"):
 		if meta.has_field(candidate):
 			fields.append(candidate)
 	rows = frappe.get_list(
@@ -113,7 +100,7 @@ def institution_scoped_query(doctype, txt, searchfield, start, page_len, filters
 		fields=fields,
 		start=int(start),
 		page_length=int(page_len),
-		order_by="sequence asc, modified desc" if meta.has_field("sequence") else "modified desc",
+		order_by="lft asc" if doctype == "Department" else ("sequence asc, modified desc" if meta.has_field("sequence") else "modified desc"),
 	)
 	return [[row.name, next((row.get(field) for field in fields[1:] if row.get(field)), row.name)] for row in rows]
 
@@ -129,10 +116,9 @@ def get_programme_offering_context(offering: str) -> dict:
 		"school_branch": doc.school_branch,
 		"institution": doc.institution,
 		"program": doc.program,
+		"department": doc.department,
 		"academic_year": doc.academic_year,
 		"academic_term": doc.academic_term,
-		"academic_section": doc.academic_section,
-		"academic_level": doc.academic_level,
 		"student_batch": doc.student_batch,
 		"study_mode": doc.study_mode,
 		"delivery_mode": doc.delivery_mode,
