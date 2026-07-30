@@ -6,11 +6,10 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from eduedge.education.academic_fields import ACADEMIC_LEVEL_FIELD
+from eduedge.education.academic_progression import OFFERING_LEVEL_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.services.branch_context import (
-	get_allowed_school_branches,
-	get_current_school_branch,
-)
+from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
 Purpose = Literal["admission", "enrollment"]
 PURPOSE_FIELD = {
@@ -25,6 +24,7 @@ def validate_program_offering(
 	program: str | None,
 	academic_year: str | None,
 	academic_term: str | None = None,
+	academic_level: str | None = None,
 	purpose: Purpose,
 	reference_date: str | None = None,
 ) -> dict:
@@ -40,13 +40,14 @@ def validate_program_offering(
 		program=program,
 		academic_year=academic_year,
 		academic_term=academic_term,
+		academic_level=academic_level,
 		purpose=purpose,
 	)
 	if not rows:
 		frappe.throw(
-			_(
-				"Program {0} is not enabled for {1} at School Branch / Campus {2} for Academic Year {3}."
-			).format(program, purpose, branch, academic_year),
+			_("Program {0} is not enabled for {1} at School Branch / Campus {2} for Academic Year {3}.").format(
+				program, purpose, branch, academic_year
+			),
 			frappe.ValidationError,
 		)
 
@@ -65,6 +66,11 @@ def validate_program_offering(
 			)
 		rows = open_rows
 
+	if len(rows) > 1 and not academic_level:
+		frappe.throw(
+			_("More than one Programme Offering matches this Program and period. Select the exact Offering or Academic Level."),
+			frappe.ValidationError,
+		)
 	return rows[0]
 
 
@@ -74,29 +80,34 @@ def get_matching_offerings(
 	program: str,
 	academic_year: str,
 	academic_term: str | None,
+	academic_level: str | None,
 	purpose: Purpose,
 ) -> list[dict]:
 	purpose_field = PURPOSE_FIELD[purpose]
+	filters = {
+		"school_branch": branch,
+		"program": program,
+		"academic_year": academic_year,
+		"is_active": 1,
+		purpose_field: 1,
+	}
+	if academic_level:
+		filters[OFFERING_LEVEL_FIELD] = academic_level
 	rows = frappe.get_all(
 		"EduEdge Program Offering",
-		filters={
-			"school_branch": branch,
-			"program": program,
-			"academic_year": academic_year,
-			"is_active": 1,
-			purpose_field: 1,
-		},
+		filters=filters,
 		fields=[
 			"name",
 			"school_branch",
 			"program",
+			OFFERING_LEVEL_FIELD,
 			"academic_year",
 			"academic_term",
 			"application_start_date",
 			"application_end_date",
 			"capacity",
 		],
-		order_by="academic_term asc, modified desc",
+		order_by="academic_level asc, academic_term asc, modified desc",
 	)
 	if academic_term:
 		return [
@@ -123,12 +134,19 @@ def validate_student_admission(doc) -> None:
 				frappe.ValidationError,
 			)
 		seen.add(row.program)
-		validate_program_offering(
+		matching = get_matching_offerings(
 			branch=branch,
 			program=row.program,
 			academic_year=doc.academic_year,
+			academic_term=None,
+			academic_level=None,
 			purpose="admission",
 		)
+		if not matching:
+			frappe.throw(
+				_("Program {0} has no active admission Offering for this Branch and Academic Year.").format(row.program),
+				frappe.ValidationError,
+			)
 
 
 def validate_student_applicant(doc) -> None:
@@ -182,6 +200,7 @@ def validate_student_applicant(doc) -> None:
 		program=doc.program,
 		academic_year=doc.academic_year,
 		academic_term=doc.academic_term,
+		academic_level=doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None,
 		purpose="admission",
 		reference_date=doc.application_date or nowdate(),
 	)
@@ -198,6 +217,7 @@ def validate_program_enrollment(doc) -> None:
 		program=doc.program,
 		academic_year=doc.academic_year,
 		academic_term=doc.academic_term,
+		academic_level=doc.get(ACADEMIC_LEVEL_FIELD) if doc.meta.has_field(ACADEMIC_LEVEL_FIELD) else None,
 		purpose="enrollment",
 	)
 
@@ -208,9 +228,7 @@ def get_context_branch() -> str | None:
 		if current:
 			return current.get("name")
 	settings_branch = frappe.db.get_single_value("EduEdge Settings", "default_school_branch")
-	if settings_branch and frappe.db.get_value(
-		"EduEdge School Branch", settings_branch, "enabled"
-	):
+	if settings_branch and frappe.db.get_value("EduEdge School Branch", settings_branch, "enabled"):
 		return settings_branch
 	branches = frappe.get_all(
 		"EduEdge School Branch",
