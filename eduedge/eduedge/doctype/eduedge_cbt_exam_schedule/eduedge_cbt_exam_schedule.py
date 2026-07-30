@@ -5,7 +5,7 @@ from datetime import timedelta
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, get_datetime, now_datetime
+from frappe.utils import cint, flt, get_datetime, now_datetime
 
 from eduedge.cbt.public_access import require_public_exam_authoring
 from eduedge.cbt.schedule_governance import (
@@ -76,6 +76,8 @@ ACADEMIC_CONTEXT_FIELDS = (
 	"academic_term",
 	"program",
 	"assessment_group",
+	"assessment_plan",
+	"maximum_assessment_score",
 )
 
 PROTECTED_AFTER_CANDIDATE_CONFIRMATION = (
@@ -146,6 +148,7 @@ class EduEdgeCBTExamSchedule(Document):
 		self._validate_scope()
 		self._validate_template_applicability(template)
 		self._validate_academic_context()
+		self._validate_assessment_plan(template)
 		self._validate_centre()
 		self._validate_timing()
 		self._validate_operational_policy()
@@ -404,6 +407,70 @@ class EduEdgeCBTExamSchedule(Document):
 					_("The selected Programme does not belong to the Schedule {0}.").format(label),
 					frappe.ValidationError,
 				)
+
+	def _validate_assessment_plan(self, template) -> None:
+		if self.exam_scope != SCHOOL_EXAM:
+			return
+		if self.status in {"Ready", "Active"} and not self.assessment_plan:
+			frappe.throw(
+				_("Select a submitted Assessment Plan before the School Examination Schedule becomes Ready."),
+				frappe.ValidationError,
+			)
+		if not self.assessment_plan:
+			self.maximum_assessment_score = 0
+			return
+
+		plan = frappe.get_doc("Assessment Plan", self.assessment_plan)
+		if not frappe.has_permission("Assessment Plan", "read", doc=plan):
+			frappe.throw(_("You are not permitted to use this Assessment Plan."), frappe.PermissionError)
+		if plan.docstatus != 1:
+			frappe.throw(_("The Assessment Plan selected for CBT Result Sync must be submitted."), frappe.ValidationError)
+		if plan.get(BRANCH_FIELD) != self.school_branch:
+			frappe.throw(_("Assessment Plan Branch must match the actual Schedule Branch."), frappe.ValidationError)
+		if plan.course != self.course:
+			frappe.throw(
+				_("Assessment Plan Subject / Course must match the actual Schedule Subject / Course."),
+				frappe.ValidationError,
+			)
+		if not self.student_group or plan.student_group != self.student_group:
+			frappe.throw(
+				_("Assessment Plan Student Group must match the actual Schedule Student Group / Class."),
+				frappe.ValidationError,
+			)
+
+		for fieldname, label in (
+			("academic_year", _("Academic Year")),
+			("academic_term", _("Academic Term")),
+			("assessment_group", _("Assessment Group")),
+		):
+			schedule_value = self.get(fieldname)
+			plan_value = plan.get(fieldname)
+			if schedule_value and plan_value != schedule_value:
+				frappe.throw(
+					_("Assessment Plan {0} must match the actual Schedule context.").format(label),
+					frappe.ValidationError,
+				)
+
+		criteria = list(plan.get("assessment_criteria") or [])
+		if len(criteria) != 1:
+			frappe.throw(
+				_("CBT Result Sync V1.1 requires an Assessment Plan with exactly one Assessment Criterion."),
+				frappe.ValidationError,
+			)
+		template_total = flt(template.total_marks)
+		plan_total = flt(plan.maximum_assessment_score)
+		criterion_total = flt(criteria[0].maximum_score)
+		if (
+			not template_total
+			or abs(plan_total - template_total) > 0.0001
+			or abs(criterion_total - plan_total) > 0.0001
+		):
+			frappe.throw(
+				_("Assessment Plan maximum score and its single criterion must equal the approved CBT Template total marks."),
+				frappe.ValidationError,
+			)
+
+		self.maximum_assessment_score = plan_total
 
 	def _validate_centre(self) -> None:
 		if not self.examination_centre:

@@ -50,6 +50,9 @@ RESOURCE_DOCTYPES = {
 	"cbt_schedule": "EduEdge CBT Exam Schedule",
 	"cbt_candidate_assignment": "EduEdge CBT Candidate Assignment",
 	"cbt_intervention_log": "EduEdge CBT Intervention Log",
+	"cbt_attempt": "EduEdge CBT Attempt",
+	"cbt_attempt_review": "EduEdge CBT Attempt Review",
+	"cbt_result": "EduEdge CBT Result",
 	"eduedge_settings": "EduEdge Settings",
 	"training_course": "EduEdge Training Course",
 	"training_progress": "EduEdge Training Progress",
@@ -64,6 +67,13 @@ ROUTE_REQUIREMENTS = {
 	# My Profile is a self-service page. The API fixes the target to the logged-in
 	# User and the profile permission hook restricts records to that same User.
 	"/app/eduedge-my-profile": (),
+	"/app/eduedge-academic-foundation": (
+		("academic_year", "read"),
+		("academic_term", "read"),
+		("program", "read"),
+		("course", "read"),
+		("topic", "read"),
+	),
 	"/app/eduedge-academic-operations": (
 		("student_attendance", "create"),
 		("student_attendance", "write"),
@@ -92,6 +102,13 @@ ROUTE_REQUIREMENTS = {
 	),
 	"/app/eduedge-question-bank": (("cbt_question", "read"),),
 	"/app/eduedge-question-responsibilities": (("question_responsibility_assignment", "read"),),
+	"/app/eduedge-cbt-invigilation": (
+		("cbt_schedule", "read"),
+		("cbt_candidate_assignment", "read"),
+		("cbt_attempt", "read"),
+	),
+	"/app/eduedge-cbt-marking": (("cbt_result", "write"),),
+	"/app/eduedge-cbt-attempt-review": (("cbt_attempt_review", "create"),),
 	"/app/eduedge-question-builder": (
 		("cbt_question", "read"),
 		("cbt_question", "create"),
@@ -110,6 +127,10 @@ ROUTE_REQUIREMENTS = {
 		("assessment_result", "read"),
 	),
 	"/app/eduedge-institution-profile": (("institution", "read"),),
+	"/app/eduedge-institution-structure": (
+		("institution", "read"),
+		("school_branch", "read"),
+	),
 	"/app/eduedge-school-branches": (("school_branch", "read"),),
 	"/app/eduedge-institution-operations-settings": (
 		("institution", "read"),

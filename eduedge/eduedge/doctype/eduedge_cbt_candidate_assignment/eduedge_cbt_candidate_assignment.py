@@ -181,6 +181,7 @@ class EduEdgeCBTCandidateAssignment(Document):
 		self._schedule = schedule
 
 	def _apply_schedule_context(self) -> None:
+		# Candidate class and subject are locked on the examination schedule.
 		schedule = self._schedule
 		self.exam_template = schedule.exam_template
 		self.exam_scope = schedule.exam_scope

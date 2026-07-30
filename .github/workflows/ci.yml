@@ -41,6 +41,12 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_cbt_exam_template/eduedge_cbt_exam_template.js
           node --check eduedge/eduedge/doctype/eduedge_cbt_exam_schedule/eduedge_cbt_exam_schedule.js
           node --check eduedge/eduedge/doctype/eduedge_cbt_candidate_assignment/eduedge_cbt_candidate_assignment.js
+          node --check eduedge/public/js/eduedge_cbt_runtime_storage.js
+          node --check eduedge/public/js/eduedge_cbt_candidate.js
+          node --check eduedge/public/js/eduedge_cbt_candidate_serialization.js
+          node --check eduedge/public/js/eduedge_cbt_invigilation.bundle.js
+          node --check eduedge/public/js/eduedge_cbt_marking.bundle.js
+          node --check eduedge/public/js/eduedge_cbt_attempt_review.bundle.js
           node --check eduedge/public/js/eduedge_ui/app_factory.js
           node --check eduedge/public/js/eduedge_ui/native_frappe_dialog.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
@@ -85,6 +91,9 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_exam_template_builder/eduedge_exam_template_builder.js
           node --check eduedge/eduedge/page/eduedge_question_bank/eduedge_question_bank.js
           node --check eduedge/eduedge/page/eduedge_question_responsibilities/eduedge_question_responsibilities.js
+          node --check eduedge/eduedge/page/eduedge_cbt_invigilation/eduedge_cbt_invigilation.js
+          node --check eduedge/eduedge/page/eduedge_cbt_marking/eduedge_cbt_marking.js
+          node --check eduedge/eduedge/page/eduedge_cbt_attempt_review/eduedge_cbt_attempt_review.js
           node --check eduedge/eduedge/page/eduedge_question_builder/eduedge_question_builder.js
           node --check eduedge/eduedge/page/eduedge_question_batch/eduedge_question_batch.js
           node --check eduedge/eduedge/page/eduedge_assessment_operations/eduedge_assessment_operations.js
