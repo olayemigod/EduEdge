@@ -3,6 +3,7 @@ from __future__ import annotations
 from mimetypes import guess_type
 from pathlib import Path
 
+import filetype
 import frappe
 from frappe import _
 from frappe.utils.file_manager import save_file
@@ -34,9 +35,15 @@ def _uploaded_image() -> tuple[str, bytes]:
 		frappe.throw(_("Profile photos must not exceed 2 MB."), frappe.ValidationError)
 
 	extension = Path(filename).suffix.lower()
-	mimetype = (guess_type(filename)[0] or "").lower()
-	if extension not in ALLOWED_IMAGE_EXTENSIONS or mimetype not in ALLOWED_IMAGE_MIMETYPES:
-		frappe.throw(_("Only JPG, PNG, and WebP images are allowed."), frappe.ValidationError)
+	declared_mimetype = (guess_type(filename)[0] or "").lower()
+	detected_kind = filetype.guess(content)
+	detected_mimetype = (detected_kind.mime if detected_kind else "").lower()
+	if (
+		extension not in ALLOWED_IMAGE_EXTENSIONS
+		or declared_mimetype not in ALLOWED_IMAGE_MIMETYPES
+		or detected_mimetype not in ALLOWED_IMAGE_MIMETYPES
+	):
+		frappe.throw(_("Only genuine JPG, PNG, and WebP images are allowed."), frappe.ValidationError)
 	return filename, content
 
 
