@@ -9,6 +9,7 @@ from eduedge.security.cbt_candidate_requests import (
 	enforce_candidate_request,
 	is_candidate_command,
 )
+from eduedge.security.feature_gate import enforce_feature_for_command
 
 
 POST_ONLY_MUTATION_PREFIXES = (
@@ -72,7 +73,7 @@ def _reject_non_post() -> None:
 
 
 def enforce_post_for_mutations() -> None:
-	"""Protect all EduEdge mutations and public CBT requests before dispatch.
+	"""Protect feature access, all EduEdge mutations, and public CBT requests.
 
 	The request-boundary control also covers methods redirected through
 	override_whitelisted_methods, so legacy source decorators cannot reopen a GET
@@ -83,6 +84,8 @@ def enforce_post_for_mutations() -> None:
 	if not method:
 		return
 	command = _request_command()
+	if command.startswith("eduedge."):
+		enforce_feature_for_command(command)
 	if is_candidate_command(command):
 		if method == "OPTIONS":
 			return
