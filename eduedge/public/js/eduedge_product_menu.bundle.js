@@ -1,5 +1,8 @@
 const EDUEDGE_PRODUCT_KEY = "eduedge";
 const COMMAND_RESULT_LIMIT = 12;
+const FAVORITES_STATE_VERSION = "v1";
+const DENSITY_STATE_VERSION = "v1";
+const DENSITY_MODES = new Set(["comfortable", "compact", "touch"]);
 let activeCommandDialog = null;
 
 function term(key, { plural = false, fallback = "" } = {}) {
@@ -8,6 +11,54 @@ function term(key, { plural = false, fallback = "" } = {}) {
 
 function item(label, description, icon, route, extra = {}) {
 	return { label, description, icon, route, ...extra };
+}
+
+function normalizeRoute(route) {
+	try {
+		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+	} catch (_error) {
+		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
+	}
+}
+
+function preferenceKey(kind, version) {
+	return `edgeui:eduedge:${kind}:${version}:${frappe.session?.user || "Guest"}`;
+}
+
+function readFavorites() {
+	try {
+		const value = JSON.parse(localStorage.getItem(preferenceKey("favorites", FAVORITES_STATE_VERSION)) || "[]");
+		return Array.isArray(value) ? value.map(normalizeRoute).filter(Boolean) : [];
+	} catch (_error) {
+		return [];
+	}
+}
+
+function writeFavorites(routes) {
+	const normalized = [...new Set((routes || []).map(normalizeRoute).filter(Boolean))].slice(0, 12);
+	localStorage.setItem(preferenceKey("favorites", FAVORITES_STATE_VERSION), JSON.stringify(normalized));
+	window.dispatchEvent(new CustomEvent("edgesuite:favorites-changed", { detail: { product: EDUEDGE_PRODUCT_KEY, routes: normalized } }));
+	return normalized;
+}
+
+function toggleFavorite(route) {
+	const normalized = normalizeRoute(route);
+	const routes = readFavorites();
+	const next = routes.includes(normalized) ? routes.filter((value) => value !== normalized) : [...routes, normalized];
+	return writeFavorites(next);
+}
+
+function getDensity() {
+	const stored = localStorage.getItem(preferenceKey("density", DENSITY_STATE_VERSION)) || "compact";
+	return DENSITY_MODES.has(stored) ? stored : "compact";
+}
+
+function setDensity(mode) {
+	const next = DENSITY_MODES.has(mode) ? mode : "compact";
+	localStorage.setItem(preferenceKey("density", DENSITY_STATE_VERSION), next);
+	document.documentElement.dataset.eduedgeDensity = next;
+	window.dispatchEvent(new CustomEvent("edgesuite:density-changed", { detail: { product: EDUEDGE_PRODUCT_KEY, density: next } }));
+	return next;
 }
 
 function featureEnabled(feature) {
@@ -135,20 +186,10 @@ function buildEduEdgeProductMenu() {
 				label: "Help & Training",
 				description: "Role-based learning, practice, and readiness",
 				icon: "book",
-				items: [
-					item("EduEdge Training Centre", "Step-by-step guides, flowcharts, videos, and progress", "book", "/app/eduedge-training-centre", { keywords: ["training", "guide", "help", "video", "onboarding"] }),
-				],
+				items: [item("EduEdge Training Centre", "Step-by-step guides, flowcharts, videos, and progress", "book", "/app/eduedge-training-centre", { keywords: ["training", "guide", "help", "video", "onboarding"] })],
 			},
 		],
 	};
-}
-
-function normalizeRoute(route) {
-	try {
-		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
-	} catch (_error) {
-		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
-	}
 }
 
 function itemAllowed(menuItem) {
@@ -166,33 +207,69 @@ function itemAllowed(menuItem) {
 
 function permissionFilteredMenu() {
 	const source = buildEduEdgeProductMenu();
-	const sections = source.sections
+	const baseSections = source.sections
 		.filter((section) => featureEnabled(section.feature))
 		.map((section) => ({
 			...section,
 			items: section.items.filter(itemAllowed).map(({ resource, permissions, ...menuItem }) => menuItem),
 		}))
 		.filter((section) => section.items.length);
-	return {
-		...source,
-		sections,
-		quick_actions: sections.flatMap((section) => section.items.filter((menuItem) => menuItem.quick_action)),
-	};
+	const favorites = new Set(readFavorites());
+	const favoriteItems = [];
+	const seenFavorites = new Set();
+	for (const section of baseSections) {
+		for (const menuItem of section.items) {
+			const route = normalizeRoute(menuItem.route);
+			if (!favorites.has(route) || seenFavorites.has(route)) continue;
+			favoriteItems.push({ ...menuItem, favorite: true });
+			seenFavorites.add(route);
+		}
+	}
+	const sections = [...baseSections];
+	if (favoriteItems.length) {
+		const insertAt = Math.max(0, sections.findIndex((section) => section.key === "overview") + 1);
+		sections.splice(insertAt, 0, {
+			key: "favorites",
+			label: __("Favorites"),
+			description: __("Your pinned EduEdge pages"),
+			icon: "star",
+			items: favoriteItems,
+		});
+	}
+	const quickActions = [];
+	const seenActions = new Set();
+	for (const section of baseSections) {
+		for (const menuItem of section.items) {
+			const route = normalizeRoute(menuItem.route);
+			if (!menuItem.quick_action || seenActions.has(route)) continue;
+			quickActions.push(menuItem);
+			seenActions.add(route);
+		}
+	}
+	return { ...source, sections, quick_actions: quickActions };
 }
 
 function commandEntries(menu = permissionFilteredMenu()) {
-	return menu.sections
-		.flatMap((section) =>
-			section.items.map((menuItem) => ({
+	const favorites = new Set(readFavorites());
+	const entries = new Map();
+	for (const section of menu.sections.filter((entry) => entry.key !== "favorites")) {
+		for (const menuItem of section.items) {
+			const route = normalizeRoute(menuItem.route);
+			if (!route || entries.has(route)) continue;
+			entries.set(route, {
 				...menuItem,
+				favorite: favorites.has(route),
 				section: section.label,
-				searchText: [menuItem.label, menuItem.description, section.label, ...(menuItem.keywords || [])]
-					.filter(Boolean)
-					.join(" ")
-					.toLowerCase(),
-			}))
-		)
-		.sort((left, right) => Number(Boolean(right.quick_action)) - Number(Boolean(left.quick_action)) || left.label.localeCompare(right.label));
+				searchText: [menuItem.label, menuItem.description, section.label, ...(menuItem.keywords || [])].filter(Boolean).join(" ").toLowerCase(),
+			});
+		}
+	}
+	return [...entries.values()].sort(
+		(left, right) =>
+			Number(Boolean(right.favorite)) - Number(Boolean(left.favorite)) ||
+			Number(Boolean(right.quick_action)) - Number(Boolean(left.quick_action)) ||
+			left.label.localeCompare(right.label)
+	);
 }
 
 function getProfile() {
@@ -206,6 +283,11 @@ function getProfile() {
 	};
 }
 
+function isEduEdgeSurface() {
+	const path = normalizeRoute(window.location.pathname);
+	return path === "/app/eduedge" || path.startsWith("/app/eduedge-") || path.startsWith("/desk/eduedge-");
+}
+
 function openEduEdgeCommandPalette() {
 	if (!isEduEdgeSurface() || !frappe.ui?.Dialog) return false;
 	if (activeCommandDialog) {
@@ -214,7 +296,7 @@ function openEduEdgeCommandPalette() {
 		return true;
 	}
 
-	const entries = commandEntries();
+	let entries = commandEntries();
 	const dialog = new frappe.ui.Dialog({
 		title: __("Search EduEdge"),
 		size: "large",
@@ -223,18 +305,31 @@ function openEduEdgeCommandPalette() {
 	const root = dialog.fields_dict.command_palette.$wrapper.empty()[0];
 	const shell = document.createElement("div");
 	shell.className = "eduedge-command-palette";
+	const controls = document.createElement("div");
+	controls.className = "eduedge-command-palette__controls";
 	const input = document.createElement("input");
 	input.type = "search";
 	input.className = "form-control eduedge-command-palette__input";
 	input.placeholder = __("Search pages, workbenches, and quick actions");
 	input.setAttribute("aria-label", __("Search EduEdge navigation"));
+	const density = document.createElement("select");
+	density.className = "form-control eduedge-command-palette__density";
+	density.setAttribute("aria-label", __("Display density"));
+	for (const [value, label] of [["compact", __("Compact")], ["comfortable", __("Comfortable")], ["touch", __("Touch")]]) {
+		const option = document.createElement("option");
+		option.value = value;
+		option.textContent = label;
+		density.appendChild(option);
+	}
+	density.value = getDensity();
+	controls.append(input, density);
 	const hint = document.createElement("div");
 	hint.className = "eduedge-command-palette__hint";
-	hint.textContent = __("Use ↑ and ↓ to move, Enter to open, and Esc to close.");
+	hint.textContent = __("Use ↑ and ↓ to move, Enter to open, and the star to pin a page.");
 	const list = document.createElement("div");
 	list.className = "eduedge-command-palette__results";
 	list.setAttribute("role", "listbox");
-	shell.append(input, hint, list);
+	shell.append(controls, hint, list);
 	root.appendChild(shell);
 
 	let results = entries.slice(0, COMMAND_RESULT_LIMIT);
@@ -256,9 +351,11 @@ function openEduEdgeCommandPalette() {
 			return;
 		}
 		results.forEach((entry, index) => {
+			const row = document.createElement("div");
+			row.className = `eduedge-command-palette__result${index === selectedIndex ? " is-selected" : ""}`;
 			const button = document.createElement("button");
 			button.type = "button";
-			button.className = `eduedge-command-palette__result${index === selectedIndex ? " is-selected" : ""}`;
+			button.className = "eduedge-command-palette__open";
 			button.setAttribute("role", "option");
 			button.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
 			const text = document.createElement("span");
@@ -271,12 +368,25 @@ function openEduEdgeCommandPalette() {
 			section.className = "eduedge-command-palette__section";
 			section.textContent = entry.section;
 			button.append(text, section);
-			button.addEventListener("mouseenter", () => {
+			const favorite = document.createElement("button");
+			favorite.type = "button";
+			favorite.className = "eduedge-command-palette__favorite";
+			favorite.textContent = entry.favorite ? "★" : "☆";
+			favorite.title = entry.favorite ? __("Remove from Favorites") : __("Add to Favorites");
+			favorite.setAttribute("aria-label", favorite.title);
+			favorite.addEventListener("click", () => {
+				toggleFavorite(entry.route);
+				entries = commandEntries();
+				filterResults();
+				registerEduEdgeProductMenu();
+			});
+			row.addEventListener("mouseenter", () => {
 				selectedIndex = index;
 				renderResults();
 			});
 			button.addEventListener("click", () => openEntry(entry));
-			list.appendChild(button);
+			row.append(button, favorite);
+			list.appendChild(row);
 		});
 	}
 
@@ -304,6 +414,7 @@ function openEduEdgeCommandPalette() {
 			dialog.hide();
 		}
 	});
+	density.addEventListener("change", () => setDensity(density.value));
 
 	dialog.__eduedgeCommandInput = input;
 	dialog.$wrapper.on("hidden.bs.modal", () => {
@@ -321,7 +432,7 @@ function registerEduEdgeProductMenu() {
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.registerProductMenu) return;
 		const menu = permissionFilteredMenu();
-		runtime.registerProductMenu({ ...menu, profile: getProfile(), commands: commandEntries(menu) });
+		runtime.registerProductMenu({ ...menu, profile: getProfile(), commands: commandEntries(menu).map(({ searchText, ...entry }) => entry) });
 		runtime.refreshProductMenu?.();
 		scheduleVisibleFriendlyNames();
 	});
@@ -339,32 +450,14 @@ function friendlyPairs() {
 	const assessment = term("assessment", { fallback: "Assessment" });
 	const assessments = term("assessment", { plural: true, fallback: "Assessments" });
 	return [
-		["Add School Branches", "Add School Branch"],
-		["Add School Branche", "Add School Branch"],
-		["School Branche", "School Branch"],
-		["Student Groups / Classes", groups],
-		["Student Groups", groups],
-		["Student Group", group],
-		["Student Applicants", applicants],
-		["Applicants", applicants],
-		["Students", students],
-		["Student", student],
-		["Program Offerings", offerings],
-		["Programme Offerings", offerings],
-		["Programs", programmes],
-		["Programmes", programmes],
-		["Program", programme],
-		["Programme", programme],
-		["Assessment Operations", `${assessment} Operations`],
-		["Assessment Plans", `${assessment} Plans`],
-		["Assessment Results", `${assessment} Results`],
+		["Add School Branches", "Add School Branch"], ["Add School Branche", "Add School Branch"], ["School Branche", "School Branch"],
+		["Student Groups / Classes", groups], ["Student Groups", groups], ["Student Group", group],
+		["Student Applicants", applicants], ["Applicants", applicants], ["Students", students], ["Student", student],
+		["Program Offerings", offerings], ["Programme Offerings", offerings], ["Programs", programmes], ["Programmes", programmes],
+		["Program", programme], ["Programme", programme], ["Assessment Operations", `${assessment} Operations`],
+		["Assessment Plans", `${assessment} Plans`], ["Assessment Results", `${assessment} Results`],
 		["Assessments & Results", `${assessments} & Results`],
 	].filter(([from, to]) => from && to && from !== to).sort((left, right) => right[0].length - left[0].length);
-}
-
-function isEduEdgeSurface() {
-	const path = normalizeRoute(window.location.pathname);
-	return path === "/app/eduedge" || path.startsWith("/app/eduedge-") || path.startsWith("/desk/eduedge-");
 }
 
 function replaceValue(value, pairs) {
@@ -411,6 +504,7 @@ function scheduleVisibleFriendlyNames() {
 }
 
 function initialiseEduEdgeMenu() {
+	setDensity(getDensity());
 	registerEduEdgeProductMenu();
 	scheduleVisibleFriendlyNames();
 	if (!window.__eduedgeFriendlyNameObserver && document.body) {
@@ -420,16 +514,15 @@ function initialiseEduEdgeMenu() {
 }
 
 window.openEduEdgeCommandPalette = openEduEdgeCommandPalette;
+window.setEduEdgeDensity = setDensity;
 window.addEventListener("edgesuite:command-palette-request", (event) => {
 	if (event.detail?.handled || !isEduEdgeSurface()) return;
 	event.detail.handled = openEduEdgeCommandPalette();
 });
+window.addEventListener("edgesuite:favorites-changed", registerEduEdgeProductMenu);
 
-if (document.readyState === "loading") {
-	document.addEventListener("DOMContentLoaded", initialiseEduEdgeMenu, { once: true });
-} else {
-	initialiseEduEdgeMenu();
-}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialiseEduEdgeMenu, { once: true });
+else initialiseEduEdgeMenu();
 
 ["desktop_screen", "sidebar_setup", "toolbar_setup", "page-change"].forEach((eventName) => {
 	document.addEventListener(eventName, initialiseEduEdgeMenu);
