@@ -6,6 +6,8 @@ import frappe
 from frappe.permissions import get_valid_perms
 from frappe.utils import cint
 
+from eduedge.security.feature_gate import feature_for_route, is_feature_enabled
+
 
 PERMISSION_TYPES = (
 	"read",
@@ -232,7 +234,7 @@ def _route_allowed(
 def build_access_manifest(user: str | None = None) -> dict:
 	resolved_user = user or frappe.session.user
 	if not resolved_user or resolved_user == "Guest":
-		return {"resources": {}, "routes": {}, "can_access_eduedge": False}
+		return {"resources": {}, "routes": {}, "features": {}, "can_access_eduedge": False}
 
 	resources = {
 		key: _resource_permissions(doctype, resolved_user)
@@ -245,6 +247,17 @@ def build_access_manifest(user: str | None = None) -> dict:
 	for route in _installed_eduedge_page_routes():
 		routes.setdefault(route, False)
 
+	features = {
+		"cbt": is_feature_enabled("cbt"),
+		"student_pickup": is_feature_enabled("student_pickup"),
+		"school_intelligence": is_feature_enabled("school_intelligence"),
+		"edgefinder_publication": is_feature_enabled("edgefinder_publication"),
+	}
+	for route in list(routes):
+		feature = feature_for_route(route)
+		if feature and not features.get(feature, False):
+			routes[route] = False
+
 	can_access_eduedge = any(routes.values())
 	if not can_access_eduedge:
 		routes["/app/eduedge-home"] = False
@@ -253,6 +266,7 @@ def build_access_manifest(user: str | None = None) -> dict:
 	return {
 		"resources": resources,
 		"routes": routes,
+		"features": features,
 		"can_access_eduedge": can_access_eduedge,
 	}
 
