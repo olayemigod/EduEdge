@@ -15,6 +15,10 @@ class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
 			"activateSaveHandler",
 			"saveCurrentContext",
 			"openCommandPalette",
+			"findVisibleSaveControl",
+			"invokeVisibleSaveControl",
+			"data-edgesuite-save",
+			"control.click()",
 			'key === "s"',
 			'key === "k"',
 			"edgesuite:save-request",
@@ -38,6 +42,8 @@ class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
 			self.assertNotIn(forbidden, asset)
 		self.assertIn("Submitted documents cannot be changed", asset)
 		self.assertIn("textarea, [contenteditable='true']", asset)
+		self.assertIn(".modal.show", asset)
+		self.assertIn('new Set(["save", "save changes", "update", "apply changes"])', asset)
 
 	def test_hooks_load_keyboard_asset_before_product_navigation(self):
 		hooks = (APP / "hooks.py").read_text()
