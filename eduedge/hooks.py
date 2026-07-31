@@ -8,7 +8,7 @@ app_license = "mit"
 required_apps = ["erpnext", "education", "edgesuite_ui"]
 app_include_css = []
 app_include_js = [
-	"eduedge_keyboard_shortcuts.bundle.js",
+	"/assets/eduedge/js/eduedge_keyboard_shortcuts.js",
 	"eduedge_terminology.bundle.js",
 	"eduedge_profile_identity.bundle.js",
 	"eduedge_product_menu.bundle.js",
