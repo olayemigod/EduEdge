@@ -1,6 +1,82 @@
 (() => {
 	const COMMAND_VERSION = "1.0.0";
+
+	function normalizeRoute(value) {
+		try {
+			const path = new URL(value, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+			return path.startsWith("/desk/") ? `/app/${path.slice(6)}` : path;
+		} catch (_error) {
+			return String(value || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
+		}
+	}
+
+	function installedEduEdgePageRoutes() {
+		const routes = frappe.boot?.eduedge_page_routes;
+		return new Set(Array.isArray(routes) ? routes.map(normalizeRoute) : []);
+	}
+
+	function hasEduEdgePageRouteAccess(route) {
+		if (frappe.session?.user === "Administrator") return true;
+		const normalized = normalizeRoute(route);
+		if (!installedEduEdgePageRoutes().has(normalized)) return true;
+		const routes = frappe.boot?.eduedge_access_manifest?.routes;
+		if (!routes || !Object.prototype.hasOwnProperty.call(routes, normalized)) return false;
+		return Boolean(routes[normalized]);
+	}
+
+	function notify(message, indicator = "blue") {
+		if (window.frappe?.show_alert) frappe.show_alert({ message: __(message), indicator }, 4);
+	}
+
+	function showRouteDenied() {
+		notify("Your current role does not provide access to this EduEdge page.", "orange");
+	}
+
+	function enforceCurrentEduEdgePage() {
+		const route = normalizeRoute(window.location.pathname);
+		if (!installedEduEdgePageRoutes().has(route) || hasEduEdgePageRouteAccess(route)) return;
+		showRouteDenied();
+		const home = "/app/eduedge-home";
+		window.location.replace(hasEduEdgePageRouteAccess(home) ? home : "/app");
+	}
+
+	function onRouteClick(event) {
+		const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+		if (!anchor) return;
+		let url;
+		try {
+			url = new URL(anchor.href, window.location.origin);
+		} catch (_error) {
+			return;
+		}
+		if (url.origin !== window.location.origin) return;
+		const route = normalizeRoute(url.pathname);
+		if (!installedEduEdgePageRoutes().has(route) || hasEduEdgePageRouteAccess(route)) return;
+		event.preventDefault();
+		event.stopPropagation();
+		showRouteDenied();
+	}
+
+	function installEduEdgeRouteGuard() {
+		if (window.__eduedgePageRouteGuardBound) return;
+		window.__eduedgePageRouteGuardBound = true;
+		document.addEventListener("click", onRouteClick, true);
+		document.addEventListener("page-change", enforceCurrentEduEdgePage);
+		window.addEventListener("popstate", enforceCurrentEduEdgePage);
+		if (document.readyState === "loading") {
+			document.addEventListener("DOMContentLoaded", enforceCurrentEduEdgePage, { once: true });
+		} else {
+			queueMicrotask(enforceCurrentEduEdgePage);
+		}
+		window.EdgeSuiteRouteGuard = {
+			hasEduEdgePageRouteAccess,
+			enforceCurrentEduEdgePage,
+		};
+	}
+
+	installEduEdgeRouteGuard();
 	if (window.EdgeSuiteCommands?.version === COMMAND_VERSION) return;
+
 	const registry = (window.EdgeSuiteCommands = window.EdgeSuiteCommands || {});
 	const saveHandlers = new Map();
 	let activeSaveHandler = null;
@@ -20,10 +96,6 @@
 
 	function isVisible(element) {
 		return Boolean(element && !element.hidden && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
-	}
-
-	function notify(message, indicator = "blue") {
-		if (window.frappe?.show_alert) frappe.show_alert({ message: __(message), indicator }, 4);
 	}
 
 	function registerSaveHandler(key, handler) {
