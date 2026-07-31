@@ -3,6 +3,13 @@ import { reactive } from "vue";
 const NAVIGATION_STATE_VERSION = "v1";
 const COMPACT_STYLESHEET = "/assets/eduedge/css/eduedge_compact_navigation.css";
 
+export const EDUEDGE_CRITICAL_CBT_ROUTES = Object.freeze([
+	{ route: "/app/eduedge-cbt-schedules" },
+	{ route: "/app/eduedge-cbt-invigilation" },
+	{ route: "/app/eduedge-cbt-review-workbench" },
+	{ route: "/app/eduedge-cbt-marking" },
+]);
+
 function term(key, { plural = false, fallback = "" } = {}) {
 	return frappe.eduedge?.term?.(key, { plural, fallback }) || fallback;
 }
