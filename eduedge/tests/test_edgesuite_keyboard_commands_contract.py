@@ -10,7 +10,9 @@ class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
 	def test_keyboard_asset_registers_search_and_safe_save_commands(self):
 		asset = (APP / "public/js/eduedge_keyboard_shortcuts.js").read_text()
 		for expected in (
-			"EdgeSuiteCommands",
+			'COMMAND_VERSION = "1.0.0"',
+			"EdgeSuiteCommands?.version",
+			"registry.version = COMMAND_VERSION",
 			"registerSaveHandler",
 			"activateSaveHandler",
 			"saveCurrentContext",
