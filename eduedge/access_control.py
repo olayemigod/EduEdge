@@ -157,6 +157,25 @@ def _doctype_exists(doctype: str) -> bool:
 		return False
 
 
+def _installed_eduedge_page_routes() -> set[str]:
+	"""Return every installed standard EduEdge Page as an explicit Desk route.
+
+	The access manifest is fail closed: an installed Page that was not deliberately
+	registered in ROUTE_REQUIREMENTS is still present in the manifest with False.
+	This prevents stale frontend menus from treating a newly added route as allowed.
+	"""
+	try:
+		page_names = frappe.get_all(
+			"Page",
+			filters={"name": ["like", "eduedge-%"]},
+			pluck="name",
+			page_length=0,
+		)
+	except Exception:
+		return set()
+	return {f"/app/{name}" for name in page_names if name}
+
+
 def user_has_role_permission(
 	doctype: str,
 	permission_type: str = "read",
@@ -223,6 +242,9 @@ def build_access_manifest(user: str | None = None) -> dict:
 		route: _route_allowed(requirements, resources)
 		for route, requirements in ROUTE_REQUIREMENTS.items()
 	}
+	for route in _installed_eduedge_page_routes():
+		routes.setdefault(route, False)
+
 	can_access_eduedge = any(routes.values())
 	if not can_access_eduedge:
 		routes["/app/eduedge-home"] = False
