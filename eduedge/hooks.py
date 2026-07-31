@@ -18,6 +18,7 @@ app_include_js = [
 after_install = "eduedge.install.after_install"
 after_migrate = "eduedge.install.after_migrate"
 extend_bootinfo = "eduedge.boot.extend_bootinfo"
+before_request = ["eduedge.security.request_method.enforce_post_for_mutations"]
 
 scheduler_events = {
 	"hourly": [
