@@ -13,3 +13,4 @@ eduedge.patches.v0_8.add_cbt_candidate_assignment_unique_indexes
 eduedge.patches.v0_9.ensure_current_academic_calendars
 eduedge.patches.v0_9.migrate_native_academic_hierarchy
 eduedge.patches.v0_9.harden_training_progress_permissions
+eduedge.patches.v0_9.harden_sensitive_role_permissions
