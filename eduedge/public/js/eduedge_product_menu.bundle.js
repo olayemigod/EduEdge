@@ -8,6 +8,16 @@ function item(label, description, icon, route, extra = {}) {
 	return { label, description, icon, route, ...extra };
 }
 
+function featureEnabled(feature) {
+	if (!feature) return true;
+	const features =
+		frappe.boot?.eduedge_features ||
+		frappe.boot?.eduedge_ui_identity?.features ||
+		frappe.boot?.eduedge_access_manifest?.features;
+	if (!features || !Object.prototype.hasOwnProperty.call(features, feature)) return true;
+	return Boolean(features[feature]);
+}
+
 function buildEduEdgeProductMenu() {
 	const programme = term("programme", { fallback: __("Programme") });
 	const programmes = term("programme", { plural: true, fallback: __("Programmes") });
@@ -28,59 +38,90 @@ function buildEduEdgeProductMenu() {
 		order: 30,
 		subtitle: "School operations and intelligence",
 		menu_source: "eduedge",
+		accordion: true,
 		sections: [
 			{
+				key: "overview",
 				label: "Overview",
-				description: "Start from the school command centre",
+				description: "School command centre and your profile",
 				icon: "home",
 				items: [
-					item("EduEdge Home", "Branch context, readiness, and daily priorities", "home", "/app/eduedge-home", { keywords: ["dashboard", "school", "home"] }),
+					item("EduEdge Home", "Branch context, readiness, and daily priorities", "home", "/app/eduedge-home", { keywords: ["dashboard", "school", "home"], quick_action: true }),
 					item("My Profile", "Your EduEdge identity and account profile", "user", "/app/eduedge-my-profile", { keywords: ["profile", "account", "identity"] }),
 				],
 			},
 			{
-				label: "School Operations",
-				description: `Admissions, ${students.toLowerCase()}, ${groups.toLowerCase()}, and attendance`,
-				icon: "graduation",
+				key: "students-admissions",
+				label: "Students & Admissions",
+				description: `Admissions, applicants, and ${students.toLowerCase()}`,
+				icon: "students",
 				items: [
-					item("Academic Foundation", "Academic structure, levels, and calendars", "book", "/app/eduedge-academic-foundation", { keywords: ["academic", "foundation", "calendar", "level"] }),
-					item("Academic Operations", `Run ${groups.toLowerCase()}, schedules, and attendance`, "book", "/app/eduedge-academic-operations", { keywords: ["class", "schedule", "attendance"] }),
-					item("Admissions", "Configure and publish admission windows", "clipboard", "/app/eduedge-admissions", { keywords: ["admission", "session", "programme"] }),
+					item("Admissions", "Configure and publish admission windows", "clipboard", "/app/eduedge-admissions", { keywords: ["admission", "session", "programme"], quick_action: true }),
 					item(applicants, `Review prospective ${students.toLowerCase()}`, "user", "/app/eduedge-applicants", { keywords: ["applicant", "application", "enrolment"] }),
-					item(students, `${student} records, profiles, and branch context`, "students", "/app/eduedge-students", { keywords: ["student", "pupil", "learner", "profile"] }),
+					item(students, `${student} records, profiles, and branch context`, "students", "/app/eduedge-students", { keywords: ["student", "pupil", "learner", "profile"], quick_action: true }),
 				],
 			},
 			{
-				label: "Academics and Outcomes",
-				description: `${programmes}, CBT, ${assessments.toLowerCase()}, results, and progression`,
-				icon: "assessment",
+				key: "academic-setup",
+				label: "Academic Setup",
+				description: `${programmes}, offerings, ${groups.toLowerCase()}, schedules, and attendance`,
+				icon: "graduation",
 				items: [
+					item("Academic Foundation", "Academic structure, levels, and calendars", "book", "/app/eduedge-academic-foundation", { keywords: ["academic", "foundation", "calendar", "level"] }),
 					item(programmes, `Maintain the ${programme.toLowerCase()} catalogue`, "book", "/app/eduedge-programs", { keywords: ["programme", "class", "catalogue", "course"] }),
 					item(offerings, `${programmes} available by campus and session`, "layers", "/app/eduedge-program-offerings", { keywords: ["programme", "class", "offering", "academic year"] }),
-					item("CBT Operations", "Centres, approved questions, templates, and readiness", "assessment", "/app/eduedge-cbt-operations", { keywords: ["cbt", "exam", "question bank", "template"] }),
-					item("CBT Schedules", "Schedules, candidates, check-in, release, and interventions", "calendar", "/app/eduedge-cbt-schedules", { keywords: ["cbt", "schedule", "candidate", "check in", "invigilator", "intervention"] }),
-					item("CBT Invigilation", "Monitor candidates, sync health, and result readiness", "monitor", "/app/eduedge-cbt-invigilation", { resource: "cbt_attempt", permissions: ["read", "report"], keywords: ["cbt", "invigilation", "candidate", "pending sync", "monitor"] }),
-					item("CBT Scoring & Marking", "Score objective responses, mark written answers, and approve results", "edit", "/app/eduedge-cbt-marking", { resource: "cbt_result", permissions: ["write"], keywords: ["cbt", "score", "marking", "result", "approval"] }),
-					item("CBT Attempt Review", "Resolve integrity flags before scoring", "shield", "/app/eduedge-cbt-review-workbench", { resource: "cbt_attempt_review", permissions: ["create"], keywords: ["cbt", "attempt", "review", "integrity", "disqualify"] }),
-					item("Exam Templates", "Review reusable approved examination designs", "layers", "/app/eduedge-exam-templates", { keywords: ["cbt", "exam", "template", "reuse"] }),
-					item("Exam Template Builder", "Create and govern reusable examination designs", "edit", "/app/eduedge-exam-template-builder", { keywords: ["cbt", "exam", "template", "builder"] }),
-					item("Question Bank", "Search and review governed CBT questions", "book", "/app/eduedge-question-bank", { keywords: ["cbt", "question", "bank", "review"] }),
-					item("Question Responsibilities", "Manage scoped authors, reviewers, and approvers", "shield", "/app/eduedge-question-responsibilities", { keywords: ["cbt", "question", "author", "reviewer", "approver"] }),
-					item("Question Builder", "Author and revise governed CBT questions", "edit", "/app/eduedge-question-builder", { keywords: ["cbt", "question", "author", "builder"] }),
-					item("Question Batch", "Create governed CBT questions in batches", "layers", "/app/eduedge-question-batch", { keywords: ["cbt", "question", "batch", "import"] }),
-					item(`${assessments} & Results`, `Plan, review, approve, and publish ${assessments.toLowerCase()}`, "assessment", "/app/eduedge-assessment-operations", { keywords: ["exam", "assessment", "result", "publication"] }),
+					item("Academic Operations", `Run ${groups.toLowerCase()}, schedules, and attendance`, "calendar", "/app/eduedge-academic-operations", { keywords: ["class", "schedule", "attendance"], quick_action: true }),
+				],
+			},
+			{
+				key: "assessment-results",
+				label: "Assessments & Results",
+				description: `Plan, approve, publish, and report ${assessments.toLowerCase()}`,
+				icon: "assessment",
+				items: [
+					item(`${assessments} & Results`, `Plan, review, approve, and publish ${assessments.toLowerCase()}`, "assessment", "/app/eduedge-assessment-operations", { keywords: ["exam", "assessment", "result", "publication"], quick_action: true }),
 					item("Report Cards", "Comments, progression, approval, and printing", "report", "/app/eduedge-report-cards", { keywords: ["report card", "progression", "promotion", "pdf"] }),
 				],
 			},
 			{
-				label: "Administration",
-				description: "Branch governance, access, accounting, and setup",
-				icon: "settings",
+				key: "cbt-delivery",
+				label: "CBT Delivery",
+				description: "Schedules, candidates, invigilation, review, scoring, and marking",
+				icon: "monitor",
+				feature: "cbt",
+				items: [
+					item("CBT Operations", "Centres, approved questions, templates, and readiness", "assessment", "/app/eduedge-cbt-operations", { keywords: ["cbt", "exam", "readiness"], quick_action: true }),
+					item("CBT Schedules", "Schedules, candidates, check-in, release, and interventions", "calendar", "/app/eduedge-cbt-schedules", { keywords: ["cbt", "schedule", "candidate", "check in", "invigilator", "intervention"] }),
+					item("CBT Invigilation", "Monitor candidates, sync health, and result readiness", "monitor", "/app/eduedge-cbt-invigilation", { resource: "cbt_attempt", permissions: ["read", "report"], keywords: ["cbt", "invigilation", "candidate", "pending sync", "monitor"] }),
+					item("CBT Attempt Review", "Resolve integrity flags before scoring", "shield", "/app/eduedge-cbt-review-workbench", { resource: "cbt_attempt_review", permissions: ["create"], keywords: ["cbt", "attempt", "review", "integrity", "disqualify"] }),
+					item("CBT Scoring & Marking", "Score objective responses, mark written answers, and approve results", "edit", "/app/eduedge-cbt-marking", { resource: "cbt_result", permissions: ["write"], keywords: ["cbt", "score", "marking", "result", "approval"] }),
+				],
+			},
+			{
+				key: "cbt-content",
+				label: "CBT Content",
+				description: "Question governance and reusable examination designs",
+				icon: "book",
+				feature: "cbt",
+				items: [
+					item("Question Bank", "Search and review governed CBT questions", "book", "/app/eduedge-question-bank", { keywords: ["cbt", "question", "bank", "review"] }),
+					item("Question Builder", "Author and revise governed CBT questions", "edit", "/app/eduedge-question-builder", { keywords: ["cbt", "question", "author", "builder"], quick_action: true }),
+					item("Question Batch", "Create governed CBT questions in batches", "layers", "/app/eduedge-question-batch", { keywords: ["cbt", "question", "batch", "import"] }),
+					item("Question Responsibilities", "Manage scoped authors, reviewers, and approvers", "shield", "/app/eduedge-question-responsibilities", { keywords: ["cbt", "question", "author", "reviewer", "approver"] }),
+					item("Exam Templates", "Review reusable approved examination designs", "layers", "/app/eduedge-exam-templates", { keywords: ["cbt", "exam", "template", "reuse"] }),
+					item("Exam Template Builder", "Create and govern reusable examination designs", "edit", "/app/eduedge-exam-template-builder", { keywords: ["cbt", "exam", "template", "builder"] }),
+				],
+			},
+			{
+				key: "institution-access",
+				label: "Institution & Access",
+				description: "Institution identity, branches, access, accounting, and setup",
+				icon: "building",
 				items: [
 					item("Institution Profile", "Institution identity, branding, address, and contacts", "building", "/app/eduedge-institution-profile", { keywords: ["institution", "profile", "branding", "identity"] }),
-					item("Institution Structure", "Institution types and academic terminology", "building", "/app/eduedge-institution-structure", { keywords: ["institution", "structure", "terminology"] }),
-					item("Institution Operations Settings", "Company defaults and institution workflow preferences", "settings", "/app/eduedge-institution-operations-settings", { keywords: ["institution", "operations", "settings", "defaults"] }),
-					item("School Branches", "Campus identity and operational defaults", "building", "/app/eduedge-school-branches", { keywords: ["campus", "branch", "cost centre", "account"] }),
+					item("Institution Structure", "Institution types and academic terminology", "layers", "/app/eduedge-institution-structure", { keywords: ["institution", "structure", "terminology"] }),
+					item("Institution Operations", "Company defaults and institution workflow preferences", "settings", "/app/eduedge-institution-operations-settings", { keywords: ["institution", "operations", "settings", "defaults"] }),
+					item("School Branches", "Campus identity and operational defaults", "building", "/app/eduedge-school-branches", { keywords: ["campus", "branch", "cost centre", "account"], quick_action: true }),
 					item("Branch Governance", "Campus access coverage and accounting readiness", "shield", "/app/eduedge-branch-governance", { keywords: ["branch", "campus", "access", "accounting"] }),
 					item("User Branch Access", "Maintain staff campus assignments inside Branch Governance", "students", "/app/eduedge-branch-governance", { resource: "user_branch_access", permissions: ["read", "write"], keywords: ["user", "role", "assignment", "hq"] }),
 					item("Setup Center", "Review foundation readiness and configuration", "settings", "/app/eduedge-setup-center", { keywords: ["setup", "readiness", "configuration"] }),
@@ -88,10 +129,13 @@ function buildEduEdgeProductMenu() {
 				],
 			},
 			{
+				key: "help-training",
 				label: "Help & Training",
 				description: "Role-based learning, practice, and readiness",
 				icon: "book",
-				items: [item("EduEdge Training Centre", "Step-by-step guides, flowcharts, videos, and progress", "book", "/app/eduedge-training-centre", { keywords: ["training", "guide", "help", "video", "onboarding"] })],
+				items: [
+					item("EduEdge Training Centre", "Step-by-step guides, flowcharts, videos, and progress", "book", "/app/eduedge-training-centre", { keywords: ["training", "guide", "help", "video", "onboarding"] }),
+				],
 			},
 		],
 	};
@@ -123,6 +167,7 @@ function permissionFilteredMenu() {
 	return {
 		...source,
 		sections: source.sections
+			.filter((section) => featureEnabled(section.feature))
 			.map((section) => ({
 				...section,
 				items: section.items.filter(itemAllowed).map(({ resource, permissions, ...menuItem }) => menuItem),
