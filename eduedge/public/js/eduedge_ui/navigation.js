@@ -16,10 +16,12 @@ function term(key, { plural = false, fallback = "" } = {}) {
 }
 
 function normalizedPath(route) {
+	let value = String(route || "");
+	if (value.startsWith("route:")) value = value.slice(6);
 	try {
-		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+		return new URL(value, window.location.origin).pathname.replace(/\/+$/, "") || "/";
 	} catch (_error) {
-		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
+		return value.split(/[?#]/, 1)[0].replace(/\/+$/, "");
 	}
 }
 
@@ -60,7 +62,7 @@ export function hasEduEdgeRouteAccess(route) {
 	if (frappe.session.user === "Administrator") return true;
 	const path = normalizedPath(route);
 	const routes = frappe.boot?.eduedge_access_manifest?.routes;
-	if (!routes || !Object.prototype.hasOwnProperty.call(routes, path)) return true;
+	if (!routes || !Object.prototype.hasOwnProperty.call(routes, path)) return false;
 	return Boolean(routes[path]);
 }
 
@@ -127,18 +129,18 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Home"), "/app/eduedge-home", "home", __("Education command centre")),
 			menuItem(__("My Profile"), "/app/eduedge-my-profile", "user", __("Your EduEdge identity and profile")),
 		]),
-		menuGroup("students-admissions", __("Students & Admissions"), "students", [
+		menuGroup("students-admissions", __("Students & Admissions"), "user", [
 			menuItem(__("Admissions"), "/app/eduedge-admissions", "clipboard", __("Admission windows and availability")),
 			menuItem(applicants, "/app/eduedge-applicants", "user", __(`Review prospective ${students.toLowerCase()}`)),
 			menuItem(students, "/app/eduedge-students", "students", __(`${student} records and profiles`)),
 		]),
-		menuGroup("academic-setup", __("Academic Setup"), "graduation", [
+		menuGroup("academic-setup", __("Academic Setup"), "book", [
 			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and calendars`)),
 			menuItem(programmes, "/app/eduedge-programs", "book", __(`${programmes} catalogue`)),
 			menuItem(offerings, "/app/eduedge-program-offerings", "layers", __(`${programmes} by campus and ${academicYear}`)),
 			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __(`${groups}, ${sessions}, and attendance`)),
 		]),
-		menuGroup("assessment-results", __("Assessments & Results"), "assessment", [
+		menuGroup("assessment-results", __("Assessments & Results"), "clipboard", [
 			menuItem(__(`${assessments} & Results`), "/app/eduedge-assessment-operations", "assessment", __(`Plan, approve, and publish ${assessments.toLowerCase()}`)),
 			menuItem(__("Report Cards"), "/app/eduedge-report-cards", "report", __("Comments, progression, and printing")),
 		]),
