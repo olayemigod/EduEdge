@@ -12,6 +12,27 @@ from eduedge.services.institution_branding import get_institution_branding
 from eduedge.services.institution_context import get_effective_institution_context
 
 
+FEATURE_FIELDS = {
+	"cbt": ("enable_cbt", True),
+	"student_pickup": ("enable_student_pickup", False),
+	"school_intelligence": ("enable_school_intelligence", True),
+	"edgefinder_publication": ("enable_edgefinder_publication", False),
+}
+
+
+def _get_feature_flags() -> dict[str, bool]:
+	flags = {key: default for key, (_fieldname, default) in FEATURE_FIELDS.items()}
+	try:
+		if not frappe.db.exists("DocType", "EduEdge Settings"):
+			return flags
+		for key, (fieldname, default) in FEATURE_FIELDS.items():
+			value = frappe.db.get_single_value("EduEdge Settings", fieldname)
+			flags[key] = bool(default if value is None else frappe.utils.cint(value))
+	except Exception:
+		return flags
+	return flags
+
+
 def _get_company_identity(company: str) -> dict:
 	if not company or not frappe.db.exists("Company", company):
 		return {"name": company or "", "label": company or "", "logo": ""}
@@ -84,7 +105,7 @@ def _attach_institution_branding(context: dict) -> dict:
 
 
 def extend_bootinfo(bootinfo) -> None:
-	"""Expose permission-safe identity, access, and institution terminology for EdgeSuite UI."""
+	"""Expose permission-safe identity, access, features, and terminology for EdgeSuite UI."""
 	if frappe.session.user == "Guest":
 		return
 
@@ -116,6 +137,7 @@ def extend_bootinfo(bootinfo) -> None:
 		"logo": "",
 	}
 	product_identity = get_product_identity()
+	features = _get_feature_flags()
 	try:
 		institution_context = get_effective_institution_context(
 			company=active_company,
@@ -172,6 +194,7 @@ def extend_bootinfo(bootinfo) -> None:
 		"companies": companies,
 		"user": _get_user_identity(),
 		"institution_context": institution_context,
+		"features": features,
 		"contact_identity": {
 			"phone": institution_context.get("phone") or "",
 			"whatsapp_number": institution_context.get("whatsapp_number") or "",
@@ -182,6 +205,7 @@ def extend_bootinfo(bootinfo) -> None:
 	}
 
 	bootinfo["eduedge_institution_context"] = institution_context
+	bootinfo["eduedge_features"] = features
 	bootinfo["eduedge_ui_identity"] = identity
 	shared = bootinfo.get("edgesuite_ui_identity") or {}
 	shared["eduedge"] = identity
