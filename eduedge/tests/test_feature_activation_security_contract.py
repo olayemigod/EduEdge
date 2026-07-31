@@ -8,6 +8,7 @@ APP = ROOT / "eduedge"
 def test_feature_gate_blocks_direct_cbt_rpc_and_exposes_scheduler_wrapper():
 	gate = (APP / "security" / "feature_gate.py").read_text()
 	request = (APP / "security" / "request_method.py").read_text()
+	hooks = (APP / "hooks.py").read_text()
 
 	for expected in (
 		"FEATURE_SETTINGS",
@@ -24,6 +25,8 @@ def test_feature_gate_blocks_direct_cbt_rpc_and_exposes_scheduler_wrapper():
 	assert "from eduedge.security.feature_gate import enforce_feature_for_command" in request
 	assert 'if command.startswith("eduedge.")' in request
 	assert "enforce_feature_for_command(command)" in request
+	assert '"eduedge.security.feature_gate.run_cbt_expiry_job"' in hooks
+	assert '"eduedge.cbt.attempts.finalize_expired_attempts"' not in hooks
 
 
 def test_access_manifest_hides_disabled_feature_routes():
