@@ -69,7 +69,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 
 	def test_hooks_use_shared_edgesuite_identity_and_notifications(self):
 		hooks = (APP / "hooks.py").read_text()
-		self.assertIn('"eduedge_keyboard_shortcuts.bundle.js"', hooks)
+		self.assertIn('"/assets/eduedge/js/eduedge_keyboard_shortcuts.js"', hooks)
 		self.assertIn('"eduedge_product_menu.bundle.js"', hooks)
 		self.assertIn('extend_bootinfo = "eduedge.boot.extend_bootinfo"', hooks)
 		self.assertIn('"route": "/desk/eduedge-home"', hooks)
