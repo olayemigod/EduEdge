@@ -16,6 +16,10 @@
 		return Boolean(target.closest("textarea, [contenteditable='true'], .ql-editor, .CodeMirror, .ace_editor"));
 	}
 
+	function isVisible(element) {
+		return Boolean(element && !element.hidden && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
+	}
+
 	function notify(message, indicator = "blue") {
 		if (window.frappe?.show_alert) {
 			frappe.show_alert({ message: __(message), indicator }, 4);
@@ -51,6 +55,31 @@
 		return true;
 	}
 
+	function findVisibleSaveControl() {
+		const explicit = [...document.querySelectorAll("[data-edgesuite-save]:not([disabled])")].reverse().find(isVisible);
+		if (explicit) return explicit;
+
+		const activeDialog = [...document.querySelectorAll(".modal.show, .edge-modal[open], .edge-modal.is-open")].reverse().find(isVisible);
+		if (!activeDialog) return null;
+		const labels = new Set(["save", "save changes", "update", "apply changes"]);
+		return [...activeDialog.querySelectorAll("button:not([disabled]), [role='button']:not([aria-disabled='true'])")]
+			.reverse()
+			.find((control) => {
+				if (!isVisible(control)) return false;
+				const label = String(control.dataset.label || control.getAttribute("aria-label") || control.textContent || "")
+					.trim()
+					.toLowerCase();
+				return labels.has(label);
+			}) || null;
+	}
+
+	async function invokeVisibleSaveControl() {
+		const control = findVisibleSaveControl();
+		if (!control) return false;
+		control.click();
+		return true;
+	}
+
 	async function invokeFrappeFormSave() {
 		const form = window.cur_frm;
 		if (!form?.doc || typeof form.save !== "function") return false;
@@ -70,6 +99,7 @@
 		try {
 			if (await invokeRegisteredSave()) return true;
 			if (await invokeEventSave()) return true;
+			if (await invokeVisibleSaveControl()) return true;
 			return await invokeFrappeFormSave();
 		} catch (error) {
 			console.error("EdgeSuite save command failed", error);
