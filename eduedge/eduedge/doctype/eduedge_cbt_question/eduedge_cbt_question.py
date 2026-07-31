@@ -61,8 +61,11 @@ def sanitize_question_content(value) -> str:
 
 
 def can_review_questions(user: str | None = None) -> bool:
-	"""Use a configurable DocType right as the question-review capability."""
-	return user_has_role_permission("EduEdge CBT Question", "delete", user)
+	"""Use operational review rights, not Delete, as the approval capability."""
+	resolved_user = user or frappe.session.user
+	return user_has_role_permission(
+		"EduEdge CBT Question", "write", resolved_user
+	) and user_has_role_permission("EduEdge CBT Question", "report", resolved_user)
 
 
 def _require_question_author() -> None:
