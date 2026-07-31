@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 
 const NAVIGATION_STATE_VERSION = "v1";
+const FAVORITES_STATE_VERSION = "v1";
 const COMPACT_STYLESHEET = "/assets/eduedge/css/eduedge_compact_navigation.css";
 
 export const EDUEDGE_CRITICAL_CBT_ROUTES = Object.freeze([
@@ -19,6 +20,20 @@ function normalizedPath(route) {
 		return new URL(route, window.location.origin).pathname.replace(/\/+$/, "") || "/";
 	} catch (_error) {
 		return String(route || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
+	}
+}
+
+function preferenceKey(kind, version) {
+	const user = frappe.session?.user || "Guest";
+	return `edgeui:eduedge:${kind}:${version}:${user}`;
+}
+
+function readFavoriteRoutes() {
+	try {
+		const value = JSON.parse(localStorage.getItem(preferenceKey("favorites", FAVORITES_STATE_VERSION)) || "[]");
+		return Array.isArray(value) ? value.map(normalizedPath).filter(Boolean) : [];
+	} catch (_error) {
+		return [];
 	}
 }
 
@@ -67,6 +82,33 @@ function menuGroup(key, label, icon, items, { feature = "" } = {}) {
 	};
 }
 
+function withFavorites(groups) {
+	const populated = groups.filter((group) => group?.items.length);
+	const favoriteRoutes = new Set(readFavoriteRoutes());
+	if (!favoriteRoutes.size) return populated;
+	const favoriteItems = [];
+	const seen = new Set();
+	for (const group of populated) {
+		for (const item of group.items) {
+			const route = normalizedPath(item.route);
+			if (!favoriteRoutes.has(route) || seen.has(route)) continue;
+			favoriteItems.push(item);
+			seen.add(route);
+		}
+	}
+	if (!favoriteItems.length) return populated;
+	const favoriteGroup = {
+		key: "favorites",
+		label: __("Favorites"),
+		icon: "star",
+		defaultCollapsed: false,
+		items: favoriteItems,
+	};
+	const overviewIndex = populated.findIndex((group) => group.key === "overview");
+	const insertAt = overviewIndex >= 0 ? overviewIndex + 1 : 0;
+	return [...populated.slice(0, insertAt), favoriteGroup, ...populated.slice(insertAt)];
+}
+
 export function buildEduEdgeMenuItems() {
 	const programmes = term("programme", { plural: true, fallback: __("Programmes") });
 	const offerings = term("programme_offering", { plural: true, fallback: __("Programme Offerings") });
@@ -80,7 +122,7 @@ export function buildEduEdgeMenuItems() {
 	const students = term("student", { plural: true, fallback: __("Students") });
 	const applicants = term("student_applicant", { plural: true, fallback: __("Applicants") });
 
-	return [
+	return withFavorites([
 		menuGroup("overview", __("Overview"), "home", [
 			menuItem(__("Home"), "/app/eduedge-home", "home", __("Education command centre")),
 			menuItem(__("My Profile"), "/app/eduedge-my-profile", "user", __("Your EduEdge identity and profile")),
@@ -127,7 +169,7 @@ export function buildEduEdgeMenuItems() {
 		menuGroup("help-training", __("Help & Training"), "book", [
 			menuItem(__("Training Centre"), "/app/eduedge-training-centre", "book", __("Role-based guided learning")),
 		]),
-	].filter((group) => group?.items.length);
+	]);
 }
 
 export const EDUEDGE_MENU_ITEMS = reactive([]);
@@ -141,6 +183,7 @@ export function refreshEduEdgeMenuItems() {
 
 refreshEduEdgeMenuItems();
 window.addEventListener("eduedge:institution-context-changed", refreshEduEdgeMenuItems);
+window.addEventListener("edgesuite:favorites-changed", refreshEduEdgeMenuItems);
 window.addEventListener("popstate", refreshEduEdgeMenuItems);
 document.addEventListener("page-change", refreshEduEdgeMenuItems);
 
