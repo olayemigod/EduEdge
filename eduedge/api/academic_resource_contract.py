@@ -5,6 +5,8 @@ from frappe import _
 
 PROGRAM_RESOURCE = "programs"
 PROGRAM_OFFERING_RESOURCE = "program_offerings"
+INSTITUTION_FIELD = "eduedge_institution"
+LEGACY_SECTION_FIELD = "eduedge_academic_section"
 
 
 def ensure_contract(base) -> None:
@@ -16,33 +18,52 @@ def _ensure_program_contract(base) -> None:
 	config = base.RESOURCE_CONFIG.get(PROGRAM_RESOURCE)
 	if not config:
 		return
-	for fieldname in ("eduedge_institution", "eduedge_academic_section"):
+	for fieldname in ("program_name", "program_abbreviation", INSTITUTION_FIELD, "department"):
 		if fieldname not in config.setdefault("search_fields", []):
 			config["search_fields"].append(fieldname)
 	config["columns"] = [
 		{"fieldname": "program_name", "label": _("Program")},
 		{"fieldname": "program_abbreviation", "label": _("Abbreviation")},
-		{"fieldname": "eduedge_institution", "label": _("Institution")},
-		{"fieldname": "eduedge_academic_section", "label": _("Academic Section")},
+		{"fieldname": INSTITUTION_FIELD, "label": _("Institution")},
 		{"fieldname": "department", "label": _("Department")},
 	]
 	config["filters"] = [
-		{"fieldname": "eduedge_institution", "label": _("Institution"), "type": "Link", "options_doctype": "EduEdge Institution"},
-		{"fieldname": "eduedge_academic_section", "label": _("Academic Section"), "type": "Link", "options_doctype": "EduEdge Academic Section"},
-		{"fieldname": "department", "label": _("Department"), "type": "Link", "options_doctype": "Department"},
+		{
+			"fieldname": INSTITUTION_FIELD,
+			"label": _("Institution"),
+			"type": "Link",
+			"options_doctype": "EduEdge Institution",
+		},
+		{
+			"fieldname": "department",
+			"label": _("Department"),
+			"type": "Link",
+			"options_doctype": "Department",
+		},
 	]
 	config["editor_fields"] = [
 		{
-			"fieldname": "eduedge_institution", "label": _("Institution"), "type": "Link",
-			"options_doctype": "EduEdge Institution", "required": True,
-			"clear_fields": ["eduedge_academic_section"], "refresh_fields": ["eduedge_academic_section"],
+			"fieldname": INSTITUTION_FIELD,
+			"label": _("Institution"),
+			"type": "Link",
+			"options_doctype": "EduEdge Institution",
+			"required": True,
+			"clear_fields": ["department"],
+			"refresh_fields": ["department"],
 		},
-		{"fieldname": "eduedge_academic_section", "label": _("Academic Section"), "type": "Link", "options_doctype": "EduEdge Academic Section"},
+		{
+			"fieldname": "department",
+			"label": _("Department"),
+			"type": "Link",
+			"options_doctype": "Department",
+			"required": True,
+		},
 		{"fieldname": "program_name", "label": _("Program Name"), "type": "Data", "required": True},
 		{"fieldname": "program_abbreviation", "label": _("Program Abbreviation"), "type": "Data"},
-		{"fieldname": "department", "label": _("Department"), "type": "Link", "options_doctype": "Department"},
 	]
-	config["advanced_note"] = _("Select the Institution and optional Academic Section before defining the curriculum courses in the full Program form.")
+	config["advanced_note"] = _(
+		"Select the Institution first, then its valid Faculty, Department, or School Section. Curriculum courses remain in the full Program form."
+	)
 
 
 def _ensure_offering_contract(base) -> None:
@@ -50,7 +71,14 @@ def _ensure_offering_contract(base) -> None:
 	if not config:
 		return
 	config["title_field"] = "offering_title"
-	for fieldname in ("offering_title", "offering_code", "study_mode", "delivery_mode", "student_batch", "academic_level"):
+	for fieldname in (
+		"offering_title",
+		"offering_code",
+		"study_mode",
+		"delivery_mode",
+		"student_batch",
+		"academic_level",
+	):
 		if fieldname not in config.setdefault("search_fields", []):
 			config["search_fields"].append(fieldname)
 	config["columns"] = [
@@ -66,20 +94,78 @@ def _ensure_offering_contract(base) -> None:
 	]
 	config["editor_fields"] = [
 		{
-			"fieldname": "school_branch", "label": _("School Branch / Campus"), "type": "Link",
-			"options_doctype": "EduEdge School Branch", "required": True,
-			"clear_fields": ["program", "academic_level", "student_batch"],
-			"refresh_fields": ["program", "academic_level", "student_batch"],
+			"fieldname": "school_branch",
+			"label": _("School Branch / Campus"),
+			"type": "Link",
+			"options_doctype": "EduEdge School Branch",
+			"required": True,
+			"clear_fields": [
+				"program",
+				"academic_year",
+				"academic_term",
+				"academic_level",
+				"student_batch",
+			],
+			"refresh_fields": [
+				"program",
+				"academic_year",
+				"academic_term",
+				"academic_level",
+				"student_batch",
+			],
 		},
-		{"fieldname": "program", "label": _("Program"), "type": "Link", "options_doctype": "Program", "required": True},
-		{"fieldname": "academic_year", "label": _("Academic Year"), "type": "Link", "options_doctype": "Academic Year", "required": True, "clear_fields": ["academic_term"]},
-		{"fieldname": "academic_term", "label": _("Academic Term"), "type": "Link", "options_doctype": "Academic Term"},
-		{"fieldname": "academic_level", "label": _("Academic Level"), "type": "Link", "options_doctype": "EduEdge Academic Level"},
-		{"fieldname": "student_batch", "label": _("Student Batch / Cohort"), "type": "Link", "options_doctype": "Student Batch Name"},
+		{
+			"fieldname": "program",
+			"label": _("Program"),
+			"type": "Link",
+			"options_doctype": "Program",
+			"required": True,
+			"clear_fields": ["academic_level"],
+			"refresh_fields": ["academic_level"],
+		},
+		{
+			"fieldname": "academic_year",
+			"label": _("Academic Year"),
+			"type": "Link",
+			"options_doctype": "Academic Year",
+			"required": True,
+			"clear_fields": ["academic_term"],
+			"refresh_fields": ["academic_term"],
+		},
+		{
+			"fieldname": "academic_term",
+			"label": _("Academic Term"),
+			"type": "Link",
+			"options_doctype": "Academic Term",
+		},
+		{
+			"fieldname": "academic_level",
+			"label": _("Academic Level"),
+			"type": "Link",
+			"options_doctype": "EduEdge Academic Level",
+		},
+		{
+			"fieldname": "student_batch",
+			"label": _("Student Batch / Cohort"),
+			"type": "Link",
+			"options_doctype": "Student Batch Name",
+		},
 		{"fieldname": "offering_title", "label": _("Offering Title"), "type": "Data"},
 		{"fieldname": "offering_code", "label": _("Offering Code"), "type": "Data"},
-		{"fieldname": "study_mode", "label": _("Study Mode"), "type": "Select", "options": ["Full-Time", "Part-Time", "Weekend", "Evening", "Short Course", "Flexible"], "default": "Full-Time"},
-		{"fieldname": "delivery_mode", "label": _("Delivery Mode"), "type": "Select", "options": ["Onsite", "Online", "Hybrid"], "default": "Onsite"},
+		{
+			"fieldname": "study_mode",
+			"label": _("Study Mode"),
+			"type": "Select",
+			"options": ["Full-Time", "Part-Time", "Weekend", "Evening", "Short Course", "Flexible"],
+			"default": "Full-Time",
+		},
+		{
+			"fieldname": "delivery_mode",
+			"label": _("Delivery Mode"),
+			"type": "Select",
+			"options": ["Onsite", "Online", "Hybrid"],
+			"default": "Onsite",
+		},
 		{"fieldname": "start_date", "label": _("Start Date"), "type": "Date"},
 		{"fieldname": "end_date", "label": _("End Date"), "type": "Date"},
 		{"fieldname": "is_active", "label": _("Active"), "type": "Check", "default": 1},
@@ -105,26 +191,96 @@ def enrich_editor(base, result: dict, resource: str) -> dict:
 
 def search_options(base, resource: str, fieldname: str, txt: str, values: dict) -> list[dict] | None:
 	if resource == PROGRAM_RESOURCE:
-		institution = values.get("eduedge_institution")
-		if fieldname == "eduedge_institution":
+		institution = values.get(INSTITUTION_FIELD)
+		if fieldname == INSTITUTION_FIELD:
 			return _link_rows("EduEdge Institution", "institution_name", txt, {"enabled": 1})
-		if fieldname == "eduedge_academic_section":
-			return _link_rows("EduEdge Academic Section", "section_name", txt, {"institution": institution, "enabled": 1} if institution else {"enabled": 1})
+		if fieldname == "department":
+			if not institution:
+				return []
+			return _link_rows("Department", "department_name", txt, {INSTITUTION_FIELD: institution})
 		return None
+
 	if resource != PROGRAM_OFFERING_RESOURCE:
 		return None
 	branch = values.get("school_branch")
 	institution = frappe.db.get_value("EduEdge School Branch", branch, "institution") if branch else None
+	program = values.get("program")
+	academic_year = values.get("academic_year")
+
 	if fieldname == "program":
-		return _link_rows("Program", "program_name", txt, {"eduedge_institution": institution} if institution and frappe.get_meta("Program").has_field("eduedge_institution") else {})
+		if not institution:
+			return []
+		filters = {INSTITUTION_FIELD: institution} if frappe.get_meta("Program").has_field(INSTITUTION_FIELD) else {}
+		return _link_rows("Program", "program_name", txt, filters)
+	if fieldname == "academic_year":
+		return _calendar_year_options(institution, txt)
+	if fieldname == "academic_term":
+		return _calendar_term_options(institution, academic_year, txt)
 	if fieldname == "academic_level":
-		return _link_rows("EduEdge Academic Level", "level_name", txt, {"institution": institution, "enabled": 1} if institution else {"enabled": 1})
+		if not institution or not program:
+			return []
+		filters = {"institution": institution, "enabled": 1}
+		level_meta = frappe.get_meta("EduEdge Academic Level")
+		if level_meta.has_field("program"):
+			filters["program"] = program
+		elif level_meta.has_field("eduedge_program"):
+			filters["eduedge_program"] = program
+		elif level_meta.has_field("academic_section"):
+			section = frappe.db.get_value("Program", program, LEGACY_SECTION_FIELD)
+			if section:
+				filters["academic_section"] = section
+		return _link_rows("EduEdge Academic Level", "level_name", txt, filters)
 	if fieldname == "student_batch":
+		if not institution:
+			return []
 		filters = {}
-		if institution and frappe.get_meta("Student Batch Name").has_field("eduedge_institution"):
-			filters["eduedge_institution"] = institution
+		if frappe.get_meta("Student Batch Name").has_field(INSTITUTION_FIELD):
+			filters[INSTITUTION_FIELD] = institution
 		return _link_rows("Student Batch Name", "name", txt, filters)
 	return None
+
+
+def _calendar_year_options(institution: str | None, txt: str) -> list[dict]:
+	if not institution:
+		return []
+	calendars = frappe.get_list(
+		"EduEdge Institution Academic Calendar",
+		filters={"institution": institution, "enabled": 1},
+		fields=["academic_year"],
+		order_by="is_current desc, start_date desc",
+		limit_page_length=30,
+	)
+	allowed = [row.academic_year for row in calendars if row.academic_year]
+	if not allowed:
+		return []
+	return _link_rows("Academic Year", "name", txt, {"name": ["in", allowed]})
+
+
+def _calendar_term_options(institution: str | None, academic_year: str | None, txt: str) -> list[dict]:
+	if not institution or not academic_year:
+		return []
+	calendar = frappe.db.get_value(
+		"EduEdge Institution Academic Calendar",
+		{"institution": institution, "academic_year": academic_year, "enabled": 1},
+		"name",
+	)
+	if not calendar:
+		return []
+	terms = frappe.get_all(
+		"EduEdge Academic Calendar Period",
+		filters={
+			"parent": calendar,
+			"parenttype": "EduEdge Institution Academic Calendar",
+			"parentfield": "periods",
+		},
+		pluck="academic_term",
+		order_by="sequence asc, start_date asc",
+		limit_page_length=30,
+	)
+	allowed = [term for term in terms if term]
+	if not allowed:
+		return []
+	return _link_rows("Academic Term", "name", txt, {"name": ["in", allowed]})
 
 
 def _link_rows(doctype: str, label_field: str, txt: str, filters: dict) -> list[dict]:
@@ -147,6 +303,10 @@ def _link_rows(doctype: str, label_field: str, txt: str, filters: dict) -> list[
 		limit_page_length=30,
 	)
 	return [
-		{"value": row.name, "label": row.get(label_field) or row.name, "description": row.name if label_field != "name" else ""}
+		{
+			"value": row.name,
+			"label": row.get(label_field) or row.name,
+			"description": row.name if label_field != "name" else "",
+		}
 		for row in rows
 	]
