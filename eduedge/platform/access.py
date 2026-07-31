@@ -20,8 +20,15 @@ def _cache_key(
 	tenant_key: str,
 	feature_key: str | None,
 	action: str | None,
+	reference_doctype: str | None = None,
+	reference_name: str | None = None,
 	decision_type: str = "runtime",
 ) -> str:
+	"""Build a scope-complete cache key for a CoreEdge access decision.
+
+	Record-aware decisions must never be reused for another document. Blank
+	references remain a distinct feature/action-level cache scope.
+	"""
 	payload = json.dumps(
 		{
 			"user": user,
@@ -29,6 +36,8 @@ def _cache_key(
 			"product": "EduEdge",
 			"feature_key": normalize_feature_key(feature_key),
 			"action": action or "",
+			"reference_doctype": reference_doctype or "",
+			"reference_name": reference_name or "",
 			"decision_type": decision_type,
 		},
 		sort_keys=True,
@@ -69,6 +78,8 @@ def get_eduedge_access_decision(
 		tenant_key=resolved_tenant,
 		feature_key=feature_key,
 		action=action,
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
 		decision_type="runtime",
 	)
 	try:
@@ -139,6 +150,8 @@ def get_eduedge_capability_decision(
 		tenant_key=resolved_tenant,
 		feature_key=feature_key,
 		action=action,
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
 		decision_type="capability",
 	)
 	try:
