@@ -10,19 +10,34 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 	def test_product_sidebar_uses_grouped_semantic_svg_icon_names(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
 		for expected in (
-			"section:",
-			"sectionIcon:",
-			"description:",
-			'icon: "home"',
-			'sectionIcon: "graduation"',
-			'icon: "assessment"',
-			'icon: "report"',
-			'icon: "shield"',
-			'icon: "settings"',
+			"menuGroup(",
+			"defaultCollapsed: true",
+			"items: items.filter",
+			'__("Students & Admissions")',
+			'__("Academic Setup")',
+			'__("Assessments & Results")',
+			'__("CBT Delivery")',
+			'__("CBT Content")',
+			'__("Institution & Access")',
+			'"home"',
+			'"graduation"',
+			'"assessment"',
+			'"report"',
+			'"shield"',
+			'"settings"',
 		):
 			self.assertIn(expected, navigation)
 		for forbidden in ('icon: "⌂"', 'icon: "⚙"', 'icon: "C"', 'icon: "R"'):
 			self.assertNotIn(forbidden, navigation)
+
+	def test_compact_sidebar_density_is_product_scoped(self):
+		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
+		styles = (APP / "public/css/eduedge_compact_navigation.css").read_text()
+		self.assertIn("eduedge_compact_navigation.css", navigation)
+		self.assertIn('data-edge-product="eduedge"', styles)
+		self.assertIn("--edge-sidebar-width: 14.25rem", styles)
+		self.assertIn(".edge-sidebar-item__description", styles)
+		self.assertIn("display: none", styles)
 
 	def test_global_product_menu_uses_shared_edgesuite_renderer_and_permissions(self):
 		bundle = (APP / "public/js/eduedge_product_menu.bundle.js").read_text()
