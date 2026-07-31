@@ -33,6 +33,19 @@ def _get_feature_flags() -> dict[str, bool]:
 	return flags
 
 
+def _get_eduedge_page_routes() -> list[str]:
+	try:
+		page_names = frappe.get_all(
+			"Page",
+			filters={"name": ["like", "eduedge-%"]},
+			pluck="name",
+			page_length=0,
+		)
+	except Exception:
+		page_names = []
+	return sorted({f"/app/{name}" for name in page_names if name})
+
+
 def _get_company_identity(company: str) -> dict:
 	if not company or not frappe.db.exists("Company", company):
 		return {"name": company or "", "label": company or "", "logo": ""}
@@ -206,6 +219,7 @@ def extend_bootinfo(bootinfo) -> None:
 
 	bootinfo["eduedge_institution_context"] = institution_context
 	bootinfo["eduedge_features"] = features
+	bootinfo["eduedge_page_routes"] = _get_eduedge_page_routes()
 	bootinfo["eduedge_ui_identity"] = identity
 	shared = bootinfo.get("edgesuite_ui_identity") or {}
 	shared["eduedge"] = identity
