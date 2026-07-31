@@ -7,8 +7,8 @@ APP = ROOT / "eduedge"
 
 
 class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
-	def test_keyboard_bundle_registers_search_and_safe_save_commands(self):
-		bundle = (APP / "public/js/eduedge_keyboard_shortcuts.bundle.js").read_text()
+	def test_keyboard_asset_registers_search_and_safe_save_commands(self):
+		asset = (APP / "public/js/eduedge_keyboard_shortcuts.js").read_text()
 		for expected in (
 			"EdgeSuiteCommands",
 			"registerSaveHandler",
@@ -24,10 +24,10 @@ class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
 			"form.is_dirty()",
 			"event.preventDefault()",
 		):
-			self.assertIn(expected, bundle)
+			self.assertIn(expected, asset)
 
-	def test_keyboard_bundle_does_not_bypass_document_safety(self):
-		bundle = (APP / "public/js/eduedge_keyboard_shortcuts.bundle.js").read_text()
+	def test_keyboard_asset_does_not_bypass_document_safety(self):
+		asset = (APP / "public/js/eduedge_keyboard_shortcuts.js").read_text()
 		for forbidden in (
 			"ignore_permissions",
 			"frappe.db.set_value",
@@ -35,13 +35,13 @@ class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
 			"docstatus = 0",
 			"form.doc.docstatus = 0",
 		):
-			self.assertNotIn(forbidden, bundle)
-		self.assertIn("Submitted documents cannot be changed", bundle)
-		self.assertIn("textarea, [contenteditable='true']", bundle)
+			self.assertNotIn(forbidden, asset)
+		self.assertIn("Submitted documents cannot be changed", asset)
+		self.assertIn("textarea, [contenteditable='true']", asset)
 
-	def test_hooks_load_keyboard_bundle_before_product_navigation(self):
+	def test_hooks_load_keyboard_asset_before_product_navigation(self):
 		hooks = (APP / "hooks.py").read_text()
-		keyboard = hooks.index('"eduedge_keyboard_shortcuts.bundle.js"')
+		keyboard = hooks.index('"/assets/eduedge/js/eduedge_keyboard_shortcuts.js"')
 		menu = hooks.index('"eduedge_product_menu.bundle.js"')
 		self.assertLess(keyboard, menu)
 
