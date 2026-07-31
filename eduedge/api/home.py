@@ -23,7 +23,7 @@ def _permission_aware_count(doctype: str, filters: dict) -> int:
 		rows = frappe.get_list(
 			doctype,
 			filters=filters,
-			fields=["count(name) as count"],
+			fields=[{"COUNT": "*", "as": "count"}],
 			limit_page_length=1,
 		)
 	except (frappe.PermissionError, frappe.DoesNotExistError):
