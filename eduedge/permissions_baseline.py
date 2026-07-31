@@ -83,8 +83,10 @@ EDUEDGE_DESK_ROLES = tuple(
 		)
 	)
 )
-EDUEDGE_PAGES = (
+STANDARD_EDUEDGE_PAGES = (
 	"eduedge-home",
+	"eduedge-my-profile",
+	"eduedge-academic-foundation",
 	"eduedge-academic-operations",
 	"eduedge-admissions",
 	"eduedge-applicants",
@@ -92,16 +94,42 @@ EDUEDGE_PAGES = (
 	"eduedge-programs",
 	"eduedge-program-offerings",
 	"eduedge-cbt-operations",
+	"eduedge-cbt-schedules",
+	"eduedge-cbt-invigilation",
+	"eduedge-cbt-marking",
+	"eduedge-cbt-review-workbench",
+	"eduedge-exam-templates",
+	"eduedge-exam-template-builder",
+	"eduedge-question-bank",
+	"eduedge-question-responsibilities",
 	"eduedge-question-builder",
 	"eduedge-question-batch",
 	"eduedge-assessment-operations",
 	"eduedge-report-cards",
+	"eduedge-institution-profile",
+	"eduedge-institution-structure",
+	"eduedge-institution-operations-settings",
 	"eduedge-school-branches",
 	"eduedge-branch-governance",
 	"eduedge-setup-center",
 	"eduedge-settings-center",
 	"eduedge-training-centre",
 )
+
+
+def get_eduedge_page_names() -> list[str]:
+	"""Discover every installed EduEdge Page from one authoritative helper."""
+	page_names = set(STANDARD_EDUEDGE_PAGES)
+	if not frappe.db.exists("DocType", "Page"):
+		return sorted(page_names)
+	for filters in ({"module": "EduEdge"}, {"name": ["like", "eduedge-%"]}):
+		try:
+			page_names.update(
+				frappe.get_all("Page", filters=filters, pluck="name", page_length=0)
+			)
+		except (frappe.PermissionError, frappe.DoesNotExistError):
+			continue
+	return sorted(name for name in page_names if name)
 
 
 def _grant(matrix: dict, doctype: str, roles, rights) -> None:
@@ -268,7 +296,7 @@ def apply_default_permission_baseline() -> dict:
 def ensure_eduedge_page_role_baseline() -> dict:
 	"""Remove duplicate Page role gates; menus, APIs and DocTypes govern access."""
 	changed_pages = []
-	for page_name in EDUEDGE_PAGES:
+	for page_name in get_eduedge_page_names():
 		if not frappe.db.exists("Page", page_name):
 			continue
 		count = frappe.db.count(
@@ -387,10 +415,11 @@ def get_role_permission_audit() -> dict:
 		if classification == "portal_only" and row.desk_access and not row.disabled:
 			portal_roles_with_desk_access.append(row.name)
 
+	page_names = get_eduedge_page_names()
 	remaining_page_role_gates = frappe.get_all(
 		"Has Role",
 		filters={
-			"parent": ["in", EDUEDGE_PAGES],
+			"parent": ["in", page_names],
 			"parenttype": "Page",
 			"parentfield": "roles",
 		},
@@ -400,6 +429,7 @@ def get_role_permission_audit() -> dict:
 	)
 	return {
 		"audited_doctypes": audited_doctypes,
+		"audited_pages": page_names,
 		"missing_doctypes": missing_doctypes,
 		"missing_defaults": missing_defaults,
 		"sensitive_permission_warnings": _sensitive_permission_warnings(rights_by_role),
