@@ -31,6 +31,16 @@ function ensureCompactNavigationStyles() {
 	document.head.appendChild(link);
 }
 
+export function featureEnabled(feature) {
+	if (!feature) return true;
+	const features =
+		frappe.boot?.eduedge_features ||
+		frappe.boot?.eduedge_ui_identity?.features ||
+		frappe.boot?.eduedge_access_manifest?.features;
+	if (!features || !Object.prototype.hasOwnProperty.call(features, feature)) return true;
+	return Boolean(features[feature]);
+}
+
 export function hasEduEdgeRouteAccess(route) {
 	if (frappe.session.user === "Administrator") return true;
 	const path = normalizedPath(route);
@@ -43,13 +53,17 @@ function menuItem(label, route, icon, description) {
 	return { label, route, icon, description };
 }
 
-function menuGroup(key, label, icon, items) {
+function menuGroup(key, label, icon, items, { feature = "" } = {}) {
+	if (!featureEnabled(feature)) return null;
+	const allowedItems = items.filter((item) => hasEduEdgeRouteAccess(item.route));
+	const activePath = typeof window === "undefined" ? "" : normalizedPath(window.location.pathname);
 	return {
 		key,
 		label,
 		icon,
-		defaultCollapsed: true,
-		items: items.filter((item) => hasEduEdgeRouteAccess(item.route)),
+		feature,
+		defaultCollapsed: !allowedItems.some((item) => normalizedPath(item.route) === activePath),
+		items: allowedItems,
 	};
 }
 
@@ -92,7 +106,7 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("CBT Invigilation"), "/app/eduedge-cbt-invigilation", "monitor", __("Live candidates and sync health")),
 			menuItem(__("CBT Attempt Review"), "/app/eduedge-cbt-review-workbench", "shield", __("Resolve integrity flags before scoring")),
 			menuItem(__("CBT Scoring & Marking"), "/app/eduedge-cbt-marking", "edit", __("Scoring, marking, and approval")),
-		]),
+		], { feature: "cbt" }),
 		menuGroup("cbt-content", __("CBT Content"), "book", [
 			menuItem(__("Question Bank"), "/app/eduedge-question-bank", "book", __("Search and review governed questions")),
 			menuItem(__("Question Builder"), "/app/eduedge-question-builder", "edit", __("Author and revise questions")),
@@ -100,7 +114,7 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Question Responsibilities"), "/app/eduedge-question-responsibilities", "shield", __("Authors, reviewers, and approvers")),
 			menuItem(__("Exam Templates"), "/app/eduedge-exam-templates", "layers", __("Review reusable exam designs")),
 			menuItem(__("Exam Template Builder"), "/app/eduedge-exam-template-builder", "edit", __("Create reusable exam designs")),
-		]),
+		], { feature: "cbt" }),
 		menuGroup("institution-access", __("Institution & Access"), "building", [
 			menuItem(__("Institution Profile"), "/app/eduedge-institution-profile", "building", __("Identity, branding, and contacts")),
 			menuItem(__("Institution Structure"), "/app/eduedge-institution-structure", "layers", __("Institution types and terminology")),
@@ -113,7 +127,7 @@ export function buildEduEdgeMenuItems() {
 		menuGroup("help-training", __("Help & Training"), "book", [
 			menuItem(__("Training Centre"), "/app/eduedge-training-centre", "book", __("Role-based guided learning")),
 		]),
-	].filter((group) => group.items.length);
+	].filter((group) => group?.items.length);
 }
 
 export const EDUEDGE_MENU_ITEMS = reactive([]);
@@ -127,6 +141,8 @@ export function refreshEduEdgeMenuItems() {
 
 refreshEduEdgeMenuItems();
 window.addEventListener("eduedge:institution-context-changed", refreshEduEdgeMenuItems);
+window.addEventListener("popstate", refreshEduEdgeMenuItems);
+document.addEventListener("page-change", refreshEduEdgeMenuItems);
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home", "/app/eduedge-my-profile", "/app/eduedge-academic-operations",
