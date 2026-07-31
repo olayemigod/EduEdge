@@ -1,4 +1,4 @@
-/* EduEdge compact navigation layer.
+/* EduEdge density and navigation layer.
    Product-scoped overrides only; EdgeSuite UI remains the shared component owner. */
 
 .edge-app-shell[data-edge-product="eduedge"] {
@@ -7,6 +7,22 @@
 	--edge-page-padding: clamp(.75rem, 1.8vw, 1.25rem);
 	--edge-section-gap: clamp(.7rem, 1.3vw, 1rem);
 	--edge-card-gap: clamp(.55rem, 1vw, .75rem);
+}
+
+html[data-eduedge-density="comfortable"] .edge-app-shell[data-edge-product="eduedge"] {
+	--edge-sidebar-width: 15.75rem;
+	--edge-topbar-height: 4rem;
+	--edge-page-padding: clamp(1rem, 2.2vw, 1.6rem);
+	--edge-section-gap: clamp(.9rem, 1.7vw, 1.3rem);
+	--edge-card-gap: clamp(.7rem, 1.25vw, 1rem);
+}
+
+html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] {
+	--edge-sidebar-width: 16.25rem;
+	--edge-topbar-height: 4.25rem;
+	--edge-page-padding: clamp(1rem, 2.4vw, 1.75rem);
+	--edge-section-gap: 1.15rem;
+	--edge-card-gap: .9rem;
 }
 
 .edge-app-shell[data-edge-product="eduedge"] .edge-topbar {
@@ -75,10 +91,34 @@
 	line-height: 1.15;
 }
 
-/* The sidebar is for finding an action quickly; descriptions remain available
-   in the searchable waffle/product menu and section landing pages. */
+/* Compact is the default because EduEdge has many operational routes. */
 .edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item__description {
 	display: none;
+}
+
+html[data-eduedge-density="comfortable"] .edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item {
+	grid-template-columns: 1.85rem minmax(0, 1fr) auto;
+	min-height: 2.55rem;
+	padding: .38rem .5rem;
+}
+
+html[data-eduedge-density="comfortable"] .edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item__label {
+	font-size: .82rem;
+}
+
+html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item {
+	grid-template-columns: 2rem minmax(0, 1fr) auto;
+	min-height: 2.9rem;
+	padding: .48rem .58rem;
+}
+
+html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item > .edge-icon {
+	height: 1.9rem;
+	width: 1.9rem;
+}
+
+html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item__label {
+	font-size: .88rem;
 }
 
 .edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__user {
@@ -116,14 +156,41 @@
 	padding: .4rem .7rem;
 }
 
+html[data-eduedge-density="comfortable"] .edge-app-shell[data-edge-product="eduedge"] .edge-stat-card {
+	min-height: 6.6rem;
+	padding: .95rem;
+}
+
+html[data-eduedge-density="comfortable"] .edge-app-shell[data-edge-product="eduedge"] .edge-button {
+	min-height: 2.45rem;
+}
+
+html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] .edge-stat-card {
+	min-height: 7.2rem;
+	padding: 1rem;
+}
+
+html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] .edge-button {
+	font-size: .9rem;
+	min-height: 2.8rem;
+	padding: .55rem .9rem;
+}
+
 .eduedge-command-palette {
 	display: grid;
 	gap: .65rem;
 	padding: .15rem 0 .35rem;
 }
 
-.eduedge-command-palette__input {
-	font-size: .92rem;
+.eduedge-command-palette__controls {
+	display: grid;
+	gap: .55rem;
+	grid-template-columns: minmax(0, 1fr) 9rem;
+}
+
+.eduedge-command-palette__input,
+.eduedge-command-palette__density {
+	font-size: .86rem;
 	min-height: 2.55rem;
 }
 
@@ -142,17 +209,13 @@
 }
 
 .eduedge-command-palette__result {
-	align-items: center;
+	align-items: stretch;
 	background: transparent;
 	border: 1px solid transparent;
 	border-radius: .65rem;
-	color: var(--text-color);
 	display: grid;
-	gap: .75rem;
-	grid-template-columns: minmax(0, 1fr) auto;
-	padding: .6rem .7rem;
-	text-align: left;
-	width: 100%;
+	grid-template-columns: minmax(0, 1fr) 2.4rem;
+	overflow: hidden;
 }
 
 .eduedge-command-palette__result:hover,
@@ -161,17 +224,44 @@
 	border-color: var(--border-color);
 }
 
-.eduedge-command-palette__result > span:first-child {
+.eduedge-command-palette__open,
+.eduedge-command-palette__favorite {
+	background: transparent;
+	border: 0;
+	color: var(--text-color);
+}
+
+.eduedge-command-palette__open {
+	align-items: center;
+	display: grid;
+	gap: .75rem;
+	grid-template-columns: minmax(0, 1fr) auto;
+	padding: .6rem .7rem;
+	text-align: left;
+	width: 100%;
+}
+
+.eduedge-command-palette__favorite {
+	border-left: 1px solid var(--border-color);
+	font-size: 1.05rem;
+	padding: 0;
+}
+
+.eduedge-command-palette__favorite:hover {
+	background: rgba(0, 0, 0, .04);
+}
+
+.eduedge-command-palette__open > span:first-child {
 	display: grid;
 	gap: .15rem;
 	min-width: 0;
 }
 
-.eduedge-command-palette__result strong {
+.eduedge-command-palette__open strong {
 	font-size: .84rem;
 }
 
-.eduedge-command-palette__result small,
+.eduedge-command-palette__open small,
 .eduedge-command-palette__section {
 	color: var(--text-muted);
 	font-size: .72rem;
@@ -188,7 +278,8 @@
 }
 
 @media (max-width: 575.98px) {
-	.eduedge-command-palette__result {
+	.eduedge-command-palette__controls,
+	.eduedge-command-palette__open {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
