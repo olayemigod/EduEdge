@@ -45,8 +45,6 @@ def school_branch_query(user: str | None = None) -> str:
 	if not _should_apply_branch_scope(resolved_user):
 		return ""
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return ""
 	if not allowed:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
@@ -152,8 +150,6 @@ def result_publication_log_query(user: str | None = None) -> str:
 	if not _should_apply_branch_scope(resolved_user):
 		return ""
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return ""
 	if not allowed:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
@@ -188,8 +184,6 @@ def guardian_query(user: str | None = None) -> str:
 	if not _should_apply_branch_scope(resolved_user) or not _branch_field_exists("Student"):
 		return ""
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return ""
 	if not allowed:
 		return "1=0"
 	branch_values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
@@ -228,8 +222,6 @@ def has_education_branch_permission(doc, user=None, permission_type=None) -> boo
 	if not _should_apply_branch_scope(resolved_user):
 		return True
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return True
 	if not doc:
 		return True
 
@@ -354,8 +346,6 @@ def has_school_branch_record_permission(doc, user=None, permission_type=None) ->
 	if not doc:
 		return True
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return True
 	name = doc if isinstance(doc, str) else doc.name
 	return name in allowed
 
@@ -367,8 +357,6 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 	if not doc:
 		return True
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return True
 	return doc.get("school_branch") in allowed
 
 
@@ -384,8 +372,6 @@ def has_result_publication_log_permission(doc, user=None, permission_type=None) 
 	if not _should_apply_branch_scope(resolved_user):
 		return True
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return True
 	return publication in allowed
 
 
@@ -446,8 +432,6 @@ def _branch_condition(
 	if not _should_apply_branch_scope(resolved_user) or not _branch_field_exists(doctype, fieldname):
 		return ""
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return ""
 	if not allowed:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
@@ -461,10 +445,15 @@ def _and_conditions(*conditions: str) -> str:
 	return " and ".join(f"({condition})" for condition in parts)
 
 
-def _allowed_branch_names(user: str) -> set[str] | None:
+def _allowed_branch_names(user: str) -> set[str]:
+	"""Return an explicit branch set for restricted users.
+
+	An empty set means no permitted branches and must fail closed. Only the role
+	bypass in _should_apply_branch_scope represents unrestricted access.
+	"""
 	if not frappe.db.count("EduEdge School Branch", {"enabled": 1}):
-		return None
-	return {row["name"] for row in get_allowed_school_branches(user=user)}
+		return set()
+	return {row["name"] for row in get_allowed_school_branches(user=user) if row.get("name")}
 
 
 def _should_apply_branch_scope(user: str) -> bool:
