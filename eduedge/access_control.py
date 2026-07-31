@@ -108,7 +108,7 @@ ROUTE_REQUIREMENTS = {
 		("cbt_attempt", "read"),
 	),
 	"/app/eduedge-cbt-marking": (("cbt_result", "write"),),
-	"/app/eduedge-cbt-attempt-review": (("cbt_attempt_review", "create"),),
+	"/app/eduedge-cbt-review-workbench": (("cbt_attempt_review", "create"),),
 	"/app/eduedge-question-builder": (
 		("cbt_question", "read"),
 		("cbt_question", "create"),
