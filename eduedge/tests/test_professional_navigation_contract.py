@@ -15,6 +15,10 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 			'{ feature: "cbt" }',
 			"defaultCollapsed: !allowedItems.some",
 			"items: allowedItems",
+			"withFavorites",
+			"readFavoriteRoutes",
+			"edgesuite:favorites-changed",
+			'__("Favorites")',
 			'__("Students & Admissions")',
 			'__("Academic Setup")',
 			'__("Assessments & Results")',
@@ -44,12 +48,19 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		):
 			self.assertIn(expected, factory)
 
-	def test_compact_sidebar_density_is_product_scoped(self):
+	def test_density_modes_are_product_scoped_and_compact_by_default(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
 		styles = (APP / "public/css/eduedge_compact_navigation.css").read_text()
+		bundle = (APP / "public/js/eduedge_product_menu.bundle.js").read_text()
 		self.assertIn("eduedge_compact_navigation.css", navigation)
 		self.assertIn('data-edge-product="eduedge"', styles)
 		self.assertIn("--edge-sidebar-width: 14.25rem", styles)
+		self.assertIn('data-eduedge-density="comfortable"', styles)
+		self.assertIn('data-eduedge-density="touch"', styles)
+		self.assertIn("DENSITY_MODES", bundle)
+		self.assertIn("getDensity", bundle)
+		self.assertIn("setDensity", bundle)
+		self.assertIn('|| "compact"', bundle)
 		self.assertIn(".edge-sidebar-item__description", styles)
 		self.assertIn("display: none", styles)
 		self.assertIn(".eduedge-command-palette", styles)
@@ -66,6 +77,9 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 			"CBT Delivery",
 			"CBT Content",
 			"Institution & Access",
+			"Favorites",
+			"toggleFavorite",
+			"readFavorites",
 			"accordion: true",
 			"featureEnabled",
 			"quick_action: true",
