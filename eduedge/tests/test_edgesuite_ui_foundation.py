@@ -66,7 +66,7 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 	def test_product_bundles_create_apps_with_the_product_vue_runtime(self):
 		bundle_root = APP / "public" / "js"
 		factory = (bundle_root / "eduedge_ui" / "app_factory.js").read_text()
-		self.assertIn('import { createApp } from "vue"', factory)
+		self.assertRegex(factory, r'import \{[^}]*createApp[^}]*\} from "vue"')
 		self.assertIn("runtime.install(app)", factory)
 		self.assertIn("resolveEdgeSuiteRuntime", factory)
 
