@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
+from urllib.parse import urlparse
 
 SUPPORTED_MODES = {"standalone", "remote"}
 LEGACY_REMOTE_MODES = {"shared_hosted", "white_label"}
+LOCAL_DEVELOPMENT_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off", ""}
@@ -40,6 +42,19 @@ def normalize_mode(value: Any) -> str:
 	if mode not in SUPPORTED_MODES:
 		return "standalone"
 	return mode
+
+
+def is_secure_remote_url(value: str) -> bool:
+	"""Require HTTPS except for explicit local development hosts."""
+	if not value:
+		return False
+	parsed = urlparse(value)
+	host = (parsed.hostname or "").lower()
+	if parsed.scheme == "https":
+		return bool(host)
+	if parsed.scheme != "http":
+		return False
+	return host in LOCAL_DEVELOPMENT_HOSTS or host.endswith(".local")
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,12 +111,18 @@ class PlatformConfig:
 	def remote_enabled(self) -> bool:
 		return self.mode == "remote"
 
+	@property
+	def secure_transport(self) -> bool:
+		return is_secure_remote_url(self.base_url)
+
 	def readiness(self) -> dict:
 		blockers: list[str] = []
 		warnings: list[str] = []
 		if self.remote_enabled:
 			if not self.base_url:
 				blockers.append("CoreEdge base URL is not configured.")
+			elif not self.secure_transport:
+				blockers.append("CoreEdge base URL must use HTTPS outside local development.")
 			if not self.tenant_key:
 				blockers.append("CoreEdge tenant key is not configured.")
 			if not self.site_identifier:
@@ -130,6 +151,7 @@ class PlatformConfig:
 			"product": self.product,
 			"required": self.required,
 			"base_url_configured": bool(self.base_url),
+			"secure_transport": self.secure_transport,
 			"tenant_key_configured": bool(self.tenant_key),
 			"site_identifier_configured": bool(self.site_identifier),
 			"client_id_configured": bool(self.client_id),
