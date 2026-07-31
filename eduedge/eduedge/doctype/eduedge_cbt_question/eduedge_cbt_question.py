@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, flt, now_datetime
+from frappe.utils import cint, flt, now_datetime, sanitize_html
 
 from eduedge.access_control import user_has_role_permission
 from eduedge.cbt.public_access import require_public_exam_authoring
@@ -17,6 +17,7 @@ BINARY_ANSWER_PRESETS = {
 }
 CHOICE_TYPES = {"Single Choice", "Multiple Choice"}
 OBJECTIVE_TYPES = CHOICE_TYPES | set(BINARY_ANSWER_PRESETS)
+CONTENT_FIELDS = ("question_text", "answer_key", "marking_guide", "review_feedback", "notes")
 PROTECTED_FIELDS = (
 	"question_code",
 	"ownership_scope",
@@ -54,6 +55,11 @@ def option_label(position: int) -> str:
 	return label
 
 
+def sanitize_question_content(value) -> str:
+	"""Apply Frappe's HTML allow-list before question content reaches storage."""
+	return sanitize_html(str(value or "")).strip()
+
+
 def can_review_questions(user: str | None = None) -> bool:
 	"""Use a configurable DocType right as the question-review capability."""
 	return user_has_role_permission("EduEdge CBT Question", "delete", user)
@@ -76,6 +82,7 @@ class EduEdgeCBTQuestion(Document):
 			self.name = self.question_code
 
 	def validate(self) -> None:
+		self._sanitize_stored_content()
 		self.question_code = (self.question_code or "").strip().upper()
 		self._validate_identity()
 		self._validate_scope()
@@ -95,6 +102,13 @@ class EduEdgeCBTQuestion(Document):
 			)
 		if self.ownership_scope == PLATFORM_BANK:
 			require_public_exam_authoring()
+
+	def _sanitize_stored_content(self) -> None:
+		for fieldname in CONTENT_FIELDS:
+			if self.get(fieldname) is not None:
+				self.set(fieldname, sanitize_question_content(self.get(fieldname)))
+		for row in self.get("options") or []:
+			row.option_text = sanitize_question_content(row.option_text)
 
 	def _validate_identity(self) -> None:
 		if not self.question_code:
@@ -227,7 +241,7 @@ class EduEdgeCBTQuestion(Document):
 		for index, row in enumerate(rows, start=1):
 			label = option_label(index)
 			row.option_key = label
-			row.option_text = (row.option_text or "").strip()
+			row.option_text = sanitize_question_content(row.option_text)
 			if not row.option_text:
 				frappe.throw(_("Enter an Answer for option {0}.").format(label), frappe.ValidationError)
 			row.display_order = index
@@ -261,7 +275,10 @@ class EduEdgeCBTQuestion(Document):
 		if not before or before.status not in {"Approved", "Retired"}:
 			return
 		for fieldname in PROTECTED_FIELDS:
-			if before.get(fieldname) != self.get(fieldname):
+			before_value = before.get(fieldname)
+			if fieldname in CONTENT_FIELDS:
+				before_value = sanitize_question_content(before_value)
+			if before_value != self.get(fieldname):
 				frappe.throw(
 					_("Approved question content is immutable. Create a new version instead."),
 					frappe.ValidationError,
@@ -287,7 +304,7 @@ class EduEdgeCBTQuestion(Document):
 		return tuple(
 			(
 				(row.option_key or "").strip().upper(),
-				(row.option_text or "").strip(),
+				sanitize_question_content(row.option_text),
 				cint(row.is_correct),
 				cint(row.display_order),
 			)
