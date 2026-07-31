@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import nowdate
+from frappe.utils import cint, nowdate
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.branch_context import get_active_branch_context
@@ -13,6 +13,22 @@ from eduedge.services.setup_readiness import get_setup_readiness
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required."), frappe.PermissionError)
+
+
+def _permission_aware_count(doctype: str, filters: dict) -> int:
+	"""Count only records visible through the current user's Frappe permissions."""
+	if not frappe.has_permission(doctype, "read", user=frappe.session.user):
+		return 0
+	try:
+		rows = frappe.get_list(
+			doctype,
+			filters=filters,
+			fields=["count(name) as count"],
+			limit_page_length=1,
+		)
+	except (frappe.PermissionError, frappe.DoesNotExistError):
+		return 0
+	return cint((rows[0] if rows else {}).get("count"))
 
 
 def _count_for_branches(
@@ -35,7 +51,7 @@ def _count_for_branches(
 		return 0
 	branch_filter: str | list = branches[0] if len(branches) == 1 else ["in", branches]
 	filters = {resolved_fieldname: branch_filter, **(extra_filters or {})}
-	return frappe.db.count(doctype, filters)
+	return _permission_aware_count(doctype, filters)
 
 
 @frappe.whitelist()
@@ -94,7 +110,7 @@ def get_home_context() -> dict:
 		"can_switch_branch": branch_context["can_switch_branch"],
 		"can_view_all_branches": branch_context["can_view_all_branches"],
 		"branch_access_enforced": branch_context["enforcement_enabled"],
-		"can_manage_branch_access": bool({"System Manager", "EduEdge Administrator"}.intersection(frappe.get_roles(frappe.session.user))),
+		"can_manage_branch_access": bool({"System Manager", "EduEdge Super Administrator", "EduEdge Administrator"}.intersection(frappe.get_roles(frappe.session.user))),
 		"requires_branch_selection": bool(
 			branch_context["active_scope"] == "branch"
 			and allowed_branches
