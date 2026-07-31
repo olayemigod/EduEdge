@@ -123,8 +123,6 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 		return True
 
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return True
 	return branch in allowed
 
 
@@ -134,8 +132,6 @@ def _has_exam_template_scope_permission(doc, user: str) -> bool:
 	if not is_branch_access_enforced():
 		return True
 	rows = _allowed_branch_rows(user)
-	if rows is None:
-		return True
 	scope = doc.get("template_reuse_scope") or REUSE_BRANCH
 	if scope == REUSE_UNIVERSAL:
 		return doc.get("company") in {row.get("company") for row in rows}
@@ -190,9 +186,6 @@ def _school_branch_condition(doctype: str, user: str | None) -> str:
 		return "" if public_allowed else school_records_only
 
 	allowed = _allowed_branch_names(resolved_user)
-	if allowed is None:
-		return "" if public_allowed else school_records_only
-
 	conditions: list[str] = []
 	if allowed:
 		values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
@@ -218,9 +211,7 @@ def _lifecycle_log_condition(user: str | None) -> str:
 		conditions.append(f"{branch_column} is not null")
 	else:
 		allowed = _allowed_branch_names(resolved_user)
-		if allowed is None:
-			conditions.append(f"{branch_column} is not null")
-		elif allowed:
+		if allowed:
 			values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
 			conditions.append(f"{branch_column} in ({values})")
 
@@ -253,9 +244,6 @@ def _exam_template_condition(user: str | None) -> str:
 		return "" if public_allowed else f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)}"
 
 	rows = _allowed_branch_rows(resolved_user)
-	if rows is None:
-		return "" if public_allowed else f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)}"
-
 	branches = sorted({row.get("name") for row in rows if row.get("name")})
 	institutions = sorted({row.get("institution") for row in rows if row.get("institution")})
 	companies = sorted({row.get("company") for row in rows if row.get("company")})
@@ -323,14 +311,13 @@ def _reference_branch_conditions(user: str, alias: str) -> list[str]:
 		conditions.append(f"{alias}.school_branch is not null")
 	else:
 		allowed = _allowed_branch_names(user)
-		if allowed is None:
-			conditions.append(f"{alias}.school_branch is not null")
-		elif allowed:
+		if allowed:
 			values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
 			conditions.append(f"{alias}.school_branch in ({values})")
 	if can_author_public_exams(user):
 		conditions.append(f"{alias}.school_branch is null")
 	return conditions
+
 
 def _has_public_record_access(doctype: str | None, user: str) -> bool:
 	if doctype in PUBLIC_ASSIGNMENT_DOCTYPES:
@@ -338,17 +325,15 @@ def _has_public_record_access(doctype: str | None, user: str) -> bool:
 	return can_author_public_exams(user)
 
 
-def _allowed_branch_rows(user: str) -> list[dict] | None:
+def _allowed_branch_rows(user: str) -> list[dict]:
+	"""Return explicit enabled Branch assignments; an empty list fails closed."""
 	if not frappe.db.count("EduEdge School Branch", {"enabled": 1}):
-		return None
+		return []
 	return [dict(row) for row in get_allowed_school_branches(user=user)]
 
 
-def _allowed_branch_names(user: str) -> set[str] | None:
-	rows = _allowed_branch_rows(user)
-	if rows is None:
-		return None
-	return {row.get("name") for row in rows if row.get("name")}
+def _allowed_branch_names(user: str) -> set[str]:
+	return {row.get("name") for row in _allowed_branch_rows(user) if row.get("name")}
 
 
 def _is_cbt_operational_user(user: str) -> bool:
