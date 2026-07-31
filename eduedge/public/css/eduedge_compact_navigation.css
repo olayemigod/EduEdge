@@ -1,0 +1,123 @@
+/* EduEdge compact navigation layer.
+   Product-scoped overrides only; EdgeSuite UI remains the shared component owner. */
+
+.edge-app-shell[data-edge-product="eduedge"] {
+	--edge-sidebar-width: 14.25rem;
+	--edge-topbar-height: 3.5rem;
+	--edge-page-padding: clamp(.75rem, 1.8vw, 1.25rem);
+	--edge-section-gap: clamp(.7rem, 1.3vw, 1rem);
+	--edge-card-gap: clamp(.55rem, 1vw, .75rem);
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-topbar {
+	gap: .7rem;
+	padding: .4rem clamp(.75rem, 1.7vw, 1.15rem);
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-topbar__mark {
+	border-radius: .625rem;
+	height: 2.1rem;
+	width: 2.1rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__brand {
+	gap: .55rem;
+	padding: .7rem .75rem .65rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__mark {
+	border-radius: .65rem;
+	height: 2.2rem;
+	width: 2.2rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__nav {
+	gap: .45rem;
+	padding: .55rem .45rem .75rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section {
+	gap: .2rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section + .edge-sidebar__section {
+	padding-top: .4rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section-title {
+	font-size: .62rem;
+	gap: .3rem;
+	letter-spacing: .055em;
+	min-height: 1.8rem;
+	padding: .2rem .45rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__items {
+	gap: .08rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item {
+	border-radius: .55rem;
+	gap: .45rem;
+	grid-template-columns: 1.65rem minmax(0, 1fr) auto;
+	min-height: 2.15rem;
+	padding: .28rem .4rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item > .edge-icon {
+	border-radius: .45rem;
+	height: 1.65rem;
+	width: 1.65rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item__label {
+	font-size: .76rem;
+	line-height: 1.15;
+}
+
+/* The sidebar is for finding an action quickly; descriptions remain available
+   in the searchable waffle/product menu and section landing pages. */
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar-item__description {
+	display: none;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__user {
+	gap: .5rem;
+	grid-template-columns: 1.9rem minmax(0, 1fr);
+	padding: .55rem .7rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__avatar {
+	height: 1.9rem;
+	width: 1.9rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-page-layout__header {
+	border-radius: .85rem;
+	padding: clamp(.75rem, 1.6vw, 1.1rem);
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-page-header__title {
+	font-size: clamp(1.25rem, 1.9vw, 1.7rem);
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-page-header__subtitle {
+	font-size: .82rem;
+	line-height: 1.4;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-stat-card {
+	min-height: 5.8rem;
+	padding: .75rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-button {
+	min-height: 2.15rem;
+	padding: .4rem .7rem;
+}
+
+@media (max-width: 1199.98px) {
+	.edge-app-shell[data-edge-product="eduedge"] {
+		--edge-sidebar-width: 13.5rem;
+	}
+}
