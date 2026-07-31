@@ -1,6 +1,15 @@
 (() => {
 	const COMMAND_VERSION = "1.0.0";
 
+	function disableGlobalFriendlyNameObserver() {
+		const existing = window.__eduedgeFriendlyNameObserver;
+		if (existing?.disconnect) existing.disconnect();
+		window.__eduedgeFriendlyNameObserver = {
+			optimized: true,
+			disconnect() {},
+		};
+	}
+
 	function normalizeRoute(value) {
 		try {
 			const path = new URL(value, window.location.origin).pathname.replace(/\/+$/, "") || "/";
@@ -74,6 +83,7 @@
 		};
 	}
 
+	disableGlobalFriendlyNameObserver();
 	installEduEdgeRouteGuard();
 	if (window.EdgeSuiteCommands?.version === COMMAND_VERSION) return;
 
