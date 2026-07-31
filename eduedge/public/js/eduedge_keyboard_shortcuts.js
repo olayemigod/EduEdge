@@ -1,5 +1,15 @@
 (() => {
 	const COMMAND_VERSION = "1.0.0";
+	const NAVIGATION_QA_STYLESHEET = "/assets/eduedge/css/eduedge_navigation_qa_fixes.css";
+
+	function ensureNavigationQaStyles() {
+		if (document.querySelector(`link[href="${NAVIGATION_QA_STYLESHEET}"]`)) return;
+		const link = document.createElement("link");
+		link.rel = "stylesheet";
+		link.href = NAVIGATION_QA_STYLESHEET;
+		link.dataset.eduedgeNavigationQa = "1";
+		document.head.appendChild(link);
+	}
 
 	function disableGlobalFriendlyNameObserver() {
 		const existing = window.__eduedgeFriendlyNameObserver;
@@ -83,6 +93,7 @@
 		};
 	}
 
+	ensureNavigationQaStyles();
 	disableGlobalFriendlyNameObserver();
 	installEduEdgeRouteGuard();
 	if (window.EdgeSuiteCommands?.version === COMMAND_VERSION) return;
