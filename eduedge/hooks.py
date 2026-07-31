@@ -26,7 +26,7 @@ scheduler_events = {
 	],
 	"cron": {
 		"*/5 * * * *": [
-			"eduedge.cbt.attempts.finalize_expired_attempts",
+			"eduedge.security.feature_gate.run_cbt_expiry_job",
 		],
 	},
 }
