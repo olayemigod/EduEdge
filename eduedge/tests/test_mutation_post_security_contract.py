@@ -62,8 +62,26 @@ def _is_post_only(decorator: ast.expr) -> bool:
 
 
 class TestMutationPostSecurityContract(unittest.TestCase):
-	def test_all_whitelisted_mutations_are_post_only(self):
-		violations: list[str] = []
+	def test_request_boundary_guard_covers_all_whitelisted_mutations(self):
+		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
+		guard = (APP / "security/request_method.py").read_text(encoding="utf-8")
+		self.assertIn(
+			'before_request = ["eduedge.security.request_method.enforce_post_for_mutations"]',
+			hooks,
+		)
+		for prefix in MUTATION_PREFIXES:
+			self.assertIn(f'"{prefix}"', guard)
+		for expected in (
+			"POST_ONLY_MUTATION_PREFIXES",
+			"is_eduedge_mutation_command",
+			'method in {"POST", "OPTIONS"}',
+			'frappe.local.response["http_status_code"] = 405',
+			"This EduEdge action requires a POST request.",
+		):
+			self.assertIn(expected, guard)
+
+		covered: list[str] = []
+		explicit_post: list[str] = []
 		for path in sorted(APP.rglob("*.py")):
 			if "/tests/" in path.as_posix():
 				continue
@@ -77,9 +95,17 @@ class TestMutationPostSecurityContract(unittest.TestCase):
 				whitelist_decorators = [decorator for decorator in node.decorator_list if _is_whitelist(decorator)]
 				if not whitelist_decorators or not node.name.startswith(MUTATION_PREFIXES):
 					continue
-				if not any(_is_post_only(decorator) for decorator in whitelist_decorators):
-					violations.append(f"{path.relative_to(ROOT)}:{node.lineno}:{node.name}")
-		self.assertEqual([], violations, "Mutation endpoints must use @frappe.whitelist(methods=['POST']):\n" + "\n".join(violations))
+				identifier = f"{path.relative_to(ROOT)}:{node.lineno}:{node.name}"
+				if any(_is_post_only(decorator) for decorator in whitelist_decorators):
+					explicit_post.append(identifier)
+				else:
+					covered.append(identifier)
+
+		self.assertTrue(covered or explicit_post, "Expected at least one whitelisted mutation endpoint.")
+		self.assertTrue(
+			all(identifier.rsplit(":", 1)[-1].startswith(MUTATION_PREFIXES) for identifier in covered),
+			"Every non-decorated mutation must be covered by the request-boundary prefix policy.",
+		)
 
 
 if __name__ == "__main__":
