@@ -120,6 +120,8 @@ class RemoteCoreEdgeClient:
 	def _request(self, path: str, payload: dict) -> dict:
 		if not self.config.base_url:
 			raise RemoteContractNotConfigured("REMOTE_CONTRACT_NOT_CONFIGURED")
+		if not self.config.secure_transport:
+			raise RemoteContractNotConfigured("INSECURE_REMOTE_TRANSPORT")
 		url = f"{self.config.base_url}/{path.lstrip('/')}"
 		headers = {
 			"Accept": "application/json",
