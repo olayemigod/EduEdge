@@ -5,6 +5,11 @@ from urllib.parse import unquote
 import frappe
 from frappe import _
 
+from eduedge.security.cbt_candidate_requests import (
+	enforce_candidate_request,
+	is_candidate_command,
+)
+
 
 POST_ONLY_MUTATION_PREFIXES = (
 	"save_",
@@ -57,23 +62,34 @@ def is_eduedge_mutation_command(command: str) -> bool:
 	return function_name.startswith(POST_ONLY_MUTATION_PREFIXES)
 
 
-def enforce_post_for_mutations() -> None:
-	"""Block GET and other non-POST transport for EduEdge mutations.
-
-	This request-boundary control also covers methods redirected through
-	override_whitelisted_methods, so legacy source decorators cannot reopen a GET
-	mutation path. Normal internal Python calls and read-only RPC methods are not
-	affected.
-	"""
-	method = _request_method()
-	if not method or method in {"POST", "OPTIONS"}:
-		return
-	command = _request_command()
-	if not is_eduedge_mutation_command(command):
-		return
+def _reject_non_post() -> None:
 	frappe.local.response["http_status_code"] = 405
 	frappe.throw(
 		_("This EduEdge action requires a POST request."),
 		frappe.PermissionError,
 		title=_("POST Required"),
 	)
+
+
+def enforce_post_for_mutations() -> None:
+	"""Protect all EduEdge mutations and public CBT requests before dispatch.
+
+	The request-boundary control also covers methods redirected through
+	override_whitelisted_methods, so legacy source decorators cannot reopen a GET
+	mutation path. Candidate launch tokens are accepted only in POST bodies and
+	are validated and throttled before any Attempt query runs.
+	"""
+	method = _request_method()
+	if not method:
+		return
+	command = _request_command()
+	if is_candidate_command(command):
+		if method == "OPTIONS":
+			return
+		if method != "POST":
+			_reject_non_post()
+		enforce_candidate_request(command, getattr(frappe.local, "form_dict", None) or {})
+		return
+	if method in {"POST", "OPTIONS"} or not is_eduedge_mutation_command(command):
+		return
+	_reject_non_post()
