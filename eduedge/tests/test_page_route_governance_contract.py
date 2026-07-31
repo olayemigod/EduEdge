@@ -53,6 +53,17 @@ class TestPageRouteGovernanceContract(unittest.TestCase):
 			self.assertIn(expected, guard)
 		self.assertIn("if (!installedEduEdgePageRoutes().has(normalized)) return true", guard)
 
+	def test_access_manifest_explicitly_denies_unregistered_installed_pages(self):
+		access = (APP / "access_control.py").read_text()
+		for expected in (
+			"def _installed_eduedge_page_routes()",
+			'{"name": ["like", "eduedge-%"]}',
+			"for route in _installed_eduedge_page_routes()",
+			"routes.setdefault(route, False)",
+			'"/app/eduedge-cbt-review-workbench"',
+		):
+			self.assertIn(expected, access)
+
 
 if __name__ == "__main__":
 	unittest.main()
