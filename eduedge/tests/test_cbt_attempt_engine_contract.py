@@ -112,7 +112,7 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 	def test_hooks_register_branch_permissions_timeout_and_rpc_guards(self):
 		hooks = (APP / "hooks.py").read_text()
 		for token in (
-			"eduedge.cbt.attempts.finalize_expired_attempts",
+			"eduedge.security.feature_gate.run_cbt_expiry_job",
 			"eduedge.cbt.attempt_runtime_guard.get_attempt_state",
 			"eduedge.cbt.attempt_runtime_guard.sync_answers",
 			"eduedge.cbt.attempt_runtime_guard.submit_attempt",
@@ -123,6 +123,7 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			"has_attempt_reference_permission",
 		):
 			self.assertIn(token, hooks)
+		self.assertNotIn('"eduedge.cbt.attempts.finalize_expired_attempts"', hooks)
 
 	def test_general_settings_still_do_not_own_attempt_runtime_policy(self):
 		settings = (
