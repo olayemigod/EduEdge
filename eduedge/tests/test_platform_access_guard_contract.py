@@ -22,6 +22,20 @@ class TestPlatformAccessGuardContract(unittest.TestCase):
 
 		self.assertNotIn("return function(*args, cmd=", access)
 
+	def test_coreedge_cache_key_contains_record_identity(self):
+		access = (APP / "platform" / "access.py").read_text(encoding="utf-8")
+		for expected in (
+			"reference_doctype: str | None = None",
+			"reference_name: str | None = None",
+			'"reference_doctype": reference_doctype or ""',
+			'"reference_name": reference_name or ""',
+			"reference_doctype=reference_doctype",
+			"reference_name=reference_name",
+		):
+			self.assertIn(expected, access)
+		self.assertGreaterEqual(access.count("reference_doctype=reference_doctype"), 4)
+		self.assertGreaterEqual(access.count("reference_name=reference_name"), 4)
+
 
 if __name__ == "__main__":
 	unittest.main()
