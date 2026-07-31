@@ -35,13 +35,34 @@ def parse_positive_int(value: Any, default: int, *, minimum: int = 1, maximum: i
 	return parsed if minimum <= parsed <= maximum else default
 
 
-def normalize_mode(value: Any) -> str:
-	mode = str(value or "standalone").strip().lower()
-	if mode in LEGACY_REMOTE_MODES:
+def normalize_mode(value: Any, default: str = "remote") -> str:
+	text = str(value or "").strip().lower()
+	if not text:
+		return default if default in SUPPORTED_MODES else "remote"
+	if text in LEGACY_REMOTE_MODES:
 		return "remote"
-	if mode not in SUPPORTED_MODES:
-		return "standalone"
-	return mode
+	if text not in SUPPORTED_MODES:
+		return "remote"
+	return text
+
+
+def _candidate_host(value: Any) -> str:
+	text = str(value or "").strip()
+	if not text:
+		return ""
+	parsed = urlparse(text if "://" in text else f"//{text}")
+	return (parsed.hostname or text.split("/", 1)[0].split(":", 1)[0]).lower()
+
+
+def is_local_development(values: Mapping[str, Any] | None = None) -> bool:
+	values = values or {}
+	if parse_bool(values.get("developer_mode"), default=False):
+		return True
+	for key in ("site_name", "coreedge_site_identifier", "host_name"):
+		host = _candidate_host(values.get(key))
+		if host in LOCAL_DEVELOPMENT_HOSTS or host.endswith(".local") or host.endswith(".localhost"):
+			return True
+	return False
 
 
 def is_secure_remote_url(value: str) -> bool:
@@ -59,15 +80,16 @@ def is_secure_remote_url(value: str) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class PlatformConfig:
-	mode: str = "standalone"
+	mode: str = "remote"
 	product: str = "EduEdge"
-	required: bool = False
+	required: bool = True
 	base_url: str = ""
 	tenant_key: str = ""
 	site_identifier: str = ""
 	client_id: str = ""
 	client_secret: str = ""
-	fail_closed: bool = False
+	fail_closed: bool = True
+	local_development: bool = False
 	timeout_seconds: int = 8
 	access_cache_seconds: int = 300
 	health_path: str = ""
@@ -78,9 +100,15 @@ class PlatformConfig:
 	@classmethod
 	def from_mapping(cls, values: Mapping[str, Any] | None = None) -> "PlatformConfig":
 		values = values or {}
-		mode = normalize_mode(values.get("edge_platform_mode"))
-		required = parse_bool(values.get("coreedge_required"), default=False)
-		fail_closed = parse_bool(values.get("coreedge_fail_closed"), default=required)
+		local_development = is_local_development(values)
+		default_mode = "standalone" if local_development else "remote"
+		mode = normalize_mode(values.get("edge_platform_mode"), default=default_mode)
+		default_required = mode == "remote"
+		required = parse_bool(values.get("coreedge_required"), default=default_required)
+		fail_closed = parse_bool(
+			values.get("coreedge_fail_closed"),
+			default=required or mode == "remote",
+		)
 		return cls(
 			mode=mode,
 			product=str(values.get("edge_platform_product") or "EduEdge").strip() or "EduEdge",
@@ -88,11 +116,15 @@ class PlatformConfig:
 			base_url=str(values.get("coreedge_base_url") or "").strip().rstrip("/"),
 			tenant_key=str(values.get("coreedge_tenant_key") or "").strip(),
 			site_identifier=str(
-				values.get("coreedge_site_identifier") or values.get("host_name") or ""
+				values.get("coreedge_site_identifier")
+				or values.get("site_name")
+				or values.get("host_name")
+				or ""
 			).strip(),
 			client_id=str(values.get("coreedge_client_id") or "").strip(),
 			client_secret=str(values.get("coreedge_client_secret") or "").strip(),
 			fail_closed=fail_closed,
+			local_development=local_development,
 			timeout_seconds=parse_positive_int(values.get("coreedge_timeout_seconds"), 8, maximum=120),
 			access_cache_seconds=parse_positive_int(
 				values.get("coreedge_access_cache_seconds"),
@@ -118,6 +150,10 @@ class PlatformConfig:
 	def readiness(self) -> dict:
 		blockers: list[str] = []
 		warnings: list[str] = []
+		if self.required and not self.remote_enabled:
+			blockers.append("CoreEdge is required but the site is configured in standalone mode.")
+		if self.mode == "standalone" and not self.local_development:
+			warnings.append("Standalone platform mode is enabled outside local development.")
 		if self.remote_enabled:
 			if not self.base_url:
 				blockers.append("CoreEdge base URL is not configured.")
@@ -150,6 +186,7 @@ class PlatformConfig:
 			"mode": self.mode,
 			"product": self.product,
 			"required": self.required,
+			"local_development": self.local_development,
 			"base_url_configured": bool(self.base_url),
 			"secure_transport": self.secure_transport,
 			"tenant_key_configured": bool(self.tenant_key),
@@ -169,4 +206,6 @@ class PlatformConfig:
 def get_platform_config() -> PlatformConfig:
 	import frappe
 
-	return PlatformConfig.from_mapping(frappe.conf)
+	values = dict(frappe.conf)
+	values.setdefault("site_name", getattr(frappe.local, "site", ""))
+	return PlatformConfig.from_mapping(values)
