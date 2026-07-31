@@ -133,7 +133,10 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 			/ "eduedge_cbt_exam_template.py"
 		).read_text()
 		training = (EDUEDGE / "training" / "permissions.py").read_text()
-		self.assertIn('user_has_role_permission("EduEdge CBT Question", "delete", user)', question)
+		question_review = question.split("def can_review_questions", 1)[1].split("def _require_question_author", 1)[0]
+		self.assertIn('"EduEdge CBT Question", "write", resolved_user', question_review)
+		self.assertIn('"EduEdge CBT Question", "report", resolved_user', question_review)
+		self.assertNotIn('"delete"', question_review)
 		self.assertIn('user_has_role_permission("EduEdge CBT Exam Template", "delete", user)', template)
 		self.assertNotIn("REVIEW_ROLES", question)
 		self.assertNotIn("REVIEW_ROLES", template)
