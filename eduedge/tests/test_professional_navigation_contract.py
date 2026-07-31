@@ -11,8 +11,10 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
 		for expected in (
 			"menuGroup(",
-			"defaultCollapsed: true",
-			"items: items.filter",
+			"featureEnabled",
+			'{ feature: "cbt" }',
+			"defaultCollapsed: !allowedItems.some",
+			"items: allowedItems",
 			'__("Students & Admissions")',
 			'__("Academic Setup")',
 			'__("Assessments & Results")',
@@ -30,6 +32,18 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		for forbidden in ('icon: "⌂"', 'icon: "⚙"', 'icon: "C"', 'icon: "R"'):
 			self.assertNotIn(forbidden, navigation)
 
+	def test_shared_shell_defaults_to_persistent_exclusive_accordion(self):
+		factory = (APP / "public/js/eduedge_ui/app_factory.js").read_text()
+		for expected in (
+			"createEduEdgeShell",
+			"EDUEDGE_SECTION_STATE_KEY",
+			"sectionStateKey",
+			"accordion",
+			"exclusiveSections",
+			'app.component("EdgeAppShell"',
+		):
+			self.assertIn(expected, factory)
+
 	def test_compact_sidebar_density_is_product_scoped(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
 		styles = (APP / "public/css/eduedge_compact_navigation.css").read_text()
@@ -38,6 +52,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertIn("--edge-sidebar-width: 14.25rem", styles)
 		self.assertIn(".edge-sidebar-item__description", styles)
 		self.assertIn("display: none", styles)
+		self.assertIn(".eduedge-command-palette", styles)
 
 	def test_global_product_menu_uses_shared_edgesuite_renderer_and_permissions(self):
 		bundle = (APP / "public/js/eduedge_product_menu.bundle.js").read_text()
@@ -54,6 +69,10 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 			"accordion: true",
 			"featureEnabled",
 			"quick_action: true",
+			"quick_actions",
+			"commandEntries",
+			"openEduEdgeCommandPalette",
+			"edgesuite:command-palette-request",
 			"eduedge_access_manifest",
 			"itemAllowed",
 			"permissionFilteredMenu",
@@ -99,7 +118,7 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertIn("hasEduEdgeRouteAccess", navigation)
 		self.assertIn("Access not available", navigation)
 
-	def test_school_product_and_user_identity_use_shared_contract(self):
+	def test_school_product_user_and_feature_identity_use_shared_contract(self):
 		boot = (APP / "boot.py").read_text()
 		settings = (
 			APP
@@ -112,6 +131,10 @@ class TestProfessionalNavigationContract(unittest.TestCase):
 		self.assertIn('"company_logo"', boot)
 		self.assertIn("get_product_identity", boot)
 		self.assertIn("product_identity_source", boot)
+		self.assertIn("FEATURE_FIELDS", boot)
+		self.assertIn("_get_feature_flags", boot)
+		self.assertIn('bootinfo["eduedge_features"]', boot)
+		self.assertIn('"features": features', boot)
 		self.assertIn("product_branding", runtime)
 		self.assertIn("CoreEdge", runtime)
 		self.assertNotIn('"eduedge_logo"', settings)
