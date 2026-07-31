@@ -2,18 +2,47 @@ from __future__ import annotations
 
 import unittest
 
-from eduedge.platform.config import PlatformConfig, is_secure_remote_url, normalize_mode, parse_bool
+from eduedge.platform.config import (
+	PlatformConfig,
+	is_local_development,
+	is_secure_remote_url,
+	normalize_mode,
+	parse_bool,
+)
 
 
 class TestPlatformConfig(unittest.TestCase):
-	def test_default_is_standalone(self):
+	def test_unconfigured_hosted_site_requires_remote_coreedge(self):
 		config = PlatformConfig.from_mapping({})
-		self.assertEqual(config.mode, "standalone")
-		self.assertFalse(config.remote_enabled)
+		self.assertEqual(config.mode, "remote")
+		self.assertTrue(config.remote_enabled)
+		self.assertTrue(config.required)
+		self.assertTrue(config.fail_closed)
+		self.assertFalse(config.readiness()["ready"])
 
-	def test_legacy_modes_are_remote(self):
+	def test_local_development_defaults_to_explicit_standalone(self):
+		for values in (
+			{"developer_mode": 1},
+			{"site_name": "eduedge.local"},
+			{"host_name": "http://localhost:8000"},
+		):
+			with self.subTest(values=values):
+				config = PlatformConfig.from_mapping(values)
+				self.assertTrue(config.local_development)
+				self.assertEqual(config.mode, "standalone")
+				self.assertFalse(config.required)
+				self.assertFalse(config.fail_closed)
+
+	def test_legacy_and_invalid_modes_fail_towards_remote(self):
 		self.assertEqual(normalize_mode("shared_hosted"), "remote")
 		self.assertEqual(normalize_mode("white_label"), "remote")
+		self.assertEqual(normalize_mode("unsupported"), "remote")
+		self.assertEqual(normalize_mode(None, default="standalone"), "standalone")
+
+	def test_local_development_detection_is_explicit(self):
+		self.assertTrue(is_local_development({"site_name": "school.local"}))
+		self.assertTrue(is_local_development({"developer_mode": True}))
+		self.assertFalse(is_local_development({"site_name": "school.example.com"}))
 
 	def test_boolean_parser(self):
 		self.assertTrue(parse_bool("yes"))
@@ -40,6 +69,17 @@ class TestPlatformConfig(unittest.TestCase):
 		)
 		self.assertFalse(config.readiness()["ready"])
 		self.assertGreaterEqual(len(config.readiness()["blockers"]), 3)
+
+	def test_explicit_production_standalone_is_visible_and_not_silently_required(self):
+		config = PlatformConfig.from_mapping(
+			{
+				"site_name": "school.example.com",
+				"edge_platform_mode": "standalone",
+				"coreedge_required": False,
+			}
+		)
+		self.assertEqual(config.mode, "standalone")
+		self.assertIn("outside local development", " ".join(config.readiness()["warnings"]))
 
 	def test_remote_transport_requires_https_outside_local_development(self):
 		self.assertTrue(is_secure_remote_url("https://coreedge.processedge.com.ng"))
