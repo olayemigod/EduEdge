@@ -1,4 +1,6 @@
 const EDUEDGE_PRODUCT_KEY = "eduedge";
+const COMMAND_RESULT_LIMIT = 12;
+let activeCommandDialog = null;
 
 function term(key, { plural = false, fallback = "" } = {}) {
 	return frappe.eduedge?.term?.(key, { plural, fallback }) || fallback;
@@ -164,16 +166,33 @@ function itemAllowed(menuItem) {
 
 function permissionFilteredMenu() {
 	const source = buildEduEdgeProductMenu();
+	const sections = source.sections
+		.filter((section) => featureEnabled(section.feature))
+		.map((section) => ({
+			...section,
+			items: section.items.filter(itemAllowed).map(({ resource, permissions, ...menuItem }) => menuItem),
+		}))
+		.filter((section) => section.items.length);
 	return {
 		...source,
-		sections: source.sections
-			.filter((section) => featureEnabled(section.feature))
-			.map((section) => ({
-				...section,
-				items: section.items.filter(itemAllowed).map(({ resource, permissions, ...menuItem }) => menuItem),
-			}))
-			.filter((section) => section.items.length),
+		sections,
+		quick_actions: sections.flatMap((section) => section.items.filter((menuItem) => menuItem.quick_action)),
 	};
+}
+
+function commandEntries(menu = permissionFilteredMenu()) {
+	return menu.sections
+		.flatMap((section) =>
+			section.items.map((menuItem) => ({
+				...menuItem,
+				section: section.label,
+				searchText: [menuItem.label, menuItem.description, section.label, ...(menuItem.keywords || [])]
+					.filter(Boolean)
+					.join(" ")
+					.toLowerCase(),
+			}))
+		)
+		.sort((left, right) => Number(Boolean(right.quick_action)) - Number(Boolean(left.quick_action)) || left.label.localeCompare(right.label));
 }
 
 function getProfile() {
@@ -187,11 +206,122 @@ function getProfile() {
 	};
 }
 
+function openEduEdgeCommandPalette() {
+	if (!isEduEdgeSurface() || !frappe.ui?.Dialog) return false;
+	if (activeCommandDialog) {
+		activeCommandDialog.show();
+		activeCommandDialog.__eduedgeCommandInput?.focus();
+		return true;
+	}
+
+	const entries = commandEntries();
+	const dialog = new frappe.ui.Dialog({
+		title: __("Search EduEdge"),
+		size: "large",
+		fields: [{ fieldtype: "HTML", fieldname: "command_palette" }],
+	});
+	const root = dialog.fields_dict.command_palette.$wrapper.empty()[0];
+	const shell = document.createElement("div");
+	shell.className = "eduedge-command-palette";
+	const input = document.createElement("input");
+	input.type = "search";
+	input.className = "form-control eduedge-command-palette__input";
+	input.placeholder = __("Search pages, workbenches, and quick actions");
+	input.setAttribute("aria-label", __("Search EduEdge navigation"));
+	const hint = document.createElement("div");
+	hint.className = "eduedge-command-palette__hint";
+	hint.textContent = __("Use ↑ and ↓ to move, Enter to open, and Esc to close.");
+	const list = document.createElement("div");
+	list.className = "eduedge-command-palette__results";
+	list.setAttribute("role", "listbox");
+	shell.append(input, hint, list);
+	root.appendChild(shell);
+
+	let results = entries.slice(0, COMMAND_RESULT_LIMIT);
+	let selectedIndex = 0;
+
+	function openEntry(entry) {
+		if (!entry?.route) return;
+		dialog.hide();
+		window.location.assign(entry.route);
+	}
+
+	function renderResults() {
+		list.replaceChildren();
+		if (!results.length) {
+			const empty = document.createElement("p");
+			empty.className = "eduedge-command-palette__empty";
+			empty.textContent = __("No permitted EduEdge action matches this search.");
+			list.appendChild(empty);
+			return;
+		}
+		results.forEach((entry, index) => {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.className = `eduedge-command-palette__result${index === selectedIndex ? " is-selected" : ""}`;
+			button.setAttribute("role", "option");
+			button.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
+			const text = document.createElement("span");
+			const label = document.createElement("strong");
+			label.textContent = entry.label;
+			const description = document.createElement("small");
+			description.textContent = entry.description || "";
+			text.append(label, description);
+			const section = document.createElement("span");
+			section.className = "eduedge-command-palette__section";
+			section.textContent = entry.section;
+			button.append(text, section);
+			button.addEventListener("mouseenter", () => {
+				selectedIndex = index;
+				renderResults();
+			});
+			button.addEventListener("click", () => openEntry(entry));
+			list.appendChild(button);
+		});
+	}
+
+	function filterResults() {
+		const query = input.value.trim().toLowerCase();
+		results = (query ? entries.filter((entry) => entry.searchText.includes(query)) : entries).slice(0, COMMAND_RESULT_LIMIT);
+		selectedIndex = 0;
+		renderResults();
+	}
+
+	input.addEventListener("input", filterResults);
+	input.addEventListener("keydown", (event) => {
+		if (event.key === "ArrowDown" && results.length) {
+			event.preventDefault();
+			selectedIndex = (selectedIndex + 1) % results.length;
+			renderResults();
+		} else if (event.key === "ArrowUp" && results.length) {
+			event.preventDefault();
+			selectedIndex = (selectedIndex - 1 + results.length) % results.length;
+			renderResults();
+		} else if (event.key === "Enter" && results[selectedIndex]) {
+			event.preventDefault();
+			openEntry(results[selectedIndex]);
+		} else if (event.key === "Escape") {
+			dialog.hide();
+		}
+	});
+
+	dialog.__eduedgeCommandInput = input;
+	dialog.$wrapper.on("hidden.bs.modal", () => {
+		activeCommandDialog = null;
+	});
+	activeCommandDialog = dialog;
+	renderResults();
+	dialog.show();
+	requestAnimationFrame(() => input.focus());
+	return true;
+}
+
 function registerEduEdgeProductMenu() {
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.registerProductMenu) return;
-		runtime.registerProductMenu({ ...permissionFilteredMenu(), profile: getProfile() });
+		const menu = permissionFilteredMenu();
+		runtime.registerProductMenu({ ...menu, profile: getProfile(), commands: commandEntries(menu) });
 		runtime.refreshProductMenu?.();
 		scheduleVisibleFriendlyNames();
 	});
@@ -288,6 +418,12 @@ function initialiseEduEdgeMenu() {
 		window.__eduedgeFriendlyNameObserver.observe(document.body, { childList: true, subtree: true });
 	}
 }
+
+window.openEduEdgeCommandPalette = openEduEdgeCommandPalette;
+window.addEventListener("edgesuite:command-palette-request", (event) => {
+	if (event.detail?.handled || !isEduEdgeSurface()) return;
+	event.detail.handled = openEduEdgeCommandPalette();
+});
 
 if (document.readyState === "loading") {
 	document.addEventListener("DOMContentLoaded", initialiseEduEdgeMenu, { once: true });
