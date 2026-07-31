@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from eduedge.platform.config import PlatformConfig, normalize_mode, parse_bool
+from eduedge.platform.config import PlatformConfig, is_secure_remote_url, normalize_mode, parse_bool
 
 
 class TestPlatformConfig(unittest.TestCase):
@@ -40,6 +40,26 @@ class TestPlatformConfig(unittest.TestCase):
 		)
 		self.assertFalse(config.readiness()["ready"])
 		self.assertGreaterEqual(len(config.readiness()["blockers"]), 3)
+
+	def test_remote_transport_requires_https_outside_local_development(self):
+		self.assertTrue(is_secure_remote_url("https://coreedge.processedge.com.ng"))
+		self.assertTrue(is_secure_remote_url("http://localhost:8000"))
+		self.assertTrue(is_secure_remote_url("http://coreedge.local:8000"))
+		self.assertFalse(is_secure_remote_url("http://coreedge.example.com"))
+		self.assertFalse(is_secure_remote_url("ftp://coreedge.example.com"))
+
+		config = PlatformConfig.from_mapping(
+			{
+				"edge_platform_mode": "remote",
+				"coreedge_base_url": "http://coreedge.example.com",
+				"coreedge_tenant_key": "TENANT-1",
+				"coreedge_site_identifier": "school.example.com",
+				"coreedge_client_id": "client",
+				"coreedge_client_secret": "secret",
+			}
+		)
+		self.assertFalse(config.secure_transport)
+		self.assertIn("must use HTTPS", " ".join(config.readiness()["blockers"]))
 
 
 if __name__ == "__main__":
