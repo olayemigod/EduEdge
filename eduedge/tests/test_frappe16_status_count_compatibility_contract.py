@@ -19,6 +19,11 @@ class TestFrappe16StatusCountCompatibilityContract(unittest.TestCase):
 			self.assertNotIn("frappe.db.count(", source, relative_path)
 			self.assertNotIn("count(name) as count", source, relative_path)
 
+	def test_home_dashboard_uses_frappe16_safe_dict_aggregate(self):
+		source = (APP / "api/home.py").read_text(encoding="utf-8")
+		self.assertIn('fields=[{"COUNT": "*", "as": "count"}]', source)
+		self.assertNotIn('fields=["count(name) as count"]', source)
+
 
 if __name__ == "__main__":
 	unittest.main()
