@@ -11,10 +11,8 @@ from eduedge.education.enrollment_field_setup import ensure_program_enrollment_b
 from eduedge.education.institution_type_defaults import apply_institution_type_defaults
 from eduedge.education.institution_types import ensure_institution_type_foundation
 from eduedge.education.native_hierarchy_migration import ensure_native_academic_context_foundation
-from eduedge.permissions_baseline import (
-	apply_default_permission_baseline,
-	ensure_eduedge_page_role_baseline,
-)
+from eduedge.permissions_baseline import ensure_eduedge_page_role_baseline
+from eduedge.security.permission_policy import apply_safe_default_permission_baseline
 
 ROLE_DESK_ACCESS = {
 	"EduEdge Super Administrator": 1,
@@ -43,9 +41,10 @@ def after_install() -> None:
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
 	ensure_program_enrollment_branch_selector()
-	# Seed the default matrix once for a new site. Existing sites are normalised
-	# by idempotent patches and later Role Permission Manager choices remain final.
-	apply_default_permission_baseline()
+	# Seed a least-privilege default matrix once for a new site. Existing sites
+	# are normalised by idempotent patches and later Role Permission Manager
+	# choices remain authoritative.
+	apply_safe_default_permission_baseline()
 	ensure_eduedge_page_role_baseline()
 	backfill_education_branch_context()
 
