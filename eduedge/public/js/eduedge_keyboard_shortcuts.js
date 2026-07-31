@@ -1,4 +1,6 @@
 (() => {
+	const COMMAND_VERSION = "1.0.0";
+	if (window.EdgeSuiteCommands?.version === COMMAND_VERSION) return;
 	const registry = (window.EdgeSuiteCommands = window.EdgeSuiteCommands || {});
 	const saveHandlers = new Map();
 	let activeSaveHandler = null;
@@ -21,9 +23,7 @@
 	}
 
 	function notify(message, indicator = "blue") {
-		if (window.frappe?.show_alert) {
-			frappe.show_alert({ message: __(message), indicator }, 4);
-		}
+		if (window.frappe?.show_alert) frappe.show_alert({ message: __(message), indicator }, 4);
 	}
 
 	function registerSaveHandler(key, handler) {
@@ -66,9 +66,7 @@
 			.reverse()
 			.find((control) => {
 				if (!isVisible(control)) return false;
-				const label = String(control.dataset.label || control.getAttribute("aria-label") || control.textContent || "")
-					.trim()
-					.toLowerCase();
+				const label = String(control.dataset.label || control.getAttribute("aria-label") || control.textContent || "").trim().toLowerCase();
 				return labels.has(label);
 			}) || null;
 	}
@@ -136,6 +134,7 @@
 		}
 	}
 
+	registry.version = COMMAND_VERSION;
 	registry.registerSaveHandler = registerSaveHandler;
 	registry.activateSaveHandler = activateSaveHandler;
 	registry.saveCurrentContext = saveCurrentContext;
