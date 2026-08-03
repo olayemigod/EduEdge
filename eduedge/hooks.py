@@ -78,6 +78,7 @@ doctype_js = {
 	"Student Attendance": "public/js/education/student_attendance.js",
 	"Assessment Plan": "public/js/education/assessment_plan.js",
 	"Assessment Result": "public/js/education/assessment_result.js",
+	"EduEdge Institution Academic Calendar": "eduedge/doctype/eduedge_institution_academic_calendar/eduedge_institution_academic_calendar.js",
 }
 
 doc_events = {
@@ -167,9 +168,9 @@ permission_query_conditions = {
 	"EduEdge CBT Lifecycle Log": "eduedge.cbt.permissions.cbt_lifecycle_log_query",
 	"EduEdge CBT Attempt": "eduedge.cbt.permissions.cbt_attempt_query",
 	"EduEdge CBT Attempt Review": "eduedge.cbt.permissions.cbt_attempt_review_query",
-	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.cbt_attempt_scoring_key_query",
-	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.cbt_attempt_answer_query",
-	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.cbt_sync_log_query",
+	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.attempt_scoring_key_query",
+	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.attempt_answer_query",
+	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.sync_log_query",
 	"EduEdge CBT Result": "eduedge.cbt.permissions.cbt_result_query",
 	"EduEdge CBT Result Item": "eduedge.cbt.permissions.cbt_result_item_query",
 	"EduEdge CBT Marking Log": "eduedge.cbt.permissions.cbt_marking_log_query",
