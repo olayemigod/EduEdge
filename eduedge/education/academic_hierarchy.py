@@ -6,11 +6,23 @@ from frappe.utils import cint
 
 from eduedge.education import academic_validation as base
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.institution_department_root import (
+	INSTITUTION_ROOT_FLAG,
+	INSTITUTION_ROOT_OWNER,
+	ensure_institution_department_root,
+	get_company_department_roots,
+	is_managed_institution_root,
+)
 
 
 def before_validate_department(doc, method=None) -> None:
 	if not doc.meta.has_field(INSTITUTION_FIELD):
 		return
+
+	if is_managed_institution_root(doc):
+		_validate_managed_institution_root(doc)
+		return
+
 	institution = doc.get(INSTITUTION_FIELD)
 	if not institution:
 		if doc.is_new():
@@ -28,15 +40,30 @@ def before_validate_department(doc, method=None) -> None:
 				frappe.ValidationError,
 			)
 		doc.company = institution_row.company
+
 	parent = doc.get("parent_department") if doc.meta.has_field("parent_department") else None
+	company_roots = set(get_company_department_roots(institution_row.company))
+	if not parent or parent in company_roots:
+		parent = ensure_institution_department_root(institution)
+		doc.parent_department = parent
+
 	if parent:
 		fields = ["company"]
-		if frappe.get_meta("Department").has_field(INSTITUTION_FIELD):
+		department_meta = frappe.get_meta("Department")
+		if department_meta.has_field(INSTITUTION_FIELD):
 			fields.append(INSTITUTION_FIELD)
+		if department_meta.has_field(INSTITUTION_ROOT_FLAG):
+			fields.extend([INSTITUTION_ROOT_FLAG, INSTITUTION_ROOT_OWNER])
 		parent_row = frappe.db.get_value("Department", parent, fields, as_dict=True)
 		if not parent_row:
 			frappe.throw(_("Select a valid Parent Department."), frappe.ValidationError)
-		if parent_row.get(INSTITUTION_FIELD) != institution:
+		if cint(parent_row.get(INSTITUTION_ROOT_FLAG)):
+			if parent_row.get(INSTITUTION_ROOT_OWNER) != institution:
+				frappe.throw(
+					_("Institution root must belong to the selected Institution."),
+					frappe.ValidationError,
+				)
+		elif parent_row.get(INSTITUTION_FIELD) != institution:
 			frappe.throw(
 				_("Parent Department must belong to the same Institution."),
 				frappe.ValidationError,
@@ -48,6 +75,30 @@ def before_validate_department(doc, method=None) -> None:
 			)
 	if not doc.is_new():
 		base._block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
+
+
+def _validate_managed_institution_root(doc) -> None:
+	if doc.is_new() and not getattr(doc.flags, "eduedge_managed_institution_root", False):
+		frappe.throw(_("Institution academic roots are managed by EduEdge."), frappe.PermissionError)
+	institution = doc.get(INSTITUTION_ROOT_OWNER)
+	if not institution:
+		frappe.throw(_("Institution academic root is missing its Institution."), frappe.ValidationError)
+	institution_row = frappe.db.get_value(
+		"EduEdge Institution", institution, ["company", "enabled"], as_dict=True
+	)
+	if not institution_row or not institution_row.company:
+		frappe.throw(_("Institution academic root requires a valid Institution Company."), frappe.ValidationError)
+	doc.company = institution_row.company
+	doc.is_group = 1
+	doc.set(INSTITUTION_FIELD, None)
+	company_roots = set(get_company_department_roots(institution_row.company))
+	if not doc.parent_department:
+		doc.parent_department = next(iter(company_roots), None)
+	if doc.parent_department not in company_roots:
+		frappe.throw(
+			_("Institution academic root must remain beneath the ERPNext Company root Department."),
+			frappe.ValidationError,
+		)
 
 
 def before_validate_program(doc, method=None) -> None:
