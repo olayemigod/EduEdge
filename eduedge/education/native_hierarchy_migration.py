@@ -7,6 +7,10 @@ import frappe
 
 from eduedge.education import academic_fields
 from eduedge.education.academic_fields import ACADEMIC_SECTION_FIELD, INSTITUTION_FIELD
+from eduedge.education.institution_department_root import (
+	ensure_institution_department_root_fields,
+	normalise_institution_department_roots,
+)
 
 
 def ensure_native_academic_context_foundation() -> None:
@@ -14,7 +18,8 @@ def ensure_native_academic_context_foundation() -> None:
 
 	The temporary replacement keeps the canonical installer as the single schema and
 	terminology entrypoint while preventing same-name Departments in a shared Company
-	from being claimed by the wrong Institution.
+	from being claimed by the wrong Institution. Institution-owned Department roots
+	are then created and existing top-level Departments are normalised idempotently.
 	"""
 	original = academic_fields.backfill_legacy_sections_to_departments
 	academic_fields.backfill_legacy_sections_to_departments = backfill_legacy_sections_to_departments
@@ -22,6 +27,8 @@ def ensure_native_academic_context_foundation() -> None:
 		academic_fields.ensure_academic_context_foundation()
 	finally:
 		academic_fields.backfill_legacy_sections_to_departments = original
+	ensure_institution_department_root_fields()
+	normalise_institution_department_roots(ignore_permissions=True)
 
 
 def backfill_legacy_sections_to_departments() -> None:
