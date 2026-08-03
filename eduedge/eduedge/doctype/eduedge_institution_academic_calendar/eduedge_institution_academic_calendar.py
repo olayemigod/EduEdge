@@ -21,6 +21,7 @@ class EduEdgeInstitutionAcademicCalendar(Document):
 					_("Calendar Institution and Academic Year cannot change after creation. Create a new calendar instead."),
 					frappe.ValidationError,
 				)
+		self._apply_academic_year_and_term_defaults()
 		if getdate(self.end_date) < getdate(self.start_date):
 			frappe.throw(_("Calendar End Date cannot be earlier than Start Date."), frappe.ValidationError)
 		duplicate = frappe.db.exists(
@@ -62,6 +63,55 @@ class EduEdgeInstitutionAcademicCalendar(Document):
 
 	def on_update(self) -> None:
 		frappe.clear_cache(doctype="EduEdge Institution Academic Calendar")
+
+	def _apply_academic_year_and_term_defaults(self) -> None:
+		year = frappe.db.get_value(
+			"Academic Year",
+			self.academic_year,
+			["year_start_date", "year_end_date"],
+			as_dict=True,
+		)
+		if not year:
+			frappe.throw(_("Select a valid Academic Year."), frappe.ValidationError)
+		if not self.start_date:
+			self.start_date = year.year_start_date
+		if not self.end_date:
+			self.end_date = year.year_end_date
+		if not self.start_date or not self.end_date:
+			frappe.throw(
+				_("The selected Academic Year must have Start Date and End Date before it can be used."),
+				frappe.ValidationError,
+			)
+
+		terms = {
+			row.name: row
+			for row in frappe.get_all(
+				"Academic Term",
+				filters={"academic_year": self.academic_year},
+				fields=["name", "academic_year", "term_start_date", "term_end_date"],
+				order_by="term_start_date asc, name asc",
+				limit_page_length=0,
+			)
+		}
+		if not self.periods and terms:
+			for sequence, term in enumerate(terms.values(), start=1):
+				self.append(
+					"periods",
+					{
+						"academic_term": term.name,
+						"start_date": term.term_start_date,
+						"end_date": term.term_end_date,
+						"sequence": sequence * 10,
+					},
+				)
+		for row in self.periods or []:
+			term = terms.get(row.academic_term)
+			if not term:
+				continue
+			if not row.start_date:
+				row.start_date = term.term_start_date
+			if not row.end_date:
+				row.end_date = term.term_end_date
 
 	def _validate_periods(self) -> None:
 		seen_terms = set()
