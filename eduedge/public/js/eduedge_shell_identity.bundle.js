@@ -9,6 +9,15 @@ const PRODUCT_FALLBACK_ICON = `
 	<path d="M7 10.5v4.2c0 1.4 2.2 2.8 5 2.8s5-1.4 5-2.8v-4.2M21 8.5v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
 </svg>`;
 
+const EDGE_MANAGED_SURFACE_SELECTOR = [
+	".edge-app-shell",
+	".edge-sidebar",
+	".edge-product-menu",
+	".edge-product-menu__panel",
+	".edge-product-menu-panel",
+	"[data-edge-product-menu]",
+].join(", ");
+
 let observer;
 let scheduled = false;
 
@@ -23,6 +32,16 @@ function isEduEdgeSurface() {
 
 function normalizedText(value) {
 	return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function markManagedTerminologySurfaces(root = document) {
+	if (!root?.querySelectorAll) return;
+	const elements = [];
+	if (root.matches?.(EDGE_MANAGED_SURFACE_SELECTOR)) elements.push(root);
+	elements.push(...root.querySelectorAll(EDGE_MANAGED_SURFACE_SELECTOR));
+	for (const element of elements) {
+		element.setAttribute("data-eduedge-terminology-managed", "1");
+	}
 }
 
 function setText(element, value) {
@@ -151,6 +170,7 @@ function enhanceSidebar(shell, identity) {
 function applyIdentity() {
 	scheduled = false;
 	if (!isEduEdgeSurface()) return;
+	markManagedTerminologySurfaces();
 	ensureContextStyles();
 	const identity = getIdentity();
 	const shells = [...document.querySelectorAll(".edge-app-shell")];
@@ -167,9 +187,19 @@ function scheduleIdentity() {
 	requestAnimationFrame(applyIdentity);
 }
 
+function processShellMutations(mutations) {
+	for (const mutation of mutations || []) {
+		for (const node of mutation.addedNodes || []) {
+			if (node.nodeType === Node.ELEMENT_NODE) markManagedTerminologySurfaces(node);
+		}
+	}
+	scheduleIdentity();
+}
+
 function startIdentityEnhancer() {
 	if (observer || !document.body) return;
-	observer = new MutationObserver(scheduleIdentity);
+	markManagedTerminologySurfaces();
+	observer = new MutationObserver(processShellMutations);
 	observer.observe(document.body, { childList: true, subtree: true });
 	document.addEventListener("page-change", scheduleIdentity);
 	globalThis.frappe?.router?.on?.("change", scheduleIdentity);
@@ -184,4 +214,4 @@ if (document.readyState === "loading") {
 	startIdentityEnhancer();
 }
 
-export { applyIdentity, startIdentityEnhancer };
+export { applyIdentity, markManagedTerminologySurfaces, startIdentityEnhancer };
