@@ -26,7 +26,9 @@ async function applyProgramTerminology(frm) {
 	if (frm.fields_dict.eduedge_academic_section) {
 		frm.set_df_property("eduedge_academic_section", "label", academicSection);
 	}
-	frm.refresh_fields(["program_name", "program_abbreviation", "department", "courses", "eduedge_academic_section"]);
+	for (const fieldname of ["program_name", "program_abbreviation", "department", "courses", "eduedge_academic_section"]) {
+		if (frm.fields_dict[fieldname]) frm.refresh_field(fieldname);
+	}
 }
 
 frappe.ui.form.on("Program", {
