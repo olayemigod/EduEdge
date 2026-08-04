@@ -49,8 +49,8 @@ class TestProgrammesPageContract(unittest.TestCase):
 		bundle = (APP / "public" / "js" / "eduedge_programmes.bundle.js").read_text(encoding="utf-8")
 		self.assertIn("<EdgeAppShell", component)
 		self.assertIn("Catalogue filters", component)
-		self.assertIn("Course Rows", component)
-		self.assertIn("Active Offerings", component)
+		self.assertIn('`${coursePlural} Rows`', component)
+		self.assertIn('`Active ${offeringPlural}`', component)
 		self.assertIn("createEduEdgeProgrammesApp", bundle)
 		self.assertLess(loader.index("edgesuite_ui.bundle.js"), loader.index("eduedge_programmes.bundle.js"))
 		self.assertNotIn("registerEduEdgeResourcePage", loader)
@@ -61,8 +61,14 @@ class TestProgrammesPageContract(unittest.TestCase):
 		self.assertIn("draftInstitutionChanged", component)
 		self.assertIn('this.draft.department = ""', component)
 		self.assertIn('frappe.set_route("Form", "Program", name)', component)
-		self.assertIn("Junior Secondary School → JSS 1", component)
-		self.assertIn("School of Agriculture → BSc Agriculture", component)
+		self.assertIn("editorExample", component)
+		for example in (
+			"Primary Section → Primary 1",
+			"Junior Secondary School → JSS 1",
+			"Department of Crop Science → BSc Agriculture",
+			"Technical Training → Electrical Installation",
+		):
+			self.assertIn(example, component)
 		self.assertNotIn("eduedge_academic_section", component)
 
 	def test_ci_checks_programmes_entry_scripts(self):
