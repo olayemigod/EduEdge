@@ -7,13 +7,17 @@ APP = ROOT / "eduedge"
 
 
 class TestProgrammeOfferingsPageContract(unittest.TestCase):
-	def test_offerings_api_is_bounded_permission_and_branch_aware(self):
+	def test_offerings_api_is_bounded_permission_and_context_aware(self):
 		api = (APP / "api" / "programme_offerings_safe.py").read_text(encoding="utf-8")
 		for token in (
-			"DEFAULT_PAGE_LENGTH = 25", "MAX_PAGE_LENGTH = 50",
+			"DEFAULT_PAGE_LENGTH = 25",
+			"MAX_PAGE_LENGTH = 50",
 			'frappe.has_permission("EduEdge Program Offering", "read")',
-			"get_current_school_branch", "assert_branch_access(branch)",
-			"page_length=page_length + 1", 'fields=[{"COUNT": "name", "as": "record_count"}]',
+			"get_current_school_branch",
+			"assert_branch_access(resolved_branch)",
+			"use_active_branch",
+			"page_length=page_length + 1",
+			'fields=[{"COUNT": "name", "as": "record_count"}]',
 		):
 			self.assertIn(token, api)
 
@@ -53,16 +57,26 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		self.assertNotIn("frappe.db.set_value", api)
 		self.assertNotIn("Academic Level", api)
 
-	def test_dedicated_page_exposes_capacity_availability_identity_and_native_department(self):
+	def test_dedicated_page_exposes_institution_calendar_capacity_and_identity(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text(encoding="utf-8")
 		for token in (
-			"<EdgeAppShell", "Occupied Seats", "admission_status", "enrollment_status",
-			"identity_locked", "draftBranchChanged", "draftProgramChanged", "draftYearChanged",
-			"Zero means no configured limit", "Current active Branch", "draftDepartmentName",
+			"<EdgeAppShell",
+			"Occupied Seats",
+			"admission_status",
+			"enrollment_status",
+			"identity_locked",
+			"draftInstitutionChanged",
+			"draftBranchChanged",
+			"draftProgramChanged",
+			"draftYearChanged",
+			"Zero means no configured limit",
+			"All permitted Branches in Institution",
+			"Resolved Institution Calendar",
+			"draftDepartmentName",
 		):
 			self.assertIn(token, component)
 		self.assertIn(':disabled="draft.identity_locked"', component)
-		self.assertIn('this.filters.institution = ""', component)
+		self.assertIn('this.filters.branch = ""', component)
 		self.assertIn('frappe.set_route("Form", "EduEdge Program Offering", name)', component)
 		self.assertNotIn("academicLevel", component)
 
