@@ -65,7 +65,7 @@
 						</label>
 						<label><span>Study Mode</span><select v-model="filters.study_mode" class="form-control" @change="applyFilters"><option value="">All study modes</option><option v-for="mode in data.options.study_modes" :key="mode" :value="mode">{{ mode }}</option></select></label>
 						<label><span>Delivery Mode</span><select v-model="filters.delivery_mode" class="form-control" @change="applyFilters"><option value="">All delivery modes</option><option v-for="mode in data.options.delivery_modes" :key="mode" :value="mode">{{ mode }}</option></select></label>
-						<label class="eduedge-offering-search"><span>Search</span><input v-model.trim="filters.search" class="form-control" placeholder="Title, code, programme or department" @keyup.enter="applyFilters" /></label>
+						<label class="eduedge-offering-search"><span>Search</span><input v-model.trim="filters.search" class="form-control" :placeholder="`Title, code, ${programmeSingular.toLowerCase()} or ${departmentSingular.toLowerCase()}`" @keyup.enter="applyFilters" /></label>
 					</div>
 					<template #actions>
 						<button type="button" class="edge-button" @click="clearFilters">Clear</button>
@@ -74,7 +74,7 @@
 				</EdgeFilterBar>
 
 				<EdgeDashboardLayout min-column-width="12rem">
-					<EdgeStatCard label="Matching Offerings" :value="data.summary.total_offerings" :helper="`${data.summary.visible_offerings} on this page`" />
+					<EdgeStatCard :label="`Matching ${offeringPlural}`" :value="data.summary.total_offerings" :helper="`${data.summary.visible_offerings} on this page`" />
 					<EdgeStatCard label="Active" :value="data.summary.active" tone="success" helper="Currently operational" />
 					<EdgeStatCard label="Upcoming" :value="data.summary.upcoming" helper="Start date is ahead" />
 					<EdgeStatCard label="Full" :value="data.summary.full" :tone="data.summary.full ? 'warning' : 'neutral'" helper="Capacity reached" />
@@ -86,7 +86,7 @@
 					<section class="eduedge-offering-panel">
 						<div class="eduedge-offering-heading"><div><p class="edge-eyebrow">Delivery catalogue</p><h2>{{ offeringPlural }}</h2></div><button type="button" class="edge-button" @click="openNativeList">Open native list</button></div>
 						<EdgeLoadingState v-if="loading" :message="`Refreshing ${offeringPlural.toLowerCase()}...`" />
-						<EdgeEmptyState v-else-if="!data.offerings.length" :title="`No ${offeringPlural.toLowerCase()} found`" description="Change the filters or create the first Branch-specific Offering." />
+						<EdgeEmptyState v-else-if="!data.offerings.length" :title="`No ${offeringPlural.toLowerCase()} found`" :description="`Change the filters or create the first Branch-specific ${offeringSingular}.`" />
 						<div v-else class="eduedge-offering-list">
 							<article v-for="row in data.offerings" :key="row.name" class="eduedge-offering-card">
 								<button type="button" class="eduedge-offering-main" @click="editOffering(row)">
@@ -106,28 +106,28 @@
 					</section>
 
 					<section class="eduedge-offering-panel eduedge-offering-editor">
-						<div class="eduedge-offering-heading"><div><p class="edge-eyebrow">{{ draft.name ? "Quick edit" : "Quick create" }}</p><h2>{{ draft.name ? draft.offering_title || offeringSingular : `New ${offeringSingular}` }}</h2></div><button type="button" class="edge-button" @click="newOffering">Reset</button></div>
-						<EdgeEmptyState v-if="!canCreate && !canWrite" title="Read-only offerings" description="Your current role can view Offerings but cannot create or edit them." />
+						<div class="eduedge-offering-heading"><div><p class="edge-eyebrow">{{ draft.name ? "Quick edit" : "Quick create" }}</p><h2>{{ draft.name ? draft.offering_title || editorOfferingSingular : `New ${editorOfferingSingular}` }}</h2></div><button type="button" class="edge-button" @click="newOffering">Reset</button></div>
+						<EdgeEmptyState v-if="!canCreate && !canWrite" :title="`Read-only ${editorOfferingPlural.toLowerCase()}`" :description="`Your current role can view ${editorOfferingPlural} but cannot create or edit them.`" />
 						<template v-else>
-							<p v-if="draft.identity_locked" class="eduedge-offering-lock-note">This Offering is already referenced by an Applicant, Student Group, or submitted Enrollment. Create a new Offering to change its identity.</p>
+							<p v-if="draft.identity_locked" class="eduedge-offering-lock-note">This {{ editorOfferingSingular }} is already referenced by an Applicant, Student Group, or submitted Enrollment. Create a new {{ editorOfferingSingular }} to change its identity.</p>
 							<label><span>Branch / Campus</span><select v-model="draft.school_branch" class="form-control" :disabled="draft.identity_locked" @change="draftBranchChanged"><option value="">Select Branch</option><option v-for="branch in draftOptions.branches" :key="branch.name" :value="branch.name">{{ branch.branch_name || branch.name }}</option></select></label>
 							<div class="eduedge-offering-context-readonly"><span>Institution</span><strong>{{ draftInstitutionName }}</strong></div>
-							<label><span>{{ programmeSingular }}</span><select v-model="draft.program" class="form-control" :disabled="draft.identity_locked" @change="draftProgramChanged"><option value="">Select {{ programmeSingular }}</option><option v-for="programme in draftOptions.programmes" :key="programme.name" :value="programme.name">{{ programme.program_name || programme.name }}</option></select></label>
-							<div class="eduedge-offering-context-readonly"><span>{{ departmentSingular }}</span><strong>{{ draftDepartmentName }}</strong></div>
+							<label><span>{{ editorProgrammeSingular }}</span><select v-model="draft.program" class="form-control" :disabled="draft.identity_locked" @change="draftProgramChanged"><option value="">Select {{ editorProgrammeSingular }}</option><option v-for="programme in draftOptions.programmes" :key="programme.name" :value="programme.name">{{ programme.program_name || programme.name }}</option></select></label>
+							<div class="eduedge-offering-context-readonly"><span>{{ editorDepartmentSingular }}</span><strong>{{ draftDepartmentName }}</strong></div>
 							<div class="eduedge-offering-two-column">
-								<label><span>{{ academicYearSingular }}</span><select v-model="draft.academic_year" class="form-control" :disabled="draft.identity_locked" @change="draftYearChanged"><option value="">Select {{ academicYearSingular.toLowerCase() }}</option><option v-for="year in draftOptions.academic_years" :key="year.name" :value="year.name">{{ year.name }}</option></select></label>
-								<label><span>{{ academicTermSingular }}</span><select v-model="draft.academic_term" class="form-control" :disabled="draft.identity_locked"><option value="">{{ academicYearSingular }}-wide</option><option v-for="term in draftOptions.academic_terms" :key="term.name" :value="term.name">{{ term.name }}</option></select></label>
+								<label><span>{{ editorAcademicYearSingular }}</span><select v-model="draft.academic_year" class="form-control" :disabled="draft.identity_locked" @change="draftYearChanged"><option value="">Select {{ editorAcademicYearSingular.toLowerCase() }}</option><option v-for="year in draftOptions.academic_years" :key="year.name" :value="year.name">{{ year.name }}</option></select></label>
+								<label><span>{{ editorAcademicTermSingular }}</span><select v-model="draft.academic_term" class="form-control" :disabled="draft.identity_locked"><option value="">{{ editorAcademicYearSingular }}-wide</option><option v-for="term in draftOptions.academic_terms" :key="term.name" :value="term.name">{{ term.name }}</option></select></label>
 							</div>
-							<label><span>{{ studentBatchSingular }}</span><select v-model="draft.student_batch" class="form-control" :disabled="draft.identity_locked"><option value="">Not assigned</option><option v-for="batch in draftOptions.student_batches" :key="batch.name" :value="batch.name">{{ batch.name }}</option></select></label>
+							<label><span>{{ editorStudentBatchSingular }}</span><select v-model="draft.student_batch" class="form-control" :disabled="draft.identity_locked"><option value="">Not assigned</option><option v-for="batch in draftOptions.student_batches" :key="batch.name" :value="batch.name">{{ batch.name }}</option></select></label>
 							<div class="eduedge-offering-two-column"><label><span>Study Mode</span><select v-model="draft.study_mode" class="form-control" :disabled="draft.identity_locked"><option v-for="mode in draftOptions.study_modes" :key="mode" :value="mode">{{ mode }}</option></select></label><label><span>Delivery Mode</span><select v-model="draft.delivery_mode" class="form-control" :disabled="draft.identity_locked"><option v-for="mode in draftOptions.delivery_modes" :key="mode" :value="mode">{{ mode }}</option></select></label></div>
-							<label><span>Offering Title</span><input v-model.trim="draft.offering_title" class="form-control" placeholder="Generated when left blank" /></label>
-							<label><span>Offering Code</span><input v-model.trim="draft.offering_code" class="form-control" :disabled="Boolean(draft.name)" placeholder="Generated when left blank" /></label>
+							<label><span>{{ editorOfferingSingular }} Title</span><input v-model.trim="draft.offering_title" class="form-control" placeholder="Generated when left blank" /></label>
+							<label><span>{{ editorOfferingSingular }} Code</span><input v-model.trim="draft.offering_code" class="form-control" :disabled="Boolean(draft.name)" placeholder="Generated when left blank" /></label>
 							<div class="eduedge-offering-two-column"><label><span>Start Date</span><input v-model="draft.start_date" type="date" class="form-control" /></label><label><span>End Date</span><input v-model="draft.end_date" type="date" class="form-control" /></label></div>
 							<label><span>Capacity</span><input v-model.number="draft.capacity" type="number" min="0" class="form-control" /><small>Zero means no configured limit.</small></label>
 							<div class="eduedge-offering-checks"><label><input v-model="draft.is_active" type="checkbox" /> Active</label><label><input v-model="draft.admission_enabled" type="checkbox" /> Admission enabled</label><label><input v-model="draft.enrollment_enabled" type="checkbox" /> Enrollment enabled</label></div>
 							<div class="eduedge-offering-two-column"><label><span>Application Opens</span><input v-model="draft.application_start_date" type="date" class="form-control" /></label><label><span>Application Closes</span><input v-model="draft.application_end_date" type="date" class="form-control" /></label></div>
 							<label><span>Notes</span><textarea v-model.trim="draft.notes" class="form-control" rows="3"></textarea></label>
-							<div class="eduedge-offering-editor-actions"><button type="button" class="edge-button edge-button--primary" :disabled="!canSave || saving" @click="saveOffering">{{ saving ? "Saving..." : `Save ${offeringSingular}` }}</button><button v-if="draft.name" type="button" class="edge-button" @click="openFullForm(draft.name)">Open full form</button></div>
+							<div class="eduedge-offering-editor-actions"><button type="button" class="edge-button edge-button--primary" :disabled="!canSave || saving" @click="saveOffering">{{ saving ? "Saving..." : `Save ${editorOfferingSingular}` }}</button><button v-if="draft.name" type="button" class="edge-button" @click="openFullForm(draft.name)">Open full form</button></div>
 							<p v-if="saveError" class="eduedge-offering-error">{{ saveError }}</p>
 						</template>
 					</section>
@@ -149,7 +149,7 @@ export default {
 		return {
 			loading: true, loadedOnce: false, error: "", saving: false, saveError: "", menuItems: EDUEDGE_MENU_ITEMS,
 			filters: { branch: "", institution: "", program: "", department: "", academic_year: "", academic_term: "", student_batch: "", study_mode: "", delivery_mode: "", is_active: "", admission_enabled: "", enrollment_enabled: "", search: "" },
-			draft: emptyDraft(), draftOptions: emptyOptions(),
+			draft: emptyDraft(), draftOptions: emptyOptions(), draftContext: {},
 			data: { active_context: {}, offerings: [], options: emptyOptions(), summary: { total_offerings: 0, visible_offerings: 0, active: 0, upcoming: 0, full: 0, closed_or_disabled: 0, occupied_seats: 0, configured_capacity: 0 }, paging: { start: 0, page_length: 25, has_more: false, next_start: 0 }, permissions: { can_create: false, can_write: false } },
 		};
 	},
@@ -166,6 +166,13 @@ export default {
 		academicTermSingular() { return this.term("academic_term", false, "Term / Semester"); },
 		academicTermPlural() { return this.term("academic_term", true, "Terms / Semesters"); },
 		studentBatchSingular() { return this.term("student_batch", false, "Cohort / Batch"); },
+		editorProgrammeSingular() { return this.term("programme", false, "Class / Programme", this.draftContext); },
+		editorOfferingSingular() { return this.term("programme_offering", false, "Class / Programme Intake", this.draftContext); },
+		editorOfferingPlural() { return this.term("programme_offering", true, "Class / Programme Intakes", this.draftContext); },
+		editorDepartmentSingular() { return this.term("department", false, "Academic Unit", this.draftContext); },
+		editorAcademicYearSingular() { return this.term("academic_year", false, "Academic Session", this.draftContext); },
+		editorAcademicTermSingular() { return this.term("academic_term", false, "Term / Semester", this.draftContext); },
+		editorStudentBatchSingular() { return this.term("student_batch", false, "Cohort / Batch", this.draftContext); },
 		canCreate() { return Boolean(this.data.permissions.can_create); },
 		canWrite() { return Boolean(this.data.permissions.can_write); },
 		canSave() { const permitted = this.draft.name ? this.canWrite : this.canCreate; return Boolean(permitted && this.draft.school_branch && this.draft.program && this.draft.academic_year); },
@@ -177,7 +184,7 @@ export default {
 	mounted() { this.load(true); },
 	methods: {
 		openRoute: openEduEdgeRoute,
-		term(key, plural = false, fallback = "") { return frappe.eduedge?.term?.(key, { plural, context: this.activeContext, fallback }) || fallback; },
+		term(key, plural = false, fallback = "", context = null) { return frappe.eduedge?.term?.(key, { plural, context: context || this.activeContext, fallback }) || fallback; },
 		branchName(name) { return this.data.options.branches.find((row) => row.name === name)?.branch_name || name || "Unknown Branch"; },
 		departmentName(name) { return this.data.options.departments.find((row) => row.name === name)?.department_name || this.draftOptions.departments.find((row) => row.name === name)?.department_name || name || `No ${this.departmentSingular}`; },
 		statusTone(status) { if (status === "Active") return "success"; if (["Full", "Upcoming"].includes(status)) return "warning"; if (["Closed", "Disabled"].includes(status)) return "danger"; return "neutral"; },
@@ -191,6 +198,7 @@ export default {
 				this.data = response.message || this.data; this.filters = { ...this.filters, ...(this.data.filters || {}) };
 				if (!this.draft.school_branch) { this.draft.school_branch = this.filters.branch || ""; this.draft.institution = this.filters.institution || ""; }
 				if (!this.draftOptions.branches.length) this.draftOptions = JSON.parse(JSON.stringify(this.data.options));
+				if (!Object.keys(this.draftContext || {}).length) this.draftContext = this.activeContext;
 				this.loadedOnce = true;
 			} catch (error) { this.error = error?.message || `${this.offeringPlural} could not be loaded.`; }
 			finally { this.loading = false; }
@@ -202,10 +210,10 @@ export default {
 		clearFilters() { this.filters = { branch: "", institution: "", program: "", department: "", academic_year: "", academic_term: "", student_batch: "", study_mode: "", delivery_mode: "", is_active: "", admission_enabled: "", enrollment_enabled: "", search: "" }; this.newOffering(); this.load(true); },
 		previousPage() { this.data.paging.start = Math.max(0, this.data.paging.start - this.data.paging.page_length); this.load(false); },
 		nextPage() { if (this.data.paging.has_more) { this.data.paging.start = this.data.paging.next_start; this.load(false); } },
-		async newOffering() { this.draft = { ...emptyDraft(), school_branch: this.filters.branch || "", institution: this.filters.institution || "" }; this.saveError = ""; await this.loadDraftOptions(); },
+		async newOffering() { this.draft = { ...emptyDraft(), school_branch: this.filters.branch || "", institution: this.filters.institution || "" }; this.draftContext = this.activeContext; this.saveError = ""; await this.loadDraftOptions(); },
 		async editOffering(row) { this.draft = { ...emptyDraft(), ...row, is_active: Boolean(row.is_active), admission_enabled: Boolean(row.admission_enabled), enrollment_enabled: Boolean(row.enrollment_enabled), identity_locked: Boolean(row.identity_locked) }; this.saveError = ""; await this.loadDraftOptions(); },
 		async loadDraftOptions() {
-			try { const response = await frappe.call("eduedge.api.programme_offerings.get_programme_offering_options", { branch: this.draft.school_branch || undefined, academic_year: this.draft.academic_year || undefined }); const result = response.message || {}; this.draftOptions = result.options || emptyOptions(); this.draft.institution = result.institution || this.draft.institution || ""; this.draftProgramChanged(); }
+			try { const response = await frappe.call("eduedge.api.programme_offerings.get_programme_offering_options", { branch: this.draft.school_branch || undefined, academic_year: this.draft.academic_year || undefined }); const result = response.message || {}; this.draftOptions = result.options || emptyOptions(); this.draftContext = result.active_context || this.activeContext; this.draft.institution = result.institution || this.draft.institution || ""; this.draftProgramChanged(); }
 			catch (error) { this.saveError = error?.message || "Offering options could not be loaded."; }
 		},
 		async draftBranchChanged() { this.draft.program = ""; this.draft.department = ""; this.draft.academic_year = ""; this.draft.academic_term = ""; this.draft.student_batch = ""; await this.loadDraftOptions(); },
@@ -215,8 +223,8 @@ export default {
 			if (!this.canSave) return; this.saving = true; this.saveError = "";
 			try {
 				const response = await frappe.call("eduedge.api.programme_offerings.save_programme_offering", { offering: this.draft.name || undefined, school_branch: this.draft.school_branch, program: this.draft.program, academic_year: this.draft.academic_year, academic_term: this.draft.academic_term || undefined, student_batch: this.draft.student_batch || undefined, offering_title: this.draft.offering_title || undefined, offering_code: this.draft.offering_code || undefined, study_mode: this.draft.study_mode, delivery_mode: this.draft.delivery_mode, start_date: this.draft.start_date || undefined, end_date: this.draft.end_date || undefined, is_active: this.draft.is_active ? 1 : 0, admission_enabled: this.draft.admission_enabled ? 1 : 0, enrollment_enabled: this.draft.enrollment_enabled ? 1 : 0, capacity: this.draft.capacity || 0, application_start_date: this.draft.application_start_date || undefined, application_end_date: this.draft.application_end_date || undefined, notes: this.draft.notes || undefined });
-				frappe.show_alert({ message: __(`${this.offeringSingular} saved`), indicator: "green" }); await this.load(true); const row = this.data.offerings.find((item) => item.name === response.message?.name); if (row) await this.editOffering(row); else await this.newOffering();
-			} catch (error) { this.saveError = error?.message || `${this.offeringSingular} could not be saved.`; }
+				frappe.show_alert({ message: __(`${this.editorOfferingSingular} saved`), indicator: "green" }); await this.load(true); const row = this.data.offerings.find((item) => item.name === response.message?.name); if (row) await this.editOffering(row); else await this.newOffering();
+			} catch (error) { this.saveError = error?.message || `${this.editorOfferingSingular} could not be saved.`; }
 			finally { this.saving = false; }
 		},
 		openFullForm(name) { if (name) frappe.set_route("Form", "EduEdge Program Offering", name); },
