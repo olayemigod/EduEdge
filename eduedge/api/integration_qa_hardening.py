@@ -14,6 +14,7 @@ from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	get_current_school_branch,
 )
+from eduedge.services.institution_context import get_effective_institution_context
 
 
 def _academic_calendars(institution: str | None) -> list[dict]:
@@ -184,8 +185,13 @@ def get_operations_context(
 	student_group: str | None = None,
 ) -> dict:
 	"""Resolve an active/default/sole permitted Branch before loading operations."""
-	return academic_operations_review.get_operations_context(
-		branch=_preferred_operational_branch(branch),
+	resolved_branch = _preferred_operational_branch(branch)
+	payload = academic_operations_review.get_operations_context(
+		branch=resolved_branch,
 		date=date,
 		student_group=student_group,
 	)
+	institution_context = get_effective_institution_context(branch=resolved_branch)
+	payload["institution_context"] = institution_context
+	payload["terms"] = institution_context.get("terms") or {}
+	return payload
