@@ -76,6 +76,10 @@ ROUTE_REQUIREMENTS = {
 		("course", "read"),
 		("topic", "read"),
 	),
+	"/app/eduedge-academic-sessions": (
+		("academic_year", "read"),
+		("academic_term", "read"),
+	),
 	"/app/eduedge-academic-operations": (
 		("student_attendance", "create"),
 		("student_attendance", "write"),
