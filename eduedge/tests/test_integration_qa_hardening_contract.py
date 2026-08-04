@@ -42,9 +42,10 @@ class IntegrationQAHardeningContractTest(unittest.TestCase):
 		self.assertIn("registerEduEdgeResourcePage", content)
 		self.assertIn('resourceKey: "school_branches"', content)
 
-	def test_friendly_name_pipeline_covers_sidebar_waffle_workspace_and_branch_action(self):
+	def test_friendly_names_are_generated_at_source_without_recursive_dom_rewriting(self):
 		navigation = self.read("public/js/eduedge_ui/navigation.js")
 		product_menu = self.read("public/js/eduedge_product_menu.bundle.js")
+		shell_identity = self.read("public/js/eduedge_shell_identity.bundle.js")
 		workspace = self.read("eduedge/workspace/eduedge/eduedge.json")
 		self.assertIn('term("student"', navigation)
 		self.assertIn('term("student_applicant"', navigation)
@@ -53,7 +54,11 @@ class IntegrationQAHardeningContractTest(unittest.TestCase):
 		self.assertIn('term("programme"', product_menu)
 		self.assertIn('term("student_group"', product_menu)
 		self.assertIn('path === "/app/eduedge"', product_menu)
-		self.assertIn('["Add School Branche", "Add School Branch"]', product_menu)
+		self.assertIn('item("School Branches"', product_menu)
+		self.assertNotIn("function friendlyPairs", product_menu)
+		self.assertNotIn("function applyVisibleFriendlyNames", product_menu)
+		self.assertIn('".edge-app-shell"', shell_identity)
+		self.assertIn('data-eduedge-terminology-managed', shell_identity)
 		self.assertIn('"label":"Student Groups"', workspace)
 		self.assertNotIn("Student Groups / Classes", workspace)
 
