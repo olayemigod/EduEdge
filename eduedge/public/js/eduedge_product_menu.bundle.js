@@ -435,85 +435,20 @@ function registerEduEdgeProductMenu() {
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.registerProductMenu) return;
 		const menu = permissionFilteredMenu();
-		runtime.registerProductMenu({ ...menu, profile: getProfile(), commands: commandEntries(menu).map(({ searchText, ...entry }) => entry) });
+		runtime.registerProductMenu({
+			...menu,
+			profile: getProfile(),
+			commands: commandEntries(menu).map(({ searchText, ...entry }) => entry),
+		});
 		runtime.refreshProductMenu?.();
-		scheduleVisibleFriendlyNames();
-	});
-}
-
-function friendlyPairs() {
-	const student = term("student", { fallback: "Student" });
-	const students = term("student", { plural: true, fallback: "Students" });
-	const applicants = term("student_applicant", { plural: true, fallback: "Applicants" });
-	const group = term("student_group", { fallback: "Student Group" });
-	const groups = term("student_group", { plural: true, fallback: "Student Groups" });
-	const programme = term("programme", { fallback: "Programme" });
-	const programmes = term("programme", { plural: true, fallback: "Programmes" });
-	const offerings = term("programme_offering", { plural: true, fallback: "Programme Offerings" });
-	const assessment = term("assessment", { fallback: "Assessment" });
-	const assessments = term("assessment", { plural: true, fallback: "Assessments" });
-	return [
-		["Add School Branches", "Add School Branch"], ["Add School Branche", "Add School Branch"], ["School Branche", "School Branch"],
-		["Student Groups / Classes", groups], ["Student Groups", groups], ["Student Group", group],
-		["Student Applicants", applicants], ["Applicants", applicants], ["Students", students], ["Student", student],
-		["Program Offerings", offerings], ["Programme Offerings", offerings], ["Programs", programmes], ["Programmes", programmes],
-		["Program", programme], ["Programme", programme], ["Assessment Operations", `${assessment} Operations`],
-		["Assessment Plans", `${assessment} Plans`], ["Assessment Results", `${assessment} Results`],
-		["Assessments & Results", `${assessments} & Results`],
-	].filter(([from, to]) => from && to && from !== to).sort((left, right) => right[0].length - left[0].length);
-}
-
-function replaceValue(value, pairs) {
-	let next = String(value || "");
-	for (const [from, to] of pairs) next = next.split(from).join(to);
-	return next;
-}
-
-function applyVisibleFriendlyNames(root = document.body) {
-	if (!root || !isEduEdgeSurface()) return;
-	const pairs = friendlyPairs();
-	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-		acceptNode(node) {
-			const parent = node.parentElement;
-			if (!parent || !node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
-			if (parent.closest("script, style, textarea, code, pre, [contenteditable='true']")) return NodeFilter.FILTER_REJECT;
-			return NodeFilter.FILTER_ACCEPT;
-		},
-	});
-	const nodes = [];
-	while (walker.nextNode()) nodes.push(walker.currentNode);
-	for (const node of nodes) {
-		const next = replaceValue(node.nodeValue, pairs);
-		if (next !== node.nodeValue) node.nodeValue = next;
-	}
-	for (const element of root.querySelectorAll?.("[placeholder], [title], [aria-label]") || []) {
-		for (const attribute of ["placeholder", "title", "aria-label"]) {
-			if (!element.hasAttribute(attribute)) continue;
-			const current = element.getAttribute(attribute) || "";
-			const next = replaceValue(current, pairs);
-			if (next !== current) element.setAttribute(attribute, next);
-		}
-	}
-}
-
-let terminologyScheduled = false;
-function scheduleVisibleFriendlyNames() {
-	if (terminologyScheduled) return;
-	terminologyScheduled = true;
-	requestAnimationFrame(() => {
-		terminologyScheduled = false;
-		applyVisibleFriendlyNames();
 	});
 }
 
 function initialiseEduEdgeMenu() {
 	setDensity(getDensity());
 	registerEduEdgeProductMenu();
-	scheduleVisibleFriendlyNames();
-	if (!window.__eduedgeFriendlyNameObserver && document.body) {
-		window.__eduedgeFriendlyNameObserver = new MutationObserver(scheduleVisibleFriendlyNames);
-		window.__eduedgeFriendlyNameObserver.observe(document.body, { childList: true, subtree: true });
-	}
+	window.__eduedgeFriendlyNameObserver?.disconnect?.();
+	delete window.__eduedgeFriendlyNameObserver;
 }
 
 window.openEduEdgeCommandPalette = openEduEdgeCommandPalette;
