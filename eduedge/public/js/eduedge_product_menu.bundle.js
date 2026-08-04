@@ -75,6 +75,8 @@ function buildEduEdgeProductMenu() {
 	const programme = term("programme", { fallback: __("Programme") });
 	const programmes = term("programme", { plural: true, fallback: __("Programmes") });
 	const offerings = term("programme_offering", { plural: true, fallback: __("Programme Offerings") });
+	const academicYears = term("academic_year", { plural: true, fallback: __("Academic Years") });
+	const academicTerms = term("academic_term", { plural: true, fallback: __("Academic Terms") });
 	const student = term("student", { fallback: __("Student") });
 	const students = term("student", { plural: true, fallback: __("Students") });
 	const applicants = term("student_applicant", { plural: true, fallback: __("Applicants") });
@@ -121,6 +123,7 @@ function buildEduEdgeProductMenu() {
 				icon: "graduation",
 				items: [
 					item("Academic Foundation", "Academic structure, levels, and calendars", "book", "/app/eduedge-academic-foundation", { keywords: ["academic", "foundation", "calendar", "level"] }),
+					item(`${academicYears} & ${academicTerms}`, `Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`, "calendar", "/app/eduedge-academic-sessions", { keywords: ["academic", "session", "year", "term", "semester", "calendar"] }),
 					item(programmes, `Maintain the ${programme.toLowerCase()} catalogue`, "book", "/app/eduedge-programs", { keywords: ["programme", "class", "catalogue", "course"] }),
 					item(offerings, `${programmes} available by campus and session`, "layers", "/app/eduedge-program-offerings", { keywords: ["programme", "class", "offering", "academic year"] }),
 					item("Academic Operations", `Run ${groups.toLowerCase()}, schedules, and attendance`, "calendar", "/app/eduedge-academic-operations", { keywords: ["class", "schedule", "attendance"], quick_action: true }),
