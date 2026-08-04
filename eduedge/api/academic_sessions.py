@@ -39,7 +39,7 @@ def _normalise(value: str | None) -> str:
 def _active_context() -> dict:
 	try:
 		return get_effective_institution_context()
-	 except Exception:
+	except Exception:
 		return {}
 
 
