@@ -43,8 +43,8 @@ class TestClassArmsPageContract(unittest.TestCase):
 			'"docstatus": 1',
 			'enrollment_filters[OFFERING_FIELD] = context.name',
 			'filters={"school_branch": branch, "enabled": 1}',
-			"Duplicate Student rows are not allowed",
-			"Duplicate Instructor rows are not allowed",
+			'_assert_unique(student_rows, "student", _("Student"))',
+			'_assert_unique(instructor_rows, "instructor", _("Instructor"))',
 		):
 			self.assertIn(token, api)
 
