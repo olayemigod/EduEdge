@@ -26,10 +26,15 @@ class TestAcademicSessionsPageContract(unittest.TestCase):
 
 	def test_navigation_and_access_manifest_expose_sessions_and_terms(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
+		product_menu = (APP / "public/js/eduedge_product_menu.bundle.js").read_text()
 		access = (APP / "access_control.py").read_text()
-		self.assertIn('"/app/eduedge-academic-sessions"', navigation)
+		for source in (navigation, product_menu):
+			self.assertIn('"/app/eduedge-academic-sessions"', source)
+			self.assertIn('const academicTerms = term("academic_term"', source)
 		self.assertIn('menuItem(`${academicYears} & ${academicTerms}`', navigation)
-		self.assertIn('const academicTerms = term("academic_term"', navigation)
+		self.assertIn('item(`${academicYears} & ${academicTerms}`', product_menu)
+		self.assertIn("permissionFilteredMenu", product_menu)
+		self.assertIn("itemAllowed", product_menu)
 		self.assertIn('"/app/eduedge-academic-sessions": (', access)
 		self.assertIn('("academic_year", "read")', access)
 		self.assertIn('("academic_term", "read")', access)
