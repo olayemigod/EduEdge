@@ -5,6 +5,7 @@ import frappe
 from eduedge.education import institution_types as registry
 
 ADDITIONAL_TERM_KEYS = (
+	"department",
 	"program_enrollment",
 	"student",
 	"assessment",
@@ -15,6 +16,9 @@ ADDITIONAL_TERM_KEYS = (
 
 INSTITUTION_TERM_OVERRIDES = {
 	"PRIMARY": {
+		"department": ("School Section", "School Sections"),
+		"programme": ("Class", "Classes"),
+		"programme_offering": ("Class Intake", "Class Intakes"),
 		"class_session": ("Period", "Periods"),
 		"program_enrollment": ("Class Enrollment", "Class Enrollments"),
 		"student": ("Pupil", "Pupils"),
@@ -24,6 +28,9 @@ INSTITUTION_TERM_OVERRIDES = {
 		"assessment_result": ("Examination Result", "Examination Results"),
 	},
 	"SECONDARY": {
+		"department": ("School Section", "School Sections"),
+		"programme": ("Class", "Classes"),
+		"programme_offering": ("Class Intake", "Class Intakes"),
 		"class_session": ("Period", "Periods"),
 		"program_enrollment": ("Class Enrollment", "Class Enrollments"),
 		"student": ("Student", "Students"),
@@ -33,6 +40,9 @@ INSTITUTION_TERM_OVERRIDES = {
 		"assessment_result": ("Examination Result", "Examination Results"),
 	},
 	"TERTIARY": {
+		"department": ("Department", "Departments"),
+		"programme": ("Programme", "Programmes"),
+		"programme_offering": ("Programme Intake", "Programme Intakes"),
 		"program_enrollment": ("Programme Enrollment", "Programme Enrollments"),
 		"student": ("Student", "Students"),
 		"assessment": ("Assessment", "Assessments"),
@@ -41,6 +51,9 @@ INSTITUTION_TERM_OVERRIDES = {
 		"assessment_result": ("Assessment Result", "Assessment Results"),
 	},
 	"TRAINING_CENTRE": {
+		"department": ("Training Category", "Training Categories"),
+		"programme": ("Programme", "Programmes"),
+		"programme_offering": ("Intake", "Intakes"),
 		"program_enrollment": ("Trainee Enrollment", "Trainee Enrollments"),
 		"student": ("Trainee", "Trainees"),
 		"assessment": ("Evaluation", "Evaluations"),
