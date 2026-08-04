@@ -1,6 +1,166 @@
 (() => {
 	const COMMAND_VERSION = "1.0.0";
 	const NAVIGATION_QA_STYLESHEET = "/assets/eduedge/css/eduedge_navigation_qa_fixes.css";
+	const CALENDAR_DOCTYPE = "EduEdge Institution Academic Calendar";
+	const CALENDAR_PERIOD_DOCTYPE = "EduEdge Academic Calendar Period";
+	const CALENDAR_QUICK_ENTRY_MARKER = "__eduedgeCalendarQuickEntryAdapter";
+
+	function calendarQuickEntryValue(entry, fieldname) {
+		if (typeof entry?.get_value === "function") {
+			const value = entry.get_value(fieldname);
+			if (value !== undefined && value !== null) return value;
+		}
+		return entry?.doc?.[fieldname];
+	}
+
+	function escapeCalendarQuickEntryText(value) {
+		const text = String(value || "");
+		if (typeof frappe.utils?.escape_html === "function") return frappe.utils.escape_html(text);
+		return $("<div>").text(text).html();
+	}
+
+	function calendarQuickEntryDate(value) {
+		if (!value) return __("Not set");
+		return typeof frappe.datetime?.str_to_user === "function"
+			? frappe.datetime.str_to_user(value)
+			: String(value);
+	}
+
+	function renderCalendarQuickEntrySummary(entry, academicYear, year, terms) {
+		if (typeof entry?.set_intro !== "function") return;
+		const range = `${calendarQuickEntryDate(year?.year_start_date)} – ${calendarQuickEntryDate(year?.year_end_date)}`;
+		if (!terms.length) {
+			entry.set_intro(
+				__("{0} covers {1}. No Academic Terms are configured for this Academic Year.", [
+					escapeCalendarQuickEntryText(academicYear),
+					escapeCalendarQuickEntryText(range),
+				]),
+				"orange",
+			);
+			return;
+		}
+		const termSummary = terms
+			.map((term) => `${escapeCalendarQuickEntryText(term.name)} (${calendarQuickEntryDate(term.term_start_date)} – ${calendarQuickEntryDate(term.term_end_date)})`)
+			.join("<br>");
+		entry.set_intro(
+			`<strong>${escapeCalendarQuickEntryText(academicYear)}</strong> · ${escapeCalendarQuickEntryText(range)}<br>${termSummary}`,
+			"blue",
+		);
+	}
+
+	async function syncCalendarQuickEntryDefaults(entry) {
+		if (!entry?.doc || entry.doctype !== CALENDAR_DOCTYPE) return;
+		const academicYear = String(calendarQuickEntryValue(entry, "academic_year") || "").trim();
+		const requestToken = Number(entry.__eduedgeCalendarSyncToken || 0) + 1;
+		entry.__eduedgeCalendarSyncToken = requestToken;
+		if (!academicYear) {
+			if (typeof entry.set_intro === "function") {
+				entry.set_intro(__("Select an Academic Year to load its calendar dates and Terms."), "blue");
+			}
+			return;
+		}
+
+		try {
+			const [yearResponse, terms] = await Promise.all([
+				frappe.db.get_value("Academic Year", academicYear, ["year_start_date", "year_end_date"]),
+				frappe.db.get_list("Academic Term", {
+					filters: { academic_year: academicYear },
+					fields: ["name", "term_start_date", "term_end_date"],
+					order_by: "term_start_date asc, name asc",
+					limit: 0,
+				}),
+			]);
+			if (
+				entry.__eduedgeCalendarSyncToken !== requestToken
+				|| String(calendarQuickEntryValue(entry, "academic_year") || "").trim() !== academicYear
+			) return;
+
+			const year = yearResponse?.message || {};
+			if (typeof entry.set_value === "function") {
+				await entry.set_value("start_date", year.year_start_date || "");
+				await entry.set_value("end_date", year.year_end_date || "");
+			} else {
+				entry.doc.start_date = year.year_start_date || null;
+				entry.doc.end_date = year.year_end_date || null;
+			}
+
+			frappe.model.clear_table(entry.doc, "periods");
+			for (const [index, term] of terms.entries()) {
+				const row = frappe.model.add_child(entry.doc, CALENDAR_PERIOD_DOCTYPE, "periods");
+				row.academic_term = term.name;
+				row.start_date = term.term_start_date || null;
+				row.end_date = term.term_end_date || null;
+				row.sequence = (index + 1) * 10;
+			}
+			renderCalendarQuickEntrySummary(entry, academicYear, year, terms);
+		} catch (error) {
+			console.error("EduEdge calendar Quick Entry autofill failed", error);
+			if (typeof entry.set_intro === "function") {
+				entry.set_intro(
+					error?.message || __("Calendar dates and Terms could not be loaded for this Academic Year."),
+					"red",
+				);
+			}
+		}
+	}
+
+	function setupCalendarQuickEntry(entry) {
+		if (
+			!entry?.doc
+			|| entry.doctype !== CALENDAR_DOCTYPE
+			|| !entry.fields_dict
+			|| entry.__eduedgeCalendarQuickEntryBound
+		) return;
+		entry.__eduedgeCalendarQuickEntryBound = true;
+		const academicYearField = entry.fields_dict.academic_year;
+		if (!academicYearField) return;
+
+		academicYearField.$input
+			?.off("change.eduedgeCalendarQuickEntry")
+			.on("change.eduedgeCalendarQuickEntry", () => {
+				setTimeout(() => syncCalendarQuickEntryDefaults(entry), 0);
+			});
+		if (calendarQuickEntryValue(entry, "academic_year")) {
+			queueMicrotask(() => syncCalendarQuickEntryDefaults(entry));
+		} else if (typeof entry.set_intro === "function") {
+			entry.set_intro(__("Select an Academic Year to load its calendar dates and Terms."), "blue");
+		}
+	}
+
+	function installCalendarQuickEntryAdapter() {
+		if (window[CALENDAR_QUICK_ENTRY_MARKER]?.installed) return;
+		const formApi = window.frappe?.ui?.form;
+		if (typeof formApi?.make_quick_entry !== "function") return;
+		const originalMakeQuickEntry = formApi.make_quick_entry;
+		formApi.make_quick_entry = function (
+			doctype,
+			afterInsert,
+			initCallback,
+			doc,
+			force,
+			skipInsert,
+		) {
+			const combinedInitCallback = doctype !== CALENDAR_DOCTYPE
+				? initCallback
+				: (target) => {
+					if (typeof initCallback === "function") initCallback(target);
+					setupCalendarQuickEntry(target);
+				};
+			return originalMakeQuickEntry.call(
+				this,
+				doctype,
+				afterInsert,
+				combinedInitCallback,
+				doc,
+				force,
+				skipInsert,
+			);
+		};
+		window[CALENDAR_QUICK_ENTRY_MARKER] = {
+			installed: true,
+			sync: syncCalendarQuickEntryDefaults,
+		};
+	}
 
 	function ensureNavigationQaStyles() {
 		if (document.querySelector(`link[href="${NAVIGATION_QA_STYLESHEET}"]`)) return;
@@ -96,6 +256,7 @@
 	ensureNavigationQaStyles();
 	disableGlobalFriendlyNameObserver();
 	installEduEdgeRouteGuard();
+	installCalendarQuickEntryAdapter();
 	if (window.EdgeSuiteCommands?.version === COMMAND_VERSION) return;
 
 	const registry = (window.EdgeSuiteCommands = window.EdgeSuiteCommands || {});
