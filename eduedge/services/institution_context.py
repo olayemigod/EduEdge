@@ -276,24 +276,33 @@ def _term_row(singular: str, plural: str, *, sequence: int) -> dict:
 
 
 def _augment_academic_hierarchy_terms(code: str, terms: dict[str, dict]) -> dict[str, dict]:
-	"""Expose distinct labels for Section → Level/Class → Student Group/Class Arm.
+	"""Align visible terms with Department → Program → Student Group hierarchy.
 
-	The database DocTypes retain their stable technical identities. These aliases keep
-	all EdgeSuite pages aligned and prevent the ERPNext Program record from being
-	mislabelled as the same School Section represented by EduEdge Academic Section.
+	The database DocTypes keep their stable technical identities. The selected
+	Institution Type controls whether those records are presented as School Sections
+	and Classes, Departments and Programmes, or Training Categories and Programmes.
 	"""
 	resolved = {key: dict(value) for key, value in (terms or {}).items()}
 	if code in {"PRIMARY", "SECONDARY"}:
-		resolved["academic_section"] = _term_row("School Section", "School Sections", sequence=35)
-		resolved["academic_level"] = _term_row("Class", "Classes", sequence=75)
-		resolved["programme"] = _term_row("Programme", "Programmes", sequence=30)
+		resolved["department"] = _term_row("School Section", "School Sections", sequence=25)
+		resolved["academic_section"] = dict(resolved["department"])
+		resolved["programme"] = _term_row("Class", "Classes", sequence=30)
+		resolved["programme_offering"] = _term_row("Class Intake", "Class Intakes", sequence=40)
+		resolved["academic_level"] = _term_row("Class Level", "Class Levels", sequence=75)
 	elif code == "TERTIARY":
+		resolved["department"] = _term_row("Department", "Departments", sequence=25)
 		resolved["academic_section"] = _term_row("Faculty / School", "Faculties / Schools", sequence=35)
+		resolved["programme"] = _term_row("Programme", "Programmes", sequence=30)
+		resolved["programme_offering"] = _term_row("Programme Intake", "Programme Intakes", sequence=40)
 		resolved["academic_level"] = _term_row("Level", "Levels", sequence=75)
 	elif code == "TRAINING_CENTRE":
-		resolved["academic_section"] = _term_row("Training Category", "Training Categories", sequence=35)
+		resolved["department"] = _term_row("Training Category", "Training Categories", sequence=25)
+		resolved["academic_section"] = dict(resolved["department"])
+		resolved["programme"] = _term_row("Programme", "Programmes", sequence=30)
+		resolved["programme_offering"] = _term_row("Intake", "Intakes", sequence=40)
 		resolved["academic_level"] = _term_row("Training Level", "Training Levels", sequence=75)
 	else:
+		resolved.setdefault("department", _term_row("Department", "Departments", sequence=25))
 		resolved["academic_section"] = _term_row("Academic Section", "Academic Sections", sequence=35)
 		resolved["academic_level"] = dict(
 			resolved.get("class_level") or _term_row("Academic Level", "Academic Levels", sequence=75)
