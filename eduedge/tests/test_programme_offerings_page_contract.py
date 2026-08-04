@@ -80,6 +80,16 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		self.assertIn('frappe.set_route("Form", "EduEdge Program Offering", name)', component)
 		self.assertNotIn("academicLevel", component)
 
+	def test_calendar_title_prefers_human_readable_session_over_internal_hash(self):
+		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text(encoding="utf-8")
+		self.assertIn("calendarTitle(filterCalendar)", component)
+		self.assertIn("calendarTitle(draftCalendar)", component)
+		self.assertIn("calendar?.calendar_title", component)
+		self.assertIn('academicYear ? `${academicYear} Calendar`', component)
+		self.assertIn('calendar?.name || "Institution Academic Calendar"', component)
+		self.assertNotIn("{{ filterCalendar.name }}", component)
+		self.assertNotIn("{{ draftCalendar.name }}", component)
+
 	def test_department_filters_programmes_and_programme_derives_department(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text(encoding="utf-8")
 		bundle = (APP / "public" / "js" / "eduedge_programme_offerings.bundle.js").read_text(encoding="utf-8")
