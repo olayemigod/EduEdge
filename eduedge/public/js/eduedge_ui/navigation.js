@@ -117,6 +117,8 @@ export function buildEduEdgeMenuItems() {
 	const groups = term("student_group", { plural: true, fallback: __("Classes") });
 	const sessions = term("class_session", { plural: true, fallback: __("Schedules") });
 	const academicYear = term("academic_year", { fallback: __("Academic Year") });
+	const academicYears = term("academic_year", { plural: true, fallback: __("Academic Years") });
+	const academicTerms = term("academic_term", { plural: true, fallback: __("Academic Terms") });
 	const sections = term("academic_section", { plural: true, fallback: __("Academic Sections") });
 	const levels = term("academic_level", { plural: true, fallback: __("Academic Levels") });
 	const assessments = term("assessment", { plural: true, fallback: __("Assessments") });
@@ -135,7 +137,8 @@ export function buildEduEdgeMenuItems() {
 			menuItem(students, "/app/eduedge-students", "students", __(`${student} records and profiles`)),
 		]),
 		menuGroup("academic-setup", __("Academic Setup"), "book", [
-			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and calendars`)),
+			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and Institution calendars`)),
+			menuItem(`${academicYears} & ${academicTerms}`, "/app/eduedge-academic-sessions", "calendar", __(`Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`)),
 			menuItem(programmes, "/app/eduedge-programs", "book", __(`${programmes} catalogue`)),
 			menuItem(offerings, "/app/eduedge-program-offerings", "layers", __(`${programmes} by campus and ${academicYear}`)),
 			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __(`${groups}, ${sessions}, and attendance`)),
@@ -193,14 +196,14 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home", "/app/eduedge-my-profile", "/app/eduedge-academic-operations",
 	"/app/eduedge-admissions", "/app/eduedge-applicants", "/app/eduedge-students",
 	"/app/eduedge-programs", "/app/eduedge-program-offerings", "/app/eduedge-academic-foundation",
-	"/app/eduedge-cbt-operations", "/app/eduedge-cbt-schedules", "/app/eduedge-cbt-invigilation",
-	"/app/eduedge-cbt-marking", "/app/eduedge-cbt-review-workbench", "/app/eduedge-exam-templates",
-	"/app/eduedge-exam-template-builder", "/app/eduedge-question-bank", "/app/eduedge-question-responsibilities",
-	"/app/eduedge-question-builder", "/app/eduedge-question-batch", "/app/eduedge-assessment-operations",
-	"/app/eduedge-report-cards", "/app/eduedge-institution-profile", "/app/eduedge-school-branches",
-	"/app/eduedge-institution-structure", "/app/eduedge-institution-operations-settings",
-	"/app/eduedge-branch-governance", "/app/eduedge-setup-center", "/app/eduedge-settings-center",
-	"/app/eduedge-training-centre",
+	"/app/eduedge-academic-sessions", "/app/eduedge-cbt-operations", "/app/eduedge-cbt-schedules",
+	"/app/eduedge-cbt-invigilation", "/app/eduedge-cbt-marking", "/app/eduedge-cbt-review-workbench",
+	"/app/eduedge-exam-templates", "/app/eduedge-exam-template-builder", "/app/eduedge-question-bank",
+	"/app/eduedge-question-responsibilities", "/app/eduedge-question-builder", "/app/eduedge-question-batch",
+	"/app/eduedge-assessment-operations", "/app/eduedge-report-cards", "/app/eduedge-institution-profile",
+	"/app/eduedge-school-branches", "/app/eduedge-institution-structure",
+	"/app/eduedge-institution-operations-settings", "/app/eduedge-branch-governance",
+	"/app/eduedge-setup-center", "/app/eduedge-settings-center", "/app/eduedge-training-centre",
 ]);
 
 export function isEduEdgeUIRoute(route) {
