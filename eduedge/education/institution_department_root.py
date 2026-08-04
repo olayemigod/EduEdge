@@ -128,6 +128,31 @@ def ensure_institution_department_root(
 	return doc.name
 
 
+def _department_is_ancestor_of(ancestor: str, descendant: str) -> bool:
+	"""Return True when moving ``ancestor`` below ``descendant`` would form a cycle.
+
+	Use the stored parent chain instead of lft/rgt values because this helper runs
+	during migration and may encounter a partially-normalised nested set.
+	"""
+	ancestor = str(ancestor or "").strip()
+	current = str(descendant or "").strip()
+	if not ancestor or not current:
+		return False
+	if ancestor == current:
+		return True
+
+	visited: set[str] = set()
+	while current and current not in visited:
+		visited.add(current)
+		parent = frappe.db.get_value("Department", current, "parent_department")
+		if not parent:
+			return False
+		if parent == ancestor:
+			return True
+		current = str(parent)
+	return False
+
+
 def normalise_institution_department_roots(*, ignore_permissions: bool = True) -> None:
 	if not (
 		frappe.db.exists("DocType", "Department")
@@ -160,8 +185,32 @@ def normalise_institution_department_roots(*, ignore_permissions: bool = True) -
 		for row in rows:
 			if cint(row.get(INSTITUTION_ROOT_FLAG)):
 				continue
+
+			# A Company root is a technical ERPNext container shared by every
+			# Institution in the Company. Earlier foundation data could leave an
+			# Institution value on that root. Clear the stale ownership without
+			# invoking nested-set movement; never place the Company root beneath one
+			# of its own descendants.
+			if row.name in company_roots:
+				frappe.db.set_value(
+					"Department",
+					row.name,
+					INSTITUTION_FIELD,
+					None,
+					update_modified=False,
+				)
+				continue
+
 			if row.parent_department and row.parent_department not in company_roots:
 				continue
+
+			# A partially-normalised site can already have the managed Institution
+			# root below this row. Moving the row beneath that target would create a
+			# nested-set cycle. Leave such ancestors untouched for a safe, idempotent
+			# migration rather than forcing an invalid move.
+			if _department_is_ancestor_of(row.name, institution_root):
+				continue
+
 			doc = frappe.get_doc("Department", row.name)
 			doc.parent_department = institution_root
 			doc.flags.eduedge_root_normalisation = True
