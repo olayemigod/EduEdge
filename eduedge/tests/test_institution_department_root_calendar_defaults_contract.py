@@ -31,6 +31,26 @@ class TestInstitutionDepartmentRootCalendarDefaultsContract(unittest.TestCase):
 		self.assertIn("ensure_institution_department_root_fields()", migration)
 		self.assertIn("normalise_institution_department_roots(ignore_permissions=True)", migration)
 
+	def test_department_root_normalisation_is_cycle_safe(self):
+		helper = (APP / "education" / "institution_department_root.py").read_text()
+		for expected in (
+			"def _department_is_ancestor_of(ancestor: str, descendant: str) -> bool:",
+			'frappe.db.get_value("Department", current, "parent_department")',
+			"if row.name in company_roots:",
+			"frappe.db.set_value(",
+			"update_modified=False",
+			"if _department_is_ancestor_of(row.name, institution_root):",
+		):
+			self.assertIn(expected, helper)
+		self.assertLess(
+			helper.index("if row.name in company_roots:"),
+			helper.index("doc = frappe.get_doc(\"Department\", row.name)"),
+		)
+		self.assertLess(
+			helper.index("if _department_is_ancestor_of(row.name, institution_root):"),
+			helper.index("doc = frappe.get_doc(\"Department\", row.name)"),
+		)
+
 	def test_calendar_derives_year_and_term_dates_in_ui_and_backend(self):
 		controller = (
 			APP
