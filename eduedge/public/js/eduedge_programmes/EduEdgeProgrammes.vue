@@ -13,7 +13,7 @@
 				<EdgePageHeader
 					eyebrow="Academic Catalogue"
 					:title="programmePlural"
-					:subtitle="`Maintain the native ${departmentSingular} → ${programmeSingular} structure. Course rows and advanced curriculum settings remain in the standard Frappe Program form.`"
+					:subtitle="`Maintain the native ${departmentSingular} → ${programmeSingular} structure. ${coursePlural} and advanced curriculum settings remain available in the native form.`"
 					:action-label="canCreate ? `New ${programmeSingular}` : ''"
 					@action="newProgramme"
 				/>
@@ -35,7 +35,7 @@
 							<select v-model="filters.institution" class="form-control" @change="institutionChanged">
 								<option value="">All permitted Institutions</option>
 								<option v-for="institution in data.institutions" :key="institution.name" :value="institution.name">
-									{{ institution.institution_name }} · {{ institution.institution_type }}
+									{{ institution.institution_name }} · {{ institution.institution_type_name || institution.institution_type }}
 								</option>
 							</select>
 						</label>
@@ -62,8 +62,8 @@
 
 				<EdgeDashboardLayout min-column-width="12rem">
 					<EdgeStatCard label="Matching Catalogue" :value="data.summary.total_programmes" :helper="`${data.summary.visible_programmes} on this page`" />
-					<EdgeStatCard label="Course Rows" :value="data.summary.course_rows" helper="Across visible records" />
-					<EdgeStatCard label="Active Offerings" :value="data.summary.active_offerings" helper="Across visible records" tone="success" />
+					<EdgeStatCard :label="`${coursePlural} Rows`" :value="data.summary.course_rows" helper="Across visible records" />
+					<EdgeStatCard :label="`Active ${offeringPlural}`" :value="data.summary.active_offerings" helper="Across visible records" tone="success" />
 					<EdgeStatCard label="Needs Classification" :value="data.summary.unclassified_visible" :helper="`Missing Institution or ${departmentSingular}`" :tone="data.summary.unclassified_visible ? 'warning' : 'neutral'" />
 				</EdgeDashboardLayout>
 
@@ -82,8 +82,8 @@
 									<span class="eduedge-programme-title"><strong>{{ row.program_name || row.name }}</strong><small>{{ row.program_abbreviation || row.name }}</small></span>
 									<span class="eduedge-programme-context">{{ institutionName(row.eduedge_institution) }}<small>{{ departmentName(row.department) }}</small></span>
 									<span class="eduedge-programme-counts">
-										<EdgeStatusBadge :label="`${row.course_count} course row(s)`" status="courses" tone="neutral" />
-										<EdgeStatusBadge :label="`${row.active_offering_count} active offering(s)`" status="offerings" :tone="row.active_offering_count ? 'success' : 'neutral'" />
+										<EdgeStatusBadge :label="`${row.course_count} ${coursePlural.toLowerCase()} row(s)`" status="courses" tone="neutral" />
+										<EdgeStatusBadge :label="`${row.active_offering_count} active ${offeringPlural.toLowerCase()}`" status="offerings" :tone="row.active_offering_count ? 'success' : 'neutral'" />
 									</span>
 								</button>
 								<button type="button" class="edge-button" @click="openFullForm(row.name)">Full form</button>
@@ -98,12 +98,12 @@
 
 					<section class="eduedge-programme-panel eduedge-programme-editor">
 						<div class="eduedge-programme-panel-heading">
-							<div><p class="edge-eyebrow">{{ draft.name ? "Quick edit" : "Quick create" }}</p><h2>{{ draft.name ? draft.program_name || programmeSingular : `New ${programmeSingular}` }}</h2></div>
+							<div><p class="edge-eyebrow">{{ draft.name ? "Quick edit" : "Quick create" }}</p><h2>{{ draft.name ? draft.program_name || editorProgrammeSingular : `New ${editorProgrammeSingular}` }}</h2></div>
 							<button type="button" class="edge-button" @click="newProgramme">Reset</button>
 						</div>
 						<EdgeEmptyState v-if="!canCreate && !canWrite" title="Read-only catalogue" description="Your current role can view these records but cannot create or edit them." />
 						<template v-else>
-							<label><span>{{ programmeSingular }} name</span><input v-model.trim="draft.program_name" class="form-control" /></label>
+							<label><span>{{ editorProgrammeSingular }} name</span><input v-model.trim="draft.program_name" class="form-control" /></label>
 							<label><span>Abbreviation</span><input v-model.trim="draft.program_abbreviation" class="form-control" /></label>
 							<label>
 								<span>Institution</span>
@@ -113,15 +113,15 @@
 								</select>
 							</label>
 							<label>
-								<span>{{ departmentSingular }}</span>
+								<span>{{ editorDepartmentSingular }}</span>
 								<select v-model="draft.department" class="form-control" :disabled="Boolean(draft.name && draft.active_offering_count)">
-									<option value="">Select {{ departmentSingular }}</option>
+									<option value="">Select {{ editorDepartmentSingular }}</option>
 									<option v-for="department in draftDepartments" :key="department.name" :value="department.name">{{ departmentLabel(department) }}</option>
 								</select>
 							</label>
-							<p class="text-muted">Examples: Junior Secondary School → JSS 1; Nursery Section → Nursery 1; School of Agriculture → BSc Agriculture.</p>
+							<p class="text-muted">{{ editorExample }}</p>
 							<div class="eduedge-programme-editor-actions">
-								<button type="button" class="edge-button edge-button--primary" :disabled="!canSave || saving" @click="saveProgramme">{{ saving ? "Saving..." : `Save ${programmeSingular}` }}</button>
+								<button type="button" class="edge-button edge-button--primary" :disabled="!canSave || saving" @click="saveProgramme">{{ saving ? "Saving..." : `Save ${editorProgrammeSingular}` }}</button>
 								<button v-if="draft.name" type="button" class="edge-button" @click="openFullForm(draft.name)">Open full form</button>
 							</div>
 							<p v-if="saveError" class="eduedge-programme-error">{{ saveError }}</p>
@@ -156,10 +156,32 @@ export default {
 	},
 	computed: {
 		activeContext() { return this.data.active_context || {}; },
-		programmeSingular() { return this.term("programme", false, "Programme"); },
-		programmePlural() { return this.term("programme", true, "Programmes"); },
-		departmentSingular() { return this.term("department", false, "Department / School Section"); },
-		departmentPlural() { return this.term("department", true, "Departments / School Sections"); },
+		mixedInstitutionView() {
+			if (this.filters.institution) return false;
+			return new Set((this.data.institutions || []).map((row) => row.institution_type).filter(Boolean)).size > 1;
+		},
+		pageContext() {
+			return this.data.institutions.find((row) => row.name === this.filters.institution)?.context || this.activeContext;
+		},
+		draftContext() {
+			return this.data.institutions.find((row) => row.name === this.draft.eduedge_institution)?.context || this.pageContext;
+		},
+		programmeSingular() { return this.mixedInstitutionView ? "Class / Programme" : this.term("programme", false, "Programme", this.pageContext); },
+		programmePlural() { return this.mixedInstitutionView ? "Classes / Programmes" : this.term("programme", true, "Programmes", this.pageContext); },
+		departmentSingular() { return this.mixedInstitutionView ? "School Section / Faculty / Department" : this.term("department", false, "Department", this.pageContext); },
+		departmentPlural() { return this.mixedInstitutionView ? "School Sections / Faculties / Departments" : this.term("department", true, "Departments", this.pageContext); },
+		coursePlural() { return this.mixedInstitutionView ? "Subjects / Courses / Modules" : this.term("course", true, "Courses", this.pageContext); },
+		offeringPlural() { return this.mixedInstitutionView ? "Class / Programme Intakes" : this.term("programme_offering", true, "Programme Intakes", this.pageContext); },
+		editorProgrammeSingular() { return this.term("programme", false, "Class / Programme", this.draftContext); },
+		editorDepartmentSingular() { return this.term("department", false, "Academic Unit", this.draftContext); },
+		editorExample() {
+			const type = this.draftContext?.institution_type;
+			if (type === "PRIMARY") return "Example: Primary Section → Primary 1.";
+			if (type === "SECONDARY") return "Example: Junior Secondary School → JSS 1.";
+			if (type === "TERTIARY") return "Example: Department of Crop Science → BSc Agriculture.";
+			if (type === "TRAINING_CENTRE") return "Example: Technical Training → Electrical Installation.";
+			return "Select an Institution to apply the correct academic terminology.";
+		},
 		canCreate() { return Boolean(this.data.permissions.can_create); },
 		canWrite() { return Boolean(this.data.permissions.can_write); },
 		canSave() {
@@ -171,7 +193,7 @@ export default {
 	mounted() { this.load(true); },
 	methods: {
 		openRoute: openEduEdgeRoute,
-		term(key, plural = false, fallback = "") { return frappe.eduedge?.term?.(key, { plural, context: this.activeContext, fallback }) || fallback; },
+		term(key, plural = false, fallback = "", context = null) { return frappe.eduedge?.term?.(key, { plural, context: context || this.pageContext, fallback }) || fallback; },
 		institutionName(name) { return this.data.institutions.find((row) => row.name === name)?.institution_name || name || "Unclassified Institution"; },
 		departmentName(name) { return this.data.departments.find((row) => row.name === name)?.department_name || name || `No ${this.departmentSingular}`; },
 		departmentLabel(row) { return row.parent_department ? `${row.department_name || row.name} · ${row.parent_department}` : row.department_name || row.name; },
@@ -208,11 +230,11 @@ export default {
 					institution: this.draft.eduedge_institution,
 					department: this.draft.department,
 				});
-				frappe.show_alert({ message: __(`${this.programmeSingular} saved`), indicator: "green" });
+				frappe.show_alert({ message: __(`${this.editorProgrammeSingular} saved`), indicator: "green" });
 				await this.load(true);
 				const row = this.data.programmes.find((item) => item.name === response.message?.name);
 				if (row) this.editProgramme(row); else this.newProgramme();
-			} catch (error) { this.saveError = error?.message || `${this.programmeSingular} could not be saved.`; }
+			} catch (error) { this.saveError = error?.message || `${this.editorProgrammeSingular} could not be saved.`; }
 			finally { this.saving = false; }
 		},
 		openFullForm(name) { if (name) frappe.set_route("Form", "Program", name); },
