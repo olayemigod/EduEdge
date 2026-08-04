@@ -25,7 +25,7 @@ def _require_login() -> None:
 def _require_programme_read() -> None:
 	_require_login()
 	if not frappe.has_permission("Program", "read"):
-		frappe.throw(_("You are not permitted to view Programmes / Classes."), frappe.PermissionError)
+		frappe.throw(_("You are not permitted to view Classes / Programmes."), frappe.PermissionError)
 
 
 @frappe.whitelist()
@@ -154,13 +154,18 @@ def _attach_programme_counts(rows: list[dict]) -> None:
 def _list_institutions() -> list[dict]:
 	if not frappe.has_permission("EduEdge Institution", "read"):
 		return []
-	return frappe.get_list(
+	rows = frappe.get_list(
 		"EduEdge Institution",
 		filters={"enabled": 1},
 		fields=["name", "institution_name", "institution_type", "company"],
 		order_by="institution_name asc",
 		page_length=MAX_OPTION_ROWS,
 	)
+	for row in rows:
+		context = get_effective_institution_context(institution=row.name)
+		row["institution_type_name"] = context.get("institution_type_name") or row.get("institution_type")
+		row["context"] = context
+	return rows
 
 
 def _list_departments(institution: str | None = None) -> list[dict]:
@@ -207,6 +212,16 @@ def _assert_department_context(department: str, institution: str | None) -> None
 
 
 @frappe.whitelist()
+def get_programme_terminology(institution: str | None = None) -> dict:
+	"""Return the permission-checked terminology for a Program document or editor."""
+	_require_programme_read()
+	institution = str(institution or "").strip() or None
+	if institution:
+		_assert_institution_access(institution)
+	return get_effective_institution_context(institution=institution)
+
+
+@frappe.whitelist()
 def search_departments(txt: str | None = None, institution: str | None = None) -> list[dict]:
 	_require_programme_read()
 	institution = str(institution or "").strip() or None
@@ -250,7 +265,7 @@ def save_programme(
 		doc.check_permission("write")
 	else:
 		if not frappe.has_permission("Program", "create"):
-			frappe.throw(_("You are not permitted to create Programmes / Classes."), frappe.PermissionError)
+			frappe.throw(_("You are not permitted to create Classes / Programmes."), frappe.PermissionError)
 		doc = frappe.new_doc("Program")
 	doc.program_name = str(program_name or "").strip()
 	doc.program_abbreviation = str(program_abbreviation or "").strip() or None
