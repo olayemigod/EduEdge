@@ -181,6 +181,7 @@ export default {
 			menuItems: EDUEDGE_MENU_ITEMS,
 			page: {
 				title: "",
+				singular_title: "",
 				eyebrow: "",
 				subtitle: "",
 				columns: [],
@@ -195,10 +196,7 @@ export default {
 	},
 	computed: {
 		singularTitle() {
-			const title = String(this.page.title || "Record");
-			if (title.endsWith("ies")) return `${title.slice(0, -3)}y`;
-			if (title.endsWith("s")) return title.slice(0, -1);
-			return title;
+			return String(this.page.singular_title || "Record");
 		},
 		currentPage() {
 			return Math.floor((this.page.start || 0) / (this.page.page_length || 20)) + 1;
