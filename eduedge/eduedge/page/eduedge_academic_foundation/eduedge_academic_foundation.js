@@ -22,21 +22,44 @@ frappe.pages["eduedge-academic-foundation"].on_page_show = function (wrapper) {
 	};
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		frappe.require("eduedge_academic_foundation.bundle.js", () => {
+		frappe.require("/assets/eduedge/js/academic_foundation_calendar_dialog.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (!window.EduEdgeAcademicFoundation || typeof window.createEduEdgeAcademicFoundationApp !== "function") {
-				fail(__("The EduEdge Academic Foundation bundle is unavailable or incomplete."));
-				return;
-			}
-			$loading.remove();
-			const root = $('<div class="eduedge-academic-foundation-root" data-edge-product="eduedge"></div>').appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeAcademicFoundationApp();
-				wrapper.vue_app.mount(root[0]);
-			} catch (error) {
-				console.error("Failed to mount EduEdge Academic Foundation", error);
-				fail(error.message || String(error));
-			}
+			frappe.require("eduedge_academic_foundation.bundle.js", () => {
+				if (wrapper.current_visit_id !== visitId) return;
+				if (!window.EduEdgeAcademicFoundation || typeof window.createEduEdgeAcademicFoundationApp !== "function") {
+					fail(__("The EduEdge Academic Foundation bundle is unavailable or incomplete."));
+					return;
+				}
+				if (typeof window.EduEdgeAcademicCalendarDialog?.open !== "function") {
+					fail(__("The Institution Academic Calendar dialog is unavailable."));
+					return;
+				}
+
+				const component = window.EduEdgeAcademicFoundation;
+				component.methods = component.methods || {};
+				component.methods.createCalendar = function () {
+					return window.EduEdgeAcademicCalendarDialog.open({
+						institution: this.selectedInstitution,
+						institutionLabel: this.selectedInstitutionLabel,
+						academicYearLabel: this.academicYearSingular,
+						academicTermLabel: this.academicTermPlural,
+						title: __(`New ${this.academicYearSingular} Calendar`),
+						onCreated: async () => {
+							await this.load();
+						},
+					});
+				};
+
+				$loading.remove();
+				const root = $('<div class="eduedge-academic-foundation-root" data-edge-product="eduedge"></div>').appendTo(page.body);
+				try {
+					wrapper.vue_app = window.createEduEdgeAcademicFoundationApp();
+					wrapper.vue_app.mount(root[0]);
+				} catch (error) {
+					console.error("Failed to mount EduEdge Academic Foundation", error);
+					fail(error.message || String(error));
+				}
+			});
 		});
 	});
 };
