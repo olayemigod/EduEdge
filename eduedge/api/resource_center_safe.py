@@ -28,6 +28,18 @@ RESOURCE_TITLE_TERMS = {
 	"program_offerings": ("programme_offering", True),
 }
 
+RESOURCE_SINGULAR_TITLES = {
+	"school_branches": _("School Branch"),
+	"admissions": _("Admission"),
+	"applicants": _("Applicant"),
+	"students": _("Student"),
+}
+
+RESOURCE_SINGULAR_TERMS = {
+	"programs": "programme",
+	"program_offerings": "programme_offering",
+}
+
 FIELD_TERM_KEYS = {
 	"program": "programme",
 	"program_name": "programme",
@@ -135,6 +147,7 @@ def _empty_page(resource: str, config: dict, page_length: int | str = 20) -> dic
 		"resource": resource,
 		"doctype": doctype,
 		"title": config["title"],
+		"singular_title": RESOURCE_SINGULAR_TITLES.get(resource) or config["title"],
 		"eyebrow": config["eyebrow"],
 		"subtitle": config["subtitle"],
 		"icon": config["icon"],
@@ -206,6 +219,15 @@ def _apply_terminology(result: dict, resource: str, context: dict) -> dict:
 	if resource in RESOURCE_TITLE_TERMS:
 		key, plural = RESOURCE_TITLE_TERMS[resource]
 		result["title"] = _term_label(context, key, plural=plural)
+	if resource in RESOURCE_SINGULAR_TERMS:
+		result["singular_title"] = _term_label(context, RESOURCE_SINGULAR_TERMS[resource])
+	else:
+		result["singular_title"] = (
+			RESOURCE_SINGULAR_TITLES.get(resource)
+			or result.get("singular_title")
+			or result.get("title")
+			or _("Record")
+		)
 	for collection_name in ("columns", "filters", "fields"):
 		for field in result.get(collection_name) or []:
 			key = FIELD_TERM_KEYS.get(field.get("fieldname"))
