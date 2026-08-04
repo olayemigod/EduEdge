@@ -16,7 +16,7 @@
 					:title="`${term('student_group', true, 'Student Groups')}, ${term('class_session', true, 'Schedules')} and attendance`"
 					:subtitle="`Run daily academic activity for ${activeInstitutionName || 'the selected Institution'} and ${activeBranchName || 'Branch / Campus'}.`"
 					:action-label="canCreateStudentGroup ? `New ${term('student_group', false, 'Student Group / Class Arm')}` : ''"
-					@action="openRoute('/app/student-group/new-student-group')"
+					@action="openClassArms(true)"
 				/>
 			</template>
 
@@ -83,6 +83,7 @@
 					<button type="button" class="edge-button" @click="openRoute('/app/eduedge-academic-foundation')">Academic Foundation</button>
 					<button type="button" class="edge-button" @click="openRoute('/app/eduedge-programs')">{{ term('programme', true, 'Programmes') }}</button>
 					<button type="button" class="edge-button" @click="openRoute('/app/eduedge-program-offerings')">{{ term('programme_offering', true, 'Programme Offerings') }}</button>
+					<button type="button" class="edge-button" @click="openClassArms(false)">Manage {{ term('student_group', true, 'Class Arms') }}</button>
 					<button v-if="canCreateCourseSchedule" type="button" class="edge-button" @click="openRoute('/app/course-schedule/new-course-schedule')">Add {{ term('class_session', false, 'Schedule') }}</button>
 					<button v-if="canReadRooms" type="button" class="edge-button" @click="openRoute('/app/room')">Manage Rooms</button>
 					<button v-if="canReadInstructorAssignments" type="button" class="edge-button" @click="openRoute('/app/eduedge-instructor-branch-assignment')">Instructor Assignments</button>
@@ -228,7 +229,7 @@ export default {
 		canReadAttendance() { return Boolean(this.permissions.can_read_attendance); },
 		canManageAttendance() { return Boolean(this.registerPermissions.can_create_attendance || this.registerPermissions.can_write_attendance); },
 		canSubmitAttendance() { return Boolean(this.registerPermissions.can_submit_attendance); },
-		canCreateStudentGroup() { return Boolean(this.calendarReady && this.permissions.can_create_student_group); },
+		canCreateStudentGroup() { return Boolean(this.permissions.can_create_student_group); },
 		canCreateCourseSchedule() { return Boolean(this.calendarReady && this.permissions.can_create_course_schedule); },
 		canReadRooms() { return Boolean(this.permissions.can_read_rooms); },
 		canReadInstructorAssignments() { return Boolean(this.permissions.can_read_instructor_assignments); },
@@ -238,6 +239,16 @@ export default {
 		openRoute: openEduEdgeRoute,
 		term(key, plural = false, fallback = "") { return frappe.eduedge?.term?.(key, { plural, context: this.context, fallback }) || fallback; },
 		formatTime(value) { return String(value || "").slice(0, 5) || "—"; },
+		classArmsRoute(createMode = false) {
+			const params = new URLSearchParams();
+			if (this.filters.branch) params.set("branch", this.filters.branch);
+			if (this.context.filters?.academic_year) params.set("academic_year", this.context.filters.academic_year);
+			if (this.context.filters?.academic_term) params.set("academic_term", this.context.filters.academic_term);
+			if (createMode) params.set("mode", "create");
+			const query = params.toString();
+			return `/app/eduedge-class-arms${query ? `?${query}` : ""}`;
+		},
+		openClassArms(createMode = false) { window.location.href = this.classArmsRoute(createMode); },
 		async loadContext() {
 			this.loading = true; this.error = "";
 			try {
