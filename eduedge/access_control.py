@@ -80,6 +80,7 @@ ROUTE_REQUIREMENTS = {
 		("academic_year", "read"),
 		("academic_term", "read"),
 	),
+	"/app/eduedge-class-arms": (("student_group", "read"),),
 	"/app/eduedge-academic-operations": (
 		("student_attendance", "create"),
 		("student_attendance", "write"),
