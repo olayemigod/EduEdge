@@ -17,6 +17,8 @@ from eduedge.services.institution_context import get_effective_institution_conte
 DEFAULT_PAGE_LENGTH = 25
 MAX_PAGE_LENGTH = 50
 MAX_OPTION_ROWS = 500
+CALENDAR_DOCTYPE = "EduEdge Institution Academic Calendar"
+PERIOD_DOCTYPE = "EduEdge Academic Calendar Period"
 
 
 def _require_login() -> None:
@@ -38,6 +40,48 @@ def _assert_link_read_permission(doctype: str, name: str | None, label: str) -> 
 	frappe.get_doc(doctype, name).check_permission("read")
 
 
+def _assert_institution_access(institution: str | None) -> None:
+	if not institution:
+		return
+	_assert_link_read_permission("EduEdge Institution", institution, _("Institution"))
+	if not cint(frappe.db.get_value("EduEdge Institution", institution, "enabled")):
+		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+
+
+def _resolve_page_context(
+	*,
+	branch: str | None,
+	institution: str | None,
+	use_active_branch: int | str | bool = 0,
+) -> tuple[str | None, str | None]:
+	resolved_branch = str(branch or "").strip() or None
+	resolved_institution = str(institution or "").strip() or None
+	if not resolved_branch and not resolved_institution and cint(use_active_branch):
+		current_branch = get_current_school_branch() or {}
+		resolved_branch = str(current_branch.get("name") or "").strip() or None
+
+	_assert_institution_access(resolved_institution)
+	if resolved_branch:
+		assert_branch_access(resolved_branch)
+		branch_row = frappe.db.get_value(
+			"EduEdge School Branch",
+			resolved_branch,
+			["institution", "enabled"],
+			as_dict=True,
+		) or {}
+		if not cint(branch_row.get("enabled")):
+			frappe.throw(_("Select an enabled School Branch / Campus."), frappe.ValidationError)
+		branch_institution = branch_row.get("institution")
+		if resolved_institution and branch_institution != resolved_institution:
+			frappe.throw(
+				_("Selected Branch does not belong to the selected Institution."),
+				frappe.ValidationError,
+			)
+		resolved_institution = branch_institution or resolved_institution
+		_assert_institution_access(resolved_institution)
+	return resolved_branch, resolved_institution
+
+
 @frappe.whitelist()
 def get_programme_offerings_page(
 	branch: str | None = None,
@@ -55,18 +99,15 @@ def get_programme_offerings_page(
 	search: str | None = None,
 	start: int | str = 0,
 	page_length: int | str = DEFAULT_PAGE_LENGTH,
+	use_active_branch: int | str | bool = 0,
 	**_legacy_filters,
 ) -> dict:
 	_require_read()
-	current_branch = get_current_school_branch() or {}
-	branch = str(branch or current_branch.get("name") or "").strip() or None
-	institution = str(institution or "").strip() or None
-	if branch:
-		assert_branch_access(branch)
-		branch_institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
-		if institution and branch_institution != institution:
-			frappe.throw(_("Selected Branch does not belong to the selected Institution."), frappe.ValidationError)
-		institution = branch_institution or institution
+	branch, institution = _resolve_page_context(
+		branch=branch,
+		institution=institution,
+		use_active_branch=use_active_branch,
+	)
 	active_context = get_effective_institution_context(institution=institution, branch=branch)
 
 	start = max(cint(start), 0)
@@ -110,11 +151,28 @@ def get_programme_offerings_page(
 		filters=filters,
 		or_filters=or_filters,
 		fields=[
-			"name", "school_branch", "institution", "program", "department",
-			"academic_year", "academic_term", "student_batch", "offering_title",
-			"offering_code", "study_mode", "delivery_mode", "start_date", "end_date",
-			"is_active", "admission_enabled", "enrollment_enabled", "capacity",
-			"application_start_date", "application_end_date", "notes", "modified",
+			"name",
+			"school_branch",
+			"institution",
+			"program",
+			"department",
+			"academic_year",
+			"academic_term",
+			"student_batch",
+			"offering_title",
+			"offering_code",
+			"study_mode",
+			"delivery_mode",
+			"start_date",
+			"end_date",
+			"is_active",
+			"admission_enabled",
+			"enrollment_enabled",
+			"capacity",
+			"application_start_date",
+			"application_end_date",
+			"notes",
+			"modified",
 		],
 		order_by="is_active desc, start_date desc, modified desc",
 		start=start,
@@ -127,8 +185,8 @@ def get_programme_offerings_page(
 	return {
 		"active_context": active_context,
 		"filters": {
-			"branch": branch,
-			"institution": institution,
+			"branch": branch or "",
+			"institution": institution or "",
 			"program": str(program or "").strip(),
 			"department": str(department or "").strip(),
 			"academic_year": str(academic_year or "").strip(),
@@ -149,7 +207,9 @@ def get_programme_offerings_page(
 			"active": sum(1 for row in rows if row.get("operational_status") == "Active"),
 			"upcoming": sum(1 for row in rows if row.get("operational_status") == "Upcoming"),
 			"full": sum(1 for row in rows if row.get("operational_status") == "Full"),
-			"closed_or_disabled": sum(1 for row in rows if row.get("operational_status") in {"Closed", "Disabled"}),
+			"closed_or_disabled": sum(
+				1 for row in rows if row.get("operational_status") in {"Closed", "Disabled"}
+			),
 			"occupied_seats": sum(cint(row.get("occupied_seats")) for row in rows),
 			"configured_capacity": sum(cint(row.get("capacity")) for row in rows),
 		},
@@ -218,9 +278,7 @@ def _identity_locked_offerings(names: list[str]) -> set[str]:
 	locked: set[str] = set()
 	for doctype in ("Student Applicant", "Student Group"):
 		if frappe.db.exists("DocType", doctype) and frappe.get_meta(doctype).has_field(OFFERING_FIELD):
-			locked.update(
-				frappe.get_all(doctype, filters={OFFERING_FIELD: ["in", names]}, pluck=OFFERING_FIELD)
-			)
+			locked.update(frappe.get_all(doctype, filters={OFFERING_FIELD: ["in", names]}, pluck=OFFERING_FIELD))
 	if frappe.db.exists("DocType", "Program Enrollment") and frappe.get_meta("Program Enrollment").has_field(OFFERING_FIELD):
 		locked.update(
 			frappe.get_all(
@@ -232,13 +290,38 @@ def _identity_locked_offerings(names: list[str]) -> set[str]:
 	return locked
 
 
+def _list_institutions() -> list[dict]:
+	if not frappe.has_permission("EduEdge Institution", "read"):
+		return []
+	rows = frappe.get_list(
+		"EduEdge Institution",
+		filters={"enabled": 1},
+		fields=["name", "institution_name", "institution_type", "company", "is_default"],
+		order_by="is_default desc, institution_name asc",
+		page_length=MAX_OPTION_ROWS,
+	)
+	for row in rows:
+		context = get_effective_institution_context(institution=row.name)
+		row["institution_type_name"] = context.get("institution_type_name") or row.get("institution_type")
+	return rows
+
+
 def _get_context_options(institution: str | None, academic_year: str | None) -> dict:
-	branches = get_allowed_school_branches()
+	branches = (
+		get_allowed_school_branches(institution=institution)
+		if institution
+		else get_allowed_school_branches()
+	)
 	for branch in branches:
 		if not branch.get("institution"):
-			branch["institution"] = frappe.db.get_value("EduEdge School Branch", branch.get("name"), "institution")
+			branch["institution"] = frappe.db.get_value(
+				"EduEdge School Branch", branch.get("name"), "institution"
+			)
 		if not branch.get("institution_name") and branch.get("institution"):
-			branch["institution_name"] = frappe.db.get_value("EduEdge Institution", branch.get("institution"), "institution_name")
+			branch["institution_name"] = frappe.db.get_value(
+				"EduEdge Institution", branch.get("institution"), "institution_name"
+			)
+
 	program_filters = {INSTITUTION_FIELD: institution} if institution else {}
 	programmes = (
 		frappe.get_list(
@@ -251,7 +334,11 @@ def _get_context_options(institution: str | None, academic_year: str | None) -> 
 		if frappe.has_permission("Program", "read")
 		else []
 	)
-	department_filters = {INSTITUTION_FIELD: institution} if institution and frappe.get_meta("Department").has_field(INSTITUTION_FIELD) else {}
+	department_filters = (
+		{INSTITUTION_FIELD: institution}
+		if institution and frappe.get_meta("Department").has_field(INSTITUTION_FIELD)
+		else {}
+	)
 	departments = (
 		frappe.get_list(
 			"Department",
@@ -265,6 +352,8 @@ def _get_context_options(institution: str | None, academic_year: str | None) -> 
 	)
 	academic_years = _institution_academic_years(institution) if institution else []
 	academic_terms = _institution_calendar_terms(institution, academic_year)
+	calendar_context = _institution_calendar_context(institution, academic_year)
+
 	batch_filters = {}
 	batch_meta = frappe.get_meta("Student Batch Name")
 	if institution and batch_meta.has_field(INSTITUTION_FIELD):
@@ -281,11 +370,13 @@ def _get_context_options(institution: str | None, academic_year: str | None) -> 
 		else []
 	)
 	return {
+		"institutions": _list_institutions(),
 		"branches": branches,
 		"programmes": programmes,
 		"departments": departments,
 		"academic_years": academic_years,
 		"academic_terms": academic_terms,
+		"calendar_context": calendar_context,
 		"student_batches": batches,
 		"study_modes": ["Full-Time", "Part-Time", "Weekend", "Evening", "Short Course", "Flexible"],
 		"delivery_modes": ["Onsite", "Online", "Hybrid"],
@@ -293,12 +384,12 @@ def _get_context_options(institution: str | None, academic_year: str | None) -> 
 
 
 def _institution_academic_years(institution: str) -> list[dict]:
-	if not frappe.has_permission("Academic Year", "read") or not frappe.has_permission("EduEdge Institution Academic Calendar", "read"):
+	if not frappe.has_permission("Academic Year", "read") or not frappe.has_permission(CALENDAR_DOCTYPE, "read"):
 		return []
 	calendars = frappe.get_list(
-		"EduEdge Institution Academic Calendar",
+		CALENDAR_DOCTYPE,
 		filters={"institution": institution, "enabled": 1},
-		fields=["academic_year", "start_date", "end_date", "is_current"],
+		fields=["name", "academic_year", "start_date", "end_date", "is_current"],
 		order_by="is_current desc, start_date desc, academic_year desc",
 		page_length=MAX_OPTION_ROWS,
 	)
@@ -311,50 +402,103 @@ def _institution_academic_years(institution: str) -> list[dict]:
 		fields=["name", "year_start_date", "year_end_date"],
 		page_length=len(year_names),
 	)
-	by_name = {row.name: row for row in years}
-	return [by_name[name] for name in year_names if name in by_name]
+	by_year = {row.name: row for row in years}
+	calendar_by_year = {row.academic_year: row for row in calendars if row.academic_year}
+	result = []
+	for name in year_names:
+		year = by_year.get(name)
+		calendar = calendar_by_year.get(name)
+		if not year or not calendar:
+			continue
+		result.append(
+			{
+				"name": year.name,
+				"year_start_date": year.year_start_date,
+				"year_end_date": year.year_end_date,
+				"calendar": calendar.name,
+				"calendar_start_date": calendar.start_date,
+				"calendar_end_date": calendar.end_date,
+				"is_current": cint(calendar.is_current),
+			}
+		)
+	return result
 
 
 def _institution_calendar_terms(institution: str | None, academic_year: str | None) -> list[dict]:
-	if not institution or not academic_year or not frappe.has_permission("Academic Term", "read"):
+	if (
+		not institution
+		or not academic_year
+		or not frappe.has_permission("Academic Term", "read")
+		or not frappe.has_permission(CALENDAR_DOCTYPE, "read")
+	):
 		return []
 	calendar_names = frappe.get_list(
-		"EduEdge Institution Academic Calendar",
+		CALENDAR_DOCTYPE,
 		filters={"institution": institution, "academic_year": academic_year, "enabled": 1},
 		pluck="name",
 		page_length=MAX_OPTION_ROWS,
 	)
 	if not calendar_names:
 		return []
-	term_names = list(dict.fromkeys(
-		frappe.get_all(
-			"EduEdge Academic Calendar Period",
-			filters={"parent": ["in", calendar_names], "parenttype": "EduEdge Institution Academic Calendar"},
-			pluck="academic_term",
-			limit_page_length=MAX_OPTION_ROWS,
-		)
-	))
-	term_names = [name for name in term_names if name]
+	periods = frappe.get_all(
+		PERIOD_DOCTYPE,
+		filters={"parent": ["in", calendar_names], "parenttype": CALENDAR_DOCTYPE},
+		fields=["parent", "academic_term", "start_date", "end_date", "sequence"],
+		order_by="sequence asc, start_date asc",
+		limit_page_length=MAX_OPTION_ROWS,
+	)
+	term_names = list(dict.fromkeys(row.academic_term for row in periods if row.academic_term))
 	if not term_names:
 		return []
-	return frappe.get_list(
+	terms = frappe.get_list(
 		"Academic Term",
 		filters={"name": ["in", term_names], "academic_year": academic_year},
 		fields=["name", "academic_year", "term_start_date", "term_end_date"],
-		order_by="term_start_date asc, name asc",
 		page_length=MAX_OPTION_ROWS,
 	)
+	by_name = {row.name: row for row in terms}
+	return [
+		{
+			"name": row.academic_term,
+			"academic_year": academic_year,
+			"term_start_date": (by_name.get(row.academic_term) or {}).get("term_start_date"),
+			"term_end_date": (by_name.get(row.academic_term) or {}).get("term_end_date"),
+			"calendar": row.parent,
+			"calendar_start_date": row.start_date,
+			"calendar_end_date": row.end_date,
+			"sequence": cint(row.sequence),
+		}
+		for row in periods
+		if row.academic_term in by_name
+	]
+
+
+def _institution_calendar_context(institution: str | None, academic_year: str | None) -> dict:
+	if not institution or not academic_year or not frappe.has_permission(CALENDAR_DOCTYPE, "read"):
+		return {}
+	rows = frappe.get_list(
+		CALENDAR_DOCTYPE,
+		filters={"institution": institution, "academic_year": academic_year, "enabled": 1},
+		fields=["name", "institution", "academic_year", "start_date", "end_date", "is_current"],
+		order_by="is_current desc, start_date desc, modified desc",
+		page_length=1,
+	)
+	return dict(rows[0]) if rows else {}
 
 
 @frappe.whitelist()
-def get_programme_offering_options(branch: str | None = None, academic_year: str | None = None) -> dict:
+def get_programme_offering_options(
+	institution: str | None = None,
+	branch: str | None = None,
+	academic_year: str | None = None,
+	use_active_branch: int | str | bool = 0,
+) -> dict:
 	_require_read()
-	current_branch = get_current_school_branch() or {}
-	branch = str(branch or current_branch.get("name") or "").strip() or None
-	institution = None
-	if branch:
-		assert_branch_access(branch)
-		institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
+	branch, institution = _resolve_page_context(
+		branch=branch,
+		institution=institution,
+		use_active_branch=use_active_branch,
+	)
 	return {
 		"branch": branch,
 		"institution": institution,
@@ -369,6 +513,7 @@ def save_programme_offering(
 	program: str,
 	academic_year: str,
 	offering: str | None = None,
+	institution: str | None = None,
 	academic_term: str | None = None,
 	student_batch: str | None = None,
 	offering_title: str | None = None,
@@ -388,13 +533,18 @@ def save_programme_offering(
 ) -> dict:
 	_require_login()
 	require_eduedge_access(feature_key="academics", action="save_programme_offering")
-	assert_branch_access(school_branch)
+	resolved_branch, resolved_institution = _resolve_page_context(
+		branch=school_branch,
+		institution=institution,
+	)
+	if not resolved_branch or not resolved_institution:
+		frappe.throw(_("Select an Institution and one of its permitted Branches."), frappe.ValidationError)
 	_assert_link_read_permission("Program", program, _("Programme / Class"))
 	_assert_link_read_permission("Academic Year", academic_year, _("Academic Session"))
 	_assert_link_read_permission("Academic Term", academic_term, _("Term / Semester"))
 	_assert_link_read_permission("Student Batch Name", student_batch, _("Student Batch / Cohort"))
 	assert_institution_calendar_context(
-		branch=school_branch,
+		branch=resolved_branch,
 		academic_year=academic_year,
 		academic_term=academic_term or None,
 	)
@@ -407,7 +557,7 @@ def save_programme_offering(
 		doc = frappe.new_doc("EduEdge Program Offering")
 	doc.update(
 		{
-			"school_branch": school_branch,
+			"school_branch": resolved_branch,
 			"program": program,
 			"academic_year": academic_year,
 			"academic_term": academic_term or None,
@@ -428,4 +578,10 @@ def save_programme_offering(
 		}
 	)
 	doc.save()
-	return {"name": doc.name, "offering_title": doc.offering_title, "offering_code": doc.offering_code}
+	return {
+		"name": doc.name,
+		"offering_title": doc.offering_title,
+		"offering_code": doc.offering_code,
+		"institution": doc.institution,
+		"school_branch": doc.school_branch,
+	}
