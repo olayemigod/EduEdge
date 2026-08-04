@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import getdate, nowdate
 
 from eduedge.platform.access import require_eduedge_access
+from eduedge.services.institution_context import get_effective_institution_context
 
 ACADEMIC_YEAR_DOCTYPE = "Academic Year"
 ACADEMIC_TERM_DOCTYPE = "Academic Term"
@@ -35,8 +36,14 @@ def _normalise(value: str | None) -> str:
 	return " ".join(str(value or "").split())
 
 
+def _active_context() -> dict:
+	try:
+		return get_effective_institution_context()
+	 except Exception:
+		return {}
+
+
 def _session_rows(search: str = "") -> list[dict]:
-	filters = {}
 	or_filters = None
 	if search:
 		like = f"%{search}%"
@@ -48,7 +55,6 @@ def _session_rows(search: str = "") -> list[dict]:
 		dict(row)
 		for row in frappe.get_list(
 			ACADEMIC_YEAR_DOCTYPE,
-			filters=filters,
 			or_filters=or_filters,
 			fields=["name", "academic_year_name", "year_start_date", "year_end_date", "modified"],
 			order_by="year_start_date desc, name desc",
@@ -137,7 +143,7 @@ def get_academic_sessions_page(
 	selected_terms = terms_by_year.get(selected, [])
 
 	return {
-		"active_context": frappe.boot.get("eduedge_institution_context") if hasattr(frappe, "boot") else {},
+		"active_context": _active_context(),
 		"filters": {"academic_year": selected, "search": search},
 		"sessions": sessions,
 		"selected_session": selected_session,
@@ -157,11 +163,13 @@ def get_academic_sessions_page(
 	}
 
 
-def _validate_session_dates(start_date: str, end_date: str) -> tuple:
+def _validate_date_range(start_date: str | None, end_date: str | None, label: str) -> tuple:
+	if not start_date or not end_date:
+		frappe.throw(_("Enter Start Date and End Date for the {0}.").format(label), frappe.ValidationError)
 	start = getdate(start_date)
 	end = getdate(end_date)
 	if end < start:
-		frappe.throw(_("Session End Date cannot be earlier than Start Date."), frappe.ValidationError)
+		frappe.throw(_("{0} End Date cannot be earlier than Start Date.").format(label), frappe.ValidationError)
 	return start, end
 
 
@@ -196,7 +204,7 @@ def save_academic_session(
 	name = _normalise(academic_year_name)
 	if not name:
 		frappe.throw(_("Enter the Academic Session name."), frappe.ValidationError)
-	start, end = _validate_session_dates(start_date, end_date)
+	start, end = _validate_date_range(start_date, end_date, _("Session"))
 	resolved_session = _normalise(session)
 
 	if resolved_session:
@@ -258,7 +266,7 @@ def save_academic_term(
 		frappe.throw(_("Select a valid Academic Session."), frappe.ValidationError)
 	if not resolved_name:
 		frappe.throw(_("Enter the Term name."), frappe.ValidationError)
-	start, end = _validate_session_dates(start_date, end_date)
+	start, end = _validate_date_range(start_date, end_date, _("Term"))
 	year = frappe.db.get_value(
 		ACADEMIC_YEAR_DOCTYPE,
 		resolved_year,
