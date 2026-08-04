@@ -24,11 +24,15 @@ class TestAcademicSessionsPageContract(unittest.TestCase):
 		self.assertIn('frappe.require("edgesuite_ui.bundle.js"', loader)
 		self.assertIn('frappe.require("eduedge_academic_sessions.bundle.js"', loader)
 
-	def test_navigation_exposes_sessions_and_terms(self):
+	def test_navigation_and_access_manifest_expose_sessions_and_terms(self):
 		navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text()
+		access = (APP / "access_control.py").read_text()
 		self.assertIn('"/app/eduedge-academic-sessions"', navigation)
 		self.assertIn('menuItem(`${academicYears} & ${academicTerms}`', navigation)
 		self.assertIn('const academicTerms = term("academic_term"', navigation)
+		self.assertIn('"/app/eduedge-academic-sessions": (', access)
+		self.assertIn('("academic_year", "read")', access)
+		self.assertIn('("academic_term", "read")', access)
 
 	def test_page_uses_edgesuite_and_cascades_session_to_terms(self):
 		component = (APP / "public/js/eduedge_academic_sessions/EduEdgeAcademicSessions.vue").read_text()
