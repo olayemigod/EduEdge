@@ -80,7 +80,7 @@
 				</EdgeFilterBar>
 
 				<div v-if="filterCalendar.name" class="eduedge-calendar-context">
-					<div><span>Resolved Institution Calendar</span><strong>{{ filterCalendar.name }}</strong></div>
+					<div><span>Resolved Institution Calendar</span><strong>{{ calendarTitle(filterCalendar) }}</strong></div>
 					<div><span>{{ academicYearSingular }}</span><strong>{{ filterCalendar.academic_year }}</strong></div>
 					<div><span>Calendar dates</span><strong>{{ calendarRange(filterCalendar) }}</strong></div>
 					<EdgeStatusBadge :label="filterCalendar.is_current ? 'Current' : 'Configured'" status="calendar" :tone="filterCalendar.is_current ? 'success' : 'neutral'" />
@@ -132,7 +132,7 @@
 								<label><span>{{ editorAcademicTermSingular }}</span><select v-model="draft.academic_term" class="form-control" :disabled="draft.identity_locked || !draft.academic_year"><option value="">{{ editorAcademicYearSingular }}-wide</option><option v-for="term in draftOptions.academic_terms" :key="term.name" :value="term.name">{{ term.name }}</option></select></label>
 							</div>
 							<div v-if="draftCalendar.name" class="eduedge-calendar-context eduedge-calendar-context--editor">
-								<div><span>Resolved Institution Calendar</span><strong>{{ draftCalendar.name }}</strong></div>
+								<div><span>Resolved Institution Calendar</span><strong>{{ calendarTitle(draftCalendar) }}</strong></div>
 								<div><span>Calendar dates</span><strong>{{ calendarRange(draftCalendar) }}</strong></div>
 								<EdgeStatusBadge :label="draftCalendar.is_current ? 'Current' : 'Configured'" status="calendar" :tone="draftCalendar.is_current ? 'success' : 'neutral'" />
 							</div>
@@ -209,6 +209,7 @@ export default {
 		statusTone(status) { if (status === "Active") return "success"; if (["Full", "Upcoming"].includes(status)) return "warning"; if (["Closed", "Disabled"].includes(status)) return "danger"; return "neutral"; },
 		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : ""; },
 		dateRange(row) { const start = this.formatDate(row.start_date); const end = this.formatDate(row.end_date); return start && end ? `${start} – ${end}` : start || end || "Dates not set"; },
+		calendarTitle(calendar) { const academicYear = String(calendar?.academic_year || "").trim(); return calendar?.calendar_title || (academicYear ? `${academicYear} Calendar` : calendar?.name || "Institution Academic Calendar"); },
 		calendarRange(calendar) { const start = this.formatDate(calendar.start_date || calendar.calendar_start_date); const end = this.formatDate(calendar.end_date || calendar.calendar_end_date); return start && end ? `${start} – ${end}` : start || end || "Dates not configured"; },
 		capacityLabel(row) { return Number(row.capacity || 0) ? `${row.seats_remaining} of ${row.capacity} seats left` : "No capacity limit"; },
 		async load(resetStart = false, useActiveBranch = false) {
