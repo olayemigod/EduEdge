@@ -516,33 +516,15 @@ def _ensure_branch_eligibility(instructor: str, branch: str) -> None:
 
 @frappe.whitelist(methods=["POST"])
 def save_instructor(payload: str | dict) -> dict:
-	require_eduedge_access(feature_key="academics", action="save_instructor")
-	data = _parse_payload(payload)
-	name = str(data.get("name") or "").strip()
-	if name:
-		doc = frappe.get_doc("Instructor", name)
-		doc.check_permission("write")
-	else:
-		_require_permission("Instructor", "create")
-		doc = frappe.new_doc("Instructor")
-		doc.naming_series = data.get("naming_series") or "EDU-INS-.YYYY.-"
-	branch = str(data.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD) or "").strip()
-	if not branch:
-		frappe.throw(_("Primary School Branch / Campus is required."), frappe.ValidationError)
-	assert_branch_access(branch)
-	institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
-	for fieldname in INSTRUCTOR_FIELDS:
-		if doc.meta.has_field(fieldname) and fieldname in data:
-			doc.set(fieldname, data.get(fieldname))
-	if doc.meta.has_field(INSTITUTION_FIELD):
-		doc.set(INSTITUTION_FIELD, institution)
-	if doc.meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD):
-		doc.set(INSTRUCTOR_PRIMARY_BRANCH_FIELD, branch)
-	if not doc.instructor_name:
-		frappe.throw(_("Instructor Name is required."), frappe.ValidationError)
-	doc.save()
-	_ensure_branch_eligibility(doc.name, branch)
-	return _instructor_detail(doc.name)
+	"""Backward-compatible Instructor save endpoint.
+
+	The current Instructor Profile workspace is Institution-scoped and permits a
+	blank Primary Branch. Delegate to the authoritative profile service so older
+	cached bundles cannot reintroduce the retired Branch-required rule.
+	"""
+	from eduedge.api.instructor_profiles import save_instructor as save_instructor_profile
+
+	return save_instructor_profile(payload)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -550,7 +532,7 @@ def set_instructor_photo(instructor: str, file_url: str) -> dict:
 	require_eduedge_access(feature_key="academics", action="set_instructor_photo")
 	_require_people_manager()
 	doc = frappe.get_doc("Instructor", instructor)
-	doc.check_permission("write")	
+	doc.check_permission("write")
 	_validate_private_image(file_url, "Instructor", instructor)
 	doc.image = file_url
 	doc.save()
@@ -595,8 +577,6 @@ def _assignment_options(branch: str, offering: str | None = None, student_group:
 		limit_page_length=500,
 	)
 	instructor_filters: dict[str, Any] = {"name": ["in", eligible_names], "status": "Active"}
-	if frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
-		instructor_filters[INSTITUTION_FIELD] = institution
 	instructors = frappe.get_list(
 		"Instructor",
 		filters=instructor_filters,
