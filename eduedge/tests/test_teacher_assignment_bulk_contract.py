@@ -91,8 +91,7 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
         for token in (
             "program_courses.get(offering.program",
             "course_institution",
-            "selected Class belongs to another Branch",
-            "selected Class belongs to another Institution",
+            "selected Class belongs to another Branch or Institution",
             "Class Arm does not belong to the selected Programme Offering",
         ):
             self.assertIn(token, api)
