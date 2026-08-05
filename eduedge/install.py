@@ -13,6 +13,7 @@ from eduedge.education.institution_type_defaults import apply_institution_type_d
 from eduedge.education.institution_types import ensure_institution_type_foundation
 from eduedge.education.native_hierarchy_migration import ensure_native_academic_context_foundation
 from eduedge.education.people_fields import ensure_people_operations_foundation
+from eduedge.education.teaching_assignments import ensure_teaching_assignment_foundation
 from eduedge.permissions_baseline import ensure_eduedge_page_role_baseline
 from eduedge.security.permission_policy import apply_safe_default_permission_baseline
 
@@ -44,10 +45,8 @@ def after_install() -> None:
 	ensure_native_academic_context_foundation()
 	ensure_people_operations_foundation()
 	ensure_curriculum_management_foundation()
+	ensure_teaching_assignment_foundation()
 	ensure_program_enrollment_branch_selector()
-	# Seed a least-privilege default matrix once for a new site. Existing sites
-	# are normalised by idempotent patches and later Role Permission Manager
-	# choices remain authoritative.
 	apply_safe_default_permission_baseline()
 	ensure_eduedge_page_role_baseline()
 	backfill_education_branch_context()
@@ -63,9 +62,8 @@ def after_migrate() -> None:
 	ensure_native_academic_context_foundation()
 	ensure_people_operations_foundation()
 	ensure_curriculum_management_foundation()
+	ensure_teaching_assignment_foundation()
 	ensure_program_enrollment_branch_selector()
-	# Standard Page JSON may reintroduce legacy role rows during model sync.
-	# Keep EdgeSuite shells neutral; menus, APIs and DocTypes remain authoritative.
 	ensure_eduedge_page_role_baseline()
 	backfill_education_branch_context()
 
