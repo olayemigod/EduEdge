@@ -82,18 +82,18 @@ class EduEdgeInstructorAssignment(Document):
 	def _validate_instructor_context(self) -> None:
 		if not self.instructor:
 			frappe.throw(_("Select an Instructor."), frappe.ValidationError)
-		meta = frappe.get_meta("Instructor")
-		fields = ["name", "instructor_name", "status"]
-		if meta.has_field(INSTITUTION_FIELD):
-			fields.append(INSTITUTION_FIELD)
-		instructor = frappe.db.get_value("Instructor", self.instructor, fields, as_dict=True)
+		instructor = frappe.db.get_value(
+			"Instructor",
+			self.instructor,
+			["name", "instructor_name", "status"],
+			as_dict=True,
+		)
 		if not instructor or instructor.status != "Active":
 			frappe.throw(_("Select an active Instructor."), frappe.ValidationError)
-		if meta.has_field(INSTITUTION_FIELD) and instructor.get(INSTITUTION_FIELD) and instructor.get(INSTITUTION_FIELD) != self.institution:
-			frappe.throw(_("Instructor must belong to the selected Institution."), frappe.ValidationError)
+		frappe.get_doc("Instructor", self.instructor).check_permission("read")
 		if not _has_branch_eligibility(self.instructor, self.school_branch, self.valid_from or nowdate(), self.valid_to):
 			frappe.throw(
-				_("Instructor is not eligible for the selected Branch. Save through Teacher Assignments or add Branch eligibility first."),
+				_("Instructor is not eligible for the selected Branch. Save through Instructor Assignments or add Branch eligibility first."),
 				frappe.ValidationError,
 			)
 		self.instructor_name = instructor.instructor_name
@@ -138,7 +138,7 @@ class EduEdgeInstructorAssignment(Document):
 			if (row.course or "") != (self.course or ""):
 				continue
 			if _date_ranges_overlap(self.valid_from, self.valid_to, row.valid_from, row.valid_to):
-				frappe.throw(_("An overlapping active Teacher Assignment already exists."), frappe.DuplicateEntryError)
+				frappe.throw(_("An overlapping active Instructor Assignment already exists."), frappe.DuplicateEntryError)
 
 	def _build_title(self) -> str:
 		target = self.program_offering if self.assignment_scope == CLASS_SCOPE else self.student_group
