@@ -11,6 +11,7 @@ from eduedge.education.enrollment_field_setup import ensure_program_enrollment_b
 from eduedge.education.institution_type_defaults import apply_institution_type_defaults
 from eduedge.education.institution_types import ensure_institution_type_foundation
 from eduedge.education.native_hierarchy_migration import ensure_native_academic_context_foundation
+from eduedge.education.people_fields import ensure_people_operations_foundation
 from eduedge.permissions_baseline import ensure_eduedge_page_role_baseline
 from eduedge.security.permission_policy import apply_safe_default_permission_baseline
 
@@ -40,6 +41,7 @@ def after_install() -> None:
 	ensure_education_custom_fields()
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
+	ensure_people_operations_foundation()
 	ensure_program_enrollment_branch_selector()
 	# Seed a least-privilege default matrix once for a new site. Existing sites
 	# are normalised by idempotent patches and later Role Permission Manager
@@ -57,6 +59,7 @@ def after_migrate() -> None:
 	ensure_education_custom_fields()
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
+	ensure_people_operations_foundation()
 	ensure_program_enrollment_branch_selector()
 	# Standard Page JSON may reintroduce legacy role rows during model sync.
 	# Keep EdgeSuite shells neutral; menus, APIs and DocTypes remain authoritative.
