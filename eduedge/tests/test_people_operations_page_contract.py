@@ -49,6 +49,7 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 
 	def test_instructor_profile_api_is_institution_scoped_and_branch_optional(self):
 		api = (APP / "api" / "instructor_profiles.py").read_text(encoding="utf-8")
+		legacy_api = (APP / "api" / "people_operations.py").read_text(encoding="utf-8")
 		for token in (
 			'ALL_INSTITUTIONS_KEY = "__all__"',
 			"GLOBAL_INSTRUCTOR_ROLES",
@@ -62,6 +63,10 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 			self.assertIn(token, api)
 		self.assertNotIn("Primary School Branch / Campus is required", api)
 		self.assertNotIn("ignore_permissions", api)
+		self.assertIn("Backward-compatible Instructor save endpoint", legacy_api)
+		self.assertIn("from eduedge.api.instructor_profiles import save_instructor as save_instructor_profile", legacy_api)
+		self.assertIn("return save_instructor_profile(payload)", legacy_api)
+		self.assertNotIn("Primary School Branch / Campus is required", legacy_api)
 
 	def test_instructor_governance_allows_safe_home_institution_transfer(self):
 		governance = (APP / "education" / "people_governance.py").read_text(encoding="utf-8")
@@ -158,6 +163,8 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 		self.assertIn('"/app/eduedge-instructors": (("instructor", "read"),)', access)
 		self.assertIn('"/app/eduedge-instructor-assignments": (("instructor_assignment", "read"),)', access)
 		self.assertIn('"/app/eduedge-instructor-branch-assignment": "/app/eduedge-instructor-assignments"', navigation)
+		self.assertIn('menuItem(__("Instructor Assignments"), "/app/eduedge-instructor-assignments"', navigation)
+		self.assertNotIn('menuItem(__("Teacher Assignments"), "/app/eduedge-instructor-assignments"', navigation)
 		self.assertIn("ensure_people_operations_foundation()", install)
 		self.assertIn("ensure_teaching_assignment_foundation()", install)
 
