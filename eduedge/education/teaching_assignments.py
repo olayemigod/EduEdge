@@ -18,6 +18,25 @@ COURSE_REQUIRED_TYPES = {
 }
 
 
+def ensure_teaching_assignment_foundation() -> None:
+	if not frappe.db.exists("DocType", "EduEdge Instructor Assignment"):
+		return
+	meta = frappe.get_meta("EduEdge Instructor Assignment")
+	if not meta.has_field("assignment_scope"):
+		return
+	frappe.db.sql(
+		"""
+		update `tabEduEdge Instructor Assignment`
+		set assignment_scope = case
+			when ifnull(student_group, '') != '' then %s
+			else %s
+		end
+		where ifnull(assignment_scope, '') = ''
+		""",
+		(CLASS_ARM_SCOPE, CLASS_SCOPE),
+	)
+
+
 def current_user_instructors(user: str | None = None) -> list[str]:
 	resolved = user or frappe.session.user
 	if not resolved or resolved == "Guest" or not frappe.db.exists("DocType", "Instructor"):
