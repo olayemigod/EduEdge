@@ -9,10 +9,12 @@ from eduedge.education.academic_permissions import has_academic_institution_perm
 from eduedge.education.curriculum_fields import TOPIC_COURSE_FIELD
 from eduedge.services.branch_context import get_allowed_institutions, is_branch_access_enforced
 
-MANAGER_ROLES = {
+PRIVILEGED_ROLES = {
 	"System Manager",
 	"EduEdge Super Administrator",
 	"EduEdge Administrator",
+}
+MANAGER_ROLES = PRIVILEGED_ROLES | {
 	"School Administrator",
 	"Academic Administrator",
 	"Education Manager",
@@ -23,6 +25,11 @@ TEACHER_ROLES = {"Teacher", "Instructor"}
 
 def _roles(user: str) -> set[str]:
 	return set(frappe.get_roles(user))
+
+
+def is_privileged_curriculum_user(user: str | None = None) -> bool:
+	resolved = user or frappe.session.user
+	return resolved == "Administrator" or bool(_roles(resolved).intersection(PRIVILEGED_ROLES))
 
 
 def is_curriculum_manager(user: str | None = None) -> bool:
@@ -85,6 +92,12 @@ def assigned_courses(user: str | None = None, branch: str | None = None) -> set[
 	return {row.course for row in assigned_course_rows(user, branch) if row.course}
 
 
+def _allowed_institutions(user: str) -> set[str]:
+	return {
+		row.get("name") for row in get_allowed_institutions(user=user) if row.get("name")
+	}
+
+
 def course_query(user: str | None = None) -> str:
 	resolved = user or frappe.session.user
 	if not is_teacher_user(resolved):
@@ -106,11 +119,9 @@ def topic_query(user: str | None = None) -> str:
 			return "1=0"
 		values = ", ".join(frappe.db.escape(value) for value in sorted(courses))
 		return f"`tabTopic`.`{TOPIC_COURSE_FIELD}` in ({values})"
-	if not is_branch_access_enforced() or resolved == "Administrator" or is_curriculum_manager(resolved):
+	if not is_branch_access_enforced() or is_privileged_curriculum_user(resolved):
 		return ""
-	institutions = {
-		row.get("name") for row in get_allowed_institutions(user=resolved) if row.get("name")
-	}
+	institutions = _allowed_institutions(resolved)
 	if not institutions:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
@@ -122,21 +133,26 @@ def has_course_permission(doc, user=None, permission_type=None) -> bool:
 	if is_teacher_user(resolved):
 		if permission_type in {"create", "delete", "submit", "cancel", "amend"}:
 			return False
-		return bool(doc and doc.name in assigned_courses(resolved))
+		courses = assigned_courses(resolved)
+		if not doc:
+			return bool(courses)
+		return bool(doc.name in courses)
 	return has_academic_institution_permission(doc, resolved, permission_type)
 
 
 def has_topic_permission(doc, user=None, permission_type=None) -> bool:
 	resolved = user or frappe.session.user
-	if not doc:
-		return False
 	if is_teacher_user(resolved):
 		if permission_type in {"delete", "submit", "cancel", "amend"}:
 			return False
+		courses = assigned_courses(resolved)
+		if not doc:
+			return bool(courses) if permission_type in {"read", "create", "write", "report", "print"} else False
 		course = doc.get(TOPIC_COURSE_FIELD)
-		return bool(course and course in assigned_courses(resolved))
-	if not is_branch_access_enforced() or resolved == "Administrator" or is_curriculum_manager(resolved):
+		return bool(course and course in courses)
+	if not doc:
+		return bool(resolved and resolved != "Guest")
+	if not is_branch_access_enforced() or is_privileged_curriculum_user(resolved):
 		return True
 	institution = doc.get(INSTITUTION_FIELD)
-	allowed = {row.get("name") for row in get_allowed_institutions(user=resolved)}
-	return bool(institution and institution in allowed)
+	return bool(institution and institution in _allowed_institutions(resolved))
