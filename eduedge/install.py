@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 
 from eduedge.cbt.result_sync_fields import ensure_result_sync_custom_fields
+from eduedge.education.curriculum_fields import ensure_curriculum_management_foundation
 from eduedge.education.custom_fields import (
 	backfill_education_branch_context,
 	ensure_education_custom_fields,
@@ -42,6 +43,7 @@ def after_install() -> None:
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
 	ensure_people_operations_foundation()
+	ensure_curriculum_management_foundation()
 	ensure_program_enrollment_branch_selector()
 	# Seed a least-privilege default matrix once for a new site. Existing sites
 	# are normalised by idempotent patches and later Role Permission Manager
@@ -60,6 +62,7 @@ def after_migrate() -> None:
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
 	ensure_people_operations_foundation()
+	ensure_curriculum_management_foundation()
 	ensure_program_enrollment_branch_selector()
 	# Standard Page JSON may reintroduce legacy role rows during model sync.
 	# Keep EdgeSuite shells neutral; menus, APIs and DocTypes remain authoritative.
