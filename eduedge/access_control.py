@@ -20,18 +20,19 @@ PERMISSION_TYPES = (
 	"print",
 )
 
-# Resource keys are stable UI/API identifiers. DocType names remain the Frappe
-# permission source of truth and can be changed through Role Permission Manager.
 RESOURCE_DOCTYPES = {
 	"institution": "EduEdge Institution",
 	"company_operations_settings": "EduEdge Company Operations Settings",
 	"school_branch": "EduEdge School Branch",
 	"user_branch_access": "EduEdge User Branch Access",
 	"instructor_branch_assignment": "EduEdge Instructor Branch Assignment",
+	"instructor_assignment": "EduEdge Instructor Assignment",
+	"student_photo_review_log": "EduEdge Student Photo Review Log",
 	"question_responsibility_assignment": "EduEdge Question Responsibility Assignment",
 	"student_admission": "Student Admission",
 	"student_applicant": "Student Applicant",
 	"student": "Student",
+	"instructor": "Instructor",
 	"program": "Program",
 	"course": "Course",
 	"topic": "Topic",
@@ -60,14 +61,8 @@ RESOURCE_DOCTYPES = {
 	"training_progress": "EduEdge Training Progress",
 }
 
-# Each route is available when any listed resource/permission pair is allowed.
-# Record-level branch and user permissions continue to filter the records shown.
-# Operational pages intentionally require an operational right rather than a
-# broad Read right, because their interfaces expose create/update actions.
 ROUTE_REQUIREMENTS = {
 	"/app/eduedge-home": (),
-	# My Profile is a self-service page. The API fixes the target to the logged-in
-	# User and the profile permission hook restricts records to that same User.
 	"/app/eduedge-my-profile": (),
 	"/app/eduedge-academic-foundation": (
 		("academic_year", "read"),
@@ -88,6 +83,8 @@ ROUTE_REQUIREMENTS = {
 	"/app/eduedge-admissions": (("student_admission", "read"),),
 	"/app/eduedge-applicants": (("student_applicant", "read"),),
 	"/app/eduedge-students": (("student", "read"),),
+	"/app/eduedge-instructors": (("instructor", "read"),),
+	"/app/eduedge-instructor-assignments": (("instructor_assignment", "read"),),
 	"/app/eduedge-programs": (("program", "read"),),
 	"/app/eduedge-program-offerings": (("program_offering", "read"),),
 	"/app/eduedge-cbt-operations": (
@@ -165,12 +162,6 @@ def _doctype_exists(doctype: str) -> bool:
 
 
 def _installed_eduedge_page_routes() -> set[str]:
-	"""Return every installed standard EduEdge Page as an explicit Desk route.
-
-	The access manifest is fail closed: an installed Page that was not deliberately
-	registered in ROUTE_REQUIREMENTS is still present in the manifest with False.
-	This prevents stale frontend menus from treating a newly added route as allowed.
-	"""
 	try:
 		page_names = frappe.get_all(
 			"Page",
@@ -188,12 +179,6 @@ def user_has_role_permission(
 	permission_type: str = "read",
 	user: str | None = None,
 ) -> bool:
-	"""Check effective role rows without invoking query/has_permission hooks.
-
-	This helper is safe inside permission hooks and makes custom school roles
-	participate in branch isolation as soon as Role Permission Manager grants them
-	access to a branch-aware DocType.
-	"""
 	resolved_user = user or frappe.session.user
 	if resolved_user == "Administrator":
 		return True
