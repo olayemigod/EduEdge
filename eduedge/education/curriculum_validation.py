@@ -24,6 +24,7 @@ COURSE_GOVERNANCE_FIELDS = (
 	"department",
 	INSTITUTION_FIELD,
 	"default_grading_scale",
+	"description",
 )
 CHILD_META_FIELDS = {
 	"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx",
@@ -45,6 +46,15 @@ def _child_signature(rows) -> list[dict]:
 def before_validate_course(doc, method=None) -> None:
 	validate_course_context(doc, method)
 	if not is_teacher_user():
+		return
+	if getattr(frappe.flags, "in_eduedge_topic_link_update", False):
+		before = doc.get_doc_before_save()
+		if not before:
+			frappe.throw(_("A Subject / Course master cannot be created through Topic linking."), frappe.PermissionError)
+		if any(doc.get(fieldname) != before.get(fieldname) for fieldname in COURSE_GOVERNANCE_FIELDS):
+			frappe.throw(_("Topic linking cannot change Subject / Course identity or grading governance."), frappe.PermissionError)
+		if _child_signature(doc.get("assessment_criteria")) != _child_signature(before.get("assessment_criteria")):
+			frappe.throw(_("Topic linking cannot change Subject / Course assessment criteria."), frappe.PermissionError)
 		return
 	frappe.throw(
 		_("Subject / Course masters and grading governance are controlled by authorised academic managers. Use the class-aware Curriculum workspace for assigned Topics and learning operations."),
