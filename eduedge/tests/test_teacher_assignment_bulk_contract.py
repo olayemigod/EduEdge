@@ -85,6 +85,7 @@ class TestTeacherAssignmentBulkContract(unittest.TestCase):
 	def test_class_and_class_arm_links_preserve_assignment_context(self):
 		loader = (APP / "eduedge" / "page" / "eduedge_instructor_assignments" / "eduedge_instructor_assignments.js").read_text(encoding="utf-8")
 		class_arms = (APP / "public" / "js" / "eduedge_class_arms" / "EduEdgeClassArms.vue").read_text(encoding="utf-8")
+		offerings = (APP / "eduedge" / "page" / "eduedge_program_offerings" / "eduedge_program_offerings.js").read_text(encoding="utf-8")
 		for token in (
 			'params.get("offering") || params.get("program_offering")',
 			'params.get("student_group")',
@@ -96,6 +97,16 @@ class TestTeacherAssignmentBulkContract(unittest.TestCase):
 			self.assertIn(token, loader)
 		self.assertIn('params = new URLSearchParams({ branch: this.draft.branch, offering: this.draft.offering, student_group: this.draft.name })', class_arms)
 		self.assertIn("/app/eduedge-instructor-assignments", class_arms)
+		for token in (
+			"Manage Curriculum",
+			"Assign Teachers",
+			"selected_offering_context",
+			'params.set("branch", context.branch)',
+			'params.set("offering", context.offering)',
+			'open_offering_operation(wrapper, "/app/eduedge-curriculum")',
+			'open_offering_operation(wrapper, "/app/eduedge-instructor-assignments")',
+		):
+			self.assertIn(token, offerings)
 
 
 if __name__ == "__main__":
