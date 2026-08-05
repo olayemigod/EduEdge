@@ -35,33 +35,34 @@ class TestClassArmsPageContract(unittest.TestCase):
 		self.assertNotIn("ignore_permissions", api)
 		self.assertNotIn("frappe.db.set_value", api)
 
-	def test_options_are_branch_offering_enrollment_and_assignment_scoped(self):
+	def test_options_are_branch_offering_and_enrollment_scoped(self):
 		api = (APP / "api" / "class_arms.py").read_text(encoding="utf-8")
 		for token in (
 			"assert_branch_access",
 			'"school_branch": branch, "is_active": 1, "enrollment_enabled": 1',
 			'"docstatus": 1',
 			'enrollment_filters[OFFERING_FIELD] = context.name',
-			'filters={"school_branch": branch, "enabled": 1}',
 			'_assert_unique(student_rows, "student", _("Student"))',
-			'_assert_unique(instructor_rows, "instructor", _("Instructor"))',
 		):
 			self.assertIn(token, api)
 
-	def test_page_supports_context_cascade_rosters_and_full_form_fallback(self):
+	def test_page_supports_context_cascade_student_roster_and_assignment_handoff(self):
 		component = (APP / "public" / "js" / "eduedge_class_arms" / "EduEdgeClassArms.vue").read_text(encoding="utf-8")
 		for token in (
 			"draftBranchChanged",
 			"draftOfferingChanged",
 			"applyOfferingContext",
 			"Only enabled students with submitted enrollment in this exact Programme Offering and Branch",
-			"Instructor Branch Assignment",
 			"toggleStudent",
-			"toggleInstructor",
 			"save_class_arm",
+			"openInstructorAssignments",
+			"/app/eduedge-instructor-assignments",
+			"Assign Instructor",
 			"openFullForm",
 		):
 			self.assertIn(token, component)
+		self.assertNotIn("Create an enabled Instructor Branch Assignment", component)
+		self.assertNotIn("toggleInstructor", component)
 
 	def test_academic_operations_uses_edgesuite_class_arm_workflow(self):
 		component = (APP / "public" / "js" / "eduedge_academic_operations" / "EduEdgeAcademicOperations.vue").read_text(encoding="utf-8")
