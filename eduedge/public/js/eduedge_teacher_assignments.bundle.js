@@ -1,17 +1,17 @@
-import EduEdgeTeacherAssignments from "./eduedge_instructor_assignments/EduEdgeInstructorAssignments.vue";
+import EduEdgeInstructorAssignments from "./eduedge_instructor_assignments/EduEdgeInstructorAssignments.vue";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
-export function createEduEdgeTeacherAssignmentsApp(rootProps = null) {
-	return createEduEdgeApp(EduEdgeTeacherAssignments, rootProps);
+export function createEduEdgeInstructorAssignmentsApp(rootProps = null) {
+	return createEduEdgeApp(EduEdgeInstructorAssignments, rootProps);
 }
 
 if (typeof window !== "undefined") {
-	window.EduEdgeTeacherAssignments = EduEdgeTeacherAssignments;
-	window.createEduEdgeTeacherAssignmentsApp = createEduEdgeTeacherAssignmentsApp;
+	window.EduEdgeInstructorAssignments = EduEdgeInstructorAssignments;
+	window.createEduEdgeInstructorAssignmentsApp = createEduEdgeInstructorAssignmentsApp;
 
-	// Backward-compatible globals for older page loaders and saved browser sessions.
-	window.EduEdgeInstructorAssignments = EduEdgeTeacherAssignments;
-	window.createEduEdgeInstructorAssignmentsApp = createEduEdgeTeacherAssignmentsApp;
+	// Backward-compatible globals for older cached page loaders.
+	window.EduEdgeTeacherAssignments = EduEdgeInstructorAssignments;
+	window.createEduEdgeTeacherAssignmentsApp = createEduEdgeInstructorAssignmentsApp;
 }
 
-export default EduEdgeTeacherAssignments;
+export default EduEdgeInstructorAssignments;
