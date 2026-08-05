@@ -1,6 +1,13 @@
 import EduEdgeInstructorAssignments from "./eduedge_instructor_assignments/EduEdgeInstructorAssignments.vue";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
+let promotedRowSequence = 0;
+
+function uniquePromotedRowId() {
+	promotedRowSequence += 1;
+	return `assignment-row-${Date.now()}-promoted-${promotedRowSequence}`;
+}
+
 function keepNewestAssignmentRowOnTop(methodName) {
 	const methods = EduEdgeInstructorAssignments.methods || {};
 	const original = methods[methodName];
@@ -8,10 +15,13 @@ function keepNewestAssignmentRowOnTop(methodName) {
 
 	methods[methodName] = function (...args) {
 		const existingIds = new Set((this.rows || []).map((row) => row.row_id));
+		const previousLength = (this.rows || []).length;
 		const result = original.apply(this, args);
-		const createdIndex = (this.rows || []).findIndex((row) => !existingIds.has(row.row_id));
-		if (createdIndex > 0) {
-			const [newest] = this.rows.splice(createdIndex, 1);
+		if ((this.rows || []).length > previousLength) {
+			const [newest] = this.rows.splice(this.rows.length - 1, 1);
+			if (!newest.row_id || existingIds.has(newest.row_id)) {
+				newest.row_id = uniquePromotedRowId();
+			}
 			this.rows.unshift(newest);
 		}
 		this.$nextTick?.(() => {
