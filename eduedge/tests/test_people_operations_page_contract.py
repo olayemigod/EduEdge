@@ -60,7 +60,7 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 			self.assertIn(token, api)
 		self.assertNotIn("ignore_permissions", api)
 
-	def test_instructor_page_and_assignment_page_are_edgesuite_surfaces(self):
+	def test_instructor_and_unified_teacher_assignment_pages_are_edgesuite_surfaces(self):
 		for page_name, bundle_name in (
 			("eduedge_instructors", "eduedge_instructors.bundle.js"),
 			("eduedge_instructor_assignments", "eduedge_instructor_assignments.bundle.js"),
@@ -83,37 +83,70 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 
 		assignments = (APP / "public" / "js" / "eduedge_instructor_assignments" / "EduEdgeInstructorAssignments.vue").read_text(encoding="utf-8")
 		for token in (
-			"Programme Offering",
-			"Class Arm / Student Group",
-			"Assignment type",
-			"get_instructor_assignment_options",
-			"save_instructor_assignment",
-			"Branch eligibility remains a background governance rule",
+			"Teacher Assignments",
+			"Branches / Campuses",
+			"Classes / Programme Offerings",
+			"Class Arms",
+			"Preview Assignment Batch",
+			"preview_teacher_assignment_batch",
+			"save_teacher_assignment_batch",
+			"Branch Access",
+			"Current Assignments",
 		):
 			self.assertIn(token, assignments)
+		self.assertNotIn("get_instructor_assignment_options", assignments)
+		self.assertNotIn("save_instructor_assignment", assignments)
 
-	def test_assignment_doctype_validates_academic_truth(self):
+	def test_assignment_doctype_validates_class_and_class_arm_truth(self):
 		doctype_json = json.loads((APP / "eduedge" / "doctype" / "eduedge_instructor_assignment" / "eduedge_instructor_assignment.json").read_text(encoding="utf-8"))
 		controller = (APP / "eduedge" / "doctype" / "eduedge_instructor_assignment" / "eduedge_instructor_assignment.py").read_text(encoding="utf-8")
 		self.assertEqual(doctype_json["name"], "EduEdge Instructor Assignment")
-		for fieldname in ("instructor", "school_branch", "program_offering", "student_group", "course", "assignment_type"):
-			self.assertIn(fieldname, {row.get("fieldname") for row in doctype_json["fields"]})
+		fieldnames = {row.get("fieldname") for row in doctype_json["fields"]}
+		for fieldname in ("instructor", "school_branch", "program_offering", "student_group", "course", "assignment_type", "assignment_scope"):
+			self.assertIn(fieldname, fieldnames)
+		assignment_scope = next(row for row in doctype_json["fields"] if row.get("fieldname") == "assignment_scope")
+		self.assertIn("Class / Programme Offering", assignment_scope["options"])
+		self.assertIn("Class Arm", assignment_scope["options"])
 		for token in (
 			"_apply_offering_context",
 			"_validate_group_context",
 			"_validate_instructor_context",
 			"_validate_course_context",
 			"_validate_duplicate",
-			"Instructor is not eligible for the selected Branch",
-			"An overlapping active Instructor Assignment already exists",
+			"CLASS_SCOPE",
+			"CLASS_ARM_SCOPE",
+			"Save through Teacher Assignments or add Branch eligibility first.",
+			"An overlapping active Teacher Assignment already exists.",
 		):
 			self.assertIn(token, controller)
 
-	def test_schedule_enforcement_is_backward_compatible_until_branch_activation(self):
+	def test_bulk_api_creates_branch_access_and_safe_assignment_combinations(self):
+		api = (APP / "api" / "teacher_assignments.py").read_text(encoding="utf-8")
+		for token in (
+			"BRANCH_ONLY_SCOPE",
+			"preview_teacher_assignment_batch",
+			"save_teacher_assignment_batch",
+			"PlannedAssignment",
+			"_ensure_branch_assignment",
+			'frappe.new_doc("EduEdge Instructor Assignment")',
+			'frappe.new_doc("EduEdge Instructor Branch Assignment")',
+			"Subject is not configured for this Class",
+			"Overlapping active assignment",
+			"assignments_existing",
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("ignore_permissions", api)
+		self.assertNotIn("frappe.db.set_value", api)
+
+	def test_schedule_enforcement_supports_class_wide_and_class_arm_assignments(self):
 		helper = (APP / "education" / "instructor_assignments.py").read_text(encoding="utf-8")
 		branching = (APP / "education" / "branching.py").read_text(encoding="utf-8")
 		self.assertIn('if not frappe.db.exists(ASSIGNMENT_DOCTYPE, {"school_branch": branch, "enabled": 1})', helper)
-		self.assertIn("Instructor {0} has no active Instructor Assignment", helper)
+		self.assertIn("CLASS_SCOPE", helper)
+		self.assertIn("CLASS_ARM_SCOPE", helper)
+		self.assertIn("row.program_offering != program_offering", helper)
+		self.assertIn("row.student_group != doc.student_group", helper)
+		self.assertIn("Instructor {0} has no active Teacher Assignment", helper)
 		self.assertIn("assert_schedule_instructor_assignment(doc)", branching)
 		self.assertLess(branching.index("_before_validate_course_schedule(doc, method)"), branching.index("assert_schedule_instructor_assignment(doc)"))
 
@@ -132,6 +165,7 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 		self.assertIn('"/app/eduedge-instructor-assignments": (("instructor_assignment", "read"),)', access)
 		self.assertIn('"/app/eduedge-instructor-branch-assignment": "/app/eduedge-instructor-assignments"', navigation)
 		self.assertIn("ensure_people_operations_foundation()", install)
+		self.assertIn("ensure_teaching_assignment_foundation()", install)
 
 	def test_ci_checks_people_operations_entries(self):
 		workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
