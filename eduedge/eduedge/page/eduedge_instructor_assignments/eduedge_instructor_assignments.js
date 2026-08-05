@@ -32,6 +32,35 @@ function apply_teacher_assignment_route_context(wrapper, visitId) {
 	window.setTimeout(apply, 0);
 }
 
+function teacher_assignment_factory() {
+	return window.createEduEdgeTeacherAssignmentsApp || window.createEduEdgeInstructorAssignmentsApp;
+}
+
+function teacher_assignment_component() {
+	return window.EduEdgeTeacherAssignments || window.EduEdgeInstructorAssignments;
+}
+
+function mount_teacher_assignments(wrapper, visitId, page, $loading, fail) {
+	if (wrapper.current_visit_id !== visitId) return;
+	const factory = teacher_assignment_factory();
+	if (!teacher_assignment_component() || typeof factory !== "function") {
+		return fail(
+			__("The EduEdge Teacher Assignments bundle did not register correctly. Rebuild EduEdge assets and hard-refresh the browser.")
+		);
+	}
+
+	$loading.remove();
+	const root = $('<div class="eduedge-instructor-assignments-root" data-edge-product="eduedge"></div>').appendTo(page.body);
+	try {
+		wrapper.vue_app = factory({ pageName: "eduedge-instructor-assignments" });
+		wrapper.vue_app.mount(root[0]);
+		apply_teacher_assignment_route_context(wrapper, visitId);
+	} catch (error) {
+		console.error("Failed to mount Teacher Assignments", error);
+		fail(error.message || String(error));
+	}
+}
+
 frappe.pages["eduedge-instructor-assignments"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
@@ -52,21 +81,8 @@ frappe.pages["eduedge-instructor-assignments"].on_page_show = function (wrapper)
 	};
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		frappe.require("eduedge_instructor_assignments.bundle.js", () => {
-			if (wrapper.current_visit_id !== visitId) return;
-			if (!window.EduEdgeInstructorAssignments || typeof window.createEduEdgeInstructorAssignmentsApp !== "function") {
-				return fail(__("The EduEdge Teacher Assignments bundle is unavailable."));
-			}
-			$loading.remove();
-			const root = $('<div class="eduedge-instructor-assignments-root" data-edge-product="eduedge"></div>').appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeInstructorAssignmentsApp({ pageName: "eduedge-instructor-assignments" });
-				wrapper.vue_app.mount(root[0]);
-				apply_teacher_assignment_route_context(wrapper, visitId);
-			} catch (error) {
-				console.error("Failed to mount Teacher Assignments", error);
-				fail(error.message || String(error));
-			}
+		frappe.require("eduedge_teacher_assignments.bundle.js", () => {
+			mount_teacher_assignments(wrapper, visitId, page, $loading, fail);
 		});
 	});
 };
