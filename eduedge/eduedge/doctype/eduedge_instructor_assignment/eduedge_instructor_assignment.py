@@ -8,18 +8,19 @@ from frappe.utils import getdate, nowdate
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
-
-COURSE_REQUIRED_TYPES = {
-	"Subject Teacher",
-	"Lecturer",
-	"Tutor",
-	"Practical Instructor",
-	"Assistant Instructor",
-}
+from eduedge.education.teaching_assignments import (
+	ACADEMIC_ASSIGNMENT_SCOPES,
+	CLASS_ARM_SCOPE,
+	CLASS_SCOPE,
+	COURSE_REQUIRED_TYPES,
+)
 
 
 class EduEdgeInstructorAssignment(Document):
 	def validate(self) -> None:
+		self.assignment_scope = self.assignment_scope or (CLASS_ARM_SCOPE if self.student_group else CLASS_SCOPE)
+		if self.assignment_scope not in ACADEMIC_ASSIGNMENT_SCOPES:
+			frappe.throw(_("Select a valid Assignment Scope."), frappe.ValidationError)
 		self._validate_dates()
 		self._apply_offering_context()
 		self._validate_group_context()
@@ -34,7 +35,7 @@ class EduEdgeInstructorAssignment(Document):
 
 	def _apply_offering_context(self) -> None:
 		if not self.program_offering:
-			frappe.throw(_("Select a Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Select a Class / Programme Offering."), frappe.ValidationError)
 		offering = frappe.db.get_value(
 			"EduEdge Program Offering",
 			self.program_offering,
@@ -42,12 +43,12 @@ class EduEdgeInstructorAssignment(Document):
 			as_dict=True,
 		)
 		if not offering or not offering.is_active:
-			frappe.throw(_("Select an active Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Select an active Class / Programme Offering."), frappe.ValidationError)
 		assert_branch_access(offering.school_branch)
 		if self.school_branch and self.school_branch != offering.school_branch:
-			frappe.throw(_("Programme Offering must belong to the selected Branch."), frappe.ValidationError)
+			frappe.throw(_("Class / Programme Offering must belong to the selected Branch."), frappe.ValidationError)
 		if self.institution and self.institution != offering.institution:
-			frappe.throw(_("Programme Offering must belong to the selected Institution."), frappe.ValidationError)
+			frappe.throw(_("Class / Programme Offering must belong to the selected Institution."), frappe.ValidationError)
 		self.school_branch = offering.school_branch
 		self.institution = offering.institution
 		self.academic_year = offering.academic_year
@@ -55,8 +56,11 @@ class EduEdgeInstructorAssignment(Document):
 		self._offering_program = offering.program
 
 	def _validate_group_context(self) -> None:
+		if self.assignment_scope == CLASS_SCOPE:
+			self.student_group = None
+			return
 		if not self.student_group:
-			frappe.throw(_("Select a Class Arm / Student Group."), frappe.ValidationError)
+			frappe.throw(_("Select a Class Arm / Student Group for a Class Arm assignment."), frappe.ValidationError)
 		meta = frappe.get_meta("Student Group")
 		fields = ["name", "program", "academic_year", "academic_term", "disabled", BRANCH_FIELD]
 		if meta.has_field(OFFERING_FIELD):
@@ -67,13 +71,13 @@ class EduEdgeInstructorAssignment(Document):
 		if group.get(BRANCH_FIELD) != self.school_branch:
 			frappe.throw(_("Class Arm / Student Group must belong to the selected Branch."), frappe.ValidationError)
 		if group.program and group.program != self._offering_program:
-			frappe.throw(_("Class Arm / Student Group Programme must match the Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Class Arm / Student Group Programme must match the Class / Programme Offering."), frappe.ValidationError)
 		if group.academic_year and group.academic_year != self.academic_year:
-			frappe.throw(_("Class Arm / Student Group Academic Session must match the Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Class Arm / Student Group Academic Session must match the Class / Programme Offering."), frappe.ValidationError)
 		if group.academic_term and group.academic_term != self.academic_term:
-			frappe.throw(_("Class Arm / Student Group Term must match the Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Class Arm / Student Group Term must match the Class / Programme Offering."), frappe.ValidationError)
 		if meta.has_field(OFFERING_FIELD) and group.get(OFFERING_FIELD) and group.get(OFFERING_FIELD) != self.program_offering:
-			frappe.throw(_("Class Arm / Student Group must belong to the selected Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Class Arm / Student Group must belong to the selected Class / Programme Offering."), frappe.ValidationError)
 
 	def _validate_instructor_context(self) -> None:
 		if not self.instructor:
@@ -89,7 +93,7 @@ class EduEdgeInstructorAssignment(Document):
 			frappe.throw(_("Instructor must belong to the selected Institution."), frappe.ValidationError)
 		if not _has_branch_eligibility(self.instructor, self.school_branch, self.valid_from or nowdate(), self.valid_to):
 			frappe.throw(
-				_("Instructor is not eligible for the selected Branch. Update the Instructor profile or background Branch eligibility first."),
+				_("Instructor is not eligible for the selected Branch. Save through Teacher Assignments or add Branch eligibility first."),
 				frappe.ValidationError,
 			)
 		self.instructor_name = instructor.instructor_name
@@ -99,37 +103,46 @@ class EduEdgeInstructorAssignment(Document):
 			frappe.throw(_("Course / Subject is required for this assignment type."), frappe.ValidationError)
 		if not self.course:
 			return
-		if not frappe.db.exists("Course", self.course):
+		course = frappe.db.get_value("Course", self.course, ["name", INSTITUTION_FIELD], as_dict=True)
+		if not course:
 			frappe.throw(_("Select a valid Course / Subject."), frappe.ValidationError)
+		if course.get(INSTITUTION_FIELD) and course.get(INSTITUTION_FIELD) != self.institution:
+			frappe.throw(_("Course / Subject must belong to the selected Institution."), frappe.ValidationError)
 		if self._offering_program and not frappe.db.exists(
 			"Program Course",
 			{"parent": self._offering_program, "parenttype": "Program", "course": self.course},
 		):
-			frappe.throw(_("Course / Subject is not configured for the Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Course / Subject is not configured for the selected Class / Programme Offering."), frappe.ValidationError)
 
 	def _validate_duplicate(self) -> None:
 		if not self.enabled:
 			return
+		filters = {
+			"instructor": self.instructor,
+			"school_branch": self.school_branch,
+			"program_offering": self.program_offering,
+			"assignment_scope": self.assignment_scope,
+			"assignment_type": self.assignment_type,
+			"enabled": 1,
+			"name": ["!=", self.name or ""],
+		}
 		rows = frappe.get_all(
 			self.doctype,
-			filters={
-				"instructor": self.instructor,
-				"school_branch": self.school_branch,
-				"student_group": self.student_group,
-				"assignment_type": self.assignment_type,
-				"enabled": 1,
-				"name": ["!=", self.name or ""],
-			},
-			fields=["name", "course", "valid_from", "valid_to"],
+			filters=filters,
+			fields=["name", "student_group", "course", "valid_from", "valid_to"],
+			limit_page_length=0,
 		)
 		for row in rows:
+			if (row.student_group or "") != (self.student_group or ""):
+				continue
 			if (row.course or "") != (self.course or ""):
 				continue
 			if _date_ranges_overlap(self.valid_from, self.valid_to, row.valid_from, row.valid_to):
-				frappe.throw(_("An overlapping active Instructor Assignment already exists."), frappe.DuplicateEntryError)
+				frappe.throw(_("An overlapping active Teacher Assignment already exists."), frappe.DuplicateEntryError)
 
 	def _build_title(self) -> str:
-		parts = [self.instructor_name or self.instructor, self.assignment_type, self.student_group]
+		target = self.program_offering if self.assignment_scope == CLASS_SCOPE else self.student_group
+		parts = [self.instructor_name or self.instructor, self.assignment_type, target]
 		if self.course:
 			parts.append(self.course)
 		return " · ".join(value for value in parts if value)
@@ -140,6 +153,7 @@ def _has_branch_eligibility(instructor: str, branch: str, start_date, end_date=N
 		"EduEdge Instructor Branch Assignment",
 		filters={"instructor": instructor, "school_branch": branch, "enabled": 1},
 		fields=["valid_from", "valid_to"],
+		limit_page_length=0,
 	)
 	return any(_date_ranges_overlap(start_date, end_date, row.valid_from, row.valid_to) for row in rows)
 
