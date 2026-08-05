@@ -60,6 +60,9 @@ jobs:
           node --check eduedge/public/js/eduedge_programmes.bundle.js
           node --check eduedge/public/js/eduedge_programme_offerings.bundle.js
           node --check eduedge/public/js/eduedge_class_arms.bundle.js
+          node --check eduedge/public/js/eduedge_students.bundle.js
+          node --check eduedge/public/js/eduedge_instructors.bundle.js
+          node --check eduedge/public/js/eduedge_instructor_assignments.bundle.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
           node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
           node --check eduedge/public/js/eduedge_resource_center.bundle.js
@@ -85,6 +88,9 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_programs/eduedge_programs.js
           node --check eduedge/eduedge/page/eduedge_program_offerings/eduedge_program_offerings.js
           node --check eduedge/eduedge/page/eduedge_class_arms/eduedge_class_arms.js
+          node --check eduedge/eduedge/page/eduedge_students/eduedge_students.js
+          node --check eduedge/eduedge/page/eduedge_instructors/eduedge_instructors.js
+          node --check eduedge/eduedge/page/eduedge_instructor_assignments/eduedge_instructor_assignments.js
           node --check eduedge/eduedge/page/eduedge_my_profile/eduedge_my_profile.js
           node --check eduedge/eduedge/page/eduedge_institution_profile/eduedge_institution_profile.js
           node --check eduedge/eduedge/page/eduedge_cbt_operations/eduedge_cbt_operations.js
