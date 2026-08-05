@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, getdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.people_fields import INSTRUCTOR_PRIMARY_BRANCH_FIELD
@@ -185,6 +185,53 @@ def _operational_instructor_names(institution: str, branch: str, branches: list[
 	return assignment_names | home_names
 
 
+def _earliest(values: list) -> Any:
+	available = [value for value in values if value]
+	return min(available, key=getdate) if available else None
+
+
+def _latest(values: list) -> Any:
+	available = [value for value in values if value]
+	return max(available, key=getdate) if available else None
+
+
+def _summarise_branch_eligibility(rows: list[dict]) -> list[dict]:
+	"""Return one profile card per Branch while retaining the underlying periods."""
+	grouped: dict[str, list[dict]] = {}
+	for source in rows:
+		row = dict(source)
+		branch = str(row.get("school_branch") or "").strip()
+		if branch:
+			grouped.setdefault(branch, []).append(row)
+
+	result: list[dict] = []
+	for branch, periods in grouped.items():
+		active_periods = [row for row in periods if cint(row.get("enabled"))]
+		visible_periods = active_periods or periods
+		primary = next((row for row in active_periods if cint(row.get("is_primary"))), None)
+		identity = primary or visible_periods[0]
+		open_ended = any(not row.get("valid_to") for row in visible_periods)
+		result.append(
+			{
+				"name": identity.get("name"),
+				"school_branch": branch,
+				"is_primary": 1 if primary else 0,
+				"enabled": 1 if active_periods else 0,
+				"valid_from": _earliest([row.get("valid_from") for row in visible_periods]),
+				"valid_to": None if open_ended else _latest([row.get("valid_to") for row in visible_periods]),
+				"period_count": len(periods),
+				"periods": periods,
+			}
+		)
+	return sorted(
+		result,
+		key=lambda row: (
+			0 if cint(row.get("is_primary")) else 1,
+			str(row.get("school_branch") or "").lower(),
+		),
+	)
+
+
 def _instructor_detail(name: str) -> dict:
 	doc = frappe.get_doc("Instructor", name)
 	doc.check_permission("read")
@@ -199,13 +246,15 @@ def _instructor_detail(name: str) -> dict:
 		order_by="modified desc",
 		limit_page_length=100,
 	) if frappe.db.exists("DocType", "EduEdge Instructor Assignment") else []
-	result["branch_eligibility"] = frappe.get_list(
+	periods = frappe.get_list(
 		"EduEdge Instructor Branch Assignment",
 		filters={"instructor": doc.name},
 		fields=["name", "school_branch", "is_primary", "enabled", "valid_from", "valid_to"],
-		order_by="is_primary desc, school_branch asc",
-		limit_page_length=100,
+		order_by="is_primary desc, school_branch asc, valid_from asc",
+		limit_page_length=500,
 	) if frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment") else []
+	result["branch_eligibility_periods"] = periods
+	result["branch_eligibility"] = _summarise_branch_eligibility(periods)
 	return result
 
 
