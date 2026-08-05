@@ -61,8 +61,16 @@ function mount_teacher_assignments(wrapper, visitId, page, $loading, fail) {
 	}
 }
 
-function load_teacher_assignments_bundle(wrapper, visitId, page, $loading, fail) {
-	frappe.require("eduedge_teacher_assignments.bundle.js", () => {
+function load_teacher_assignments_bundle(
+	wrapper,
+	visitId,
+	page,
+	$loading,
+	fail,
+	primaryBundle,
+	legacyBundle
+) {
+	frappe.require(primaryBundle, () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		if (teacher_assignment_component() && typeof teacher_assignment_factory() === "function") {
 			mount_teacher_assignments(wrapper, visitId, page, $loading, fail);
@@ -70,7 +78,7 @@ function load_teacher_assignments_bundle(wrapper, visitId, page, $loading, fail)
 		}
 
 		// Retain compatibility with a bench that still has the previous logical asset in its manifest.
-		frappe.require("eduedge_instructor_assignments.bundle.js", () => {
+		frappe.require(legacyBundle, () => {
 			mount_teacher_assignments(wrapper, visitId, page, $loading, fail);
 		});
 	});
@@ -96,6 +104,14 @@ frappe.pages["eduedge-instructor-assignments"].on_page_show = function (wrapper)
 	};
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		load_teacher_assignments_bundle(wrapper, visitId, page, $loading, fail);
+		load_teacher_assignments_bundle(
+			wrapper,
+			visitId,
+			page,
+			$loading,
+			fail,
+			"eduedge_teacher_assignments.bundle.js",
+			"eduedge_instructor_assignments.bundle.js"
+		);
 	});
 };
