@@ -1,0 +1,182 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-05 01:50:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "assignment_title",
+  "instructor",
+  "instructor_name",
+  "assignment_type",
+  "enabled",
+  "context_section",
+  "institution",
+  "school_branch",
+  "program_offering",
+  "column_break_1",
+  "academic_year",
+  "academic_term",
+  "student_group",
+  "course",
+  "validity_section",
+  "valid_from",
+  "valid_to",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "assignment_title",
+   "fieldtype": "Data",
+   "label": "Assignment",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_global_search": 1
+  },
+  {
+   "fieldname": "instructor",
+   "fieldtype": "Link",
+   "label": "Instructor",
+   "options": "Instructor",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fetch_from": "instructor.instructor_name",
+   "fieldname": "instructor_name",
+   "fieldtype": "Read Only",
+   "label": "Instructor Name",
+   "read_only": 1
+  },
+  {
+   "default": "Subject Teacher",
+   "fieldname": "assignment_type",
+   "fieldtype": "Select",
+   "label": "Assignment Type",
+   "options": "Class Teacher\nSubject Teacher\nLecturer\nTutor\nPractical Instructor\nAssistant Instructor\nForm Teacher\nHead of Class / Level",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "context_section",
+   "fieldtype": "Section Break",
+   "label": "Academic Assignment Context"
+  },
+  {
+   "fieldname": "institution",
+   "fieldtype": "Link",
+   "label": "Institution",
+   "options": "EduEdge Institution",
+   "reqd": 1,
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "school_branch",
+   "fieldtype": "Link",
+   "label": "School Branch / Campus",
+   "options": "EduEdge School Branch",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "program_offering",
+   "fieldtype": "Link",
+   "label": "Programme Offering",
+   "options": "EduEdge Program Offering",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "academic_year",
+   "fieldtype": "Link",
+   "label": "Academic Session",
+   "options": "Academic Year",
+   "reqd": 1,
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "academic_term",
+   "fieldtype": "Link",
+   "label": "Term / Semester",
+   "options": "Academic Term",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "student_group",
+   "fieldtype": "Link",
+   "label": "Class Arm / Student Group",
+   "options": "Student Group",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "course",
+   "fieldtype": "Link",
+   "label": "Course / Subject",
+   "options": "Course",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "validity_section",
+   "fieldtype": "Section Break",
+   "label": "Validity"
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Date",
+   "label": "Valid From"
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Date",
+   "label": "Valid To"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-05 01:50:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Instructor Assignment",
+ "owner": "Administrator",
+ "permissions": [
+  {"role":"EduEdge Administrator","read":1,"create":1,"write":1,"delete":1,"report":1,"export":1},
+  {"role":"School Administrator","read":1,"create":1,"write":1,"delete":1,"report":1,"export":1},
+  {"role":"Academic Administrator","read":1,"create":1,"write":1,"delete":1,"report":1,"export":1},
+  {"role":"Education Manager","read":1,"create":1,"write":1,"delete":1,"report":1,"export":1},
+  {"role":"Academics User","read":1,"create":1,"write":1,"report":1},
+  {"role":"Teacher","read":1},
+  {"role":"System Manager","read":1,"create":1,"write":1,"delete":1,"report":1,"export":1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "assignment_title"
+}
