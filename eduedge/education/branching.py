@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 
 from eduedge.education.academic_operations import (
-	before_validate_course_schedule,
+	before_validate_course_schedule as _before_validate_course_schedule,
 	before_validate_room,
 	before_validate_student_attendance,
 	before_validate_student_group as _before_validate_student_group,
@@ -15,6 +15,7 @@ from eduedge.education.academic_validation import (
 )
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import (
 	get_context_branch,
 	validate_program_enrollment,
@@ -83,6 +84,11 @@ def before_validate_program_enrollment(doc, method=None) -> None:
 
 def before_validate_student_group(doc, method=None) -> None:
 	_before_validate_student_group(doc, method)
+
+
+def before_validate_course_schedule(doc, method=None) -> None:
+	_before_validate_course_schedule(doc, method)
+	assert_schedule_instructor_assignment(doc)
 
 
 def _validate_student_enrollment_institution(doc, student_branch: str | None) -> None:
