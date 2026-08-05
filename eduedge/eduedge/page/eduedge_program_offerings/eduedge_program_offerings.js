@@ -6,6 +6,39 @@ frappe.pages["eduedge-program-offerings"].on_page_load = function (wrapper) {
 	});
 };
 
+function selected_offering_context(wrapper) {
+	const proxy = wrapper.vue_app?._instance?.proxy;
+	const draft = proxy?.draft || {};
+	const filters = proxy?.filters || {};
+	return {
+		branch: draft.school_branch || filters.branch || "",
+		offering: draft.name || "",
+	};
+}
+
+function open_offering_operation(wrapper, route) {
+	const context = selected_offering_context(wrapper);
+	const params = new URLSearchParams();
+	if (context.branch) params.set("branch", context.branch);
+	if (context.offering) params.set("offering", context.offering);
+	window.location.href = `${route}${params.toString() ? `?${params.toString()}` : ""}`;
+}
+
+function add_offering_operation_buttons(wrapper) {
+	const page = wrapper.page;
+	page.clear_inner_toolbar?.();
+	page.add_inner_button(
+		__("Manage Curriculum"),
+		() => open_offering_operation(wrapper, "/app/eduedge-curriculum"),
+		__("Class Operations")
+	);
+	page.add_inner_button(
+		__("Assign Teachers"),
+		() => open_offering_operation(wrapper, "/app/eduedge-instructor-assignments"),
+		__("Class Operations")
+	);
+}
+
 frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
@@ -55,6 +88,7 @@ frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 					pageName: "eduedge-program-offerings",
 				});
 				wrapper.vue_app.mount(root[0]);
+				add_offering_operation_buttons(wrapper);
 			} catch (error) {
 				console.error("Failed to mount EduEdge Programme Offerings", error);
 				fail(error.message || String(error));
