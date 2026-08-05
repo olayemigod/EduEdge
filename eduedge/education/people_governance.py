@@ -87,19 +87,17 @@ def before_validate_student_applicant(doc, method=None) -> None:
 def before_validate_instructor(doc, method=None) -> None:
 	from eduedge.education.academic_validation import before_validate_institution_owned_master
 
-	before_validate_institution_owned_master(doc, method)
-	if not doc.meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD):
-		return
-	branch = doc.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+	branch = doc.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD) if doc.meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD) else None
 	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
-	if not branch:
-		return
-	branch_row = frappe.db.get_value(
-		"EduEdge School Branch", branch, ["institution", "enabled"], as_dict=True
-	)
-	if not branch_row or not branch_row.enabled:
-		frappe.throw(_("Select an enabled Primary School Branch / Campus."), frappe.ValidationError)
-	if institution and branch_row.institution != institution:
-		frappe.throw(_("Primary School Branch / Campus must belong to the Instructor's Institution."), frappe.ValidationError)
-	if doc.meta.has_field(INSTITUTION_FIELD) and not institution:
-		doc.set(INSTITUTION_FIELD, branch_row.institution)
+	if branch:
+		branch_row = frappe.db.get_value(
+			"EduEdge School Branch", branch, ["institution", "enabled"], as_dict=True
+		)
+		if not branch_row or not branch_row.enabled:
+			frappe.throw(_("Select an enabled Primary School Branch / Campus."), frappe.ValidationError)
+		if institution and branch_row.institution != institution:
+			frappe.throw(_("Primary School Branch / Campus must belong to the Instructor's Institution."), frappe.ValidationError)
+		if doc.meta.has_field(INSTITUTION_FIELD) and not institution:
+			doc.set(INSTITUTION_FIELD, branch_row.institution)
+
+	before_validate_institution_owned_master(doc, method)
