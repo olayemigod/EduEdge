@@ -1,0 +1,125 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-05 01:45:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "reference_doctype",
+  "reference_name",
+  "student",
+  "student_applicant",
+  "school_branch",
+  "decision",
+  "column_break_1",
+  "old_image",
+  "new_image",
+  "review_note",
+  "reviewed_by",
+  "reviewed_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Select",
+   "label": "Reference Type",
+   "options": "Student Applicant\nStudent",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference",
+   "options": "reference_doctype",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "label": "Student",
+   "options": "Student",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "student_applicant",
+   "fieldtype": "Link",
+   "label": "Student Applicant",
+   "options": "Student Applicant",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "school_branch",
+   "fieldtype": "Link",
+   "label": "School Branch / Campus",
+   "options": "EduEdge School Branch",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "decision",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "Uploaded\nApproved\nRejected\nReplaced",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "old_image",
+   "fieldtype": "Data",
+   "label": "Previous Image"
+  },
+  {
+   "fieldname": "new_image",
+   "fieldtype": "Data",
+   "label": "New Image"
+  },
+  {
+   "fieldname": "review_note",
+   "fieldtype": "Small Text",
+   "label": "Review Note"
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On",
+   "reqd": 1,
+   "in_list_view": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-05 01:45:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Student Photo Review Log",
+ "owner": "Administrator",
+ "permissions": [
+  {"role":"EduEdge Administrator","read":1,"create":1,"report":1,"export":1},
+  {"role":"School Administrator","read":1,"create":1,"report":1,"export":1},
+  {"role":"Academic Administrator","read":1,"create":1,"report":1},
+  {"role":"Registrar","read":1,"create":1,"report":1},
+  {"role":"Admission Officer","read":1,"create":1,"report":1},
+  {"role":"System Manager","read":1,"create":1,"report":1,"export":1}
+ ],
+ "sort_field": "reviewed_on",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "reference_name"
+}
