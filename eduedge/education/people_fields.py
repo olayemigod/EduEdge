@@ -4,7 +4,6 @@ import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
-from eduedge.education.custom_fields import BRANCH_FIELD
 
 PHOTO_STATUS_FIELD = "eduedge_photo_status"
 PHOTO_LOCKED_FIELD = "eduedge_photo_locked"
@@ -110,6 +109,37 @@ PEOPLE_CUSTOM_FIELDS = {
 }
 
 
+def _backfill_instructor_primary_branches() -> None:
+	if not (
+		frappe.db.exists("DocType", "Instructor")
+		and frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment")
+		and frappe.get_meta("Instructor").has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+	):
+		return
+	instructor_meta = frappe.get_meta("Instructor")
+	for instructor in frappe.get_all(
+		"Instructor",
+		filters={INSTRUCTOR_PRIMARY_BRANCH_FIELD: ["is", "not set"]},
+		pluck="name",
+		limit_page_length=0,
+	):
+		rows = frappe.get_all(
+			"EduEdge Instructor Branch Assignment",
+			filters={"instructor": instructor, "enabled": 1},
+			fields=["school_branch", "is_primary"],
+			order_by="is_primary desc, modified desc",
+			limit_page_length=1,
+		)
+		if not rows or not rows[0].school_branch:
+			continue
+		values = {INSTRUCTOR_PRIMARY_BRANCH_FIELD: rows[0].school_branch}
+		if instructor_meta.has_field(INSTITUTION_FIELD) and not frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD):
+			values[INSTITUTION_FIELD] = frappe.db.get_value(
+				"EduEdge School Branch", rows[0].school_branch, "institution"
+			)
+		frappe.db.set_value("Instructor", instructor, values, update_modified=False)
+
+
 def ensure_people_operations_foundation() -> None:
 	available = {
 		doctype: fields
@@ -118,3 +148,4 @@ def ensure_people_operations_foundation() -> None:
 	}
 	if available:
 		create_custom_fields(available, update=True)
+	_backfill_instructor_primary_branches()
