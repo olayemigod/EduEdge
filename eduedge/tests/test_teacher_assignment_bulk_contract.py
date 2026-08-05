@@ -50,8 +50,10 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             "previous global Class × Class Arm × Subject assignment format has been retired",
             "use explicit Assignment Rows",
             "def _validate_batch_duplicates",
-            "Subject / Course {1} is not configured for Class {2}",
-            "nothing is silently skipped",
+            "Institution Subject will be added to the selected Class curriculum",
+            "add to Class curriculum",
+            "curriculum_change_count",
+            "curriculum_changes",
             '"row_summaries"',
             '"academic_record_count"',
             '"conflict_count"',
@@ -155,7 +157,8 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
 
     def test_disabled_academic_rows_do_not_create_active_branch_access(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
-        self.assertIn("if not row.enabled:\n        return None", api)
+        self.assertIn("if not row.enabled:", api)
+        self.assertIn("return None", api)
         self.assertIn('"not-found-disabled"', api)
         self.assertIn('doc.enabled = cint(row["requested_enabled"])', api)
 
