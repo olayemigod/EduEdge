@@ -4,7 +4,6 @@ import frappe
 from frappe import _
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
-from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.people_fields import (
 	INSTRUCTOR_PRIMARY_BRANCH_FIELD,
 	PHOTO_APPROVED_BY_FIELD,
@@ -31,10 +30,34 @@ def _is_people_manager() -> bool:
 	return bool(PEOPLE_MANAGER_ROLES.intersection(frappe.get_roles()))
 
 
+def _inherit_approved_applicant_photo(doc) -> None:
+	if not doc.is_new() or not doc.get("student_applicant") or doc.get("image"):
+		return
+	applicant_meta = frappe.get_meta("Student Applicant")
+	if not applicant_meta.has_field(PHOTO_STATUS_FIELD):
+		return
+	fields = [
+		"image",
+		PHOTO_STATUS_FIELD,
+		PHOTO_LOCKED_FIELD,
+		PHOTO_APPROVED_BY_FIELD,
+		PHOTO_APPROVED_ON_FIELD,
+		PHOTO_REVIEW_NOTE_FIELD,
+	]
+	applicant = frappe.db.get_value("Student Applicant", doc.student_applicant, fields, as_dict=True)
+	if not applicant or applicant.get(PHOTO_STATUS_FIELD) != "Approved" or not applicant.image:
+		return
+	doc.image = applicant.image
+	if doc.meta.has_field(PHOTO_STATUS_FIELD):
+		for fieldname in fields[1:]:
+			doc.set(fieldname, applicant.get(fieldname))
+
+
 def before_validate_student(doc, method=None) -> None:
 	from eduedge.education.branching import before_validate_student as validate_student
 
 	validate_student(doc, method)
+	_inherit_approved_applicant_photo(doc)
 	if doc.is_new() or not doc.has_value_changed("image"):
 		return
 	if not _is_people_manager():
