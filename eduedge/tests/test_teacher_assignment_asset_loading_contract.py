@@ -6,15 +6,15 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
 
 
-class TestTeacherAssignmentAssetLoadingContract(unittest.TestCase):
-	def test_cache_safe_bundle_exports_new_and_legacy_globals(self):
+class TestInstructorAssignmentAssetLoadingContract(unittest.TestCase):
+	def test_cache_safe_bundle_exports_instructor_and_legacy_globals(self):
 		bundle = (APP / "public" / "js" / "eduedge_teacher_assignments.bundle.js").read_text(encoding="utf-8")
 		for token in (
-			"createEduEdgeTeacherAssignmentsApp",
-			"window.EduEdgeTeacherAssignments",
-			"window.createEduEdgeTeacherAssignmentsApp",
+			"createEduEdgeInstructorAssignmentsApp",
 			"window.EduEdgeInstructorAssignments",
 			"window.createEduEdgeInstructorAssignmentsApp",
+			"window.EduEdgeTeacherAssignments",
+			"window.createEduEdgeTeacherAssignmentsApp",
 		):
 			self.assertIn(token, bundle)
 
@@ -30,9 +30,9 @@ class TestTeacherAssignmentAssetLoadingContract(unittest.TestCase):
 			loader.index("eduedge_teacher_assignments.bundle.js"),
 			loader.index("eduedge_instructor_assignments.bundle.js"),
 		)
-		self.assertIn("teacher_assignment_factory", loader)
-		self.assertIn("teacher_assignment_component", loader)
-		self.assertIn("load_teacher_assignments_bundle", loader)
+		self.assertIn("instructor_assignment_factory", loader)
+		self.assertIn("instructor_assignment_component", loader)
+		self.assertIn("load_instructor_assignments_bundle", loader)
 		self.assertIn("Rebuild EduEdge assets and hard-refresh the browser", loader)
 
 
