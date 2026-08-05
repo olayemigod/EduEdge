@@ -14,3 +14,4 @@ eduedge.patches.v0_9.ensure_current_academic_calendars
 eduedge.patches.v0_9.migrate_native_academic_hierarchy
 eduedge.patches.v0_9.harden_training_progress_permissions
 eduedge.patches.v0_9.harden_sensitive_role_permissions
+eduedge.patches.v0_9.add_people_operations_permissions
