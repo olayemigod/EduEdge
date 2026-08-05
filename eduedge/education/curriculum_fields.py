@@ -7,6 +7,13 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.institution_types import SEED_UPDATE_FLAG
 
 TOPIC_COURSE_FIELD = "eduedge_course"
+TOPIC_SCOPE_FIELD = "eduedge_topic_scope"
+TOPIC_OFFERING_FIELD = "eduedge_program_offering"
+TOPIC_GROUP_FIELD = "eduedge_student_group"
+TOPIC_SCOPE_INSTITUTION = "Institution-wide"
+TOPIC_SCOPE_CLASS = "Class / Programme Offering"
+TOPIC_SCOPE_CLASS_ARM = "Class Arm"
+TOPIC_SCOPES = (TOPIC_SCOPE_INSTITUTION, TOPIC_SCOPE_CLASS, TOPIC_SCOPE_CLASS_ARM)
 
 CURRICULUM_TERMINOLOGY = {
 	"PRIMARY": {
@@ -48,7 +55,40 @@ TOPIC_CONTEXT_FIELDS = {
 			"in_list_view": 1,
 			"in_standard_filter": 1,
 			"insert_after": INSTITUTION_FIELD,
-			"description": "Primary Course / Subject that governs teacher access to this Topic.",
+			"description": "Institution-wide Subject master that owns this Topic.",
+		},
+		{
+			"fieldname": TOPIC_SCOPE_FIELD,
+			"fieldtype": "Select",
+			"label": "Teaching Scope",
+			"options": "\nInstitution-wide\nClass / Programme Offering\nClass Arm",
+			"default": TOPIC_SCOPE_INSTITUTION,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"insert_after": TOPIC_COURSE_FIELD,
+			"description": "Controls whether this Topic is general to the Institution, a Class, or one Class Arm.",
+		},
+		{
+			"fieldname": TOPIC_OFFERING_FIELD,
+			"fieldtype": "Link",
+			"label": "Class / Programme Offering",
+			"options": "EduEdge Program Offering",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"insert_after": TOPIC_SCOPE_FIELD,
+			"depends_on": f"eval:doc.{TOPIC_SCOPE_FIELD}!='{TOPIC_SCOPE_INSTITUTION}'",
+			"mandatory_depends_on": f"eval:doc.{TOPIC_SCOPE_FIELD}!='{TOPIC_SCOPE_INSTITUTION}'",
+		},
+		{
+			"fieldname": TOPIC_GROUP_FIELD,
+			"fieldtype": "Link",
+			"label": "Class Arm / Student Group",
+			"options": "Student Group",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"insert_after": TOPIC_OFFERING_FIELD,
+			"depends_on": f"eval:doc.{TOPIC_SCOPE_FIELD}=='{TOPIC_SCOPE_CLASS_ARM}'",
+			"mandatory_depends_on": f"eval:doc.{TOPIC_SCOPE_FIELD}=='{TOPIC_SCOPE_CLASS_ARM}'",
 		},
 	],
 }
@@ -127,5 +167,7 @@ def backfill_topic_context() -> None:
 		institution = frappe.db.get_value("Course", row.course, INSTITUTION_FIELD)
 		if institution and not frappe.db.get_value("Topic", row.topic, INSTITUTION_FIELD):
 			values[INSTITUTION_FIELD] = institution
+		if frappe.get_meta("Topic").has_field(TOPIC_SCOPE_FIELD) and not frappe.db.get_value("Topic", row.topic, TOPIC_SCOPE_FIELD):
+			values[TOPIC_SCOPE_FIELD] = TOPIC_SCOPE_INSTITUTION
 		if values:
 			frappe.db.set_value("Topic", row.topic, values, update_modified=False)
