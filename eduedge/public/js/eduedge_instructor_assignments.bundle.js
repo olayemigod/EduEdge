@@ -34,9 +34,35 @@ function keepNewestAssignmentRowOnTop(methodName) {
 	};
 }
 
+function labelInstitutionSubjectsByClassMembership() {
+	const methods = EduEdgeInstructorAssignments.methods || {};
+	const original = methods.coursesFor;
+	if (typeof original !== "function") return;
+
+	methods.coursesFor = function (row) {
+		const courses = original.call(this, row) || [];
+		const offering = this.offeringRecord?.(row?.program_offering);
+		const configured = new Set(
+			this.data?.configured_course_map?.[offering?.program] || [],
+		);
+		return courses.map((course) => {
+			const isConfigured = configured.has(course.name);
+			const name = course.course_name || course.name;
+			return {
+				...course,
+				eduedge_configured_in_class: isConfigured,
+				course_name: isConfigured
+					? name
+					: `${name} · Add to Class curriculum`,
+			};
+		});
+	};
+}
+
 keepNewestAssignmentRowOnTop("addAcademicRow");
 keepNewestAssignmentRowOnTop("addBranchAccessRow");
 keepNewestAssignmentRowOnTop("duplicateRow");
+labelInstitutionSubjectsByClassMembership();
 
 export function createEduEdgeInstructorAssignmentsApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeInstructorAssignments, rootProps);
