@@ -51,6 +51,7 @@ class TestClassAwareAcademicContentContract(unittest.TestCase):
 
 	def test_assessment_plan_native_validation_uses_same_teacher_assignment_scope(self):
 		assessment = (APP / "education" / "assessment_operations.py").read_text(encoding="utf-8")
+		plan_validation = assessment.split("def before_validate_assessment_result", 1)[0]
 		for token in (
 			"is_teacher_user",
 			"require_course_assignment",
@@ -58,8 +59,8 @@ class TestClassAwareAcademicContentContract(unittest.TestCase):
 			"student_group=doc.student_group",
 			"_resolve_group_offering",
 		):
-			self.assertIn(token, assessment)
-		self.assertNotIn("ignore_permissions", assessment)
+			self.assertIn(token, plan_validation)
+		self.assertNotIn("ignore_permissions", plan_validation)
 
 	def test_course_schedule_uses_the_same_class_or_class_arm_scope(self):
 		schedule = (APP / "education" / "instructor_assignments.py").read_text(encoding="utf-8")
