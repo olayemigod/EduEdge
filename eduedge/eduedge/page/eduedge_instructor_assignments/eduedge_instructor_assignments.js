@@ -1,8 +1,8 @@
 frappe.pages["eduedge-instructor-assignments"].on_page_load = function (wrapper) {
-	wrapper.page = frappe.ui.make_app_page({ parent: wrapper, title: __("Teacher Assignments"), single_column: true });
+	wrapper.page = frappe.ui.make_app_page({ parent: wrapper, title: __("Instructor Assignments"), single_column: true });
 };
 
-function apply_teacher_assignment_route_context(wrapper, visitId) {
+function apply_instructor_assignment_route_context(wrapper, visitId) {
 	const params = new URLSearchParams(window.location.search || "");
 	const offering = params.get("offering") || params.get("program_offering") || "";
 	const studentGroup = params.get("student_group") || "";
@@ -26,26 +26,26 @@ function apply_teacher_assignment_route_context(wrapper, visitId) {
 		try {
 			await proxy.load?.();
 		} catch (error) {
-			console.error("Failed to apply Teacher Assignment route context", error);
+			console.error("Failed to apply Instructor Assignment route context", error);
 		}
 	};
 	window.setTimeout(apply, 0);
 }
 
-function teacher_assignment_factory() {
-	return window.createEduEdgeTeacherAssignmentsApp || window.createEduEdgeInstructorAssignmentsApp;
+function instructor_assignment_factory() {
+	return window.createEduEdgeInstructorAssignmentsApp || window.createEduEdgeTeacherAssignmentsApp;
 }
 
-function teacher_assignment_component() {
-	return window.EduEdgeTeacherAssignments || window.EduEdgeInstructorAssignments;
+function instructor_assignment_component() {
+	return window.EduEdgeInstructorAssignments || window.EduEdgeTeacherAssignments;
 }
 
-function mount_teacher_assignments(wrapper, visitId, page, $loading, fail) {
+function mount_instructor_assignments(wrapper, visitId, page, $loading, fail) {
 	if (wrapper.current_visit_id !== visitId) return;
-	const factory = teacher_assignment_factory();
-	if (!teacher_assignment_component() || typeof factory !== "function") {
+	const factory = instructor_assignment_factory();
+	if (!instructor_assignment_component() || typeof factory !== "function") {
 		return fail(
-			__("The EduEdge Teacher Assignments bundle did not register correctly. Rebuild EduEdge assets and hard-refresh the browser.")
+			__("The EduEdge Instructor Assignments bundle did not register correctly. Rebuild EduEdge assets and hard-refresh the browser.")
 		);
 	}
 
@@ -54,14 +54,14 @@ function mount_teacher_assignments(wrapper, visitId, page, $loading, fail) {
 	try {
 		wrapper.vue_app = factory({ pageName: "eduedge-instructor-assignments" });
 		wrapper.vue_app.mount(root[0]);
-		apply_teacher_assignment_route_context(wrapper, visitId);
+		apply_instructor_assignment_route_context(wrapper, visitId);
 	} catch (error) {
-		console.error("Failed to mount Teacher Assignments", error);
+		console.error("Failed to mount Instructor Assignments", error);
 		fail(error.message || String(error));
 	}
 }
 
-function load_teacher_assignments_bundle(
+function load_instructor_assignments_bundle(
 	wrapper,
 	visitId,
 	page,
@@ -72,14 +72,13 @@ function load_teacher_assignments_bundle(
 ) {
 	frappe.require(primaryBundle, () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		if (teacher_assignment_component() && typeof teacher_assignment_factory() === "function") {
-			mount_teacher_assignments(wrapper, visitId, page, $loading, fail);
+		if (instructor_assignment_component() && typeof instructor_assignment_factory() === "function") {
+			mount_instructor_assignments(wrapper, visitId, page, $loading, fail);
 			return;
 		}
 
-		// Retain compatibility with a bench that still has the previous logical asset in its manifest.
 		frappe.require(legacyBundle, () => {
-			mount_teacher_assignments(wrapper, visitId, page, $loading, fail);
+			mount_instructor_assignments(wrapper, visitId, page, $loading, fail);
 		});
 	});
 }
@@ -92,19 +91,19 @@ frappe.pages["eduedge-instructor-assignments"].on_page_show = function (wrapper)
 		try {
 			wrapper.vue_app.unmount();
 		} catch (error) {
-			console.error("Failed to unmount Teacher Assignments", error);
+			console.error("Failed to unmount Instructor Assignments", error);
 		}
 		wrapper.vue_app = null;
 	}
 	$(page.body).empty();
-	const $loading = $(`<div class="p-6 text-center text-muted">${__("Loading Teacher Assignments...")}</div>`).appendTo(page.body);
+	const $loading = $(`<div class="p-6 text-center text-muted">${__("Loading Instructor Assignments...")}</div>`).appendTo(page.body);
 	const fail = (message) => {
 		$loading.remove();
-		$(`<div class="alert alert-danger p-6 text-center"><strong>${__("Teacher Assignments failed to load")}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`).appendTo(page.body);
+		$(`<div class="alert alert-danger p-6 text-center"><strong>${__("Instructor Assignments failed to load")}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`).appendTo(page.body);
 	};
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		load_teacher_assignments_bundle(
+		load_instructor_assignments_bundle(
 			wrapper,
 			visitId,
 			page,
