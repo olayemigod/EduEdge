@@ -4,10 +4,13 @@ frappe.pages["eduedge-instructor-assignments"].on_page_load = function (wrapper)
 
 function apply_instructor_assignment_route_context(wrapper, visitId) {
 	const params = new URLSearchParams(window.location.search || "");
-	const offering = params.get("offering") || params.get("program_offering") || "";
-	const studentGroup = params.get("student_group") || "";
-	const course = params.get("course") || "";
-	if (!offering && !studentGroup && !course) return;
+	const preset = {
+		branch: params.get("branch") || "",
+		program_offering: params.get("offering") || params.get("program_offering") || "",
+		student_group: params.get("student_group") || "",
+		course: params.get("course") || "",
+	};
+	if (!preset.branch && !preset.program_offering && !preset.student_group && !preset.course) return;
 
 	let attempts = 0;
 	const apply = async () => {
@@ -18,13 +21,8 @@ function apply_instructor_assignment_route_context(wrapper, visitId) {
 			if (attempts < 100) window.setTimeout(apply, 50);
 			return;
 		}
-		proxy.form.assignment_scope = studentGroup ? proxy.classArmScope : proxy.classScope;
-		proxy.form.program_offerings = offering ? [offering] : [];
-		proxy.form.student_groups = studentGroup ? [studentGroup] : [];
-		proxy.form.courses = course ? [course] : [];
-		proxy.invalidatePreview?.();
 		try {
-			await proxy.load?.();
+			proxy.applyRoutePreset?.(preset);
 		} catch (error) {
 			console.error("Failed to apply Instructor Assignment route context", error);
 		}
