@@ -85,7 +85,7 @@ doc_events = {
 	"Company": {"before_validate": "eduedge.education.institution_types.before_validate_company"},
 	"Department": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_department"},
 	"Program": {"before_validate": "eduedge.education.academic_hierarchy.before_validate_program"},
-	"Course": {"before_validate": "eduedge.education.academic_validation.before_validate_course"},
+	"Course": {"before_validate": "eduedge.education.curriculum_validation.before_validate_course"},
 	"Topic": {"before_validate": "eduedge.education.curriculum_validation.before_validate_topic"},
 	"Student Batch Name": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
 	"Student House": {"before_validate": "eduedge.education.academic_validation.before_validate_institution_owned_master"},
