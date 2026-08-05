@@ -134,7 +134,9 @@ export function buildEduEdgeMenuItems() {
 		menuGroup("students-admissions", __("Students & Admissions"), "user", [
 			menuItem(__("Admissions"), "/app/eduedge-admissions", "clipboard", __("Admission windows and availability")),
 			menuItem(applicants, "/app/eduedge-applicants", "user", __(`Review prospective ${students.toLowerCase()}`)),
-			menuItem(students, "/app/eduedge-students", "students", __(`${student} records and profiles`)),
+			menuItem(students, "/app/eduedge-students", "students", __(`${student} profiles, guardians, photographs, and academic context`)),
+			menuItem(__("Instructors"), "/app/eduedge-instructors", "users", __("Instructor identity, qualification, specialisation, and eligibility")),
+			menuItem(__("Instructor Assignments"), "/app/eduedge-instructor-assignments", "assignment", __("Assign instructors to offerings, Class Arms, and courses")),
 		]),
 		menuGroup("academic-setup", __("Academic Setup"), "book", [
 			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and Institution calendars`)),
@@ -194,7 +196,8 @@ document.addEventListener("page-change", refreshEduEdgeMenuItems);
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home", "/app/eduedge-my-profile", "/app/eduedge-academic-operations",
-	"/app/eduedge-admissions", "/app/eduedge-applicants", "/app/eduedge-students",
+	"/app/eduedge-class-arms", "/app/eduedge-admissions", "/app/eduedge-applicants",
+	"/app/eduedge-students", "/app/eduedge-instructors", "/app/eduedge-instructor-assignments",
 	"/app/eduedge-programs", "/app/eduedge-program-offerings", "/app/eduedge-academic-foundation",
 	"/app/eduedge-academic-sessions", "/app/eduedge-cbt-operations", "/app/eduedge-cbt-schedules",
 	"/app/eduedge-cbt-invigilation", "/app/eduedge-cbt-marking", "/app/eduedge-cbt-review-workbench",
