@@ -14,6 +14,21 @@ COURSE_IDENTITY_FIELDS = (
 	INSTITUTION_FIELD,
 	"default_grading_scale",
 )
+CHILD_META_FIELDS = {
+	"name", "owner", "creation", "modified", "modified_by", "docstatus", "idx",
+	"parent", "parentfield", "parenttype", "doctype",
+}
+
+
+def _child_signature(rows) -> list[dict]:
+	return [
+		{
+			key: value
+			for key, value in row.as_dict(no_nulls=False).items()
+			if key not in CHILD_META_FIELDS
+		}
+		for row in rows or []
+	]
 
 
 def before_validate_course(doc, method=None) -> None:
@@ -33,7 +48,7 @@ def before_validate_course(doc, method=None) -> None:
 			_("Assigned teachers cannot change Course / Subject identity, department, Institution, or grading governance."),
 			frappe.PermissionError,
 		)
-	if doc.get("assessment_criteria") != before.get("assessment_criteria"):
+	if _child_signature(doc.get("assessment_criteria")) != _child_signature(before.get("assessment_criteria")):
 		frappe.throw(
 			_("Assigned teachers cannot change Course assessment criteria from the curriculum workspace."),
 			frappe.PermissionError,
