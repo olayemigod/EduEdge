@@ -82,6 +82,21 @@ class TestTeacherAssignmentBulkContract(unittest.TestCase):
 		self.assertIn("row.student_group != doc.student_group", helper)
 		self.assertIn("row.course != doc.get(\"course\")", helper)
 
+	def test_class_and_class_arm_links_preserve_assignment_context(self):
+		loader = (APP / "eduedge" / "page" / "eduedge_instructor_assignments" / "eduedge_instructor_assignments.js").read_text(encoding="utf-8")
+		class_arms = (APP / "public" / "js" / "eduedge_class_arms" / "EduEdgeClassArms.vue").read_text(encoding="utf-8")
+		for token in (
+			'params.get("offering") || params.get("program_offering")',
+			'params.get("student_group")',
+			'params.get("course")',
+			"proxy.form.program_offerings",
+			"proxy.form.student_groups",
+			"proxy.form.courses",
+		):
+			self.assertIn(token, loader)
+		self.assertIn('params = new URLSearchParams({ branch: this.draft.branch, offering: this.draft.offering, student_group: this.draft.name })', class_arms)
+		self.assertIn("/app/eduedge-instructor-assignments", class_arms)
+
 
 if __name__ == "__main__":
 	unittest.main()
