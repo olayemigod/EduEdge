@@ -10,6 +10,7 @@
   "instructor",
   "instructor_name",
   "assignment_type",
+  "assignment_scope",
   "enabled",
   "context_section",
   "institution",
@@ -26,142 +27,29 @@
   "notes"
  ],
  "fields": [
-  {
-   "fieldname": "assignment_title",
-   "fieldtype": "Data",
-   "label": "Assignment",
-   "read_only": 1,
-   "in_list_view": 1,
-   "in_global_search": 1
-  },
-  {
-   "fieldname": "instructor",
-   "fieldtype": "Link",
-   "label": "Instructor",
-   "options": "Instructor",
-   "reqd": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fetch_from": "instructor.instructor_name",
-   "fieldname": "instructor_name",
-   "fieldtype": "Read Only",
-   "label": "Instructor Name",
-   "read_only": 1
-  },
-  {
-   "default": "Subject Teacher",
-   "fieldname": "assignment_type",
-   "fieldtype": "Select",
-   "label": "Assignment Type",
-   "options": "Class Teacher\nSubject Teacher\nLecturer\nTutor\nPractical Instructor\nAssistant Instructor\nForm Teacher\nHead of Class / Level",
-   "reqd": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "default": "1",
-   "fieldname": "enabled",
-   "fieldtype": "Check",
-   "label": "Enabled",
-   "in_list_view": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "context_section",
-   "fieldtype": "Section Break",
-   "label": "Academic Assignment Context"
-  },
-  {
-   "fieldname": "institution",
-   "fieldtype": "Link",
-   "label": "Institution",
-   "options": "EduEdge Institution",
-   "reqd": 1,
-   "read_only": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "school_branch",
-   "fieldtype": "Link",
-   "label": "School Branch / Campus",
-   "options": "EduEdge School Branch",
-   "reqd": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "program_offering",
-   "fieldtype": "Link",
-   "label": "Programme Offering",
-   "options": "EduEdge Program Offering",
-   "reqd": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "column_break_1",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "academic_year",
-   "fieldtype": "Link",
-   "label": "Academic Session",
-   "options": "Academic Year",
-   "reqd": 1,
-   "read_only": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "academic_term",
-   "fieldtype": "Link",
-   "label": "Term / Semester",
-   "options": "Academic Term",
-   "read_only": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "student_group",
-   "fieldtype": "Link",
-   "label": "Class Arm / Student Group",
-   "options": "Student Group",
-   "reqd": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "course",
-   "fieldtype": "Link",
-   "label": "Course / Subject",
-   "options": "Course",
-   "in_list_view": 1,
-   "in_standard_filter": 1
-  },
-  {
-   "fieldname": "validity_section",
-   "fieldtype": "Section Break",
-   "label": "Validity"
-  },
-  {
-   "fieldname": "valid_from",
-   "fieldtype": "Date",
-   "label": "Valid From"
-  },
-  {
-   "fieldname": "valid_to",
-   "fieldtype": "Date",
-   "label": "Valid To"
-  },
-  {
-   "fieldname": "notes",
-   "fieldtype": "Small Text",
-   "label": "Notes"
-  }
+  {"fieldname":"assignment_title","fieldtype":"Data","label":"Assignment","read_only":1,"in_list_view":1,"in_global_search":1},
+  {"fieldname":"instructor","fieldtype":"Link","label":"Instructor","options":"Instructor","reqd":1,"in_list_view":1,"in_standard_filter":1},
+  {"fetch_from":"instructor.instructor_name","fieldname":"instructor_name","fieldtype":"Read Only","label":"Instructor Name","read_only":1},
+  {"default":"Subject Teacher","fieldname":"assignment_type","fieldtype":"Select","label":"Assignment Type","options":"Class Teacher\nSubject Teacher\nLecturer\nTutor\nPractical Instructor\nAssistant Instructor\nForm Teacher\nHead of Class / Level","reqd":1,"in_list_view":1,"in_standard_filter":1},
+  {"default":"Class Arm","description":"Class / Programme Offering applies to every Class Arm in the selected Offering. Class Arm limits responsibility to one Student Group.","fieldname":"assignment_scope","fieldtype":"Select","label":"Assignment Scope","options":"Class / Programme Offering\nClass Arm","reqd":1,"in_list_view":1,"in_standard_filter":1},
+  {"default":"1","fieldname":"enabled","fieldtype":"Check","label":"Enabled","in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"context_section","fieldtype":"Section Break","label":"Academic Assignment Context"},
+  {"fieldname":"institution","fieldtype":"Link","label":"Institution","options":"EduEdge Institution","reqd":1,"read_only":1,"in_standard_filter":1},
+  {"fieldname":"school_branch","fieldtype":"Link","label":"School Branch / Campus","options":"EduEdge School Branch","reqd":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"program_offering","fieldtype":"Link","label":"Class / Programme Offering","options":"EduEdge Program Offering","reqd":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"column_break_1","fieldtype":"Column Break"},
+  {"fieldname":"academic_year","fieldtype":"Link","label":"Academic Session","options":"Academic Year","reqd":1,"read_only":1,"in_standard_filter":1},
+  {"fieldname":"academic_term","fieldtype":"Link","label":"Term / Semester","options":"Academic Term","read_only":1,"in_standard_filter":1},
+  {"depends_on":"eval:doc.assignment_scope=='Class Arm'","description":"Required only when Assignment Scope is Class Arm.","fieldname":"student_group","fieldtype":"Link","label":"Class Arm / Student Group","mandatory_depends_on":"eval:doc.assignment_scope=='Class Arm'","options":"Student Group","in_list_view":1,"in_standard_filter":1},
+  {"description":"Required for Subject Teacher, Lecturer, Tutor, Practical Instructor and Assistant Instructor assignments.","fieldname":"course","fieldtype":"Link","label":"Course / Subject","options":"Course","in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"validity_section","fieldtype":"Section Break","label":"Validity"},
+  {"fieldname":"valid_from","fieldtype":"Date","label":"Valid From"},
+  {"fieldname":"valid_to","fieldtype":"Date","label":"Valid To"},
+  {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-08-05 01:50:00.000000",
+ "modified": "2026-08-05 10:05:00.000000",
  "modified_by": "Administrator",
  "module": "EduEdge",
  "name": "EduEdge Instructor Assignment",
@@ -173,6 +61,7 @@
   {"role":"Education Manager","read":1,"create":1,"write":1,"delete":1,"report":1,"export":1},
   {"role":"Academics User","read":1,"create":1,"write":1,"report":1},
   {"role":"Teacher","read":1},
+  {"role":"Instructor","read":1},
   {"role":"System Manager","read":1,"create":1,"write":1,"delete":1,"report":1,"export":1}
  ],
  "sort_field": "modified",
