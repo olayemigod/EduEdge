@@ -19,6 +19,16 @@ class TestInstructorAssignmentNewestRowContract(unittest.TestCase):
 		):
 			self.assertIn(token, bundle)
 
+	def test_duplicated_row_gets_a_unique_internal_identity(self):
+		bundle = (APP / "public" / "js" / "eduedge_instructor_assignments.bundle.js").read_text(encoding="utf-8")
+		for token in (
+			"uniquePromotedRowId",
+			"existingIds.has(newest.row_id)",
+			"newest.row_id = uniquePromotedRowId()",
+			"previousLength",
+		):
+			self.assertIn(token, bundle)
+
 
 if __name__ == "__main__":
 	unittest.main()
