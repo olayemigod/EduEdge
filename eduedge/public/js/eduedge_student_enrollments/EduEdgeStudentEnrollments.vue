@@ -166,7 +166,7 @@ export default {
 		return {
 			menuItems: EDUEDGE_MENU_ITEMS, loading: true, loaded: false, optionsLoading: false, saving: false,
 			error: "", saveError: "", filters: { branch: "", student: "", start: 0 }, data: blankData(),
-			options: blankOptions(), draft: blankDraft(), initialCreateMode: false,
+			options: blankOptions(), draft: blankDraft(), initialCreateMode: false, initialOffering: "",
 		};
 	},
 	computed: {
@@ -185,6 +185,7 @@ export default {
 		const params = new URLSearchParams(window.location.search || "");
 		this.filters.branch = params.get("branch") || "";
 		this.filters.student = params.get("student") || "";
+		this.initialOffering = params.get("offering") || "";
 		this.initialCreateMode = params.get("mode") === "create";
 		await this.load(true);
 		if (this.initialCreateMode && this.canCreate) await this.newEnrollment();
@@ -217,7 +218,7 @@ export default {
 			finally { this.loading = false; }
 		},
 		async loadOptions() {
-			if (!this.draft.student || !this.draft.branch) { this.options = blankOptions(); return; }
+			if (!this.draft.student || !this.draft.branch) { this.options = { ...blankOptions(), offerings: this.data.offerings || [] }; return; }
 			this.optionsLoading = true; this.saveError = "";
 			try {
 				const response = await frappe.call("eduedge.api.student_enrollments.get_student_enrollment_options", {
@@ -225,7 +226,7 @@ export default {
 				});
 				this.options = { ...blankOptions(), ...(response.message || {}) };
 				if (this.context.name) this.applyContext(this.context);
-			} catch (error) { this.options = blankOptions(); this.saveError = error?.message || "Enrollment options could not be loaded."; }
+			} catch (error) { this.options = { ...blankOptions(), offerings: this.data.offerings || [] }; this.saveError = error?.message || "Enrollment options could not be loaded."; }
 			finally { this.optionsLoading = false; }
 		},
 		applyContext(context) {
@@ -239,16 +240,20 @@ export default {
 		async newEnrollment() {
 			this.draft = blankDraft(this.filters.branch || this.data.selected_branch?.name || "", this.filters.student || "");
 			this.options = { ...blankOptions(), offerings: this.data.offerings || [] };
+			if (this.initialOffering && this.options.offerings.some((row) => row.name === this.initialOffering)) {
+				this.draft.offering = this.initialOffering;
+				this.draft.eduedge_program_offering = this.initialOffering;
+			}
 			this.saveError = "";
 			if (this.draft.student && this.draft.branch) await this.loadOptions();
 		},
 		async editEnrollment(name) { await this.load(false, name); },
 		async branchChanged() {
-			this.filters.student = ""; this.draft = blankDraft(this.filters.branch, ""); this.options = blankOptions(); await this.load(true);
+			this.initialOffering = ""; this.filters.student = ""; this.draft = blankDraft(this.filters.branch, ""); this.options = blankOptions(); await this.load(true);
 		},
-		async studentFilterChanged() { this.draft = blankDraft(this.filters.branch, this.filters.student); await this.load(true); if (this.filters.student) await this.loadOptions(); },
-		async studentChanged() { this.filters.student = this.draft.student; this.draft.offering = ""; this.draft.eduedge_program_offering = ""; await this.loadOptions(); },
-		async draftBranchChanged() { this.filters.branch = this.draft.branch; this.draft.offering = ""; this.draft.eduedge_program_offering = ""; this.draft.program = ""; this.draft.academic_year = ""; this.draft.academic_term = ""; this.draft.student_batch_name = ""; await this.load(true); this.draft.branch = this.filters.branch; this.draft.student = this.filters.student; await this.loadOptions(); },
+		async studentFilterChanged() { this.draft = blankDraft(this.filters.branch, this.filters.student); if (this.initialOffering) this.draft.offering = this.initialOffering; await this.load(true); if (this.filters.student) await this.loadOptions(); },
+		async studentChanged() { this.filters.student = this.draft.student; if (!this.draft.student) { this.draft.offering = ""; this.draft.eduedge_program_offering = ""; } await this.loadOptions(); },
+		async draftBranchChanged() { this.initialOffering = ""; this.filters.branch = this.draft.branch; this.filters.student = ""; this.draft.student = ""; this.draft.offering = ""; this.draft.eduedge_program_offering = ""; this.draft.program = ""; this.draft.academic_year = ""; this.draft.academic_term = ""; this.draft.student_batch_name = ""; await this.load(true); this.draft.branch = this.filters.branch; await this.loadOptions(); },
 		async offeringChanged() { await this.loadOptions(); },
 		async save(submit = false) {
 			if (!this.canSave) return;
