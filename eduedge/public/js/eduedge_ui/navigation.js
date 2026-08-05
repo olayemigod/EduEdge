@@ -150,7 +150,7 @@ export function buildEduEdgeMenuItems() {
 			menuItem(students, "/app/eduedge-students", "students", __(`${student} profiles, guardians, photographs, and academic context`)),
 			menuItem(__("Student Enrollments"), "/app/eduedge-student-enrollments", "assignment", __("Enroll Students into active Programme Offerings")),
 			menuItem(__("Instructors"), "/app/eduedge-instructors", "users", __("Instructor identity, qualification, specialisation, and eligibility")),
-			menuItem(__("Teacher Assignments"), "/app/eduedge-instructor-assignments", "assignment", __("Assign teachers to multiple Branches, Classes, Class Arms, and Subjects")),
+			menuItem(__("Instructor Assignments"), "/app/eduedge-instructor-assignments", "assignment", __("Assign Instructors to multiple Branches, Classes, Class Arms, and Subjects")),
 		]),
 		menuGroup("academic-setup", __("Academic Setup"), "book", [
 			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and Institution calendars`)),
