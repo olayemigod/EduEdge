@@ -120,6 +120,8 @@ def topic_query(user: str | None = None) -> str:
 def has_course_permission(doc, user=None, permission_type=None) -> bool:
 	resolved = user or frappe.session.user
 	if is_teacher_user(resolved):
+		if permission_type == "write" and getattr(frappe.flags, "in_eduedge_topic_link_update", False):
+			return True
 		if permission_type in {"create", "write", "delete", "submit", "cancel", "amend", "share", "import"}:
 			return False
 		courses = assigned_courses(resolved)
