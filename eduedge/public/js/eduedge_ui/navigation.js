@@ -3,6 +3,9 @@ import { reactive } from "vue";
 const NAVIGATION_STATE_VERSION = "v1";
 const FAVORITES_STATE_VERSION = "v1";
 const COMPACT_STYLESHEET = "/assets/eduedge/css/eduedge_compact_navigation.css";
+const EDUEDGE_ROUTE_ALIASES = Object.freeze({
+	"/app/eduedge-instructor-branch-assignment": "/app/eduedge-instructor-assignments",
+});
 
 export const EDUEDGE_CRITICAL_CBT_ROUTES = Object.freeze([
 	{ route: "/app/eduedge-cbt-schedules" },
@@ -23,6 +26,14 @@ function normalizedPath(route) {
 	} catch (_error) {
 		return value.split(/[?#]/, 1)[0].replace(/\/+$/, "");
 	}
+}
+
+function resolvedRoute(route) {
+	const value = String(route || "");
+	const alias = EDUEDGE_ROUTE_ALIASES[normalizedPath(value)];
+	if (!alias) return value;
+	const queryIndex = value.indexOf("?");
+	return `${alias}${queryIndex >= 0 ? value.slice(queryIndex) : ""}`;
 }
 
 function preferenceKey(kind, version) {
@@ -60,7 +71,7 @@ export function featureEnabled(feature) {
 
 export function hasEduEdgeRouteAccess(route) {
 	if (frappe.session.user === "Administrator") return true;
-	const path = normalizedPath(route);
+	const path = normalizedPath(resolvedRoute(route));
 	const routes = frappe.boot?.eduedge_access_manifest?.routes;
 	if (!routes || !Object.prototype.hasOwnProperty.call(routes, path)) return false;
 	return Boolean(routes[path]);
@@ -210,10 +221,11 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 ]);
 
 export function isEduEdgeUIRoute(route) {
-	return EDUEDGE_UI_ROUTES.includes(normalizedPath(route));
+	return EDUEDGE_UI_ROUTES.includes(normalizedPath(resolvedRoute(route)));
 }
 
 export function openEduEdgeRoute(route) {
+	route = resolvedRoute(route);
 	if (!route) return;
 	if (isEduEdgeUIRoute(route)) {
 		if (!hasEduEdgeRouteAccess(route)) {
