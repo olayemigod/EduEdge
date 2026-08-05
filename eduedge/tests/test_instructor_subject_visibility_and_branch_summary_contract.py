@@ -9,6 +9,7 @@ APP = ROOT / "eduedge"
 class TestInstructorSubjectVisibilityAndBranchSummaryContract(unittest.TestCase):
 	def test_assignment_page_exposes_institution_subjects_and_exact_curriculum_membership(self):
 		api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
+		bundle = (APP / "public" / "js" / "eduedge_instructor_assignments.bundle.js").read_text(encoding="utf-8")
 		for token in (
 			"_course_options",
 			"Institution subjects",
@@ -20,6 +21,13 @@ class TestInstructorSubjectVisibilityAndBranchSummaryContract(unittest.TestCase)
 			"add to Class curriculum",
 		):
 			self.assertIn(token, api)
+		for token in (
+			"labelInstitutionSubjectsByClassMembership",
+			"configured_course_map",
+			"eduedge_configured_in_class",
+			"Add to Class curriculum",
+		):
+			self.assertIn(token, bundle)
 
 	def test_missing_class_subject_is_added_through_native_program_courses(self):
 		api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
