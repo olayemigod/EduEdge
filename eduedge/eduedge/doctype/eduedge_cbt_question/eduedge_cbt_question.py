@@ -7,7 +7,19 @@ from frappe.utils import cint, flt, now_datetime, sanitize_html
 
 from eduedge.access_control import user_has_role_permission
 from eduedge.cbt.public_access import require_public_exam_authoring
+from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
+from eduedge.education.curriculum_fields import (
+	TOPIC_GROUP_FIELD,
+	TOPIC_OFFERING_FIELD,
+	TOPIC_SCOPE_CLASS,
+	TOPIC_SCOPE_CLASS_ARM,
+	TOPIC_SCOPE_FIELD,
+	TOPIC_SCOPE_INSTITUTION,
+)
+from eduedge.education.curriculum_permissions import is_teacher_user
+from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.teaching_assignments import require_course_assignment
 
 SCHOOL_BANK = "School Question Bank"
 PLATFORM_BANK = "EduEdge Examination Bank"
@@ -22,6 +34,9 @@ PROTECTED_FIELDS = (
 	"question_code",
 	"ownership_scope",
 	"school_branch",
+	"institution",
+	"program_offering",
+	"student_group",
 	"version_number",
 	"supersedes_question",
 	"course",
@@ -45,7 +60,6 @@ ALLOWED_STATUS_TRANSITIONS = {
 
 
 def option_label(position: int) -> str:
-	"""Return spreadsheet-style labels A..Z, AA.. for a one-based row position."""
 	value = cint(position)
 	label = ""
 	while value > 0:
@@ -56,12 +70,10 @@ def option_label(position: int) -> str:
 
 
 def sanitize_question_content(value) -> str:
-	"""Apply Frappe's HTML allow-list before question content reaches storage."""
 	return sanitize_html(str(value or "")).strip()
 
 
 def can_review_questions(user: str | None = None) -> bool:
-	"""Use operational review rights, not Delete, as the approval capability."""
 	resolved_user = user or frappe.session.user
 	return user_has_role_permission(
 		"EduEdge CBT Question", "write", resolved_user
@@ -121,20 +133,67 @@ class EduEdgeCBTQuestion(Document):
 
 	def _validate_scope(self) -> None:
 		if self.ownership_scope == SCHOOL_BANK:
-			if not self.school_branch:
-				frappe.throw(
-					_("School Branch / Campus is required for a School Question Bank question."),
-					frappe.ValidationError,
-				)
-			assert_branch_access(self.school_branch)
+			self._validate_school_context()
 			return
-
 		if self.ownership_scope == PLATFORM_BANK:
 			require_public_exam_authoring()
 			self.school_branch = None
+			self.institution = None
+			self.program_offering = None
+			self.student_group = None
 			return
-
 		frappe.throw(_("Select a valid Question Bank."), frappe.ValidationError)
+
+	def _validate_school_context(self) -> None:
+		if not self.school_branch:
+			frappe.throw(
+				_("School Branch / Campus is required for a School Question Bank question."),
+				frappe.ValidationError,
+			)
+		assert_branch_access(self.school_branch)
+		branch_institution = frappe.db.get_value("EduEdge School Branch", self.school_branch, "institution")
+		if not branch_institution:
+			frappe.throw(_("The selected Branch has no Institution context."), frappe.ValidationError)
+		self.institution = branch_institution
+		if is_teacher_user() and not self.program_offering:
+			frappe.throw(_("Assigned teachers must select the Class / Programme Offering for a CBT question."), frappe.ValidationError)
+		if not self.program_offering:
+			self.student_group = None
+			return
+		offering = frappe.db.get_value(
+			"EduEdge Program Offering",
+			self.program_offering,
+			["name", "institution", "school_branch", "program", "is_active"],
+			as_dict=True,
+		)
+		if not offering or not offering.is_active:
+			frappe.throw(_("Select an active Class / Programme Offering."), frappe.ValidationError)
+		if offering.school_branch != self.school_branch or offering.institution != branch_institution:
+			frappe.throw(_("Class / Programme Offering must belong to the selected Branch and Institution."), frappe.ValidationError)
+		if self.course and not frappe.db.exists(
+			"Program Course",
+			{"parent": offering.program, "parenttype": "Program", "course": self.course},
+		):
+			frappe.throw(_("Subject / Course is not configured for the selected Class / Programme."), frappe.ValidationError)
+		if self.student_group:
+			meta = frappe.get_meta("Student Group")
+			fields = ["name", BRANCH_FIELD, "program", "disabled"]
+			if meta.has_field(OFFERING_FIELD):
+				fields.append(OFFERING_FIELD)
+			group = frappe.db.get_value("Student Group", self.student_group, fields, as_dict=True)
+			if not group or group.disabled:
+				frappe.throw(_("Select an active Class Arm / Student Group."), frappe.ValidationError)
+			if group.get(BRANCH_FIELD) != self.school_branch or group.program != offering.program:
+				frappe.throw(_("Class Arm must belong to the selected Class / Programme Offering."), frappe.ValidationError)
+			if meta.has_field(OFFERING_FIELD) and group.get(OFFERING_FIELD) and group.get(OFFERING_FIELD) != offering.name:
+				frappe.throw(_("Class Arm must belong to the selected Class / Programme Offering."), frappe.ValidationError)
+		if is_teacher_user() and self.course:
+			require_course_assignment(
+				self.course,
+				branch=self.school_branch,
+				program_offering=self.program_offering,
+				student_group=self.student_group,
+			)
 
 	def _validate_topic(self) -> None:
 		if not self.topic:
@@ -156,6 +215,23 @@ class EduEdgeCBTQuestion(Document):
 				),
 				frappe.ValidationError,
 			)
+		meta = frappe.get_meta("Topic")
+		if not meta.has_field(TOPIC_SCOPE_FIELD):
+			return
+		topic = frappe.db.get_value(
+			"Topic",
+			self.topic,
+			[TOPIC_SCOPE_FIELD, TOPIC_OFFERING_FIELD, TOPIC_GROUP_FIELD],
+			as_dict=True,
+		) or {}
+		scope = topic.get(TOPIC_SCOPE_FIELD) or TOPIC_SCOPE_INSTITUTION
+		if scope == TOPIC_SCOPE_CLASS and topic.get(TOPIC_OFFERING_FIELD) != self.program_offering:
+			frappe.throw(_("Topic is not available in the selected Class."), frappe.ValidationError)
+		if scope == TOPIC_SCOPE_CLASS_ARM and (
+			topic.get(TOPIC_OFFERING_FIELD) != self.program_offering
+			or topic.get(TOPIC_GROUP_FIELD) != self.student_group
+		):
+			frappe.throw(_("Topic is not available in the selected Class Arm."), frappe.ValidationError)
 
 	def _validate_version(self) -> None:
 		if cint(self.version_number) < 1:
@@ -168,11 +244,8 @@ class EduEdgeCBTQuestion(Document):
 			"EduEdge CBT Question",
 			self.supersedes_question,
 			[
-				"status",
-				"ownership_scope",
-				"school_branch",
-				"course",
-				"version_number",
+				"status", "ownership_scope", "school_branch", "program_offering", "student_group",
+				"course", "version_number",
 			],
 			as_dict=True,
 		)
@@ -183,10 +256,12 @@ class EduEdgeCBTQuestion(Document):
 		if (
 			previous.ownership_scope != self.ownership_scope
 			or previous.school_branch != self.school_branch
+			or previous.program_offering != self.program_offering
+			or previous.student_group != self.student_group
 			or previous.course != self.course
 		):
 			frappe.throw(
-				_("A new question version must keep the same Question Bank, Branch, and Subject / Course."),
+				_("A new question version must keep the same Question Bank, Branch, Class context, and Subject / Course."),
 				frappe.ValidationError,
 			)
 		if cint(self.version_number) <= cint(previous.version_number):
@@ -204,7 +279,6 @@ class EduEdgeCBTQuestion(Document):
 			frappe.throw(_("Negative Mark cannot exceed the Default Mark."), frappe.ValidationError)
 
 	def _prepare_answer_options(self) -> None:
-		"""Prepare fixed binary answers for form, import, and API requests."""
 		rows = list(self.get("options") or [])
 		if self.question_type not in BINARY_ANSWER_PRESETS or rows:
 			return
@@ -231,15 +305,10 @@ class EduEdgeCBTQuestion(Document):
 			if self.question_type == "Essay" and not (self.marking_guide or "").strip():
 				frappe.throw(_("Marking Guide is required for an Essay question."), frappe.ValidationError)
 			return
-
 		if len(rows) < 2:
 			frappe.throw(_("Objective questions require at least two Answers."), frappe.ValidationError)
 		if self.question_type in BINARY_ANSWER_PRESETS and len(rows) != 2:
-			frappe.throw(
-				_("{0} questions require exactly two Answers.").format(self.question_type),
-				frappe.ValidationError,
-			)
-
+			frappe.throw(_("{0} questions require exactly two Answers.").format(self.question_type), frappe.ValidationError)
 		correct_count = 0
 		for index, row in enumerate(rows, start=1):
 			label = option_label(index)
@@ -249,24 +318,17 @@ class EduEdgeCBTQuestion(Document):
 				frappe.throw(_("Enter an Answer for option {0}.").format(label), frappe.ValidationError)
 			row.display_order = index
 			correct_count += cint(row.is_correct)
-
 		if self.question_type in {"Single Choice", "True/False", "Yes/No"} and correct_count != 1:
 			frappe.throw(_("This question type requires exactly one Correct Answer."), frappe.ValidationError)
 		if self.question_type == "Multiple Choice" and correct_count < 1:
-			frappe.throw(
-				_("Multiple Choice questions require at least one Correct Answer."),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("Multiple Choice questions require at least one Correct Answer."), frappe.ValidationError)
 
 	def _validate_status_transition(self) -> None:
 		before = self.get_doc_before_save()
 		previous_status = before.status if before else "Draft"
 		allowed = ALLOWED_STATUS_TRANSITIONS.get(previous_status, {previous_status})
 		if self.status not in allowed:
-			frappe.throw(
-				_("Question Status cannot change from {0} to {1}.").format(previous_status, self.status),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("Question Status cannot change from {0} to {1}.").format(previous_status, self.status), frappe.ValidationError)
 		if self.status in {"Approved", "Retired"} and self.status != previous_status:
 			self._assert_review_authority()
 		if self.status == "Approved" and self.status != previous_status:
@@ -282,25 +344,16 @@ class EduEdgeCBTQuestion(Document):
 			if fieldname in CONTENT_FIELDS:
 				before_value = sanitize_question_content(before_value)
 			if before_value != self.get(fieldname):
-				frappe.throw(
-					_("Approved question content is immutable. Create a new version instead."),
-					frappe.ValidationError,
-				)
+				frappe.throw(_("Approved question content is immutable. Create a new version instead."), frappe.ValidationError)
 		if self._option_fingerprint(before) != self._option_fingerprint(self):
-			frappe.throw(
-				_("Approved Answers are immutable. Create a new question version instead."),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("Approved Answers are immutable. Create a new question version instead."), frappe.ValidationError)
 
 	def _assert_review_authority(self) -> None:
 		if self.ownership_scope == PLATFORM_BANK:
 			require_public_exam_authoring()
 			return
 		if not can_review_questions(frappe.session.user):
-			frappe.throw(
-				_("You are not permitted to approve or retire CBT questions."),
-				frappe.PermissionError,
-			)
+			frappe.throw(_("You are not permitted to approve or retire CBT questions."), frappe.PermissionError)
 
 	@staticmethod
 	def _option_fingerprint(doc) -> tuple:
@@ -325,7 +378,6 @@ def course_topic_query(
 	page_len: int,
 	filters,
 ):
-	"""Return only Topic masters configured under the selected Course."""
 	_require_question_author()
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	course = filters.get("course")
@@ -334,24 +386,39 @@ def course_topic_query(
 	course_doc = frappe.get_doc("Course", course)
 	if not course_doc.has_permission("read"):
 		frappe.throw(_("You are not permitted to view this Subject / Course."), frappe.PermissionError)
-
+	program_offering = filters.get("program_offering")
+	student_group = filters.get("student_group")
+	conditions = [
+		f"(ifnull(topic.`{TOPIC_SCOPE_FIELD}`, '') in ('', %(institution_scope)s))"
+	]
+	if program_offering:
+		conditions.append(
+			f"(topic.`{TOPIC_SCOPE_FIELD}` = %(class_scope)s AND topic.`{TOPIC_OFFERING_FIELD}` = %(program_offering)s)"
+		)
+	if program_offering and student_group:
+		conditions.append(
+			f"(topic.`{TOPIC_SCOPE_FIELD}` = %(arm_scope)s AND topic.`{TOPIC_OFFERING_FIELD}` = %(program_offering)s AND topic.`{TOPIC_GROUP_FIELD}` = %(student_group)s)"
+		)
 	return frappe.db.sql(
-		"""
-		SELECT DISTINCT
-			topic.name,
-			topic.topic_name,
-			COALESCE(topic.description, '')
+		f"""
+		SELECT DISTINCT topic.name, topic.topic_name, COALESCE(topic.description, '')
 		FROM `tabCourse Topic` course_topic
 		INNER JOIN `tabTopic` topic ON topic.name = course_topic.topic
 		WHERE course_topic.parent = %(course)s
 			AND course_topic.parenttype = 'Course'
 			AND course_topic.parentfield = 'topics'
+			AND ({' OR '.join(conditions)})
 			AND (topic.name LIKE %(txt)s OR topic.topic_name LIKE %(txt)s)
 		ORDER BY topic.topic_name ASC
 		LIMIT %(start)s, %(page_len)s
 		""",
 		{
 			"course": course,
+			"program_offering": program_offering,
+			"student_group": student_group,
+			"institution_scope": TOPIC_SCOPE_INSTITUTION,
+			"class_scope": TOPIC_SCOPE_CLASS,
+			"arm_scope": TOPIC_SCOPE_CLASS_ARM,
 			"txt": f"%{txt or ''}%",
 			"start": cint(start),
 			"page_len": cint(page_len) or 20,
