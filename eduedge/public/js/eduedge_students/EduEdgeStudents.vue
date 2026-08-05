@@ -49,7 +49,12 @@
 					<article class="eduedge-people-panel eduedge-person-editor">
 						<div class="eduedge-people-heading">
 							<div><p class="edge-eyebrow">Official student record</p><h2>{{ draft.name ? draft.student_name || draft.name : `New ${studentSingular}` }}</h2></div>
-							<div class="eduedge-people-actions"><button v-if="draft.name" type="button" class="edge-button" @click="openFullForm">Open full form</button><button type="button" class="edge-button edge-button--primary" :disabled="saving || !canSave" @click="save">{{ saving ? 'Saving...' : 'Save student' }}</button></div>
+							<div class="eduedge-people-actions">
+								<button v-if="draft.name && canReadEnrollments" type="button" class="edge-button" @click="openEnrollments(false)">View Enrollments</button>
+								<button v-if="draft.name && canEnroll" type="button" class="edge-button" @click="openEnrollments(true)">Enroll Student</button>
+								<button v-if="draft.name" type="button" class="edge-button" @click="openFullForm">Open full form</button>
+								<button type="button" class="edge-button edge-button--primary" :disabled="saving || !canSave" @click="save">{{ saving ? 'Saving...' : 'Save student' }}</button>
+							</div>
 						</div>
 
 						<div class="eduedge-profile-summary">
@@ -83,7 +88,7 @@
 						<div v-else class="eduedge-roster-list"><div v-for="(row,index) in draft.guardians" :key="`${row.guardian}-${index}`" class="eduedge-roster-row"><select v-model="row.guardian" class="form-control" :disabled="!canEdit"><option value="">Select guardian</option><option v-for="guardian in data.guardians" :key="guardian.name" :value="guardian.name">{{ guardian.guardian_name || guardian.name }}</option></select><select v-model="row.relation" class="form-control" :disabled="!canEdit"><option value="">Relationship</option><option>Mother</option><option>Father</option><option>Others</option></select><button type="button" class="edge-button" :disabled="!canEdit" @click="removeGuardian(index)">Remove</button></div></div>
 
 						<template v-if="draft.name">
-							<h3>Academic context</h3>
+							<div class="eduedge-people-heading"><h3>Academic context</h3><button v-if="canReadEnrollments" type="button" class="edge-button" @click="openEnrollments(false)">View all Enrollments</button></div>
 							<div class="eduedge-context-columns"><section><strong>Submitted enrolments</strong><p v-if="!draft.enrollments?.length" class="text-muted">No submitted enrolment.</p><article v-for="row in draft.enrollments || []" :key="row.name"><span>{{ row.program }} · {{ row.academic_year }}</span><small>{{ row.academic_term || 'Session-wide' }} · {{ row.eduedge_program_offering || row.name }}</small></article></section><section><strong>Active Class Arms</strong><p v-if="!draft.class_arms?.length" class="text-muted">Not assigned to a Class Arm.</p><article v-for="row in draft.class_arms || []" :key="row.name"><span>{{ row.eduedge_display_name || row.student_group_name || row.name }}</span><small>{{ row.program || '' }} · Roll {{ row.group_roll_number || '—' }}</small></article></section></div>
 						</template>
 						<p v-if="saveError" class="eduedge-people-error">{{ saveError }}</p>
@@ -109,9 +114,16 @@ export default {
 		canCreate() { return Boolean(this.data.permissions?.can_create); },
 		canEdit() { return this.draft.name ? Boolean(this.data.permissions?.can_write) : this.canCreate; },
 		canManagePhoto() { return Boolean(this.data.permissions?.can_manage_photo); },
+		enrollmentPermissions() { return frappe.boot?.eduedge_access_manifest?.resources?.program_enrollment || {}; },
+		canReadEnrollments() { return Boolean(this.enrollmentPermissions.read); },
+		canEnroll() { return Boolean(this.enrollmentPermissions.create); },
 		canSave() { return Boolean(this.canEdit && this.draft.first_name && this.draft.eduedge_school_branch && this.draft.student_email_id); },
 	},
-	mounted() { this.load(); },
+	async mounted() {
+		const params = new URLSearchParams(window.location.search || "");
+		this.filters.branch = params.get("branch") || "";
+		await this.load(false, params.get("student") || "");
+	},
 	methods: {
 		openRoute: openEduEdgeRoute,
 		initials(value) { return String(value || "S").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); },
@@ -148,6 +160,12 @@ export default {
 		async reviewPhoto(decision) {
 			const note = window.prompt(decision === "Approved" ? "Approval note (optional)" : "Reason for rejection") || "";
 			try { const response = await frappe.call("eduedge.api.people_operations.review_student_photo", { reference_doctype: "Student", reference_name: this.draft.name, decision, note }); this.draft = { ...this.draft, ...(response.message || {}) }; frappe.show_alert({ message: __(`Photo ${decision.toLowerCase()}`), indicator: decision === "Approved" ? "green" : "orange" }); await this.load(true, this.draft.name); } catch (error) { this.saveError = error?.message || "Photo review could not be completed."; }
+		},
+		openEnrollments(createMode = false) {
+			if (!this.draft.name) return;
+			const params = new URLSearchParams({ student: this.draft.name, branch: this.draft.eduedge_school_branch || this.filters.branch });
+			if (createMode) params.set("mode", "create");
+			window.location.href = `/app/eduedge-student-enrollments?${params.toString()}`;
 		},
 		openFullForm() { window.open(`/app/student/${encodeURIComponent(this.draft.name)}`, "_blank", "noopener,noreferrer"); },
 		previousPage() { this.filters.start = Math.max(0, this.filters.start - this.data.paging.page_length); this.load(); },
