@@ -7,13 +7,13 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
 
 
-class TestTeacherAssignmentBulkContract(unittest.TestCase):
-	def test_unified_page_supports_multi_branch_class_arm_and_subject_selection(self):
+class TestInstructorAssignmentBulkContract(unittest.TestCase):
+	def test_unified_page_supports_multi_institution_branch_class_arm_and_subject_selection(self):
 		component = (APP / "public" / "js" / "eduedge_instructor_assignments" / "EduEdgeInstructorAssignments.vue").read_text(encoding="utf-8")
 		for token in (
-			"Teacher Assignments",
-			"Assign one teacher to multiple Branches, Classes, Class Arms and Subjects",
-			"Branches / Campuses",
+			"Instructor Assignments",
+			"Assign one Instructor across multiple Institutions, Branches, Classes, Class Arms and Subjects",
+			"Institutions and Branches / Campuses",
 			"Classes / Programme Offerings",
 			"Class Arms",
 			"form.branches.includes",
@@ -21,45 +21,50 @@ class TestTeacherAssignmentBulkContract(unittest.TestCase):
 			"form.student_groups.includes",
 			"form.courses.includes",
 			"Preview Assignment Batch",
+			"selectedInstitutionCount",
 		):
 			self.assertIn(token, component)
+		self.assertNotIn("Teacher Assignments", component)
 
-	def test_batch_planner_builds_one_document_per_valid_combination(self):
-		api = (APP / "api" / "teacher_assignments.py").read_text(encoding="utf-8")
+	def test_batch_planner_builds_one_document_per_valid_cross_institution_combination(self):
+		api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
 		for token in (
-			"class PlannedAssignment",
+			"PlannedAssignment",
 			"for offering, group in targets:",
-			"for course in candidate_courses:",
+			"for course in courses or [None]:",
 			"Subject is not configured for this Class",
 			"valid_combinations",
 			"create_count",
 			"existing_count",
 			"conflict_count",
-			"frappe.new_doc(\"EduEdge Instructor Assignment\")",
+			"assignment_institutions",
+			'frappe.new_doc("EduEdge Instructor Assignment")',
 		):
 			self.assertIn(token, api)
+		self.assertNotIn("can be assigned only within their Institution", api)
 
 	def test_exact_existing_records_are_skipped_and_overlaps_block_save(self):
-		api = (APP / "api" / "teacher_assignments.py").read_text(encoding="utf-8")
-		self.assertIn("_classify_existing", api)
-		self.assertIn("existing.append", api)
-		self.assertIn("Overlapping active assignment", api)
+		legacy = (APP / "api" / "teacher_assignments.py").read_text(encoding="utf-8")
+		api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
+		self.assertIn("core._classify_existing", api)
 		self.assertIn("if conflicts:", api)
 		self.assertIn("Resolve the existing assignments before saving", api)
+		self.assertIn("existing.append", legacy)
 		self.assertNotIn("ignore_permissions", api)
 
 	def test_same_page_maintains_background_branch_eligibility(self):
-		api = (APP / "api" / "teacher_assignments.py").read_text(encoding="utf-8")
+		api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
 		component = (APP / "public" / "js" / "eduedge_instructor_assignments" / "EduEdgeInstructorAssignments.vue").read_text(encoding="utf-8")
 		for token in (
 			"BRANCH_ONLY_SCOPE",
 			"_ensure_branch_assignment",
 			'frappe.new_doc("EduEdge Instructor Branch Assignment")',
 			"branches_created_or_updated",
+			"institutions_covered",
 		):
 			self.assertIn(token, api)
 		self.assertIn("Branch Access Only", component)
-		self.assertIn("Branch Access", component)
+		self.assertIn("Branch Eligibility", component)
 		self.assertNotIn("/app/eduedge-instructor-branch-assignment", component)
 
 	def test_assignment_scope_is_migrated_and_class_arm_is_conditional(self):
@@ -99,7 +104,6 @@ class TestTeacherAssignmentBulkContract(unittest.TestCase):
 		self.assertIn("/app/eduedge-instructor-assignments", class_arms)
 		for token in (
 			"Manage Curriculum",
-			"Assign Teachers",
 			"selected_offering_context",
 			'params.set("branch", context.branch)',
 			'params.set("offering", context.offering)',
