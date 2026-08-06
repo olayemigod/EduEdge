@@ -197,9 +197,15 @@ def _course_options(
 		order_by="course_name asc",
 		limit_page_length=0,
 	) if frappe.has_permission("Course", "read") else []
-	course_rows = {row.name: dict(row) for row in configured_courses}
+	course_rows = {
+		str(row.get("name")): dict(row)
+		for row in configured_courses
+		if row.get("name")
+	}
 	for row in institution_courses:
-		course_rows[row.name] = dict(row)
+		name = str(row.get("name") or "").strip()
+		if name:
+			course_rows[name] = dict(row)
 
 	visible_map: dict[str, set[str]] = {}
 	for offering in offerings:
