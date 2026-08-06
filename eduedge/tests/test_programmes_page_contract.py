@@ -107,13 +107,13 @@ class TestProgrammesPageContract(unittest.TestCase):
 	def test_programmes_page_exposes_visible_class_curriculum_workspace(self):
 		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
 		for token in (
-			"Class Curriculum",
-			"openCurriculumForRow",
+			"Curriculum manager",
+			"selectProgramme",
 			"loadCurriculum",
 			"get_programme_curriculum",
 			"configured_courses",
 			"available_courses",
-			"Add Institution",
+			"Available Institution",
 			"addCurriculumCourses",
 			"add_programme_curriculum_courses",
 			"Instructor Assignment additions will also appear here",
@@ -123,7 +123,45 @@ class TestProgrammesPageContract(unittest.TestCase):
 		):
 			self.assertIn(token, component)
 		self.assertIn('type: "POST"', component)
-		self.assertIn('v-if="draft.name" ref="curriculumPanel"', component)
+		self.assertIn('ref="curriculumPanel"', component)
+		self.assertIn('v-if="!selectedProgramme"', component)
+
+	def test_class_create_and_update_use_modal_not_right_hand_quick_form(self):
+		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
+		for token in (
+			"programmeModalOpen",
+			"eduedge-programme-modal-backdrop",
+			"eduedge-programme-modal",
+			"openProgrammeModal",
+			"closeProgrammeModal",
+			"Update class master",
+			"Create class master",
+			'@action="newProgramme"',
+			'@click.stop="editProgramme(row)"',
+			'role="dialog"',
+			'aria-modal="true"',
+		):
+			self.assertIn(token, component)
+		self.assertNotIn("Quick edit", component)
+		self.assertNotIn("Quick create", component)
+		self.assertNotIn("eduedge-programme-editor", component)
+
+	def test_curriculum_manager_has_small_functional_search_and_view_filter(self):
+		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
+		for token in (
+			"Search curriculum",
+			"curriculumSearch",
+			"curriculumView",
+			"All curriculum",
+			"Configured only",
+			"Available to add",
+			"filteredConfiguredCourses",
+			"filteredAvailableCourses",
+			"curriculumSearchMatches",
+			"showConfiguredCourses",
+			"showAvailableCourses",
+		):
+			self.assertIn(token, component)
 
 	def test_ci_checks_programmes_entry_scripts(self):
 		workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
