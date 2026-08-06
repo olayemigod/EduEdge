@@ -15,6 +15,7 @@ DEFAULT_PAGE_LENGTH = 25
 MAX_PAGE_LENGTH = 50
 MAX_OPTION_ROWS = 500
 MAX_DEPARTMENT_OPTIONS = 100
+MAX_CURRICULUM_OPTIONS = 1000
 
 
 def _require_login() -> None:
@@ -209,6 +210,155 @@ def _assert_department_context(department: str, institution: str | None) -> None
 	doc.check_permission("read")
 	if institution:
 		_validate_department(department, institution)
+
+
+def _programme_doc(programme: str, permission_type: str = "read"):
+	name = str(programme or "").strip()
+	if not name:
+		frappe.throw(_("Select a Class / Programme."), frappe.ValidationError)
+	doc = frappe.get_doc("Program", name)
+	doc.check_permission(permission_type)
+	institution = str(doc.get(INSTITUTION_FIELD) or "").strip()
+	if not institution:
+		frappe.throw(_("The selected Class / Programme has no Institution context."), frappe.ValidationError)
+	_assert_institution_access(institution)
+	return doc, institution
+
+
+def _course_fields() -> list[str]:
+	fields = ["name", "course_name", "department", "description", "default_grading_scale"]
+	if frappe.get_meta("Course").has_field(INSTITUTION_FIELD):
+		fields.append(INSTITUTION_FIELD)
+	return fields
+
+
+def _programme_curriculum_payload(programme: str) -> dict:
+	doc, institution = _programme_doc(programme, "read")
+	configured_names = [str(row.course or "").strip() for row in doc.get("courses") or [] if row.course]
+	course_rows = frappe.get_list(
+		"Course",
+		filters={"name": ["in", configured_names]} if configured_names else {"name": ["in", ["__none__"]]},
+		fields=_course_fields(),
+		order_by="course_name asc",
+		page_length=max(len(configured_names), 1),
+	) if frappe.has_permission("Course", "read") else []
+	course_map = {row.name: dict(row) for row in course_rows}
+	configured = []
+	for child in doc.get("courses") or []:
+		name = str(child.course or "").strip()
+		if not name:
+			continue
+		details = course_map.get(name, {})
+		configured.append({
+			"name": name,
+			"course_name": details.get("course_name") or name,
+			"department": details.get("department") or "",
+			"default_grading_scale": details.get("default_grading_scale") or "",
+			"required": cint(child.get("required", 1)),
+			"idx": cint(child.idx),
+			"institution_mismatch": bool(details.get(INSTITUTION_FIELD) and details.get(INSTITUTION_FIELD) != institution),
+		})
+
+	available_filters: dict[str, Any] = {"name": ["not in", configured_names]} if configured_names else {}
+	if frappe.get_meta("Course").has_field(INSTITUTION_FIELD):
+		available_filters[INSTITUTION_FIELD] = institution
+	available = frappe.get_list(
+		"Course",
+		filters=available_filters,
+		fields=_course_fields(),
+		order_by="course_name asc",
+		page_length=MAX_CURRICULUM_OPTIONS,
+	) if frappe.has_permission("Course", "read") else []
+
+	active_offerings = frappe.get_list(
+		"EduEdge Program Offering",
+		filters={"program": doc.name, "is_active": 1},
+		fields=["name", "offering_title", "school_branch", "academic_year", "academic_term"],
+		order_by="academic_year desc, offering_title asc",
+		page_length=MAX_OPTION_ROWS,
+	) if frappe.db.exists("DocType", "EduEdge Program Offering") and frappe.has_permission("EduEdge Program Offering", "read") else []
+
+	return {
+		"programme": {
+			"name": doc.name,
+			"program_name": doc.program_name,
+			"institution": institution,
+			"department": doc.department,
+		},
+		"context": get_effective_institution_context(institution=institution),
+		"configured_courses": configured,
+		"available_courses": available,
+		"active_offerings": active_offerings,
+		"permissions": {
+			"can_add_courses": bool(
+				frappe.has_permission("Program", "write")
+				and frappe.has_permission("Course", "read")
+			),
+			"can_remove_courses": False,
+		},
+		"governance_note": _(
+			"Curriculum additions update the Class / Programme master and apply to its current and future Class / Programme Offerings. Subject removal requires a separate impact review."
+		),
+	}
+
+
+@frappe.whitelist()
+def get_programme_curriculum(programme: str) -> dict:
+	_require_programme_read()
+	return _programme_curriculum_payload(programme)
+
+
+def _list_values(value) -> list[str]:
+	if isinstance(value, str):
+		try:
+			parsed = frappe.parse_json(value)
+		except Exception:
+			parsed = [value]
+		value = parsed
+	if not isinstance(value, (list, tuple, set)):
+		return []
+	result = []
+	for entry in value:
+		name = str(entry or "").strip()
+		if name and name not in result:
+			result.append(name)
+	return result
+
+
+@frappe.whitelist(methods=["POST"])
+def add_programme_curriculum_courses(programme: str, courses: str | list | None = None) -> dict:
+	_require_login()
+	require_eduedge_access(feature_key="academics", action="add_programme_curriculum_courses")
+	doc, institution = _programme_doc(programme, "write")
+	selected = _list_values(courses)
+	if not selected:
+		frappe.throw(_("Select at least one Institution Subject / Course to add."), frappe.ValidationError)
+	if not frappe.has_permission("Course", "read"):
+		frappe.throw(_("You are not permitted to view Subjects / Courses."), frappe.PermissionError)
+
+	existing = {str(row.course or "").strip() for row in doc.get("courses") or [] if row.course}
+	created = []
+	for course in selected:
+		course_doc = frappe.get_doc("Course", course)
+		course_doc.check_permission("read")
+		course_institution = str(course_doc.get(INSTITUTION_FIELD) or "").strip()
+		if course_institution and course_institution != institution:
+			frappe.throw(
+				_("Subject / Course {0} belongs to another Institution.").format(course_doc.course_name or course),
+				frappe.ValidationError,
+			)
+		if course in existing:
+			continue
+		doc.append("courses", {"course": course, "required": 1})
+		existing.add(course)
+		created.append(course)
+	if created:
+		doc.save()
+	return {
+		"added": created,
+		"added_count": len(created),
+		"curriculum": _programme_curriculum_payload(doc.name),
+	}
 
 
 @frappe.whitelist()
