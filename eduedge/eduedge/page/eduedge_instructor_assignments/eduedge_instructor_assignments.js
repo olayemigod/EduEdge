@@ -107,8 +107,8 @@ frappe.pages["eduedge-instructor-assignments"].on_page_show = function (wrapper)
 			page,
 			$loading,
 			fail,
-			"eduedge_teacher_assignments.bundle.js",
-			"eduedge_instructor_assignments.bundle.js"
+			"eduedge_instructor_assignments.bundle.js",
+			"eduedge_teacher_assignments.bundle.js"
 		);
 	});
 };
