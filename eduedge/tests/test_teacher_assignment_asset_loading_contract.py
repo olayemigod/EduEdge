@@ -7,7 +7,7 @@ APP = ROOT / "eduedge"
 
 
 class TestInstructorAssignmentAssetLoadingContract(unittest.TestCase):
-	def test_cache_safe_bundle_exports_instructor_and_legacy_globals(self):
+	def test_legacy_bundle_exports_instructor_and_teacher_globals(self):
 		bundle = (APP / "public" / "js" / "eduedge_teacher_assignments.bundle.js").read_text(encoding="utf-8")
 		for token in (
 			"createEduEdgeInstructorAssignmentsApp",
@@ -18,7 +18,7 @@ class TestInstructorAssignmentAssetLoadingContract(unittest.TestCase):
 		):
 			self.assertIn(token, bundle)
 
-	def test_page_loader_prefers_cache_safe_bundle_and_falls_back_to_legacy_asset(self):
+	def test_page_loader_prefers_current_instructor_bundle_and_falls_back_to_legacy_asset(self):
 		loader = (
 			APP
 			/ "eduedge"
@@ -27,8 +27,8 @@ class TestInstructorAssignmentAssetLoadingContract(unittest.TestCase):
 			/ "eduedge_instructor_assignments.js"
 		).read_text(encoding="utf-8")
 		self.assertLess(
-			loader.index("eduedge_teacher_assignments.bundle.js"),
-			loader.index("eduedge_instructor_assignments.bundle.js"),
+			loader.index('"eduedge_instructor_assignments.bundle.js"'),
+			loader.index('"eduedge_teacher_assignments.bundle.js"'),
 		)
 		self.assertIn("instructor_assignment_factory", loader)
 		self.assertIn("instructor_assignment_component", loader)
