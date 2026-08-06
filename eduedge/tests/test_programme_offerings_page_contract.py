@@ -107,6 +107,25 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		self.assertNotIn("registerEduEdgeResourcePage", loader)
 		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 
+	def test_offering_page_exposes_visible_curriculum_review_and_manage_workflow(self):
+		loader = (APP / "eduedge" / "page" / "eduedge_program_offerings" / "eduedge_program_offerings.js").read_text(encoding="utf-8")
+		for token in (
+			"add_visible_curriculum_bridge",
+			"Class Curriculum",
+			"Review Subjects / Courses",
+			"Manage Curriculum",
+			"review_selected_curriculum",
+			"require_selected_offering",
+			"eduedge.api.curriculum_management.get_curriculum_page",
+			"program_offering: context.offering",
+			"curriculum_review_html",
+			"Default Grading Scale",
+			"/app/eduedge-curriculum",
+		):
+			self.assertIn(token, loader)
+		self.assertIn('message: __("Select an existing Class / Programme Offering card', loader)
+		self.assertNotIn("ignore_permissions", loader)
+
 	def test_ci_checks_programme_offerings_entries(self):
 		workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 		self.assertIn("node --check eduedge/public/js/eduedge_programme_offerings.bundle.js", workflow)
