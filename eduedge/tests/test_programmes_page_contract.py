@@ -71,6 +71,60 @@ class TestProgrammesPageContract(unittest.TestCase):
 			self.assertIn(example, component)
 		self.assertNotIn("eduedge_academic_section", component)
 
+	def test_class_curriculum_read_is_native_permission_aware_and_institution_scoped(self):
+		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
+		for token in (
+			"def _programme_curriculum_payload",
+			"def get_programme_curriculum",
+			'doc.get("courses")',
+			'"configured_courses"',
+			'"available_courses"',
+			'"active_offerings"',
+			'frappe.get_list(\n\t\t"Course"',
+			'available_filters[INSTITUTION_FIELD] = institution',
+			'doc.check_permission(permission_type)',
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("ignore_permissions", api)
+
+	def test_class_curriculum_addition_is_additive_and_same_institution_only(self):
+		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
+		for token in (
+			"def add_programme_curriculum_courses",
+			'methods=["POST"]',
+			'require_eduedge_access(feature_key="academics", action="add_programme_curriculum_courses")',
+			'_programme_doc(programme, "write")',
+			'course_doc.check_permission("read")',
+			"Subject / Course {0} belongs to another Institution",
+			'doc.append("courses", {"course": course, "required": 1})',
+			'"can_remove_courses": False',
+			"Subject removal requires a separate impact review",
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("delete_doc", api)
+		self.assertNotIn("frappe.db.delete", api)
+
+	def test_programmes_page_exposes_visible_class_curriculum_workspace(self):
+		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
+		for token in (
+			"Class Curriculum",
+			"openCurriculumForRow",
+			"loadCurriculum",
+			"get_programme_curriculum",
+			"configured_courses",
+			"available_courses",
+			"Add Institution",
+			"addCurriculumCourses",
+			"add_programme_curriculum_courses",
+			"Instructor Assignment additions will also appear here",
+			"Active Class / Programme Intakes",
+			"openDeliveryCurriculum",
+			"/app/eduedge-curriculum",
+		):
+			self.assertIn(token, component)
+		self.assertIn('type: "POST"', component)
+		self.assertIn('v-if="draft.name" ref="curriculumPanel"', component)
+
 	def test_ci_checks_programmes_entry_scripts(self):
 		workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 		self.assertIn("node --check eduedge/public/js/eduedge_programmes.bundle.js", workflow)
