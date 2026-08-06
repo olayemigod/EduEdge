@@ -29,6 +29,17 @@ class TestInstructorSubjectVisibilityAndBranchSummaryContract(unittest.TestCase)
 		):
 			self.assertIn(token, bundle)
 
+	def test_configured_subject_rows_are_read_as_mappings_after_save_reload(self):
+		api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
+		for token in (
+			'str(row.get("name")): dict(row)',
+			'if row.get("name")',
+			'name = str(row.get("name") or "").strip()',
+			'course_rows[name] = dict(row)',
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("course_rows = {row.name: dict(row) for row in configured_courses}", api)
+
 	def test_missing_class_subject_is_added_through_native_program_courses(self):
 		api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
 		for token in (
