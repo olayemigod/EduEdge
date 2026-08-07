@@ -84,7 +84,7 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 		entry = (APP / "public" / "js" / "eduedge_programmes.bundle.js").read_text(encoding="utf-8")
 		fix = (APP / "public" / "js" / "eduedge_programmes" / "programme_modal_save_fix.js").read_text(encoding="utf-8")
 		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
-		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
+		master = (APP / "api" / "programme_master.py").read_text(encoding="utf-8")
 		for token in (
 			"installProgrammeModalSaveFix",
 			"programme_modal_save_fix",
@@ -92,7 +92,7 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 		):
 			self.assertIn(token, entry)
 		for token in (
-			"eduedge.api.programmes.save_programme",
+			"eduedge.api.programme_master.save_programme",
 			'type: "POST"',
 			"programme: savedDraft.name || undefined",
 			"program_name: savedDraft.program_name",
@@ -102,7 +102,23 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 		):
 			self.assertIn(token, fix)
 		self.assertIn('v-model.trim="draft.program_name"', component)
-		self.assertIn("doc.program_name = str(program_name or \"\").strip()", api)
+		for token in (
+			'@frappe.whitelist(methods=["POST"])',
+			"from frappe.model.rename_doc import rename_doc",
+			"_assert_programme_name_available",
+			'rename_doc(',
+			'"Program",',
+			"force=False",
+			"merge=False",
+			"ignore_permissions=False",
+			"show_alert=False",
+			"doc.program_name = requested_name",
+			'"renamed_from": renamed_from',
+		):
+			self.assertIn(token, master)
+		self.assertNotIn("ignore_permissions=True", master)
+		self.assertNotIn("frappe.db.set_value", master)
+		self.assertNotIn("frappe.delete_doc", master)
 
 
 if __name__ == "__main__":
