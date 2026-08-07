@@ -13,7 +13,7 @@ export function installProgrammeModalSaveFix(proxy) {
 		const label = proxy.editorProgrammeSingular || "Class / Programme";
 		try {
 			const response = await frappe.call({
-				method: "eduedge.api.programmes.save_programme",
+				method: "eduedge.api.programme_master.save_programme",
 				type: "POST",
 				args: {
 					programme: savedDraft.name || undefined,
