@@ -142,8 +142,8 @@ function render(root, proxy) {
 	addAvailableControls(root, proxy);
 }
 
-export function installProgrammeCurriculumGovernance(app, root) {
-	const proxy = app?._instance?.proxy;
+export function installProgrammeCurriculumGovernance(app, root, mountedProxy = null) {
+	const proxy = mountedProxy || app?._instance?.proxy;
 	if (!proxy || !root) return;
 	let scheduled = false;
 	const schedule = () => {
