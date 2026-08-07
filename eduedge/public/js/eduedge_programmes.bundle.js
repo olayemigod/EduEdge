@@ -6,9 +6,9 @@ export function createEduEdgeProgrammesApp(rootProps = null) {
 	const app = createEduEdgeApp(EduEdgeProgrammes, rootProps);
 	const originalMount = app.mount.bind(app);
 	app.mount = (root) => {
-		const result = originalMount(root);
-		installProgrammeCurriculumGovernance(app, root);
-		return result;
+		const proxy = originalMount(root);
+		installProgrammeCurriculumGovernance(app, root, proxy);
+		return proxy;
 	};
 	return app;
 }
