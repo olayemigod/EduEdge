@@ -86,7 +86,9 @@ def _count_dependency(doctype: str, filters: dict[str, Any]) -> int:
 		return 0
 	meta = frappe.get_meta(doctype)
 	usable = {key: value for key, value in filters.items() if meta.has_field(key)}
-	if not usable:
+	# Never fall back to a global Subject-only check. Removal is blocked only by
+	# dependencies that can be tied to this exact Program or one of its Offerings.
+	if len(usable) < 2:
 		return 0
 	return cint(frappe.db.count(doctype, filters=usable))
 
