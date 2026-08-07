@@ -42,16 +42,19 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 		):
 			self.assertIn(token, api)
 
-	def test_programmes_bundle_installs_governance_controls(self):
+	def test_programmes_bundle_installs_governance_controls_from_mounted_proxy(self):
 		entry = (APP / "public" / "js" / "eduedge_programmes.bundle.js").read_text(encoding="utf-8")
 		ui = (APP / "public" / "js" / "eduedge_programmes" / "curriculum_governance.js").read_text(encoding="utf-8")
 		for token in (
 			"installProgrammeCurriculumGovernance",
 			"curriculum_governance",
-			"originalMount",
+			"const proxy = originalMount(root)",
+			"installProgrammeCurriculumGovernance(app, root, proxy)",
 		):
 			self.assertIn(token, entry)
 		for token in (
+			"mountedProxy = null",
+			"mountedProxy || app?._instance?.proxy",
 			"Required or Optional",
 			"Add as Required",
 			"Add as Optional",
@@ -63,6 +66,25 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 			"MutationObserver",
 		):
 			self.assertIn(token, ui)
+
+	def test_class_modal_save_uses_explicit_post_and_server_identity(self):
+		entry = (APP / "public" / "js" / "eduedge_programmes.bundle.js").read_text(encoding="utf-8")
+		fix = (APP / "public" / "js" / "eduedge_programmes" / "programme_modal_save_fix.js").read_text(encoding="utf-8")
+		for token in (
+			"installProgrammeModalSaveFix",
+			"programme_modal_save_fix",
+			"installProgrammeModalSaveFix(proxy)",
+		):
+			self.assertIn(token, entry)
+		for token in (
+			"eduedge.api.programmes.save_programme",
+			'type: "POST"',
+			"programme: savedDraft.name || undefined",
+			"The server did not return the saved Class identity",
+			"await proxy.load(true)",
+			"proxy.programmeModalOpen = false",
+		):
+			self.assertIn(token, fix)
 
 
 if __name__ == "__main__":
