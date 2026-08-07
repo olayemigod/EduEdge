@@ -67,9 +67,24 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 		):
 			self.assertIn(token, ui)
 
+	def test_available_subject_action_refreshes_after_each_selection_change(self):
+		ui = (APP / "public" / "js" / "eduedge_programmes" / "curriculum_governance.js").read_text(encoding="utf-8")
+		for token in (
+			"selectedCourses(proxy)",
+			"syncAvailableControls",
+			"eduedge-curriculum-add-selected",
+			"if (existingControls)",
+			"syncAvailableControls(existingControls, proxy)",
+			"add.disabled = !count",
+			'root.addEventListener("change", schedule, true)',
+		):
+			self.assertIn(token, ui)
+
 	def test_class_modal_save_uses_explicit_post_and_server_identity(self):
 		entry = (APP / "public" / "js" / "eduedge_programmes.bundle.js").read_text(encoding="utf-8")
 		fix = (APP / "public" / "js" / "eduedge_programmes" / "programme_modal_save_fix.js").read_text(encoding="utf-8")
+		component = (APP / "public" / "js" / "eduedge_programmes" / "EduEdgeProgrammes.vue").read_text(encoding="utf-8")
+		api = (APP / "api" / "programmes.py").read_text(encoding="utf-8")
 		for token in (
 			"installProgrammeModalSaveFix",
 			"programme_modal_save_fix",
@@ -80,11 +95,14 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 			"eduedge.api.programmes.save_programme",
 			'type: "POST"',
 			"programme: savedDraft.name || undefined",
+			"program_name: savedDraft.program_name",
 			"The server did not return the saved Class identity",
 			"await proxy.load(true)",
 			"proxy.programmeModalOpen = false",
 		):
 			self.assertIn(token, fix)
+		self.assertIn('v-model.trim="draft.program_name"', component)
+		self.assertIn("doc.program_name = str(program_name or \"\").strip()", api)
 
 
 if __name__ == "__main__":
