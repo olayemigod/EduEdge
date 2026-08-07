@@ -20,6 +20,10 @@ function configuredRows(proxy) {
 	return Array.isArray(proxy?.filteredConfiguredCourses) ? proxy.filteredConfiguredCourses : [];
 }
 
+function selectedCourses(proxy) {
+	return Array.isArray(proxy?.selectedCurriculumCourses) ? proxy.selectedCurriculumCourses : [];
+}
+
 function addConfiguredControls(root, proxy) {
 	const nodes = root.querySelectorAll(".eduedge-programme-course-row");
 	const rows = configuredRows(proxy);
@@ -86,14 +90,30 @@ function addConfiguredControls(root, proxy) {
 	});
 }
 
+function syncAvailableControls(controls, proxy) {
+	const add = controls?.querySelector(".eduedge-curriculum-add-selected");
+	if (!add) return;
+	const count = selectedCourses(proxy).length;
+	add.textContent = __("Add selected ({0})", [count]);
+	add.disabled = !count;
+}
+
 function addAvailableControls(root, proxy) {
 	const heading = [...root.querySelectorAll(".eduedge-programme-section-heading")].find((node) =>
 		node.textContent.includes(__("Available Institution"))
 	);
-	if (!heading || heading.querySelector(".eduedge-curriculum-add-governance")) return;
+	if (!heading) return;
 
-	const original = [...heading.querySelectorAll("button")].find((button) => button.textContent.includes(__("Add selected")));
+	const original = [...heading.querySelectorAll("button")].find(
+		(button) => !button.classList.contains("eduedge-curriculum-add-selected") && button.textContent.includes(__("Add selected"))
+	);
 	if (original) original.style.display = "none";
+
+	const existingControls = heading.querySelector(".eduedge-curriculum-add-governance");
+	if (existingControls) {
+		syncAvailableControls(existingControls, proxy);
+		return;
+	}
 
 	const controls = document.createElement("span");
 	controls.className = "eduedge-curriculum-add-governance";
@@ -105,15 +125,9 @@ function addAvailableControls(root, proxy) {
 
 	const add = document.createElement("button");
 	add.type = "button";
-	add.className = "edge-button edge-button--primary";
-	const updateLabel = () => {
-		const count = Array.isArray(proxy.selectedCurriculumCourses) ? proxy.selectedCurriculumCourses.length : 0;
-		add.textContent = __("Add selected ({0})", [count]);
-		add.disabled = !count;
-	};
-	updateLabel();
+	add.className = "edge-button edge-button--primary eduedge-curriculum-add-selected";
 	add.addEventListener("click", async () => {
-		const selected = Array.isArray(proxy.selectedCurriculumCourses) ? [...proxy.selectedCurriculumCourses] : [];
+		const selected = [...selectedCourses(proxy)];
 		if (!selected.length) return;
 		add.disabled = true;
 		try {
@@ -128,12 +142,13 @@ function addAvailableControls(root, proxy) {
 		} catch (error) {
 			showError(error);
 		} finally {
-			updateLabel();
+			syncAvailableControls(controls, proxy);
 		}
 	});
 
 	controls.append(requirement, add);
 	heading.appendChild(controls);
+	syncAvailableControls(controls, proxy);
 }
 
 function render(root, proxy) {
