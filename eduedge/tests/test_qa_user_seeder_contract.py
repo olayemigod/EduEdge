@@ -41,7 +41,7 @@ class TestQAUserSeederContract(unittest.TestCase):
 			self.assignment("QUESTION_RIGHTS"),
 			{"read", "create", "write", "report", "print"},
 		)
-		self.assertIn('_set_exact_role_permissions(QUESTION_DOCTYPE, QUESTION_RIGHTS)', self.source)
+		self.assertIn('_set_exact_role_permissions(QUESTION_DOCTYPE, QUESTION_RIGHTS, role=CUSTOM_ROLE)', self.source)
 		for permission_type in ("delete", "import", "share"):
 			self.assertIn(permission_type, self.assignment("MANAGED_PERMISSION_TYPES"))
 			self.assertNotIn(permission_type, self.assignment("QUESTION_RIGHTS"))
@@ -49,8 +49,23 @@ class TestQAUserSeederContract(unittest.TestCase):
 	def test_subject_coordinator_gets_only_read_on_question_link_dependencies(self):
 		self.assertEqual(self.assignment("QUESTION_SUPPORT_DOCTYPES"), ("Course", "Topic"))
 		self.assertIn("for doctype in QUESTION_SUPPORT_DOCTYPES", self.source)
-		self.assertIn('_set_exact_role_permissions(doctype, {"read"})', self.source)
+		self.assertIn('_set_exact_role_permissions(doctype, {"read"}, role=CUSTOM_ROLE)', self.source)
 		self.assertNotIn("EduEdge School Branch", self.assignment("QUESTION_SUPPORT_DOCTYPES"))
+
+	def test_curriculum_viewer_is_explicitly_read_only(self):
+		self.assertEqual(self.assignment("CURRICULUM_VIEWER_ROLE"), "QA Curriculum Viewer")
+		rights = self.assignment("CURRICULUM_VIEWER_RIGHTS")
+		for doctype in (
+			"Program",
+			"Course",
+			"Department",
+			"EduEdge Institution",
+			"EduEdge Program Offering",
+			"EduEdge School Branch",
+		):
+			self.assertEqual(rights[doctype], {"read"})
+		self.assertIn("_ensure_curriculum_viewer_role()", self.source)
+		self.assertIn("role=CURRICULUM_VIEWER_ROLE", self.source)
 
 	def test_expected_qa_roles_and_users_are_present(self):
 		for role in (
@@ -61,6 +76,7 @@ class TestQAUserSeederContract(unittest.TestCase):
 			"Registrar",
 			"Bursar",
 			"Subject Coordinator",
+			"QA Curriculum Viewer",
 		):
 			self.assertIn(role, self.source)
 		for email in (
@@ -71,8 +87,17 @@ class TestQAUserSeederContract(unittest.TestCase):
 			"qa.registrar@example.com",
 			"qa.bursar@example.com",
 			"qa.subject.coordinator@example.com",
+			"qa.curriculum.viewer@example.com",
 		):
 			self.assertIn(email, self.source)
+
+	def test_browser_phase_coordination_is_returned_by_seed_and_readiness(self):
+		phases = self.assignment("BROWSER_QA_PHASES")
+		self.assertGreaterEqual(len(phases), 8)
+		self.assertTrue(any(row["user"] == "qa.curriculum.viewer@example.com" for row in phases))
+		self.assertTrue(any(row["user"] == "qa.academic.admin@example.com" for row in phases))
+		self.assertIn('"browser_qa_phases": list(BROWSER_QA_PHASES)', self.source)
+		self.assertIn("def readiness(", self.source)
 
 	def test_branch_selection_is_safe_and_assignments_are_idempotent(self):
 		self.assertIn("More than one enabled EduEdge School Branch exists", self.source)
