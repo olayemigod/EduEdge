@@ -4,6 +4,10 @@ function programmeName(proxy) {
 	return proxy?.selectedProgramme?.name || "";
 }
 
+function canManageCurriculum(proxy) {
+	return Boolean(proxy?.canWrite);
+}
+
 async function refresh(proxy) {
 	const name = programmeName(proxy);
 	if (name && typeof proxy.loadCurriculum === "function") {
@@ -24,7 +28,20 @@ function selectedCourses(proxy) {
 	return Array.isArray(proxy?.selectedCurriculumCourses) ? proxy.selectedCurriculumCourses : [];
 }
 
+function removeConfiguredControls(root) {
+	root.querySelectorAll(".eduedge-curriculum-governance-actions").forEach((node) => node.remove());
+}
+
+function removeAvailableControls(root) {
+	root.querySelectorAll(".eduedge-curriculum-add-governance").forEach((node) => node.remove());
+}
+
 function addConfiguredControls(root, proxy) {
+	if (!canManageCurriculum(proxy)) {
+		removeConfiguredControls(root);
+		return;
+	}
+
 	const nodes = root.querySelectorAll(".eduedge-programme-course-row");
 	const rows = configuredRows(proxy);
 	nodes.forEach((node, index) => {
@@ -99,6 +116,11 @@ function syncAvailableControls(controls, proxy) {
 }
 
 function addAvailableControls(root, proxy) {
+	if (!canManageCurriculum(proxy)) {
+		removeAvailableControls(root);
+		return;
+	}
+
 	const heading = [...root.querySelectorAll(".eduedge-programme-section-heading")].find((node) =>
 		node.textContent.includes(__("Available Institution"))
 	);
