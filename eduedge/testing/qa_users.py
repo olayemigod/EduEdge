@@ -15,7 +15,9 @@ QUESTION_SUPPORT_DOCTYPES = ("Course", "Topic")
 CURRICULUM_VIEWER_RIGHTS = {
 	"Program": {"read"},
 	"Course": {"read"},
+	"Topic": {"read"},
 	"Department": {"read"},
+	"Student Group": {"read"},
 	"EduEdge Institution": {"read"},
 	"EduEdge Program Offering": {"read"},
 	"EduEdge School Branch": {"read"},
