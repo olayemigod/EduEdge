@@ -67,6 +67,19 @@ class TestProgrammeCurriculumGovernanceContract(unittest.TestCase):
 		):
 			self.assertIn(token, ui)
 
+	def test_read_only_programme_user_gets_no_injected_mutation_controls(self):
+		ui = (APP / "public" / "js" / "eduedge_programmes" / "curriculum_governance.js").read_text(encoding="utf-8")
+		for token in (
+			"function canManageCurriculum(proxy)",
+			"Boolean(proxy?.canWrite)",
+			"if (!canManageCurriculum(proxy))",
+			"removeConfiguredControls(root)",
+			"removeAvailableControls(root)",
+			'.eduedge-curriculum-governance-actions',
+			'.eduedge-curriculum-add-governance',
+		):
+			self.assertIn(token, ui)
+
 	def test_available_subject_action_refreshes_after_each_selection_change(self):
 		ui = (APP / "public" / "js" / "eduedge_programmes" / "curriculum_governance.js").read_text(encoding="utf-8")
 		for token in (
