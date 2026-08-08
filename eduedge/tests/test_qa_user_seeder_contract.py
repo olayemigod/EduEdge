@@ -58,12 +58,15 @@ class TestQAUserSeederContract(unittest.TestCase):
 		for doctype in (
 			"Program",
 			"Course",
+			"Topic",
 			"Department",
+			"Student Group",
 			"EduEdge Institution",
 			"EduEdge Program Offering",
 			"EduEdge School Branch",
 		):
 			self.assertEqual(rights[doctype], {"read"})
+		self.assertTrue(all(value == {"read"} for value in rights.values()))
 		self.assertIn("_ensure_curriculum_viewer_role()", self.source)
 		self.assertIn("role=CURRICULUM_VIEWER_ROLE", self.source)
 
