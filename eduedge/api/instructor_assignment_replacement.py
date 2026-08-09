@@ -321,7 +321,7 @@ def _already_replaced(source, replacement_instructor: str, handover_date: str | 
     if not source.replaced_by_assignment:
         return None
     resolved_reason = _clean_reason(reason)
-    handover = _handover_date(handover_date)
+    handover = getdate(handover_date or source.ended_on or nowdate())
     successor = frappe.get_doc("EduEdge Instructor Assignment", source.replaced_by_assignment)
     successor.check_permission("read")
     expected_start = getdate(add_days(handover, 1))
