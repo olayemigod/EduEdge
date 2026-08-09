@@ -16,3 +16,4 @@ eduedge.patches.v0_9.harden_training_progress_permissions
 eduedge.patches.v0_9.harden_sensitive_role_permissions
 eduedge.patches.v0_9.add_people_operations_permissions
 eduedge.patches.v0_9.add_curriculum_management_permissions
+eduedge.patches.v0_9.add_department_hierarchy_permissions
