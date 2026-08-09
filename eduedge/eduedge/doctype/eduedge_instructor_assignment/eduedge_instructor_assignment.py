@@ -20,6 +20,19 @@ from eduedge.education.teaching_assignments import (
 )
 
 
+IMMUTABLE_RESPONSIBILITY_FIELDS = (
+    "instructor",
+    "assignment_type",
+    "assignment_scope",
+    "school_branch",
+    "program_offering",
+    "student_group",
+    "course",
+    "valid_from",
+)
+LIFECYCLE_AUDIT_FIELDS = ("ended_on", "ended_by", "end_reason")
+
+
 class EduEdgeInstructorAssignment(Document):
     def validate(self) -> None:
         self.assignment_scope = self.assignment_scope or (
@@ -38,6 +51,8 @@ class EduEdgeInstructorAssignment(Document):
         self._validate_instructor_context()
         self._validate_assignment_type_scope()
         self._validate_course_context()
+        self._validate_existing_responsibility()
+        self._validate_lifecycle_audit()
         self._validate_duplicate()
         self._validate_primary_responsibility()
         self.assignment_title = self._build_title()
@@ -220,6 +235,55 @@ class EduEdgeInstructorAssignment(Document):
                 frappe.ValidationError,
             )
 
+    def _validate_existing_responsibility(self) -> None:
+        before = self.get_doc_before_save()
+        if not before:
+            return
+        lifecycle_action = bool(getattr(frappe.flags, "in_eduedge_assignment_lifecycle", False))
+        for fieldname in IMMUTABLE_RESPONSIBILITY_FIELDS:
+            if _same_value(before.get(fieldname), self.get(fieldname)):
+                continue
+            if lifecycle_action and fieldname == "valid_from":
+                continue
+            frappe.throw(
+                _(
+                    "Existing Instructor Assignment responsibility cannot be edited in place. Use End, Replace, Transfer or Copy lifecycle actions so history remains intact."
+                ),
+                frappe.ValidationError,
+            )
+        if not _same_value(before.get("valid_to"), self.get("valid_to")) and not lifecycle_action:
+            frappe.throw(
+                _("Use End Assignment to shorten an existing responsibility period."),
+                frappe.ValidationError,
+            )
+
+    def _validate_lifecycle_audit(self) -> None:
+        before = self.get_doc_before_save()
+        lifecycle_action = bool(getattr(frappe.flags, "in_eduedge_assignment_lifecycle", False))
+        if before and not lifecycle_action:
+            for fieldname in LIFECYCLE_AUDIT_FIELDS:
+                if not _same_value(before.get(fieldname), self.get(fieldname)):
+                    frappe.throw(
+                        _("Lifecycle audit fields are maintained by EduEdge assignment actions."),
+                        frappe.PermissionError,
+                    )
+        if not before and not lifecycle_action and any(self.get(fieldname) for fieldname in LIFECYCLE_AUDIT_FIELDS):
+            frappe.throw(
+                _("Lifecycle audit fields are maintained by EduEdge assignment actions."),
+                frappe.PermissionError,
+            )
+        if self.ended_on:
+            if not self.ended_by or not str(self.end_reason or "").strip():
+                frappe.throw(
+                    _("Ended assignments require Ended By and End Reason audit values."),
+                    frappe.ValidationError,
+                )
+            if not self.valid_to or getdate(self.valid_to) != getdate(self.ended_on):
+                frappe.throw(
+                    _("Ended On must match the final Valid To date."),
+                    frappe.ValidationError,
+                )
+
     def _validate_duplicate(self) -> None:
         if not self.enabled:
             return
@@ -288,6 +352,10 @@ class EduEdgeInstructorAssignment(Document):
         if self.course:
             parts.append(_course_label(self.course))
         return " · ".join(value for value in parts if value)
+
+
+def _same_value(left, right) -> bool:
+    return str(left or "") == str(right or "")
 
 
 def _assignment_target_label(
