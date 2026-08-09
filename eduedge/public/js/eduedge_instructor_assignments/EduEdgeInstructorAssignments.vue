@@ -193,13 +193,23 @@
 					<article v-if="canManage" class="assignment-panel">
 						<div class="assignment-heading">
 							<div><p class="edge-eyebrow">Explicit and generated periods</p><h2>Branch Eligibility Periods</h2></div>
-							<span>{{ data.branch_assignments.length }}</span>
+							<span>{{ branchEligibilityGroups.length }} Branch{{ branchEligibilityGroups.length === 1 ? '' : 'es' }} · {{ data.branch_assignments.length }} Period{{ data.branch_assignments.length === 1 ? '' : 's' }}</span>
 						</div>
 						<EdgeEmptyState v-if="!data.branch_assignments.length" title="No Branch eligibility period" description="Active academic rows create only the required contiguous Branch periods. Separate periods remain separate rather than bridging inactive gaps." />
-						<div v-else class="register-list">
-							<article v-for="item in data.branch_assignments" :key="item.name">
-								<span><strong>{{ institutionForBranch(item.school_branch) }} · {{ branchLabel(item.school_branch) }}</strong><small>{{ item.valid_from || 'No start restriction' }} → {{ item.valid_to || 'Open ended' }} · {{ item.is_primary ? 'Primary' : 'Additional' }}</small></span>
-								<EdgeStatusBadge :label="item.enabled ? 'Active' : 'Disabled'" :status="item.enabled ? 'active' : 'disabled'" :tone="item.enabled ? 'success' : 'danger'" />
+						<div v-else class="branch-eligibility-list">
+							<article v-for="group in branchEligibilityGroups" :key="group.school_branch" class="branch-eligibility-group">
+								<div class="branch-eligibility-heading">
+									<span>
+										<strong>{{ institutionForBranch(group.school_branch) }} · {{ branchLabel(group.school_branch) }}</strong>
+										<small>{{ group.periods.length }} eligibility period{{ group.periods.length === 1 ? '' : 's' }}</small>
+									</span>
+								</div>
+								<div class="branch-period-list">
+									<div v-for="item in group.periods" :key="item.name" class="branch-period-row">
+										<span><small>{{ item.valid_from || 'No start restriction' }} → {{ item.valid_to || 'Open ended' }} · {{ item.is_primary ? 'Primary' : 'Additional' }}</small></span>
+										<EdgeStatusBadge :label="branchPeriodStatus(item).label" :status="branchPeriodStatus(item).status" :tone="branchPeriodStatus(item).tone" />
+									</div>
+								</div>
 							</article>
 						</div>
 					</article>
@@ -304,6 +314,18 @@ export default {
 				groups.get(key).rows.push(branch);
 			}
 			return [...groups.values()].sort((a, b) => a.institution_name.localeCompare(b.institution_name));
+		},
+		branchEligibilityGroups() {
+			const groups = new Map();
+			for (const period of this.data.branch_assignments || []) {
+				const key = period.school_branch || "unclassified";
+				if (!groups.has(key)) groups.set(key, { school_branch: key, periods: [] });
+				groups.get(key).periods.push(period);
+			}
+			for (const group of groups.values()) {
+				group.periods.sort((a, b) => String(b.valid_from || "").localeCompare(String(a.valid_from || "")));
+			}
+			return [...groups.values()].sort((a, b) => this.branchLabel(a.school_branch).localeCompare(this.branchLabel(b.school_branch)));
 		},
 		selectedBranches() { return [...new Set(this.rows.map((row) => row.branch).filter(Boolean))]; },
 		selectedInstitutions() { return [...new Set(this.selectedBranches.map((name) => this.branchRecord(name)?.institution).filter(Boolean))]; },
@@ -426,6 +448,15 @@ export default {
 		institutionForRow(row) { return this.institutionForBranch(row.branch); },
 		offeringLabel(name) { return this.offeringRecord(name)?.offering_title || name || "Class"; },
 		courseName(name) { return this.data.courses.find((row) => row.name === name)?.course_name || name || ""; },
+		branchPeriodStatus(item) {
+			if (!Number(item.enabled)) return { label: "Disabled", status: "disabled", tone: "danger" };
+			const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
+			const start = String(item.valid_from || "").slice(0, 10);
+			const end = String(item.valid_to || "").slice(0, 10);
+			if (start && today < start) return { label: "Scheduled", status: "scheduled", tone: "warning" };
+			if (end && today > end) return { label: "Ended", status: "ended", tone: "neutral" };
+			return { label: "Current", status: "current", tone: "success" };
+		},
 		offeringsFor(row) { return (this.data.offerings || []).filter((offering) => offering.school_branch === row.branch); },
 		groupsFor(row) {
 			const offering = this.offeringRecord(row.program_offering);
@@ -500,5 +531,5 @@ export default {
 </script>
 
 <style scoped>
-.assignment-panel,.assignment-row{display:grid;gap:1rem;align-content:start;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.rows-stack{display:grid;gap:1rem;margin:1rem 0}.assignment-row{border-left:4px solid var(--primary)}.assignment-heading,.assignment-actions,.row-summary{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.assignment-heading h2,.assignment-heading h3{margin:.2rem 0 0}.instructor-field{display:grid;gap:.35rem;font-weight:600;max-width:52rem}.row-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.row-grid label{display:grid;gap:.35rem;font-weight:600}.row-grid .wide{grid-column:1/-1}.multi-select{min-height:8rem}.row-note{display:grid;gap:.25rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.row-note span,.row-summary{color:var(--text-muted)}.row-summary{justify-content:flex-start;font-size:.8rem}.row-summary span{padding:.25rem .5rem;border-radius:999px;background:var(--control-bg)}.preview{display:grid;gap:.75rem;margin-top:1rem}.preview-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:.65rem}.preview-metrics>div{display:grid;gap:.2rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.preview-metrics span{color:var(--text-muted);font-size:.75rem}.preview-metrics strong{font-size:1.3rem}.preview-list,.register-list{display:grid;gap:.6rem}.preview-list{padding:.75rem;border:1px solid var(--border-color);border-radius:8px}.preview-list.danger{border-color:var(--red-400)}.preview-list span{display:block}.register-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1rem}.register-list article{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.register-list article>span{display:grid;gap:.15rem}.register-list small{color:var(--text-muted)}.assignment-error{color:var(--red-600,#b42318)}@media(max-width:900px){.row-grid,.register-layout{grid-template-columns:1fr}.row-grid .wide{grid-column:auto}}@media(max-width:600px){.assignment-heading,.register-list article{align-items:stretch;flex-direction:column}}
+.assignment-panel,.assignment-row{display:grid;gap:1rem;align-content:start;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.rows-stack{display:grid;gap:1rem;margin:1rem 0}.assignment-row{border-left:4px solid var(--primary)}.assignment-heading,.assignment-actions,.row-summary{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.assignment-heading h2,.assignment-heading h3{margin:.2rem 0 0}.instructor-field{display:grid;gap:.35rem;font-weight:600;max-width:52rem}.row-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.row-grid label{display:grid;gap:.35rem;font-weight:600}.row-grid .wide{grid-column:1/-1}.multi-select{min-height:8rem}.row-note{display:grid;gap:.25rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.row-note span,.row-summary{color:var(--text-muted)}.row-summary{justify-content:flex-start;font-size:.8rem}.row-summary span{padding:.25rem .5rem;border-radius:999px;background:var(--control-bg)}.preview{display:grid;gap:.75rem;margin-top:1rem}.preview-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:.65rem}.preview-metrics>div{display:grid;gap:.2rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.preview-metrics span{color:var(--text-muted);font-size:.75rem}.preview-metrics strong{font-size:1.3rem}.preview-list,.register-list,.branch-eligibility-list,.branch-period-list{display:grid;gap:.6rem}.preview-list{padding:.75rem;border:1px solid var(--border-color);border-radius:8px}.preview-list.danger{border-color:var(--red-400)}.preview-list span{display:block}.register-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1rem}.register-list article{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.register-list article>span{display:grid;gap:.15rem}.register-list small{color:var(--text-muted)}.branch-eligibility-group{display:grid;gap:.65rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.branch-eligibility-heading{display:flex;align-items:center;justify-content:space-between;gap:.75rem}.branch-eligibility-heading>span,.branch-period-row>span{display:grid;gap:.15rem}.branch-eligibility-heading small,.branch-period-row small{color:var(--text-muted)}.branch-period-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg)}.assignment-error{color:var(--red-600,#b42318)}@media(max-width:900px){.row-grid,.register-layout{grid-template-columns:1fr}.row-grid .wide{grid-column:auto}}@media(max-width:600px){.assignment-heading,.register-list article,.branch-eligibility-heading,.branch-period-row{align-items:stretch;flex-direction:column}}
 </style>
