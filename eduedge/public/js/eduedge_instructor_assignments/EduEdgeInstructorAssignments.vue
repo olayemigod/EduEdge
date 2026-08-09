@@ -216,7 +216,7 @@
 
 					<article class="assignment-panel">
 						<div class="assignment-heading">
-							<div><p class="edge-eyebrow">Academic responsibility</p><h2>Current Instructor Assignments</h2></div>
+							<div><p class="edge-eyebrow">Academic responsibility</p><h2>Instructor Assignment Register</h2></div>
 							<span>{{ data.assignments.length }}</span>
 						</div>
 						<EdgeEmptyState v-if="!data.assignments.length" title="No academic assignment" description="Add exact Class, Class Arm and Subject responsibility rows above." />
@@ -226,9 +226,11 @@
 									<strong>{{ item.assignment_title || item.assignment_type }}</strong>
 									<small>{{ institutionForBranch(item.school_branch) }} · {{ branchLabel(item.school_branch) }} · {{ offeringLabel(item.program_offering) }} · {{ item.student_group || 'All Class Arms' }} · {{ courseName(item.course) || 'Whole class' }}</small>
 									<small>{{ item.valid_from || 'No start restriction' }} → {{ item.valid_to || 'Open ended' }}</small>
+									<small v-if="item.ended_on">Ended {{ item.ended_on }}{{ item.ended_by ? ` by ${item.ended_by}` : '' }}{{ item.end_reason ? ` · ${item.end_reason}` : '' }}</small>
 								</span>
 								<div class="assignment-actions">
-									<EdgeStatusBadge :label="item.enabled ? 'Active' : 'Disabled'" :status="item.enabled ? 'active' : 'disabled'" :tone="item.enabled ? 'success' : 'danger'" />
+									<EdgeStatusBadge :label="assignmentStatus(item).label" :status="assignmentStatus(item).status" :tone="assignmentStatus(item).tone" />
+									<button v-if="canEndAssignment(item)" type="button" class="edge-button" :disabled="endingAssignment === item.name" @click="endAssignment(item)">{{ endingAssignment === item.name ? 'Ending...' : 'End Assignment' }}</button>
 									<button type="button" class="edge-button" @click="openAssignment(item.name)">Open</button>
 								</div>
 							</article>
@@ -288,6 +290,7 @@ export default {
 			loaded: false,
 			previewing: false,
 			saving: false,
+			endingAssignment: "",
 			error: "",
 			saveError: "",
 			data: blankData(),
@@ -358,6 +361,18 @@ export default {
 					offerings: this.rows.map((row) => row.program_offering).filter(Boolean),
 				});
 				this.data = response.message || blankData();
+				if (this.data.assignments?.length) {
+					try {
+						const lifecycle = await frappe.call("eduedge.api.instructor_assignment_lifecycle.get_instructor_assignment_lifecycle_states", {
+							names: JSON.stringify(this.data.assignments.map((item) => item.name)),
+						});
+						const states = lifecycle.message?.states || {};
+						this.data.assignments = this.data.assignments.map((item) => ({ ...item, ...(states[item.name] || { lifecycle_status: "Unavailable", can_end: false }) }));
+					} catch (lifecycleError) {
+						console.error("Instructor Assignment lifecycle state could not load", lifecycleError);
+						this.data.assignments = this.data.assignments.map((item) => ({ ...item, lifecycle_status: "Unavailable", can_end: false }));
+					}
+				}
 				if (!this.instructor && this.data.selected_instructor?.name) this.instructor = this.data.selected_instructor.name;
 				if (this.canManage && !this.rows.some((row) => row.branch) && this.data.selected_branches?.length) this.rows[0].branch = this.data.selected_branches[0];
 				this.loaded = true;
@@ -457,6 +472,15 @@ export default {
 			if (end && today > end) return { label: "Ended", status: "ended", tone: "neutral" };
 			return { label: "Current", status: "current", tone: "success" };
 		},
+		assignmentStatus(item) {
+			const label = item.lifecycle_status || "Unavailable";
+			if (label === "Current") return { label, status: "current", tone: "success" };
+			if (label === "Scheduled") return { label, status: "scheduled", tone: "warning" };
+			if (label === "Disabled") return { label, status: "disabled", tone: "danger" };
+			if (label === "Ended") return { label, status: "ended", tone: "neutral" };
+			return { label: "Status unavailable", status: "unavailable", tone: "neutral" };
+		},
+		canEndAssignment(item) { return Boolean(this.canManage && item.can_end); },
 		offeringsFor(row) { return (this.data.offerings || []).filter((offering) => offering.school_branch === row.branch); },
 		groupsFor(row) {
 			const offering = this.offeringRecord(row.program_offering);
@@ -522,6 +546,63 @@ export default {
 				this.saveError = error?.message || "Instructor Assignments could not be saved.";
 			} finally {
 				this.saving = false;
+			}
+		},
+		endAssignment(item) {
+			if (!this.canEndAssignment(item)) return;
+			const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
+			const title = frappe.utils.escape_html(item.assignment_title || item.assignment_type || item.name);
+			const dialog = new frappe.ui.Dialog({
+				title: __("End Instructor Assignment"),
+				fields: [
+					{
+						fieldtype: "HTML",
+						fieldname: "assignment_summary",
+						options: `<div class="mb-3"><strong>${title}</strong><br><span class="text-muted">${__("This ends only this academic responsibility. The assignment record and Branch Eligibility history are preserved.")}</span></div>`,
+					},
+					{
+						fieldtype: "Date",
+						fieldname: "end_date",
+						label: __("End Date"),
+						reqd: 1,
+						default: today,
+						description: __("Final day on which this responsibility remains valid."),
+					},
+					{
+						fieldtype: "Small Text",
+						fieldname: "reason",
+						label: __("Reason"),
+						reqd: 1,
+						placeholder: __("Why is this responsibility ending?"),
+					},
+				],
+				primary_action_label: __("End Assignment"),
+				primary_action: async (values) => {
+					this.endingAssignment = item.name;
+					dialog.get_primary_btn().prop("disabled", true);
+					try {
+						const response = await frappe.call({
+							method: "eduedge.api.instructor_assignment_lifecycle.end_instructor_assignment",
+							type: "POST",
+							args: { name: item.name, end_date: values.end_date, reason: values.reason },
+						});
+						const result = response.message || {};
+						frappe.show_alert({ message: result.action === "already-ended" ? __("Instructor Assignment was already ended") : __("Instructor Assignment ended"), indicator: "green" });
+						dialog.hide();
+						await this.load();
+					} catch (error) {
+						frappe.msgprint({ title: __("Unable to end assignment"), message: error?.message || __("Instructor Assignment could not be ended."), indicator: "red" });
+					} finally {
+						this.endingAssignment = "";
+						dialog.get_primary_btn().prop("disabled", false);
+					}
+				},
+			});
+			dialog.show();
+			const endDateField = dialog.get_field("end_date");
+			if (endDateField?.$input) {
+				endDateField.$input.attr("min", today);
+				if (item.valid_to) endDateField.$input.attr("max", item.valid_to);
 			}
 		},
 		openInstructors() { window.location.href = "/app/eduedge-instructors"; },
