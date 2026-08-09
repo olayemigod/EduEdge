@@ -30,7 +30,14 @@ IMMUTABLE_RESPONSIBILITY_FIELDS = (
     "course",
     "valid_from",
 )
-LIFECYCLE_AUDIT_FIELDS = ("ended_on", "ended_by", "end_reason")
+LIFECYCLE_AUDIT_FIELDS = (
+    "ended_on",
+    "ended_by",
+    "end_reason",
+    "replaces_assignment",
+    "replaced_by_assignment",
+    "replacement_reason",
+)
 
 
 class EduEdgeInstructorAssignment(Document):
@@ -243,8 +250,6 @@ class EduEdgeInstructorAssignment(Document):
         for fieldname in IMMUTABLE_RESPONSIBILITY_FIELDS:
             if _same_value(before.get(fieldname), self.get(fieldname)):
                 continue
-            if lifecycle_action and fieldname == "valid_from":
-                continue
             frappe.throw(
                 _(
                     "Existing Instructor Assignment responsibility cannot be edited in place. Use End, Replace, Transfer or Copy lifecycle actions so history remains intact."
@@ -283,6 +288,25 @@ class EduEdgeInstructorAssignment(Document):
                     _("Ended On must match the final Valid To date."),
                     frappe.ValidationError,
                 )
+        if self.replaces_assignment and self.replaces_assignment == self.name:
+            frappe.throw(_("An Instructor Assignment cannot replace itself."), frappe.ValidationError)
+        if self.replaced_by_assignment and self.replaced_by_assignment == self.name:
+            frappe.throw(_("An Instructor Assignment cannot be replaced by itself."), frappe.ValidationError)
+        if self.replaces_assignment and not str(self.replacement_reason or "").strip():
+            frappe.throw(
+                _("Replacement assignments require a Replacement Reason."),
+                frappe.ValidationError,
+            )
+        if self.replacement_reason and not self.replaces_assignment:
+            frappe.throw(
+                _("Replacement Reason requires a Replaces Assignment link."),
+                frappe.ValidationError,
+            )
+        if self.replaced_by_assignment and not self.ended_on:
+            frappe.throw(
+                _("An assignment linked to a replacement successor must already be ended."),
+                frappe.ValidationError,
+            )
 
     def _validate_duplicate(self) -> None:
         if not self.enabled:
