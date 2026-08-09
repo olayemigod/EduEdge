@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, nowdate
+from frappe.utils import cint, getdate, nowdate
 
-from eduedge.api.instructor_assignments import _require_assignment_manager
+from eduedge.api.instructor_assignments import _can_manage_assignments, _require_assignment_manager
 from eduedge.education.offerings import assert_branch_access
 from eduedge.platform.access import require_eduedge_access
 
@@ -28,6 +28,69 @@ def _end_date(value: str | None):
             frappe.ValidationError,
         )
     return resolved
+
+
+def _assignment_names(names: str | list | tuple | None) -> list[str]:
+    if isinstance(names, str):
+        try:
+            parsed = frappe.parse_json(names)
+            names = parsed if isinstance(parsed, list) else [names]
+        except Exception:
+            names = [names]
+    if not isinstance(names, (list, tuple)):
+        return []
+    values = list(dict.fromkeys(str(value or "").strip() for value in names if str(value or "").strip()))
+    if len(values) > 500:
+        frappe.throw(_("Request lifecycle state for at most 500 Instructor Assignments at a time."), frappe.ValidationError)
+    return values
+
+
+def _lifecycle_status(row, today) -> str:
+    if not cint(row.enabled):
+        return "Disabled"
+    if row.ended_on:
+        return "Ended"
+    if row.valid_from and getdate(row.valid_from) > today:
+        return "Scheduled"
+    if row.valid_to and getdate(row.valid_to) < today:
+        return "Ended"
+    return "Current"
+
+
+@frappe.whitelist()
+def get_instructor_assignment_lifecycle_states(names: str | list | None = None) -> dict:
+    """Return permission-scoped effective/lifecycle state for assignment register rows."""
+    assignment_names = _assignment_names(names)
+    if not assignment_names:
+        return {"states": {}}
+
+    rows = frappe.get_list(
+        "EduEdge Instructor Assignment",
+        filters={"name": ["in", assignment_names]},
+        fields=[
+            "name",
+            "enabled",
+            "valid_from",
+            "valid_to",
+            "ended_on",
+            "ended_by",
+            "end_reason",
+        ],
+        limit_page_length=len(assignment_names),
+    )
+    today = getdate(nowdate())
+    can_manage = _can_manage_assignments()
+    states = {}
+    for row in rows:
+        status = _lifecycle_status(row, today)
+        states[row.name] = {
+            "lifecycle_status": status,
+            "can_end": bool(can_manage and status == "Current" and not row.ended_on),
+            "ended_on": str(row.ended_on or ""),
+            "ended_by": row.ended_by or "",
+            "end_reason": row.end_reason or "",
+        }
+    return {"states": states}
 
 
 @frappe.whitelist(methods=["POST"])
