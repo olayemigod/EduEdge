@@ -24,7 +24,11 @@
   "validity_section",
   "valid_from",
   "valid_to",
-  "notes"
+  "notes",
+  "lifecycle_section",
+  "ended_on",
+  "ended_by",
+  "end_reason"
  ],
  "fields": [
   {"fieldname":"assignment_title","fieldtype":"Data","label":"Assignment","read_only":1,"in_list_view":1,"in_global_search":1},
@@ -45,11 +49,15 @@
   {"fieldname":"validity_section","fieldtype":"Section Break","label":"Validity"},
   {"fieldname":"valid_from","fieldtype":"Date","label":"Valid From"},
   {"fieldname":"valid_to","fieldtype":"Date","label":"Valid To"},
-  {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
+  {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"},
+  {"fieldname":"lifecycle_section","fieldtype":"Section Break","label":"Lifecycle Audit"},
+  {"description":"Final responsibility date recorded by the End Assignment action.","fieldname":"ended_on","fieldtype":"Date","label":"Ended On","read_only":1},
+  {"fieldname":"ended_by","fieldtype":"Link","label":"Ended By","options":"User","read_only":1},
+  {"fieldname":"end_reason","fieldtype":"Small Text","label":"End Reason","read_only":1}
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-08-05 16:38:00.000000",
+ "modified": "2026-08-09 14:20:00.000000",
  "modified_by": "Administrator",
  "module": "EduEdge",
  "name": "EduEdge Instructor Assignment",
@@ -67,5 +75,6 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "title_field": "assignment_title"
+ "title_field": "assignment_title",
+ "track_changes": 1
 }
