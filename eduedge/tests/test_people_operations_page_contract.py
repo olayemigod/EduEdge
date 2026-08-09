@@ -108,7 +108,7 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 			"preview_instructor_assignment_batch",
 			"save_instructor_assignment_batch",
 			"Branch Eligibility",
-			"Current Instructor Assignments",
+			"Instructor Assignment Register",
 		):
 			self.assertIn(token, assignments)
 		self.assertNotIn("Teacher Assignments", assignments)
