@@ -283,11 +283,38 @@ class EduEdgeInstructorAssignment(Document):
                 )
 
     def _build_title(self) -> str:
-        target = self.program_offering if self.assignment_scope == CLASS_SCOPE else self.student_group
+        target = _assignment_target_label(self.assignment_scope, self.program_offering, self.student_group)
         parts = [self.instructor_name or self.instructor, self.assignment_type, target]
         if self.course:
-            parts.append(self.course)
+            parts.append(_course_label(self.course))
         return " · ".join(value for value in parts if value)
+
+
+def _assignment_target_label(
+    assignment_scope: str | None,
+    program_offering: str | None,
+    student_group: str | None,
+) -> str:
+    if assignment_scope == CLASS_SCOPE:
+        return (
+            frappe.db.get_value("EduEdge Program Offering", program_offering, "offering_title")
+            if program_offering
+            else ""
+        ) or (program_offering or "")
+    if not student_group:
+        return ""
+    meta = frappe.get_meta("Student Group")
+    fields = ["student_group_name"]
+    if meta.has_field("eduedge_display_name"):
+        fields.insert(0, "eduedge_display_name")
+    row = frappe.db.get_value("Student Group", student_group, fields, as_dict=True) or {}
+    return row.get("eduedge_display_name") or row.get("student_group_name") or student_group
+
+
+def _course_label(course: str | None) -> str:
+    if not course:
+        return ""
+    return frappe.db.get_value("Course", course, "course_name") or course
 
 
 def _has_branch_eligibility(instructor: str, branch: str, start_date, end_date=None) -> bool:
