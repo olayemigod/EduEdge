@@ -136,6 +136,10 @@ function siteToday() {
 	return frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
 }
 
+function sameArgs(left, right) {
+	return JSON.stringify(left || {}) === JSON.stringify(right || {});
+}
+
 export default {
 	name: "InstructorAssignmentReplacementDialog",
 	props: {
@@ -151,6 +155,7 @@ export default {
 			busy: false,
 			busyLabel: "Checking handover...",
 			previewPlan: null,
+			previewedArgs: null,
 			previewError: "",
 			fieldErrors: {},
 			form: {
@@ -185,6 +190,7 @@ export default {
 		},
 		invalidatePreview() {
 			this.previewPlan = null;
+			this.previewedArgs = null;
 			this.previewError = "";
 		},
 		args() {
@@ -227,19 +233,23 @@ export default {
 			if (!this.validate()) return;
 			this.previewError = "";
 			this.setBusy(true, "Checking handover...");
+			const currentArgs = this.args();
 			try {
 				const response = await frappe.call({
 					method: "eduedge.api.instructor_assignment_replacement.preview_instructor_assignment_replacement",
 					type: "POST",
-					args: this.args(),
+					args: currentArgs,
 				});
 				this.previewPlan = response.message || null;
+				this.previewedArgs = this.previewPlan ? currentArgs : null;
 				if (this.previewPlan?.already_replaced) {
 					this.previewError = "This responsibility already has a successor. Refresh the register to see the lifecycle relationship.";
 					this.previewPlan = null;
+					this.previewedArgs = null;
 				}
 			} catch (error) {
 				this.previewPlan = null;
+				this.previewedArgs = null;
 				this.previewError = error?.message || "Replacement preview failed.";
 			} finally {
 				this.setBusy(false);
@@ -247,12 +257,20 @@ export default {
 		},
 		async confirmReplacement() {
 			if (!this.previewPlan || !this.validate() || this.conflictCount) return;
+			const currentArgs = this.args();
+			if (!sameArgs(currentArgs, this.previewedArgs)) {
+				this.invalidatePreview();
+				this.previewError = "Replacement details changed after preview. Preview the current values again before confirming.";
+				return;
+			}
+
+			let completed = false;
 			this.setBusy(true, "Replacing assignment...");
 			try {
 				const response = await frappe.call({
 					method: "eduedge.api.instructor_assignment_replacement.replace_instructor_assignment",
 					type: "POST",
-					args: this.args(),
+					args: currentArgs,
 				});
 				const result = response.message || {};
 				frappe.show_alert({
@@ -260,13 +278,15 @@ export default {
 					indicator: "green",
 				});
 				await this.onComplete?.(result);
-				this.close();
+				completed = true;
 			} catch (error) {
+				this.previewPlan = null;
+				this.previewedArgs = null;
 				this.previewError = error?.message || "Instructor Assignment could not be replaced.";
-				this.invalidatePreview();
 			} finally {
 				this.setBusy(false);
 			}
+			if (completed) this.close();
 		},
 		close() {
 			if (this.busy) return;
