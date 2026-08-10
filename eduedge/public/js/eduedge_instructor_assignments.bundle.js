@@ -57,7 +57,6 @@ function labelInstitutionSubjectsByClassMembership() {
 					? name
 					: `${name} · Add to Class curriculum`,
 			};
-		});
 	};
 }
 
@@ -150,6 +149,7 @@ function syncReplacementRegister(proxy) {
 				if (!currentItem?.can_replace) return;
 				openInstructorAssignmentReplacementDialog({
 					item: { ...currentItem, instructor: proxy.instructor },
+					instructors: proxy.data?.instructors || [],
 					onBusy: (name) => {
 						replacementBusy.set(proxy, name || "");
 						syncReplacementRegister(proxy);
