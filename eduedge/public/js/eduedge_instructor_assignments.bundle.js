@@ -1,10 +1,12 @@
 import EduEdgeInstructorAssignments from "./eduedge_instructor_assignments/EduEdgeInstructorAssignments.vue";
 import { openInstructorAssignmentReplacementDialog } from "./eduedge_instructor_assignments/replacement_dialog";
+import { openInstructorAssignmentTransferDialog } from "./eduedge_instructor_assignments/transfer_dialog";
 import { installInstructorAssignmentVisualStyles } from "./eduedge_instructor_assignments/assignment_visual_styles";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
 let promotedRowSequence = 0;
 const replacementBusy = new WeakMap();
+const transferBusy = new WeakMap();
 
 function uniquePromotedRowId() {
 	promotedRowSequence += 1;
@@ -85,7 +87,7 @@ function enforceReadableReferenceLabels() {
 	};
 }
 
-function addReplacementStatus() {
+function addLifecycleStatuses() {
 	const methods = EduEdgeInstructorAssignments.methods || {};
 	const original = methods.assignmentStatus;
 	if (typeof original !== "function") return;
@@ -93,11 +95,28 @@ function addReplacementStatus() {
 		if (item?.lifecycle_status === "Replaced") {
 			return { label: "Replaced", status: "replaced", tone: "neutral" };
 		}
+		if (item?.lifecycle_status === "Transferred") {
+			return { label: "Transferred", status: "transferred", tone: "neutral" };
+		}
 		return original.call(this, item);
 	};
 }
 
 function relationText(item) {
+	if (item?.transferred_to_assignment) {
+		const relation = item.transferred_to || {};
+		return {
+			label: `Transferred to ${relation.assignment_title || __("destination responsibility")}`,
+			name: relation.name || item.transferred_to_assignment,
+		};
+	}
+	if (item?.transferred_from_assignment) {
+		const relation = item.transferred_from || {};
+		return {
+			label: `Transferred from ${relation.assignment_title || __("previous responsibility")}`,
+			name: relation.name || item.transferred_from_assignment,
+		};
+	}
 	if (item?.replaced_by_assignment) {
 		const relation = item.replaced_by || {};
 		const person = relation.instructor_name || relation.instructor || __("Successor Instructor");
@@ -117,7 +136,7 @@ function relationText(item) {
 	return null;
 }
 
-function syncReplacementRegister(proxy) {
+function syncLifecycleRegister(proxy) {
 	if (!proxy?.loaded) return;
 	const root = document.querySelector(".eduedge-instructor-assignments-root");
 	if (!root) return;
@@ -128,14 +147,15 @@ function syncReplacementRegister(proxy) {
 		if (!item) return;
 
 		const details = card.querySelector(":scope > span");
-		let relation = details?.querySelector("[data-eduedge-replacement-relation]");
+		let relation = details?.querySelector("[data-eduedge-lifecycle-relation], [data-eduedge-replacement-relation]");
 		const relationInfo = relationText(item);
 		if (relationInfo && details) {
 			if (!relation) {
 				relation = document.createElement("small");
-				relation.dataset.eduedgeReplacementRelation = "1";
 				details.appendChild(relation);
 			}
+			relation.dataset.eduedgeLifecycleRelation = "1";
+			delete relation.dataset.eduedgeReplacementRelation;
 			relation.replaceChildren();
 			const text = document.createElement("span");
 			text.textContent = relationInfo.label;
@@ -155,51 +175,86 @@ function syncReplacementRegister(proxy) {
 
 		const actions = card.querySelector(":scope > .assignment-actions");
 		if (!actions) return;
-		let button = actions.querySelector("[data-eduedge-replace-assignment]");
+
+		let replacementButton = actions.querySelector("[data-eduedge-replace-assignment]");
 		const canReplace = Boolean(proxy.canManage && item.can_replace);
 		if (!canReplace) {
-			button?.remove();
-			return;
-		}
-		if (!button) {
-			button = document.createElement("button");
-			button.type = "button";
-			button.className = "edge-button";
-			button.dataset.eduedgeReplaceAssignment = "1";
-			const openButton = actions.querySelector("button:last-of-type");
-			if (openButton) actions.insertBefore(button, openButton);
-			else actions.appendChild(button);
-			button.addEventListener("click", () => {
-				const currentItem = (proxy.data?.assignments || []).find((row) => row.name === item.name);
-				if (!currentItem?.can_replace) return;
-				openInstructorAssignmentReplacementDialog({
-					item: { ...currentItem, instructor: proxy.instructor },
-					instructors: proxy.data?.instructors || [],
-					displayContext: proxy.data || {},
-					onBusy: (name) => {
-						replacementBusy.set(proxy, name || "");
-						syncReplacementRegister(proxy);
-					},
-					onComplete: async () => {
-						await proxy.load?.();
-					},
+			replacementButton?.remove();
+		} else {
+			if (!replacementButton) {
+				replacementButton = document.createElement("button");
+				replacementButton.type = "button";
+				replacementButton.className = "edge-button";
+				replacementButton.dataset.eduedgeReplaceAssignment = "1";
+				const openButton = actions.querySelector("button:last-of-type");
+				if (openButton) actions.insertBefore(replacementButton, openButton);
+				else actions.appendChild(replacementButton);
+				replacementButton.addEventListener("click", () => {
+					const currentItem = (proxy.data?.assignments || []).find((row) => row.name === item.name);
+					if (!currentItem?.can_replace) return;
+					openInstructorAssignmentReplacementDialog({
+						item: { ...currentItem, instructor: currentItem.instructor || proxy.instructor },
+						instructors: proxy.data?.instructors || [],
+						displayContext: proxy.data || {},
+						onBusy: (name) => {
+							replacementBusy.set(proxy, name || "");
+							syncLifecycleRegister(proxy);
+						},
+						onComplete: async () => {
+							await proxy.load?.();
+						},
+					});
 				});
-			});
+			}
+			const busy = replacementBusy.get(proxy) === item.name;
+			replacementButton.disabled = busy;
+			replacementButton.textContent = busy ? __("Checking handover...") : __("Replace / Handover");
 		}
-		const busy = replacementBusy.get(proxy) === item.name;
-		button.disabled = busy;
-		button.textContent = busy ? __("Checking handover...") : __("Replace / Handover");
+
+		let transferButton = actions.querySelector("[data-eduedge-transfer-assignment]");
+		const canTransfer = Boolean(proxy.canManage && item.can_transfer);
+		if (!canTransfer) {
+			transferButton?.remove();
+		} else {
+			if (!transferButton) {
+				transferButton = document.createElement("button");
+				transferButton.type = "button";
+				transferButton.className = "edge-button";
+				transferButton.dataset.eduedgeTransferAssignment = "1";
+				const openButton = actions.querySelector("button:last-of-type");
+				if (openButton) actions.insertBefore(transferButton, openButton);
+				else actions.appendChild(transferButton);
+				transferButton.addEventListener("click", () => {
+					const currentItem = (proxy.data?.assignments || []).find((row) => row.name === item.name);
+					if (!currentItem?.can_transfer) return;
+					openInstructorAssignmentTransferDialog({
+						item: { ...currentItem, instructor: currentItem.instructor || proxy.instructor },
+						displayContext: proxy.data || {},
+						onBusy: (name) => {
+							transferBusy.set(proxy, name || "");
+							syncLifecycleRegister(proxy);
+						},
+						onComplete: async () => {
+							await proxy.load?.();
+						},
+					});
+				});
+			}
+			const busy = transferBusy.get(proxy) === item.name;
+			transferButton.disabled = busy;
+			transferButton.textContent = busy ? __("Checking transfer...") : __("Transfer");
+		}
 	});
 }
 
-function installReplacementRegisterEnhancer() {
+function installLifecycleRegisterEnhancer() {
 	const methods = EduEdgeInstructorAssignments.methods || {};
 	const originalLoad = methods.load;
 	if (typeof originalLoad === "function") {
 		methods.load = async function (...args) {
 			const result = await originalLoad.apply(this, args);
 			await this.$nextTick?.();
-			syncReplacementRegister(this);
+			syncLifecycleRegister(this);
 			return result;
 		};
 	}
@@ -207,7 +262,7 @@ function installReplacementRegisterEnhancer() {
 	const originalMounted = EduEdgeInstructorAssignments.mounted;
 	EduEdgeInstructorAssignments.mounted = function (...args) {
 		const result = typeof originalMounted === "function" ? originalMounted.apply(this, args) : undefined;
-		this.$nextTick?.(() => syncReplacementRegister(this));
+		this.$nextTick?.(() => syncLifecycleRegister(this));
 		return result;
 	};
 }
@@ -218,8 +273,8 @@ keepNewestAssignmentRowOnTop("addBranchAccessRow");
 keepNewestAssignmentRowOnTop("duplicateRow");
 labelInstitutionSubjectsByClassMembership();
 enforceReadableReferenceLabels();
-addReplacementStatus();
-installReplacementRegisterEnhancer();
+addLifecycleStatuses();
+installLifecycleRegisterEnhancer();
 
 export function createEduEdgeInstructorAssignmentsApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeInstructorAssignments, rootProps);
