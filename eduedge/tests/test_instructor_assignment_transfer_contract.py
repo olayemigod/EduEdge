@@ -161,6 +161,21 @@ class TestInstructorAssignmentTransferContract(unittest.TestCase):
             self.assertIn(token, controller)
         self.assertNotIn('lifecycle_action and fieldname == "valid_from"', controller)
 
+    def test_lifecycle_api_exposes_transfer_state_and_capability_without_weakening_end(self):
+        lifecycle = (APP / "api" / "instructor_assignment_lifecycle.py").read_text(encoding="utf-8")
+        for token in (
+            'return "Transferred"',
+            '"transferred_from_assignment"',
+            '"transferred_to_assignment"',
+            '"transfer_reason"',
+            '"can_transfer": can_successor_action',
+            '"transferred_to": relations.get(row.transferred_to_assignment or "")',
+            '"transferred_from": relations.get(row.transferred_from_assignment or "")',
+            "can_end = bool(",
+            "can_successor_action = bool(can_end and has_successor_period)",
+        ):
+            self.assertIn(token, lifecycle)
+
     def test_request_boundary_knows_transfer_actions_are_mutations(self):
         source = (APP / "security" / "request_method.py").read_text(encoding="utf-8")
         self.assertIn('"transfer_",', source)
