@@ -1,5 +1,6 @@
 import EduEdgeInstructorAssignments from "./eduedge_instructor_assignments/EduEdgeInstructorAssignments.vue";
 import { openInstructorAssignmentReplacementDialog } from "./eduedge_instructor_assignments/replacement_dialog";
+import { installInstructorAssignmentVisualStyles } from "./eduedge_instructor_assignments/assignment_visual_styles";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
 let promotedRowSequence = 0;
@@ -57,6 +58,7 @@ function labelInstitutionSubjectsByClassMembership() {
 					? name
 					: `${name} · Add to Class curriculum`,
 			};
+		});
 	};
 }
 
@@ -186,6 +188,7 @@ function installReplacementRegisterEnhancer() {
 	};
 }
 
+installInstructorAssignmentVisualStyles();
 keepNewestAssignmentRowOnTop("addAcademicRow");
 keepNewestAssignmentRowOnTop("addBranchAccessRow");
 keepNewestAssignmentRowOnTop("duplicateRow");
