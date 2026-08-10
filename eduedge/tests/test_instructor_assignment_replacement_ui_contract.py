@@ -134,10 +134,10 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             "courseLabel(name)",
             "successorContextLabel(successor)",
             "branchEligibilitySummary(branch)",
-            'return "Selected Branch / Campus"',
-            'return "Selected Class / Programme Offering"',
-            'return "Selected Class Arm"',
-            'return "Selected Subject / Course"',
+            '"Selected Branch / Campus"',
+            '"Selected Class / Programme Offering"',
+            '"Selected Class Arm"',
+            '"Selected Subject / Course"',
         ):
             self.assertIn(token, component)
 
