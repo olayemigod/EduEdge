@@ -187,7 +187,7 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
         self.assertNotIn('params.set("branch",', runtime)
         self.assertNotIn('params.set("offering",', runtime)
 
-    def test_page_loader_installs_filter_runtime_before_mounting_primary_component(self):
+    def test_page_loader_installs_filter_runtime_after_edgesuite_and_before_mounting(self):
         loader = (
             APP
             / "eduedge"
@@ -196,12 +196,18 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
             / "eduedge_instructor_assignments.js"
         ).read_text(encoding="utf-8")
         for token in (
-            'frappe.require("eduedge_instructor_assignment_register_filters.bundle.js"',
+            'frappe.require("edgesuite_ui.bundle.js"',
+            '"eduedge_instructor_assignment_register_filters.bundle.js"',
+            "frappe.require(filterBundle",
             "mount_instructor_assignments_with_register_filters",
             "window.installInstructorAssignmentRegisterFilters",
             "mount_instructor_assignments(wrapper, visitId, page, $loading, fail)",
         ):
             self.assertIn(token, loader)
+        self.assertLess(
+            loader.index('frappe.require("edgesuite_ui.bundle.js"'),
+            loader.index('"eduedge_instructor_assignment_register_filters.bundle.js"'),
+        )
 
 
 if __name__ == "__main__":
