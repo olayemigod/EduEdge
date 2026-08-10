@@ -1,12 +1,14 @@
 import EduEdgeInstructorAssignments from "./eduedge_instructor_assignments/EduEdgeInstructorAssignments.vue";
 import { openInstructorAssignmentReplacementDialog } from "./eduedge_instructor_assignments/replacement_dialog";
 import { openInstructorAssignmentTransferDialog } from "./eduedge_instructor_assignments/transfer_dialog";
+import { openInstructorAssignmentPreparationDialog } from "./eduedge_instructor_assignments/preparation_dialog";
 import { installInstructorAssignmentVisualStyles } from "./eduedge_instructor_assignments/assignment_visual_styles";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
 let promotedRowSequence = 0;
 const replacementBusy = new WeakMap();
 const transferBusy = new WeakMap();
+const preparationBusy = new WeakMap();
 
 function uniquePromotedRowId() {
 	promotedRowSequence += 1;
@@ -133,6 +135,13 @@ function relationText(item) {
 			name: relation.name || item.replaces_assignment,
 		};
 	}
+	if (item?.prepared_from_assignment) {
+		const relation = item.prepared_from || {};
+		return {
+			label: `Prepared from ${relation.assignment_title || __("previous academic responsibility")}`,
+			name: relation.name || item.prepared_from_assignment,
+		};
+	}
 	return null;
 }
 
@@ -243,6 +252,40 @@ function syncLifecycleRegister(proxy) {
 			const busy = transferBusy.get(proxy) === item.name;
 			transferButton.disabled = busy;
 			transferButton.textContent = busy ? __("Checking transfer...") : __("Transfer");
+		}
+
+		let preparationButton = actions.querySelector("[data-eduedge-prepare-assignment]");
+		const canPrepare = Boolean(proxy.canManage && item.can_prepare);
+		if (!canPrepare) {
+			preparationButton?.remove();
+		} else {
+			if (!preparationButton) {
+				preparationButton = document.createElement("button");
+				preparationButton.type = "button";
+				preparationButton.className = "edge-button";
+				preparationButton.dataset.eduedgePrepareAssignment = "1";
+				const openButton = actions.querySelector("button:last-of-type");
+				if (openButton) actions.insertBefore(preparationButton, openButton);
+				else actions.appendChild(preparationButton);
+				preparationButton.addEventListener("click", () => {
+					const currentItem = (proxy.data?.assignments || []).find((row) => row.name === item.name);
+					if (!currentItem?.can_prepare) return;
+					openInstructorAssignmentPreparationDialog({
+						item: { ...currentItem, instructor: currentItem.instructor || proxy.instructor },
+						displayContext: proxy.data || {},
+						onBusy: (name) => {
+							preparationBusy.set(proxy, name || "");
+							syncLifecycleRegister(proxy);
+						},
+						onComplete: async () => {
+							await proxy.load?.();
+						},
+					});
+				});
+			}
+			const busy = preparationBusy.get(proxy) === item.name;
+			preparationButton.disabled = busy;
+			preparationButton.textContent = busy ? __("Checking preparation...") : __("Prepare Next Term / Session");
 		}
 	});
 }
