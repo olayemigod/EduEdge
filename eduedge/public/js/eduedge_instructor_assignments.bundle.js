@@ -1,7 +1,9 @@
 import EduEdgeInstructorAssignments from "./eduedge_instructor_assignments/EduEdgeInstructorAssignments.vue";
+import { openInstructorAssignmentReplacementDialog } from "./eduedge_instructor_assignments/replacement_dialog";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
 let promotedRowSequence = 0;
+const replacementBusy = new WeakMap();
 
 function uniquePromotedRowId() {
 	promotedRowSequence += 1;
@@ -59,10 +61,134 @@ function labelInstitutionSubjectsByClassMembership() {
 	};
 }
 
+function addReplacementStatus() {
+	const methods = EduEdgeInstructorAssignments.methods || {};
+	const original = methods.assignmentStatus;
+	if (typeof original !== "function") return;
+	methods.assignmentStatus = function (item) {
+		if (item?.lifecycle_status === "Replaced") {
+			return { label: "Replaced", status: "replaced", tone: "neutral" };
+		}
+		return original.call(this, item);
+	};
+}
+
+function relationText(item) {
+	if (item?.replaced_by_assignment) {
+		const relation = item.replaced_by || {};
+		const person = relation.instructor_name || relation.instructor || item.replaced_by_assignment;
+		return {
+			label: `Replaced by ${person}`,
+			name: relation.name || item.replaced_by_assignment,
+		};
+	}
+	if (item?.replaces_assignment) {
+		const relation = item.replaces || {};
+		const person = relation.instructor_name || relation.instructor || item.replaces_assignment;
+		return {
+			label: `Replaces ${person}`,
+			name: relation.name || item.replaces_assignment,
+		};
+	}
+	return null;
+}
+
+function syncReplacementRegister(proxy) {
+	if (!proxy?.loaded) return;
+	const root = document.querySelector(".eduedge-instructor-assignments-root");
+	if (!root) return;
+	const cards = root.querySelectorAll(".register-list > article");
+	const assignments = proxy.data?.assignments || [];
+	cards.forEach((card, index) => {
+		const item = assignments[index];
+		if (!item) return;
+
+		const details = card.querySelector(":scope > span");
+		let relation = details?.querySelector("[data-eduedge-replacement-relation]");
+		const relationInfo = relationText(item);
+		if (relationInfo && details) {
+			if (!relation) {
+				relation = document.createElement("small");
+				relation.dataset.eduedgeReplacementRelation = "1";
+				details.appendChild(relation);
+			}
+			relation.replaceChildren();
+			const text = document.createElement("span");
+			text.textContent = relationInfo.label;
+			relation.appendChild(text);
+			if (relationInfo.name) {
+				const open = document.createElement("button");
+				open.type = "button";
+				open.className = "btn btn-link btn-xs p-0 ml-1";
+				open.textContent = __("Open linked assignment");
+				open.addEventListener("click", () => proxy.openAssignment?.(relationInfo.name));
+				relation.appendChild(document.createTextNode(" · "));
+				relation.appendChild(open);
+			}
+		} else {
+			relation?.remove();
+		}
+
+		const actions = card.querySelector(":scope > .assignment-actions");
+		if (!actions) return;
+		let button = actions.querySelector("[data-eduedge-replace-assignment]");
+		const canReplace = Boolean(proxy.canManage && item.can_replace);
+		if (!canReplace) {
+			button?.remove();
+			return;
+		}
+		if (!button) {
+			button = document.createElement("button");
+			button.type = "button";
+			button.className = "edge-button";
+			button.dataset.eduedgeReplaceAssignment = "1";
+			const openButton = actions.querySelector("button:last-of-type");
+			if (openButton) actions.insertBefore(button, openButton);
+			else actions.appendChild(button);
+			button.addEventListener("click", () => {
+				const currentItem = (proxy.data?.assignments || []).find((row) => row.name === item.name);
+				if (!currentItem?.can_replace) return;
+				openInstructorAssignmentReplacementDialog({
+					item: { ...currentItem, instructor: proxy.instructor },
+					onBusy: (name) => {
+						replacementBusy.set(proxy, name || "");
+						syncReplacementRegister(proxy);
+					},
+					onComplete: async () => {
+						await proxy.load?.();
+						proxy.$nextTick?.(() => syncReplacementRegister(proxy));
+					},
+				});
+			});
+		}
+		const busy = replacementBusy.get(proxy) === item.name;
+		button.disabled = busy;
+		button.textContent = busy ? __("Checking handover...") : __("Replace / Handover");
+	});
+}
+
+function installReplacementRegisterEnhancer() {
+	const originalMounted = EduEdgeInstructorAssignments.mounted;
+	EduEdgeInstructorAssignments.mounted = function (...args) {
+		const result = typeof originalMounted === "function" ? originalMounted.apply(this, args) : undefined;
+		this.$nextTick?.(() => syncReplacementRegister(this));
+		return result;
+	};
+
+	const originalUpdated = EduEdgeInstructorAssignments.updated;
+	EduEdgeInstructorAssignments.updated = function (...args) {
+		const result = typeof originalUpdated === "function" ? originalUpdated.apply(this, args) : undefined;
+		this.$nextTick?.(() => syncReplacementRegister(this));
+		return result;
+	};
+}
+
 keepNewestAssignmentRowOnTop("addAcademicRow");
 keepNewestAssignmentRowOnTop("addBranchAccessRow");
 keepNewestAssignmentRowOnTop("duplicateRow");
 labelInstitutionSubjectsByClassMembership();
+addReplacementStatus();
+installReplacementRegisterEnhancer();
 
 export function createEduEdgeInstructorAssignmentsApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeInstructorAssignments, rootProps);
