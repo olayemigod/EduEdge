@@ -102,6 +102,7 @@ def _admin_rows(names: list[str]) -> list:
             "ended_on",
             "replaced_by_assignment",
             "transferred_to_assignment",
+            "modified",
             *CAPABILITY_FIELDS,
             *CAPABILITY_AUDIT_FIELDS,
         ],
@@ -125,6 +126,7 @@ def get_instructor_assignment_capability_admin_states(names: str | list | None =
             "can_manage_capabilities": can_manage,
             "capability_block_reason": block_reason,
             "capabilities": {fieldname: cint(row.get(fieldname)) for fieldname in CAPABILITY_FIELDS},
+            "capability_version": str(row.modified or ""),
             "capabilities_updated_on": str(row.capabilities_updated_on or ""),
             "capabilities_updated_by": row.capabilities_updated_by or "",
             "capabilities_update_reason": row.capabilities_update_reason or "",
@@ -158,14 +160,18 @@ def update_instructor_assignment_capabilities(
     name: str,
     capabilities: str | dict,
     reason: str | None = None,
+    expected_modified: str | None = None,
 ) -> dict:
     _require_assignment_manager()
     require_eduedge_access(feature_key="academics", action="update_instructor_assignment_capabilities")
     resolved_reason = _clean_reason(reason)
     resolved_capabilities = _parse_capabilities(capabilities)
     assignment_name = str(name or "").strip()
+    expected_version = str(expected_modified or "").strip()
     if not assignment_name:
         frappe.throw(_("Select an Instructor Assignment."), frappe.ValidationError)
+    if not expected_version:
+        frappe.throw(_("Refresh the Instructor Assignment before changing capabilities."), frappe.ValidationError)
 
     savepoint = "eduedge_instructor_assignment_capabilities"
     frappe.db.savepoint(savepoint)
@@ -177,6 +183,11 @@ def update_instructor_assignment_capabilities(
         doc = frappe.get_doc(ASSIGNMENT_DOCTYPE, assignment_name)
         doc.check_permission("write")
         assert_branch_access(doc.school_branch)
+        if str(doc.modified or "") != expected_version:
+            frappe.throw(
+                _("This Instructor Assignment changed after its capabilities were loaded. Refresh the register and review the latest values before saving."),
+                frappe.ValidationError,
+            )
         allowed, block_reason = _can_manage_record(doc, getdate(nowdate()))
         if not allowed:
             frappe.throw(block_reason, frappe.ValidationError)
@@ -187,6 +198,7 @@ def update_instructor_assignment_capabilities(
                 "name": doc.name,
                 "action": "already-configured",
                 "capabilities": before,
+                "capability_version": str(doc.modified or ""),
                 "branch_eligibility_changed": False,
             }
 
@@ -219,6 +231,7 @@ def update_instructor_assignment_capabilities(
             "assignment_title": doc.assignment_title,
             "action": "capabilities-updated",
             "capabilities": resolved_capabilities,
+            "capability_version": str(doc.modified or ""),
             "capabilities_updated_on": str(doc.capabilities_updated_on or ""),
             "capabilities_updated_by": doc.capabilities_updated_by or "",
             "capabilities_update_reason": doc.capabilities_update_reason or "",
