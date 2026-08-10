@@ -48,6 +48,8 @@ def _assignment_names(names: str | list | tuple | None) -> list[str]:
 def _lifecycle_status(row, today) -> str:
     if not cint(row.enabled):
         return "Disabled"
+    if row.replaced_by_assignment:
+        return "Replaced"
     if row.ended_on:
         return "Ended"
     if row.valid_from and getdate(row.valid_from) > today:
@@ -55,6 +57,43 @@ def _lifecycle_status(row, today) -> str:
     if row.valid_to and getdate(row.valid_to) < today:
         return "Ended"
     return "Current"
+
+
+def _relation_summaries(rows: list) -> dict[str, dict]:
+    relation_names = sorted(
+        {
+            str(name or "").strip()
+            for row in rows
+            for name in (row.replaced_by_assignment, row.replaces_assignment)
+            if str(name or "").strip()
+        }
+    )
+    if not relation_names:
+        return {}
+    relations = frappe.get_list(
+        "EduEdge Instructor Assignment",
+        filters={"name": ["in", relation_names]},
+        fields=[
+            "name",
+            "assignment_title",
+            "instructor",
+            "instructor_name",
+            "valid_from",
+            "valid_to",
+        ],
+        limit_page_length=len(relation_names),
+    )
+    return {
+        row.name: {
+            "name": row.name,
+            "assignment_title": row.assignment_title or "",
+            "instructor": row.instructor or "",
+            "instructor_name": row.instructor_name or row.instructor or "",
+            "valid_from": str(row.valid_from or ""),
+            "valid_to": str(row.valid_to or ""),
+        }
+        for row in relations
+    }
 
 
 @frappe.whitelist()
@@ -75,20 +114,38 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
             "ended_on",
             "ended_by",
             "end_reason",
+            "replaced_by_assignment",
+            "replaces_assignment",
+            "replacement_reason",
         ],
         limit_page_length=len(assignment_names),
     )
+    relations = _relation_summaries(rows)
     today = getdate(nowdate())
     can_manage = _can_manage_assignments()
     states = {}
     for row in rows:
         status = _lifecycle_status(row, today)
+        has_successor_period = not row.valid_to or getdate(row.valid_to) > today
+        can_replace = bool(
+            can_manage
+            and status == "Current"
+            and not row.ended_on
+            and not row.replaced_by_assignment
+            and has_successor_period
+        )
         states[row.name] = {
             "lifecycle_status": status,
-            "can_end": bool(can_manage and status == "Current" and not row.ended_on),
+            "can_end": bool(can_manage and status == "Current" and not row.ended_on and not row.replaced_by_assignment),
+            "can_replace": can_replace,
             "ended_on": str(row.ended_on or ""),
             "ended_by": row.ended_by or "",
             "end_reason": row.end_reason or "",
+            "replaced_by_assignment": row.replaced_by_assignment or "",
+            "replaced_by": relations.get(row.replaced_by_assignment or ""),
+            "replaces_assignment": row.replaces_assignment or "",
+            "replaces": relations.get(row.replaces_assignment or ""),
+            "replacement_reason": row.replacement_reason or "",
         }
     return {"states": states}
 
