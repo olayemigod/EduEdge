@@ -77,7 +77,7 @@ function addReplacementStatus() {
 function relationText(item) {
 	if (item?.replaced_by_assignment) {
 		const relation = item.replaced_by || {};
-		const person = relation.instructor_name || relation.instructor || item.replaced_by_assignment;
+		const person = relation.instructor_name || relation.instructor || __("Successor Instructor");
 		return {
 			label: `Replaced by ${person}`,
 			name: relation.name || item.replaced_by_assignment,
@@ -85,7 +85,7 @@ function relationText(item) {
 	}
 	if (item?.replaces_assignment) {
 		const relation = item.replaces || {};
-		const person = relation.instructor_name || relation.instructor || item.replaces_assignment;
+		const person = relation.instructor_name || relation.instructor || __("Previous Instructor");
 		return {
 			label: `Replaces ${person}`,
 			name: relation.name || item.replaces_assignment,
@@ -152,6 +152,7 @@ function syncReplacementRegister(proxy) {
 				openInstructorAssignmentReplacementDialog({
 					item: { ...currentItem, instructor: proxy.instructor },
 					instructors: proxy.data?.instructors || [],
+					displayContext: proxy.data || {},
 					onBusy: (name) => {
 						replacementBusy.set(proxy, name || "");
 						syncReplacementRegister(proxy);
