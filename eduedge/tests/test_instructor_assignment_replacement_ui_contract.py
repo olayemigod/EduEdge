@@ -7,6 +7,16 @@ APP = ROOT / "eduedge"
 
 
 class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
+    def _component_source(self):
+        return (
+            APP
+            / "public"
+            / "js"
+            / "eduedge_ui"
+            / "components"
+            / "InstructorAssignmentReplacementDialog.vue"
+        ).read_text(encoding="utf-8")
+
     def test_lifecycle_state_exposes_server_authoritative_replace_capability_and_links(self):
         lifecycle = (APP / "api" / "instructor_assignment_lifecycle.py").read_text(encoding="utf-8")
         for token in (
@@ -41,6 +51,7 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             "await this.$nextTick?.()",
             "syncReplacementRegister(this)",
             "instructors: proxy.data?.instructors || []",
+            "installInstructorAssignmentVisualStyles",
         ):
             self.assertIn(token, bundle)
 
@@ -52,16 +63,10 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             / "eduedge_instructor_assignments"
             / "replacement_dialog.js"
         ).read_text(encoding="utf-8")
-        component = (
-            APP
-            / "public"
-            / "js"
-            / "eduedge_instructor_assignments"
-            / "InstructorAssignmentReplacementDialog.vue"
-        ).read_text(encoding="utf-8")
+        component = self._component_source()
 
         for token in (
-            'InstructorAssignmentReplacementDialog from "./InstructorAssignmentReplacementDialog.vue"',
+            'InstructorAssignmentReplacementDialog from "../eduedge_ui/components/InstructorAssignmentReplacementDialog.vue"',
             'createEduEdgeApp(InstructorAssignmentReplacementDialog',
             'document.body.appendChild(host)',
             'app.mount(host)',
@@ -76,9 +81,9 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             "<EdgeModal",
             "<EdgeLinkField",
             'title="Replace / Handover Instructor Assignment"',
-            "Replacement Instructor *",
-            "Handover Date *",
-            "Reason *",
+            "Replacement Instructor",
+            "Handover Date",
+            "Reason",
             "Only active Instructors already available to your permissions are shown.",
             'row.name !== this.item.instructor',
             'String(row.status || "Active") === "Active"',
@@ -86,13 +91,7 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             self.assertIn(token, component)
 
     def test_dialog_previews_before_confirming_and_immediately_invalidates_stale_preview(self):
-        component = (
-            APP
-            / "public"
-            / "js"
-            / "eduedge_instructor_assignments"
-            / "InstructorAssignmentReplacementDialog.vue"
-        ).read_text(encoding="utf-8")
+        component = self._component_source()
 
         for token in (
             "Preview Replacement",
@@ -116,6 +115,39 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
         ):
             self.assertIn(token, component)
 
+    def test_page_and_popup_buttons_labels_and_controls_have_edgesuite_visual_contract(self):
+        component = self._component_source()
+        visual_styles = (
+            APP
+            / "public"
+            / "js"
+            / "eduedge_instructor_assignments"
+            / "assignment_visual_styles.js"
+        ).read_text(encoding="utf-8")
+
+        for token in (
+            "eduedge-replacement-label",
+            "eduedge-replacement-button--cancel",
+            "eduedge-replacement-button--primary",
+            "eduedge-replacement-control",
+            "edge-color-brand-500",
+            "focus",
+            "disabled",
+        ):
+            self.assertIn(token, component)
+
+        for token in (
+            ".eduedge-instructor-assignments-root .instructor-field > span",
+            ".eduedge-instructor-assignments-root .row-grid label > span",
+            ".eduedge-instructor-assignments-root .assignment-actions .edge-button",
+            ".eduedge-instructor-assignments-root .edge-button--primary",
+            "[data-eduedge-replace-assignment]",
+            "[data-eduedge-replacement-relation]",
+            ".eduedge-instructor-assignments-root .form-control:focus",
+            ".eduedge-instructor-assignments-root .form-control:disabled",
+        ):
+            self.assertIn(token, visual_styles)
+
     def test_dialog_does_not_bypass_backend_lifecycle_write_path(self):
         helper = (
             APP
@@ -124,13 +156,7 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             / "eduedge_instructor_assignments"
             / "replacement_dialog.js"
         ).read_text(encoding="utf-8")
-        component = (
-            APP
-            / "public"
-            / "js"
-            / "eduedge_instructor_assignments"
-            / "InstructorAssignmentReplacementDialog.vue"
-        ).read_text(encoding="utf-8")
+        component = self._component_source()
         combined = helper + component
         for forbidden in (
             "frappe.db.set_value",
