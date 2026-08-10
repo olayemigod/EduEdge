@@ -8,6 +8,7 @@ from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.academic_operations import assert_instructor_assignment
 from eduedge.education.curriculum_permissions import is_teacher_user
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_assignment_capabilities import require_instructor_assignment_capability
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import require_course_assignment
 
@@ -34,6 +35,15 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 			branch=doc.get(BRANCH_FIELD),
 			program_offering=program_offering,
 			student_group=doc.student_group,
+		)
+		require_instructor_assignment_capability(
+			"can_create_assessment_plans",
+			user=frappe.session.user,
+			school_branch=doc.get(BRANCH_FIELD),
+			program_offering=program_offering or "",
+			student_group=doc.student_group,
+			course=doc.course,
+			on_date=doc.schedule_date or nowdate(),
 		)
 	if doc.room:
 		room_branch = frappe.db.get_value("Room", doc.room, BRANCH_FIELD)
@@ -88,6 +98,21 @@ def before_validate_assessment_result(doc, method=None) -> None:
 				doc.student, plan.student_group
 			),
 			frappe.ValidationError,
+		)
+	if is_teacher_user():
+		group = _get_student_group(plan.student_group)
+		program_offering = group.get(OFFERING_FIELD) or _resolve_group_offering(group)
+		# Mark entry is an operational permission evaluated at the time of entry, not
+		# merely on the historic assessment date. Former Instructors therefore do not
+		# retain mark-entry access after their exact responsibility has ended.
+		require_instructor_assignment_capability(
+			"can_enter_marks",
+			user=frappe.session.user,
+			school_branch=doc.get(BRANCH_FIELD),
+			program_offering=program_offering or "",
+			student_group=plan.student_group,
+			course=plan.course,
+			on_date=nowdate(),
 		)
 
 
@@ -301,6 +326,8 @@ def _get_assessment_plan(name: str):
 		[
 			"name",
 			"student_group",
+			"course",
+			"schedule_date",
 			"academic_year",
 			"academic_term",
 			"assessment_group",
