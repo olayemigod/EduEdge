@@ -38,6 +38,7 @@ POST_ONLY_MUTATION_PREFIXES = (
 	"sync_",
 	"end_",
 	"replace_",
+	"transfer_",
 )
 
 
