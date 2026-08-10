@@ -1,4 +1,4 @@
-import InstructorAssignmentReplacementDialog from "./InstructorAssignmentReplacementDialog.vue";
+import InstructorAssignmentReplacementDialog from "../eduedge_ui/components/InstructorAssignmentReplacementDialog.vue";
 import { createEduEdgeApp } from "../eduedge_ui/app_factory";
 
 export function openInstructorAssignmentReplacementDialog({ item, instructors = [], onBusy, onComplete }) {
