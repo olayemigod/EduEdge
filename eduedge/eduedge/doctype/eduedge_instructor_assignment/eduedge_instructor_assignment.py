@@ -37,6 +37,9 @@ LIFECYCLE_AUDIT_FIELDS = (
     "replaces_assignment",
     "replaced_by_assignment",
     "replacement_reason",
+    "transferred_from_assignment",
+    "transferred_to_assignment",
+    "transfer_reason",
 )
 
 
@@ -288,6 +291,7 @@ class EduEdgeInstructorAssignment(Document):
                     _("Ended On must match the final Valid To date."),
                     frappe.ValidationError,
                 )
+
         if self.replaces_assignment and self.replaces_assignment == self.name:
             frappe.throw(_("An Instructor Assignment cannot replace itself."), frappe.ValidationError)
         if self.replaced_by_assignment and self.replaced_by_assignment == self.name:
@@ -305,6 +309,36 @@ class EduEdgeInstructorAssignment(Document):
         if self.replaced_by_assignment and not self.ended_on:
             frappe.throw(
                 _("An assignment linked to a replacement successor must already be ended."),
+                frappe.ValidationError,
+            )
+
+        if self.transferred_from_assignment and self.transferred_from_assignment == self.name:
+            frappe.throw(_("An Instructor Assignment cannot transfer from itself."), frappe.ValidationError)
+        if self.transferred_to_assignment and self.transferred_to_assignment == self.name:
+            frappe.throw(_("An Instructor Assignment cannot transfer to itself."), frappe.ValidationError)
+        if self.transferred_from_assignment and self.replaces_assignment:
+            frappe.throw(
+                _("An Instructor Assignment can have only one incoming lifecycle origin: Replace / Handover or Transfer."),
+                frappe.ValidationError,
+            )
+        if self.transferred_to_assignment and self.replaced_by_assignment:
+            frappe.throw(
+                _("An Instructor Assignment can have only one outgoing lifecycle successor: Replace / Handover or Transfer."),
+                frappe.ValidationError,
+            )
+        if self.transferred_from_assignment and not str(self.transfer_reason or "").strip():
+            frappe.throw(
+                _("Transferred assignments require a Transfer Reason."),
+                frappe.ValidationError,
+            )
+        if self.transfer_reason and not self.transferred_from_assignment:
+            frappe.throw(
+                _("Transfer Reason requires a Transferred From Assignment link."),
+                frappe.ValidationError,
+            )
+        if self.transferred_to_assignment and not self.ended_on:
+            frappe.throw(
+                _("An assignment linked to a transfer successor must already be ended."),
                 frappe.ValidationError,
             )
 
