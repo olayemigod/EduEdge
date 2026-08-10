@@ -42,6 +42,27 @@ class TestInstructorAssignmentLifecycleUIContract(unittest.TestCase):
 
         self.assertNotIn(":label=\"item.enabled ? 'Active' : 'Disabled'\"", component)
 
+    def test_relation_enrichment_cannot_take_down_core_lifecycle_state(self):
+        api = (APP / "api" / "instructor_assignment_lifecycle.py").read_text(encoding="utf-8")
+        for token in (
+            "def _readable_instructor_from_assignment",
+            'title.split(" · ", 1)[0].strip()',
+            "Relationship enrichment must never be required to calculate lifecycle state.",
+            "relation_enrichment_available = True",
+            "try:\n        relations = _relation_summaries(rows)",
+            "except Exception:",
+            "relations = {}",
+            "relation_enrichment_available = False",
+            '"relation_enrichment_available": relation_enrichment_available',
+            "EduEdge Instructor Assignment relationship enrichment failed",
+        ):
+            self.assertIn(token, api)
+
+        # Readable relationship labels should not depend on a denormalized assignment
+        # column whose absence can take down the lifecycle endpoint.
+        relation_block = api.split("def _relation_summaries", 1)[1].split("@frappe.whitelist()", 1)[0]
+        self.assertNotIn('"instructor_name",', relation_block)
+
     def test_end_action_is_manager_only_and_uses_confirming_dialog(self):
         component = (
             APP
