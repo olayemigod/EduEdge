@@ -3,9 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import cint, getdate, nowdate
 
-from eduedge.education.instructor_scope import get_active_instructor_names_for_user
+from eduedge.education.instructor_scope import (
+    get_active_instructor_names_for_user,
+    is_limited_instructor_user,
+)
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
 
 ASSIGNMENT_DOCTYPE = "EduEdge Instructor Assignment"
@@ -23,6 +27,22 @@ CAPABILITY_LABELS = {
     "can_create_assessment_plans": "Create Assessment Plans",
     "can_enter_marks": "Enter Marks",
 }
+
+
+def assignment_capability_enforcement_enabled() -> bool:
+    """Return the migration-safe capability enforcement switch.
+
+    Missing settings/schema intentionally fail open to the existing assignment rules
+    during deployment. Once the setting is present and enabled, limited Instructor
+    users fail closed on the exact capability checks below.
+    """
+    try:
+        meta = frappe.get_meta("EduEdge Settings")
+        if not meta.has_field("enforce_instructor_assignment_capabilities"):
+            return False
+        return bool(cint(frappe.db.get_single_value("EduEdge Settings", "enforce_instructor_assignment_capabilities")))
+    except Exception:
+        return False
 
 
 def _blank_state(*, user: str, school_branch: str, program_offering: str, course: str, student_group: str = "") -> dict:
@@ -179,3 +199,86 @@ def user_has_instructor_assignment_capability(
         on_date=on_date,
     )
     return bool(state.get(capability))
+
+
+def get_user_capability_assignment_rows(
+    capability: str,
+    *,
+    user: str | None = None,
+    school_branch: str | None = None,
+    on_date=None,
+) -> list[dict]:
+    """Return effective exact assignment rows that explicitly enable one capability."""
+    if capability not in CAPABILITY_FIELDS:
+        return []
+    resolved_user = user or frappe.session.user
+    instructors = get_active_instructor_names_for_user(resolved_user)
+    if len(instructors) != 1:
+        return []
+    filters = {
+        "instructor": instructors[0],
+        "assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)],
+        "enabled": 1,
+        capability: 1,
+    }
+    if school_branch:
+        filters["school_branch"] = school_branch
+    rows = frappe.get_all(
+        ASSIGNMENT_DOCTYPE,
+        filters=filters,
+        fields=[
+            "name",
+            "school_branch",
+            "program_offering",
+            "assignment_scope",
+            "student_group",
+            "course",
+            "valid_from",
+            "valid_to",
+        ],
+        order_by="school_branch asc, program_offering asc, course asc, valid_from desc",
+        limit_page_length=0,
+    )
+    resolved_date = getdate(on_date or nowdate())
+    return [dict(row) for row in rows if _effective(row, resolved_date)]
+
+
+def require_instructor_assignment_capability(
+    capability: str,
+    *,
+    user: str | None = None,
+    school_branch: str,
+    program_offering: str,
+    course: str,
+    student_group: str | None = None,
+    on_date=None,
+) -> bool:
+    """Enforce one exact capability for limited Teacher/Instructor users when enabled.
+
+    Managers and privileged users keep their established role/permission paths. The
+    rollout switch defaults off so existing sites can migrate, review identity mappings
+    and configure capability flags before activating stricter operational enforcement.
+    """
+    resolved_user = user or frappe.session.user
+    if not assignment_capability_enforcement_enabled() or not is_limited_instructor_user(resolved_user):
+        return True
+    state = get_instructor_assignment_capability_state(
+        user=resolved_user,
+        school_branch=school_branch,
+        program_offering=program_offering,
+        course=course,
+        student_group=student_group,
+        on_date=on_date,
+    )
+    if state.get(capability):
+        return True
+    label = CAPABILITY_LABELS.get(capability, "the required operation")
+    if state.get("identity_status") == "ambiguous":
+        frappe.throw(
+            _("Your User account resolves to more than one active Instructor. {0} is blocked until the identity mapping is corrected.").format(label),
+            frappe.PermissionError,
+        )
+    frappe.throw(
+        _("Your exact active Instructor Assignment does not grant {0} for this Branch, Class, Class Arm and Subject context.").format(label),
+        frappe.PermissionError,
+    )
