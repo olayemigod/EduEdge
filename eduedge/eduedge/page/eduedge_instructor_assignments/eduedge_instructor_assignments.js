@@ -59,8 +59,8 @@ function mount_instructor_assignments(wrapper, visitId, page, $loading, fail) {
 	}
 }
 
-function mount_instructor_assignments_with_register_filters(wrapper, visitId, page, $loading, fail) {
-	frappe.require("eduedge_instructor_assignment_register_filters.bundle.js", () => {
+function mount_instructor_assignments_with_register_filters(wrapper, visitId, page, $loading, fail, filterBundle) {
+	frappe.require(filterBundle, () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		if (typeof window.installInstructorAssignmentRegisterFilters === "function") {
 			window.installInstructorAssignmentRegisterFilters(window.EduEdgeInstructorAssignments);
@@ -76,12 +76,13 @@ function load_instructor_assignments_bundle(
 	$loading,
 	fail,
 	primaryBundle,
-	legacyBundle
+	legacyBundle,
+	filterBundle
 ) {
 	frappe.require(primaryBundle, () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		if (instructor_assignment_component() && typeof instructor_assignment_factory() === "function") {
-			mount_instructor_assignments_with_register_filters(wrapper, visitId, page, $loading, fail);
+			mount_instructor_assignments_with_register_filters(wrapper, visitId, page, $loading, fail, filterBundle);
 			return;
 		}
 
@@ -118,7 +119,8 @@ frappe.pages["eduedge-instructor-assignments"].on_page_show = function (wrapper)
 			$loading,
 			fail,
 			"eduedge_instructor_assignments.bundle.js",
-			"eduedge_teacher_assignments.bundle.js"
+			"eduedge_teacher_assignments.bundle.js",
+			"eduedge_instructor_assignment_register_filters.bundle.js"
 		);
 	});
 };
