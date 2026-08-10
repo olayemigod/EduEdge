@@ -28,9 +28,11 @@ def validate_master_docstatus(doc, method: str | None = None) -> None:
 	if cint(doc.docstatus) != 0:
 		throw_master_lifecycle_error(doc)
 	if doc.doctype == "EduEdge CBT Question":
+		from eduedge.cbt.assignment_capabilities import validate_question_authoring_capability
 		from eduedge.cbt.question_governance import validate_question_governance_transition
 
 		validate_question_governance_transition(doc)
+		validate_question_authoring_capability(doc)
 	if doc.doctype == "EduEdge CBT Exam Template":
 		_validate_template_runtime_policies(doc)
 
