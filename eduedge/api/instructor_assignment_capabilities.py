@@ -111,6 +111,8 @@ def _admin_rows(names: list[str]) -> list:
 
 @frappe.whitelist()
 def get_instructor_assignment_capability_admin_states(names: str | list | None = None) -> dict:
+    _require_assignment_manager()
+    require_eduedge_access(feature_key="academics", action="view_instructor_assignment_capability_admin_states")
     assignment_names = _assignment_names(names)
     if not assignment_names:
         return {"states": {}}
