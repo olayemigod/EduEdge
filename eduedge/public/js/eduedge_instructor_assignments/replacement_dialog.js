@@ -1,7 +1,7 @@
 import InstructorAssignmentReplacementDialog from "../eduedge_ui/components/InstructorAssignmentReplacementDialog.vue";
 import { createEduEdgeApp } from "../eduedge_ui/app_factory";
 
-export function openInstructorAssignmentReplacementDialog({ item, instructors = [], onBusy, onComplete }) {
+export function openInstructorAssignmentReplacementDialog({ item, instructors = [], displayContext = {}, onBusy, onComplete }) {
 	if (!item?.name) return null;
 
 	const host = document.createElement("div");
@@ -25,6 +25,7 @@ export function openInstructorAssignmentReplacementDialog({ item, instructors = 
 	app = createEduEdgeApp(InstructorAssignmentReplacementDialog, {
 		item,
 		instructors,
+		displayContext,
 		onBusy,
 		onComplete,
 		onClosed: cleanup,
