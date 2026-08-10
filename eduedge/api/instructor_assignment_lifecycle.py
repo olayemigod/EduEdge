@@ -50,6 +50,8 @@ def _lifecycle_status(row, today) -> str:
         return "Disabled"
     if row.replaced_by_assignment:
         return "Replaced"
+    if row.transferred_to_assignment:
+        return "Transferred"
     if row.ended_on:
         return "Ended"
     if row.valid_from and getdate(row.valid_from) > today:
@@ -79,7 +81,12 @@ def _relation_summaries(rows: list) -> dict[str, dict]:
         {
             str(name or "").strip()
             for row in rows
-            for name in (row.replaced_by_assignment, row.replaces_assignment)
+            for name in (
+                row.replaced_by_assignment,
+                row.replaces_assignment,
+                row.transferred_to_assignment,
+                row.transferred_from_assignment,
+            )
             if str(name or "").strip()
         }
     )
@@ -130,6 +137,9 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
             "replaced_by_assignment",
             "replaces_assignment",
             "replacement_reason",
+            "transferred_from_assignment",
+            "transferred_to_assignment",
+            "transfer_reason",
         ],
         limit_page_length=len(assignment_names),
     )
@@ -153,17 +163,19 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
     for row in rows:
         status = _lifecycle_status(row, today)
         has_successor_period = not row.valid_to or getdate(row.valid_to) > today
-        can_replace = bool(
+        can_continue_lifecycle = bool(
             can_manage
             and status == "Current"
             and not row.ended_on
             and not row.replaced_by_assignment
+            and not row.transferred_to_assignment
             and has_successor_period
         )
         states[row.name] = {
             "lifecycle_status": status,
-            "can_end": bool(can_manage and status == "Current" and not row.ended_on and not row.replaced_by_assignment),
-            "can_replace": can_replace,
+            "can_end": can_continue_lifecycle,
+            "can_replace": can_continue_lifecycle,
+            "can_transfer": can_continue_lifecycle,
             "ended_on": str(row.ended_on or ""),
             "ended_by": row.ended_by or "",
             "end_reason": row.end_reason or "",
@@ -172,6 +184,11 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
             "replaces_assignment": row.replaces_assignment or "",
             "replaces": relations.get(row.replaces_assignment or ""),
             "replacement_reason": row.replacement_reason or "",
+            "transferred_to_assignment": row.transferred_to_assignment or "",
+            "transferred_to": relations.get(row.transferred_to_assignment or ""),
+            "transferred_from_assignment": row.transferred_from_assignment or "",
+            "transferred_from": relations.get(row.transferred_from_assignment or ""),
+            "transfer_reason": row.transfer_reason or "",
             "relation_enrichment_available": relation_enrichment_available,
         }
     return {"states": states}
