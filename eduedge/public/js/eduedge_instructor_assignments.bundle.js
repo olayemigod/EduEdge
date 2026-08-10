@@ -62,6 +62,29 @@ function labelInstitutionSubjectsByClassMembership() {
 	};
 }
 
+function enforceReadableReferenceLabels() {
+	const methods = EduEdgeInstructorAssignments.methods || {};
+	methods.branchLabel = function (name) {
+		if (!name) return __("Branch / Campus");
+		return this.branchRecord?.(name)?.branch_name || __("Selected Branch / Campus");
+	};
+	methods.institutionForBranch = function (name) {
+		const row = this.branchRecord?.(name);
+		return row?.institution_name || __("Institution");
+	};
+	methods.offeringLabel = function (name) {
+		if (!name) return __("Class / Programme Offering");
+		const row = this.offeringRecord?.(name);
+		if (!row) return __("Selected Class / Programme Offering");
+		return row.offering_title || row.program || __("Class / Programme Offering");
+	};
+	methods.courseName = function (name) {
+		if (!name) return "";
+		const row = (this.data?.courses || []).find((course) => course.name === name);
+		return row?.course_name || __("Selected Subject / Course");
+	};
+}
+
 function addReplacementStatus() {
 	const methods = EduEdgeInstructorAssignments.methods || {};
 	const original = methods.assignmentStatus;
@@ -194,6 +217,7 @@ keepNewestAssignmentRowOnTop("addAcademicRow");
 keepNewestAssignmentRowOnTop("addBranchAccessRow");
 keepNewestAssignmentRowOnTop("duplicateRow");
 labelInstitutionSubjectsByClassMembership();
+enforceReadableReferenceLabels();
 addReplacementStatus();
 installReplacementRegisterEnhancer();
 
