@@ -155,7 +155,7 @@ function syncLifecycleRegister(proxy) {
 				details.appendChild(relation);
 			}
 			relation.dataset.eduedgeLifecycleRelation = "1";
-			delete relation.dataset.eduedgeReplacementRelation;
+			relation.dataset.eduedgeReplacementRelation = "1";
 			relation.replaceChildren();
 			const text = document.createElement("span");
 			text.textContent = relationInfo.label;
@@ -247,6 +247,10 @@ function syncLifecycleRegister(proxy) {
 	});
 }
 
+function syncReplacementRegister(proxy) {
+	syncLifecycleRegister(proxy);
+}
+
 function installLifecycleRegisterEnhancer() {
 	const methods = EduEdgeInstructorAssignments.methods || {};
 	const originalLoad = methods.load;
@@ -254,7 +258,7 @@ function installLifecycleRegisterEnhancer() {
 		methods.load = async function (...args) {
 			const result = await originalLoad.apply(this, args);
 			await this.$nextTick?.();
-			syncLifecycleRegister(this);
+			syncReplacementRegister(this);
 			return result;
 		};
 	}
@@ -262,9 +266,13 @@ function installLifecycleRegisterEnhancer() {
 	const originalMounted = EduEdgeInstructorAssignments.mounted;
 	EduEdgeInstructorAssignments.mounted = function (...args) {
 		const result = typeof originalMounted === "function" ? originalMounted.apply(this, args) : undefined;
-		this.$nextTick?.(() => syncLifecycleRegister(this));
+		this.$nextTick?.(() => syncReplacementRegister(this));
 		return result;
 	};
+}
+
+function installReplacementRegisterEnhancer() {
+	installLifecycleRegisterEnhancer();
 }
 
 installInstructorAssignmentVisualStyles();
@@ -274,7 +282,7 @@ keepNewestAssignmentRowOnTop("duplicateRow");
 labelInstitutionSubjectsByClassMembership();
 enforceReadableReferenceLabels();
 addLifecycleStatuses();
-installLifecycleRegisterEnhancer();
+installReplacementRegisterEnhancer();
 
 export function createEduEdgeInstructorAssignmentsApp(rootProps = null) {
 	return createEduEdgeApp(EduEdgeInstructorAssignments, rootProps);
