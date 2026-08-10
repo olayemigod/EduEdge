@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, getdate, nowdate
 
-from eduedge.api.instructor_assignments import _can_manage_assignments, _require_assignment_manager
+from eduedge.api.instructor_assignments import _can_manage_assignments, _period_dates, _require_assignment_manager
 from eduedge.education.offerings import assert_branch_access
 from eduedge.platform.access import require_eduedge_access
 
@@ -86,6 +86,7 @@ def _relation_summaries(rows: list) -> dict[str, dict]:
                 row.replaces_assignment,
                 row.transferred_to_assignment,
                 row.transferred_from_assignment,
+                row.prepared_from_assignment,
             )
             if str(name or "").strip()
         }
@@ -116,6 +117,55 @@ def _relation_summaries(rows: list) -> dict[str, dict]:
     }
 
 
+def _active_instructor_names(rows: list, can_manage: bool) -> set[str]:
+    if not can_manage:
+        return set()
+    names = sorted({str(row.instructor or "").strip() for row in rows if str(row.instructor or "").strip()})
+    if not names:
+        return set()
+    try:
+        instructors = frappe.get_list(
+            "Instructor",
+            filters={"name": ["in", names], "status": "Active"},
+            fields=["name"],
+            limit_page_length=len(names),
+        )
+        return {row.name for row in instructors}
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "EduEdge Instructor Assignment preparation capability lookup failed",
+        )
+        return set()
+
+
+def _preparation_capability(row, can_manage: bool, active_instructors: set[str], period_cache: dict) -> tuple[bool, str]:
+    """Return fail-closed source eligibility for the next-period preparation UI.
+
+    This is a display capability only. The preparation endpoints remain authoritative
+    and repeat all permission, active-Instructor, period, branch and destination checks.
+    Unlike Transfer/Replace, an enabled historical assignment may be a valid source.
+    """
+    if not can_manage or not cint(row.enabled) or row.instructor not in active_instructors:
+        return False, ""
+
+    key = (str(row.academic_year or ""), str(row.academic_term or ""))
+    try:
+        if key not in period_cache:
+            period_cache[key] = _period_dates(row.academic_year, row.academic_term)
+        period_start, period_end = period_cache[key]
+        source_end = period_end or row.valid_to
+        if not source_end:
+            return False, ""
+        if period_start and row.valid_from and getdate(row.valid_from) < getdate(period_start):
+            return False, str(getdate(source_end))
+        if period_end and row.valid_to and getdate(row.valid_to) > getdate(period_end):
+            return False, str(getdate(source_end))
+        return True, str(getdate(source_end))
+    except Exception:
+        return False, ""
+
+
 @frappe.whitelist()
 def get_instructor_assignment_lifecycle_states(names: str | list | None = None) -> dict:
     """Return permission-scoped effective/lifecycle state for assignment register rows."""
@@ -129,6 +179,9 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
         fields=[
             "name",
             "enabled",
+            "instructor",
+            "academic_year",
+            "academic_term",
             "valid_from",
             "valid_to",
             "ended_on",
@@ -140,6 +193,8 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
             "transferred_from_assignment",
             "transferred_to_assignment",
             "transfer_reason",
+            "prepared_from_assignment",
+            "preparation_reason",
         ],
         limit_page_length=len(assignment_names),
     )
@@ -159,6 +214,8 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
 
     today = getdate(nowdate())
     can_manage = _can_manage_assignments()
+    active_instructors = _active_instructor_names(rows, can_manage)
+    period_cache = {}
     states = {}
     for row in rows:
         status = _lifecycle_status(row, today)
@@ -171,11 +228,19 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
             and not row.transferred_to_assignment
         )
         can_successor_action = bool(can_end and has_successor_period)
+        can_prepare, preparation_source_period_end = _preparation_capability(
+            row,
+            can_manage,
+            active_instructors,
+            period_cache,
+        )
         states[row.name] = {
             "lifecycle_status": status,
             "can_end": can_end,
             "can_replace": can_successor_action,
             "can_transfer": can_successor_action,
+            "can_prepare": can_prepare,
+            "preparation_source_period_end": preparation_source_period_end,
             "ended_on": str(row.ended_on or ""),
             "ended_by": row.ended_by or "",
             "end_reason": row.end_reason or "",
@@ -189,6 +254,9 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
             "transferred_from_assignment": row.transferred_from_assignment or "",
             "transferred_from": relations.get(row.transferred_from_assignment or ""),
             "transfer_reason": row.transfer_reason or "",
+            "prepared_from_assignment": row.prepared_from_assignment or "",
+            "prepared_from": relations.get(row.prepared_from_assignment or ""),
+            "preparation_reason": row.preparation_reason or "",
             "relation_enrichment_available": relation_enrichment_available,
         }
     return {"states": states}
