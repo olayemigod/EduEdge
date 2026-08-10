@@ -36,6 +36,10 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             '"Open linked assignment"',
             "syncReplacementRegister",
             "installReplacementRegisterEnhancer",
+            "const originalLoad = methods.load",
+            "await originalLoad.apply(this, args)",
+            "await this.$nextTick?.()",
+            "syncReplacementRegister(this)",
         ):
             self.assertIn(token, bundle)
 
