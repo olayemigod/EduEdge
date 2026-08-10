@@ -75,21 +75,29 @@ def _active_instructors(rows: list) -> set[str]:
 
 def _link_fields_to_assignment() -> list[tuple[str, str]]:
     fields = set()
-    for field_doctype in ("DocField", "Custom Field"):
-        try:
-            rows = frappe.get_all(
-                field_doctype,
-                filters={"fieldtype": "Link", "options": ASSIGNMENT_DOCTYPE},
-                fields=["parent", "fieldname"],
-                limit_page_length=0,
-            )
-        except Exception:
-            rows = []
-        for row in rows:
-            parent = str(row.parent or "").strip()
-            fieldname = str(row.fieldname or "").strip()
-            if parent and fieldname:
-                fields.add((parent, fieldname))
+    standard = frappe.get_all(
+        "DocField",
+        filters={"fieldtype": "Link", "options": ASSIGNMENT_DOCTYPE},
+        fields=["parent", "fieldname"],
+        limit_page_length=0,
+    )
+    for row in standard:
+        parent = str(row.parent or "").strip()
+        fieldname = str(row.fieldname or "").strip()
+        if parent and fieldname:
+            fields.add((parent, fieldname))
+
+    custom = frappe.get_all(
+        "Custom Field",
+        filters={"fieldtype": "Link", "options": ASSIGNMENT_DOCTYPE},
+        fields=["dt", "fieldname"],
+        limit_page_length=0,
+    )
+    for row in custom:
+        parent = str(row.dt or "").strip()
+        fieldname = str(row.fieldname or "").strip()
+        if parent and fieldname:
+            fields.add((parent, fieldname))
     return sorted(fields)
 
 
