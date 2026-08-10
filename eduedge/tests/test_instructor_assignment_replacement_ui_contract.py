@@ -51,7 +51,12 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             "await this.$nextTick?.()",
             "syncReplacementRegister(this)",
             "instructors: proxy.data?.instructors || []",
+            "displayContext: proxy.data || {}",
             "installInstructorAssignmentVisualStyles",
+            "enforceReadableReferenceLabels",
+            '__("Selected Branch / Campus")',
+            '__("Selected Class / Programme Offering")',
+            '__("Selected Subject / Course")',
         ):
             self.assertIn(token, bundle)
 
@@ -71,6 +76,7 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             'document.body.appendChild(host)',
             'app.mount(host)',
             'app?.unmount?.()',
+            "displayContext",
         ):
             self.assertIn(token, helper)
 
@@ -114,6 +120,33 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             "if (completed) this.close();",
         ):
             self.assertIn(token, component)
+
+    def test_page_and_popup_use_readable_business_labels_not_internal_record_keys(self):
+        component = self._component_source()
+        bundle = (APP / "public" / "js" / "eduedge_instructor_assignments.bundle.js").read_text(encoding="utf-8")
+
+        for token in (
+            "displayContext",
+            "sourceTitle",
+            "branchLabel(name)",
+            "offeringLabel(name)",
+            "groupLabel(name)",
+            "courseLabel(name)",
+            "successorContextLabel(successor)",
+            "branchEligibilitySummary(branch)",
+            'return "Selected Branch / Campus"',
+            'return "Selected Class / Programme Offering"',
+            'return "Selected Class Arm"',
+            'return "Selected Subject / Course"',
+        ):
+            self.assertIn(token, component)
+
+        self.assertNotIn("{{ previewPlan.successor?.program_offering }}", component)
+        self.assertNotIn("{{ previewPlan.successor?.school_branch }}", component)
+        self.assertNotIn("{{ previewPlan.successor.student_group }}", component)
+        self.assertNotIn("{{ previewPlan.successor.course }}", component)
+        self.assertNotIn("{{ previewPlan.incoming_branch_eligibility?.name }}", component)
+        self.assertIn("enforceReadableReferenceLabels", bundle)
 
     def test_page_and_popup_buttons_labels_and_controls_have_edgesuite_visual_contract(self):
         component = self._component_source()
