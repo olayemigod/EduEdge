@@ -32,7 +32,11 @@
   "replacement_section",
   "replaces_assignment",
   "replaced_by_assignment",
-  "replacement_reason"
+  "replacement_reason",
+  "transfer_section",
+  "transferred_from_assignment",
+  "transferred_to_assignment",
+  "transfer_reason"
  ],
  "fields": [
   {"fieldname":"assignment_title","fieldtype":"Data","label":"Assignment","read_only":1,"in_list_view":1,"in_global_search":1},
@@ -55,17 +59,21 @@
   {"fieldname":"valid_to","fieldtype":"Date","label":"Valid To"},
   {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"},
   {"fieldname":"lifecycle_section","fieldtype":"Section Break","label":"Lifecycle Audit"},
-  {"description":"Final responsibility date recorded by the End or Replace / Handover action.","fieldname":"ended_on","fieldtype":"Date","label":"Ended On","read_only":1},
+  {"description":"Final responsibility date recorded by the End, Replace / Handover, or Transfer action.","fieldname":"ended_on","fieldtype":"Date","label":"Ended On","read_only":1},
   {"fieldname":"ended_by","fieldtype":"Link","label":"Ended By","options":"User","read_only":1},
   {"fieldname":"end_reason","fieldtype":"Small Text","label":"End Reason","read_only":1},
   {"fieldname":"replacement_section","fieldtype":"Section Break","label":"Replacement / Handover Audit"},
   {"description":"Previous exact academic responsibility replaced by this assignment.","fieldname":"replaces_assignment","fieldtype":"Link","label":"Replaces Assignment","options":"EduEdge Instructor Assignment","read_only":1,"no_copy":1},
   {"description":"Successor exact academic responsibility created by Replace / Handover.","fieldname":"replaced_by_assignment","fieldtype":"Link","label":"Replaced By Assignment","options":"EduEdge Instructor Assignment","read_only":1,"no_copy":1},
-  {"description":"Reason recorded when this assignment was created as a replacement.","fieldname":"replacement_reason","fieldtype":"Small Text","label":"Replacement Reason","read_only":1,"no_copy":1}
+  {"description":"Reason recorded when this assignment was created as a replacement.","fieldname":"replacement_reason","fieldtype":"Small Text","label":"Replacement Reason","read_only":1,"no_copy":1},
+  {"fieldname":"transfer_section","fieldtype":"Section Break","label":"Transfer Audit"},
+  {"description":"Previous exact academic responsibility moved into this assignment by Transfer.","fieldname":"transferred_from_assignment","fieldtype":"Link","label":"Transferred From Assignment","options":"EduEdge Instructor Assignment","read_only":1,"no_copy":1},
+  {"description":"Successor exact academic responsibility created when this assignment was transferred to another valid academic context.","fieldname":"transferred_to_assignment","fieldtype":"Link","label":"Transferred To Assignment","options":"EduEdge Instructor Assignment","read_only":1,"no_copy":1},
+  {"description":"Reason recorded when this assignment was created by Transfer.","fieldname":"transfer_reason","fieldtype":"Small Text","label":"Transfer Reason","read_only":1,"no_copy":1}
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-08-09 21:05:00.000000",
+ "modified": "2026-08-10 16:45:00.000000",
  "modified_by": "Administrator",
  "module": "EduEdge",
  "name": "EduEdge Instructor Assignment",
