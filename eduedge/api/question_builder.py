@@ -10,7 +10,12 @@ from eduedge.cbt.public_access import get_public_exam_capability_summary
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.curriculum_permissions import is_teacher_user
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.education.teaching_assignments import assigned_courses
+from eduedge.education.instructor_assignment_capabilities import (
+	assignment_capability_enforcement_enabled,
+	get_user_capability_assignment_rows,
+	user_has_instructor_assignment_capability,
+)
+from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, assigned_courses
 from eduedge.eduedge.doctype.eduedge_cbt_question.eduedge_cbt_question import (
 	PLATFORM_BANK,
 	SCHOOL_BANK,
@@ -182,6 +187,65 @@ def _allowed_branch_names() -> set[str]:
 	return {row.get("name") for row in get_allowed_school_branches() if row.get("name")}
 
 
+def _assignment_author_filter_enabled() -> bool:
+	return bool(is_teacher_user() and assignment_capability_enforcement_enabled())
+
+
+def _author_capability_rows(
+	*,
+	branch: str | None = None,
+	program_offering: str | None = None,
+	student_group: str | None = None,
+) -> list[dict]:
+	rows = get_user_capability_assignment_rows(
+		"can_author_cbt",
+		user=frappe.session.user,
+		school_branch=branch,
+	)
+	if program_offering:
+		rows = [row for row in rows if row.get("program_offering") == program_offering]
+	if student_group:
+		rows = [
+			row
+			for row in rows
+			if row.get("assignment_scope") == CLASS_SCOPE
+			or (
+				row.get("assignment_scope") == CLASS_ARM_SCOPE
+				and row.get("student_group") == student_group
+			)
+		]
+	return rows
+
+
+def _builder_allowed_branches(question: dict) -> list[dict]:
+	rows = get_allowed_school_branches()
+	if not _assignment_author_filter_enabled() or question.get("ownership_scope") == PLATFORM_BANK:
+		return rows
+	allowed = {row.get("school_branch") for row in _author_capability_rows() if row.get("school_branch")}
+	return [row for row in rows if row.get("name") in allowed]
+
+
+def _question_author_context_allowed(question: dict) -> bool:
+	if not _assignment_author_filter_enabled() or question.get("ownership_scope") == PLATFORM_BANK:
+		return True
+	branch = str(question.get("school_branch") or "").strip()
+	offering = str(question.get("program_offering") or "").strip()
+	course = str(question.get("course") or "").strip()
+	student_group = str(question.get("student_group") or "").strip()
+	if not question.get("name") and (not offering or not course):
+		return bool(_author_capability_rows(branch=branch or None))
+	if not branch or not offering or not course:
+		return False
+	return user_has_instructor_assignment_capability(
+		"can_author_cbt",
+		user=frappe.session.user,
+		school_branch=branch,
+		program_offering=offering,
+		student_group=student_group,
+		course=course,
+	)
+
+
 def _academic_options(branch: str | None, program_offering: str | None = None) -> dict:
 	if not branch:
 		return {"offerings": [], "groups": [], "institution": None}
@@ -195,21 +259,26 @@ def _academic_options(branch: str | None, program_offering: str | None = None) -
 		order_by="academic_year desc, offering_title asc",
 		limit_page_length=500,
 	)
+	capability_rows: list[dict] | None = None
 	if is_teacher_user():
-		assigned = {
-			row.program_offering
-			for row in frappe.get_all(
-				"EduEdge Instructor Assignment",
-				filters={
-					"instructor": ["in", _current_instructors()],
-					"school_branch": branch,
-					"enabled": 1,
-				},
-				fields=["program_offering", "valid_from", "valid_to"],
-				limit_page_length=0,
-			)
-			if row.program_offering
-		}
+		if assignment_capability_enforcement_enabled():
+			capability_rows = _author_capability_rows(branch=branch)
+			assigned = {row.get("program_offering") for row in capability_rows if row.get("program_offering")}
+		else:
+			assigned = {
+				row.program_offering
+				for row in frappe.get_all(
+					"EduEdge Instructor Assignment",
+					filters={
+						"instructor": ["in", _current_instructors()],
+						"school_branch": branch,
+						"enabled": 1,
+					},
+					fields=["program_offering", "valid_from", "valid_to"],
+					limit_page_length=0,
+				)
+				if row.program_offering
+			}
 		offerings = [row for row in offerings if row.name in assigned]
 	selected = next((row for row in offerings if row.name == program_offering), None) if program_offering else None
 	if program_offering and not selected:
@@ -229,6 +298,19 @@ def _academic_options(branch: str | None, program_offering: str | None = None) -
 		order_by="student_group_name asc",
 		limit_page_length=500,
 	)
+	if capability_rows is not None:
+		if not program_offering:
+			groups = []
+		else:
+			relevant = [row for row in capability_rows if row.get("program_offering") == program_offering]
+			class_wide = any(row.get("assignment_scope") == CLASS_SCOPE for row in relevant)
+			if not class_wide:
+				allowed_groups = {
+					row.get("student_group")
+					for row in relevant
+					if row.get("assignment_scope") == CLASS_ARM_SCOPE and row.get("student_group")
+				}
+				groups = [row for row in groups if row.name in allowed_groups]
 	return {"offerings": offerings, "groups": groups, "institution": institution, "selected_offering": selected}
 
 
@@ -246,6 +328,8 @@ def _builder_response(question: dict, public_access: dict, source_doc=None) -> d
 		can_write = bool(source_doc and source_doc.has_permission("write"))
 	if status not in EDITABLE_STATUSES:
 		can_write = False
+	if can_write and not _question_author_context_allowed(question):
+		can_write = False
 	current_branch = get_current_school_branch() or {}
 	branch = question.get("school_branch") or current_branch.get("name")
 	academic = _academic_options(branch, question.get("program_offering")) if question.get("ownership_scope") != PLATFORM_BANK else {"offerings": [], "groups": [], "institution": None}
@@ -257,7 +341,7 @@ def _builder_response(question: dict, public_access: dict, source_doc=None) -> d
 		},
 		"tenant_name": current_branch.get("company") or "",
 		"current_branch": current_branch,
-		"allowed_branches": get_allowed_school_branches(),
+		"allowed_branches": _builder_allowed_branches(question),
 		"offerings": academic.get("offerings", []),
 		"groups": academic.get("groups", []),
 		"scope_options": _question_scope_options(public_access, question.get("ownership_scope")),
@@ -271,9 +355,11 @@ def _builder_response(question: dict, public_access: dict, source_doc=None) -> d
 				question.get("name")
 				and status in {"Approved", "Retired"}
 				and frappe.has_permission(QUESTION_DOCTYPE, "create")
+				and _question_author_context_allowed(question)
 			),
 			"can_open_technical_record": bool(frappe.has_permission(QUESTION_DOCTYPE, "read")),
 			"is_assigned_teacher": is_teacher_user(),
+			"assignment_capability_enforced": bool(_assignment_author_filter_enabled()),
 		},
 		"public_exam_access": public_access,
 	}
@@ -318,14 +404,32 @@ def search_courses(
 			frappe.throw(_("Select a valid Class / Programme Offering."), frappe.ValidationError)
 		course_names = set(_program_courses(offering.program))
 		if is_teacher_user():
-			course_names &= assigned_courses(branch=offering.school_branch, program_offering=program_offering, student_group=student_group)
+			if assignment_capability_enforcement_enabled():
+				capability_courses = {
+					row.get("course")
+					for row in _author_capability_rows(
+						branch=offering.school_branch,
+						program_offering=program_offering,
+						student_group=student_group,
+					)
+					if row.get("course")
+				}
+				course_names &= capability_courses
+			else:
+				course_names &= assigned_courses(branch=offering.school_branch, program_offering=program_offering, student_group=student_group)
 		filters["name"] = ["in", sorted(course_names)] if course_names else ["in", ["__none__"]]
 	elif branch:
 		institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
 		filters[INSTITUTION_FIELD] = institution
 		if is_teacher_user():
-			course_names = assigned_courses(branch=branch)
+			if assignment_capability_enforcement_enabled():
+				course_names = {row.get("course") for row in _author_capability_rows(branch=branch) if row.get("course")}
+			else:
+				course_names = assigned_courses(branch=branch)
 			filters["name"] = ["in", sorted(course_names)] if course_names else ["in", ["__none__"]]
+	elif is_teacher_user() and assignment_capability_enforcement_enabled():
+		course_names = {row.get("course") for row in _author_capability_rows() if row.get("course")}
+		filters["name"] = ["in", sorted(course_names)] if course_names else ["in", ["__none__"]]
 	rows = frappe.get_list(
 		"Course",
 		filters=filters,
