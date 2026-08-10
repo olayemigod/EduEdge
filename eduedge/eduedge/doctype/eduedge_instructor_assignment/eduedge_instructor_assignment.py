@@ -69,6 +69,15 @@ class EduEdgeInstructorAssignment(Document):
         self._validate_primary_responsibility()
         self.assignment_title = self._build_title()
 
+    def on_trash(self) -> None:
+        if not bool(getattr(frappe.flags, "in_eduedge_assignment_delete", False)):
+            frappe.throw(
+                _(
+                    "Instructor Assignments cannot be deleted directly. Use Delete Unused Assignment so EduEdge can prove that the future record has never started, has no lifecycle history, and is unreferenced."
+                ),
+                frappe.PermissionError,
+            )
+
     def _validate_dates(self) -> None:
         if self.valid_from and self.valid_to and getdate(self.valid_to) < getdate(self.valid_from):
             frappe.throw(_("Valid To cannot be earlier than Valid From."), frappe.ValidationError)
@@ -171,9 +180,25 @@ class EduEdgeInstructorAssignment(Document):
             ["name", "instructor_name", "status"],
             as_dict=True,
         )
-        if not instructor or instructor.status != "Active":
+        before = self.get_doc_before_save()
+        lifecycle_action = bool(getattr(frappe.flags, "in_eduedge_assignment_lifecycle", False))
+        governed_disable = bool(
+            before
+            and lifecycle_action
+            and int(before.enabled or 0) == 1
+            and int(self.enabled or 0) == 0
+        )
+        if not instructor:
+            frappe.throw(_("Select a valid Instructor."), frappe.ValidationError)
+        if instructor.status != "Active" and not governed_disable:
             frappe.throw(_("Select an active Instructor."), frappe.ValidationError)
         frappe.get_doc("Instructor", self.instructor).check_permission("read")
+        if governed_disable:
+            # Disabling a future responsibility must remain possible when an Instructor
+            # has since become inactive or Branch Eligibility has been withdrawn. It
+            # narrows access rather than granting it and leaves Branch Eligibility alone.
+            self.instructor_name = instructor.instructor_name
+            return
         has_explicit_access = _has_branch_eligibility(
             self.instructor,
             self.school_branch,
@@ -265,6 +290,11 @@ class EduEdgeInstructorAssignment(Document):
             frappe.throw(
                 _("Use End Assignment to shorten an existing responsibility period."),
                 frappe.ValidationError,
+            )
+        if not _same_value(before.get("enabled"), self.get("enabled")) and not lifecycle_action:
+            frappe.throw(
+                _("Use Disable Assignment or Re-enable Assignment so status changes are validated and audited."),
+                frappe.PermissionError,
             )
 
     def _validate_lifecycle_audit(self) -> None:
