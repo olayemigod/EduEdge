@@ -114,6 +114,10 @@ function syncRegisterHeading(proxy, panel) {
 	summary.textContent = `${meta.total} total · ${meta.from_row || 0}–${meta.to_row || 0}`;
 }
 
+export function createEduEdgeInstructorAssignmentRegisterFiltersApp(rootProps = null) {
+	return createEduEdgeApp(InstructorAssignmentRegisterFilters, rootProps);
+}
+
 function mountRegisterFilters(proxy) {
 	if (!proxy?.loaded || !proxy.instructor) return;
 	const panel = findRegisterPanel();
@@ -131,7 +135,7 @@ function mountRegisterFilters(proxy) {
 	const host = document.createElement("div");
 	host.className = "eduedge-instructor-assignment-register-filter-host";
 	heading.insertAdjacentElement("afterend", host);
-	const app = createEduEdgeApp(InstructorAssignmentRegisterFilters, { controller: proxy });
+	const app = createEduEdgeInstructorAssignmentRegisterFiltersApp({ controller: proxy });
 	app.mount(host);
 	filterApps.set(proxy, { app, host });
 }
@@ -221,4 +225,5 @@ export function installInstructorAssignmentRegisterFilters(component = window.Ed
 }
 
 installInstructorAssignmentRegisterFilters(window.EduEdgeInstructorAssignments);
+window.createEduEdgeInstructorAssignmentRegisterFiltersApp = createEduEdgeInstructorAssignmentRegisterFiltersApp;
 window.installInstructorAssignmentRegisterFilters = installInstructorAssignmentRegisterFilters;
