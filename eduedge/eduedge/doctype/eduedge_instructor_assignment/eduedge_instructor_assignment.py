@@ -3,10 +3,11 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate, nowdate
+from frappe.utils import cint, getdate, nowdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_assignment_capabilities import CAPABILITY_FIELDS
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import (
     ACADEMIC_ASSIGNMENT_SCOPES,
@@ -43,6 +44,11 @@ LIFECYCLE_AUDIT_FIELDS = (
     "prepared_from_assignment",
     "preparation_reason",
 )
+CAPABILITY_AUDIT_FIELDS = (
+    "capabilities_updated_on",
+    "capabilities_updated_by",
+    "capabilities_update_reason",
+)
 
 
 class EduEdgeInstructorAssignment(Document):
@@ -63,6 +69,7 @@ class EduEdgeInstructorAssignment(Document):
         self._validate_instructor_context()
         self._validate_assignment_type_scope()
         self._validate_course_context()
+        self._validate_capability_state()
         self._validate_existing_responsibility()
         self._validate_lifecycle_audit()
         self._validate_duplicate()
@@ -270,6 +277,40 @@ class EduEdgeInstructorAssignment(Document):
             frappe.throw(
                 _("Subject / Course is not configured for the selected Class / Programme Offering."),
                 frappe.ValidationError,
+            )
+
+    def _validate_capability_state(self) -> None:
+        capability_values = {fieldname: cint(self.get(fieldname)) for fieldname in CAPABILITY_FIELDS}
+        capability_action = bool(getattr(frappe.flags, "in_eduedge_assignment_capability_update", False))
+        before = self.get_doc_before_save()
+
+        if self.assignment_type not in COURSE_REQUIRED_TYPES and any(capability_values.values()):
+            frappe.throw(
+                _("Operational Subject capabilities can be granted only to Subject-bearing Instructor Assignments."),
+                frappe.ValidationError,
+            )
+        if any(
+            capability_values[fieldname]
+            for fieldname in CAPABILITY_FIELDS
+            if fieldname != "can_view_subject_content"
+        ) and not capability_values["can_view_subject_content"]:
+            frappe.throw(
+                _("View Subject Content must be enabled before operational Subject capabilities can be granted."),
+                frappe.ValidationError,
+            )
+
+        protected_fields = (*CAPABILITY_FIELDS, *CAPABILITY_AUDIT_FIELDS)
+        if before and not capability_action:
+            for fieldname in protected_fields:
+                if not _same_value(before.get(fieldname), self.get(fieldname)):
+                    frappe.throw(
+                        _("Operational capability fields are maintained by EduEdge assignment capability actions."),
+                        frappe.PermissionError,
+                    )
+        if not before and not capability_action and any(self.get(fieldname) for fieldname in protected_fields):
+            frappe.throw(
+                _("Operational capability fields are maintained by EduEdge assignment capability actions."),
+                frappe.PermissionError,
             )
 
     def _validate_existing_responsibility(self) -> None:
