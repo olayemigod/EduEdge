@@ -39,6 +39,8 @@ POST_ONLY_MUTATION_PREFIXES = (
 	"end_",
 	"replace_",
 	"transfer_",
+	"disable_",
+	"reenable_",
 )
 
 
