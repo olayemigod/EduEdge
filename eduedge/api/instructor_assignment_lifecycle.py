@@ -59,7 +59,22 @@ def _lifecycle_status(row, today) -> str:
     return "Current"
 
 
+def _readable_instructor_from_assignment(row) -> str:
+    title = str(row.assignment_title or "").strip()
+    if title:
+        first = title.split(" · ", 1)[0].strip()
+        if first:
+            return first
+    return _("Instructor")
+
+
 def _relation_summaries(rows: list) -> dict[str, dict]:
+    """Return permission-scoped readable relationship summaries.
+
+    Relationship enrichment must never be required to calculate lifecycle state.
+    Keep internal assignment keys for navigation only; visible labels come from the
+    assignment title and other readable business fields.
+    """
     relation_names = sorted(
         {
             str(name or "").strip()
@@ -77,7 +92,6 @@ def _relation_summaries(rows: list) -> dict[str, dict]:
             "name",
             "assignment_title",
             "instructor",
-            "instructor_name",
             "valid_from",
             "valid_to",
         ],
@@ -87,8 +101,7 @@ def _relation_summaries(rows: list) -> dict[str, dict]:
         row.name: {
             "name": row.name,
             "assignment_title": row.assignment_title or "",
-            "instructor": row.instructor or "",
-            "instructor_name": row.instructor_name or row.instructor or "",
+            "instructor_name": _readable_instructor_from_assignment(row),
             "valid_from": str(row.valid_from or ""),
             "valid_to": str(row.valid_to or ""),
         }
@@ -120,7 +133,20 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
         ],
         limit_page_length=len(assignment_names),
     )
-    relations = _relation_summaries(rows)
+
+    # Relationship labels are useful display enrichment, but must never take down
+    # authoritative lifecycle status or action capability for otherwise readable rows.
+    relation_enrichment_available = True
+    try:
+        relations = _relation_summaries(rows)
+    except Exception:
+        relations = {}
+        relation_enrichment_available = False
+        frappe.log_error(
+            frappe.get_traceback(),
+            "EduEdge Instructor Assignment relationship enrichment failed",
+        )
+
     today = getdate(nowdate())
     can_manage = _can_manage_assignments()
     states = {}
@@ -146,6 +172,7 @@ def get_instructor_assignment_lifecycle_states(names: str | list | None = None) 
             "replaces_assignment": row.replaces_assignment or "",
             "replaces": relations.get(row.replaces_assignment or ""),
             "replacement_reason": row.replacement_reason or "",
+            "relation_enrichment_available": relation_enrichment_available,
         }
     return {"states": states}
 
