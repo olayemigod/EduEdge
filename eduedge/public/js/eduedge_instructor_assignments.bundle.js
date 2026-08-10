@@ -156,7 +156,6 @@ function syncReplacementRegister(proxy) {
 					},
 					onComplete: async () => {
 						await proxy.load?.();
-						proxy.$nextTick?.(() => syncReplacementRegister(proxy));
 					},
 				});
 			});
@@ -168,16 +167,20 @@ function syncReplacementRegister(proxy) {
 }
 
 function installReplacementRegisterEnhancer() {
+	const methods = EduEdgeInstructorAssignments.methods || {};
+	const originalLoad = methods.load;
+	if (typeof originalLoad === "function") {
+		methods.load = async function (...args) {
+			const result = await originalLoad.apply(this, args);
+			await this.$nextTick?.();
+			syncReplacementRegister(this);
+			return result;
+		};
+	}
+
 	const originalMounted = EduEdgeInstructorAssignments.mounted;
 	EduEdgeInstructorAssignments.mounted = function (...args) {
 		const result = typeof originalMounted === "function" ? originalMounted.apply(this, args) : undefined;
-		this.$nextTick?.(() => syncReplacementRegister(this));
-		return result;
-	};
-
-	const originalUpdated = EduEdgeInstructorAssignments.updated;
-	EduEdgeInstructorAssignments.updated = function (...args) {
-		const result = typeof originalUpdated === "function" ? originalUpdated.apply(this, args) : undefined;
 		this.$nextTick?.(() => syncReplacementRegister(this));
 		return result;
 	};
