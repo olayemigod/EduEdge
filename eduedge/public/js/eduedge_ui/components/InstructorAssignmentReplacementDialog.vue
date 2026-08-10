@@ -10,7 +10,7 @@
 		<div class="eduedge-replacement-dialog" data-eduedge-terminology-managed>
 			<section class="eduedge-replacement-source">
 				<p class="edge-eyebrow eduedge-replacement-kicker">Outgoing responsibility</p>
-				<strong class="eduedge-replacement-source__title">{{ item.assignment_title || item.assignment_type || item.name }}</strong>
+				<strong class="eduedge-replacement-source__title">{{ sourceTitle }}</strong>
 				<small class="eduedge-replacement-help">
 					Handover Date is the outgoing Instructor's final responsibility day. The incoming Instructor starts the following day. The original assignment remains as history.
 				</small>
@@ -84,8 +84,8 @@
 					<div v-if="conflictCount" class="eduedge-replacement-conflicts">
 						<strong>Resolve these conflicts before replacing</strong>
 						<ul>
-							<li v-for="(conflict, index) in previewPlan.conflicts || []" :key="`${conflict.name || conflict.type || 'conflict'}-${index}`">
-								{{ conflict.reason || conflict.type || conflict.name || 'Conflict' }}
+							<li v-for="(conflict, index) in previewPlan.conflicts || []" :key="`${conflict.type || 'conflict'}-${index}`">
+								{{ conflict.reason || conflictLabel(conflict) }}
 							</li>
 						</ul>
 					</div>
@@ -93,23 +93,19 @@
 					<div class="eduedge-replacement-plan-grid">
 						<div class="eduedge-replacement-plan-card">
 							<strong class="eduedge-replacement-plan-label">Outgoing responsibility</strong>
-							<span>{{ previewPlan.source?.assignment_title || previewPlan.source?.name || item.name }}</span>
+							<span>{{ previewPlan.source?.assignment_title || sourceTitle }}</span>
 							<small>{{ previewPlan.source?.valid_from || 'No start restriction' }} → <b>{{ previewPlan.source?.final_valid_to || previewPlan.handover_date }}</b></small>
 						</div>
 						<div class="eduedge-replacement-plan-card">
 							<strong class="eduedge-replacement-plan-label">Incoming responsibility</strong>
-							<span>{{ previewPlan.successor?.instructor_name || previewPlan.successor?.instructor }} · {{ previewPlan.successor?.assignment_type }}</span>
+							<span>{{ instructorLabel(previewPlan.successor?.instructor) }} · {{ previewPlan.successor?.assignment_type || 'Academic responsibility' }}</span>
 							<small>{{ previewPlan.successor?.valid_from }} → {{ previewPlan.successor?.valid_to || 'Open ended' }}</small>
-							<small>
-								{{ previewPlan.successor?.school_branch }} · {{ previewPlan.successor?.program_offering }}
-								<span v-if="previewPlan.successor?.student_group"> · {{ previewPlan.successor.student_group }}</span>
-								<span v-if="previewPlan.successor?.course"> · {{ previewPlan.successor.course }}</span>
-							</small>
+							<small>{{ successorContextLabel(previewPlan.successor) }}</small>
 						</div>
 						<div class="eduedge-replacement-plan-card eduedge-replacement-plan-grid__wide">
 							<strong class="eduedge-replacement-plan-label">Branch Eligibility impact</strong>
 							<span>{{ branchImpactLabel(previewPlan.incoming_branch_eligibility) }}</span>
-							<small v-if="previewPlan.incoming_branch_eligibility?.name">{{ previewPlan.incoming_branch_eligibility.name }}</small>
+							<small>{{ branchEligibilitySummary(previewPlan.incoming_branch_eligibility) }}</small>
 							<small>The outgoing Instructor's Branch Eligibility is not changed by Replace / Handover.</small>
 						</div>
 					</div>
@@ -140,11 +136,19 @@ function sameArgs(left, right) {
 	return JSON.stringify(left || {}) === JSON.stringify(right || {});
 }
 
+function cleanParts(parts) {
+	return parts
+		.map((value) => String(value || "").trim())
+		.filter(Boolean)
+		.filter((value, index, values) => values.indexOf(value) === index);
+}
+
 export default {
 	name: "InstructorAssignmentReplacementDialog",
 	props: {
 		item: { type: Object, required: true },
 		instructors: { type: Array, default: () => [] },
+		displayContext: { type: Object, default: () => ({}) },
 		onBusy: { type: Function, default: null },
 		onComplete: { type: Function, default: null },
 		onClosed: { type: Function, default: null },
@@ -167,6 +171,16 @@ export default {
 	},
 	computed: {
 		today() { return siteToday(); },
+		sourceTitle() {
+			if (this.item.assignment_title) return this.item.assignment_title;
+			return cleanParts([
+				this.instructorLabel(this.item.instructor),
+				this.item.assignment_type || "Academic responsibility",
+				this.offeringLabel(this.item.program_offering),
+				this.groupLabel(this.item.student_group),
+				this.courseLabel(this.item.course),
+			]).join(" · ");
+		},
 		instructorOptions() {
 			return (this.instructors || [])
 				.filter((row) => row?.name && row.name !== this.item.instructor && String(row.status || "Active") === "Active")
@@ -178,11 +192,64 @@ export default {
 		},
 		replacementInstructorLabel() {
 			const selected = this.instructorOptions.find((row) => row.value === this.form.replacement_instructor);
-			return selected?.label || this.form.replacement_instructor || "";
+			return selected?.label || (this.form.replacement_instructor ? "Selected Instructor" : "");
 		},
 		conflictCount() { return Number(this.previewPlan?.conflict_count || 0); },
 	},
 	methods: {
+		instructorLabel(name) {
+			if (!name) return "Instructor";
+			const row = (this.instructors || []).find((item) => item.name === name);
+			return row?.instructor_name || row?.name || "Selected Instructor";
+		},
+		branchLabel(name) {
+			if (!name) return "Branch / Campus";
+			const row = (this.displayContext?.allowed_branches || []).find((item) => item.name === name);
+			return row?.branch_name || "Selected Branch / Campus";
+		},
+		offeringLabel(name) {
+			if (!name) return "Class / Programme Offering";
+			const row = (this.displayContext?.offerings || []).find((item) => item.name === name);
+			if (!row) return "Selected Class / Programme Offering";
+			return cleanParts([
+				row.offering_title || row.program || "Class / Programme Offering",
+				row.academic_year,
+				row.academic_term,
+			]).join(" · ");
+		},
+		groupLabel(name) {
+			if (!name) return "";
+			const row = (this.displayContext?.groups || []).find((item) => item.name === name);
+			return row?.eduedge_display_name || row?.student_group_name || "Selected Class Arm";
+		},
+		courseLabel(name) {
+			if (!name) return "";
+			const row = (this.displayContext?.courses || []).find((item) => item.name === name);
+			return row?.course_name || "Selected Subject / Course";
+		},
+		successorContextLabel(successor) {
+			return cleanParts([
+				this.branchLabel(successor?.school_branch),
+				this.offeringLabel(successor?.program_offering),
+				this.groupLabel(successor?.student_group),
+				this.courseLabel(successor?.course),
+			]).join(" · ");
+		},
+		branchEligibilitySummary(branch) {
+			if (!branch) return "Branch Eligibility details unavailable.";
+			const start = branch.valid_from || "No start restriction";
+			const end = branch.valid_to || "Open ended";
+			return cleanParts([
+				this.instructorLabel(this.form.replacement_instructor),
+				this.branchLabel(branch.school_branch),
+				`${start} → ${end}`,
+			]).join(" · ");
+		},
+		conflictLabel(conflict) {
+			if (conflict?.type === "replacement-instructor-overlap") return "Replacement Instructor already has an overlapping academic responsibility.";
+			if (conflict?.type === "primary-responsibility-overlap") return "Another Instructor already owns this primary responsibility during the successor period.";
+			return "Replacement conflict";
+		},
 		setField(fieldname, value) {
 			this.form = { ...this.form, [fieldname]: value };
 			this.fieldErrors = { ...this.fieldErrors, [fieldname]: "" };
