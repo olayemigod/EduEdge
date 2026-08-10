@@ -24,34 +24,66 @@ def is_limited_instructor_user(user: str | None = None) -> bool:
 	)
 
 
-def get_user_instructor_names(
-	user: str | None = None,
-	*,
-	required: bool = False,
-) -> list[str]:
-	"""Resolve User → active Employee → active Instructor without new schema."""
+def get_active_instructor_names_for_user(user: str | None = None) -> list[str]:
+	"""Resolve any authenticated User → active Employee → active Instructor identities.
+
+	This helper intentionally does not grant access. It only resolves identity so exact
+	Instructor Assignment capability checks can fail closed when there is no unique
+	active teaching identity. Role and Branch permission checks remain separate.
+	"""
 	resolved_user = user or frappe.session.user
-	if not is_limited_instructor_user(resolved_user):
+	if not resolved_user or resolved_user == "Guest":
 		return []
 	if not frappe.db.exists("DocType", "Employee") or not frappe.db.exists("DocType", "Instructor"):
-		if required:
-			frappe.throw(_("Instructor identity could not be resolved."), frappe.PermissionError)
 		return []
 	employees = frappe.get_all(
 		"Employee",
 		filters={"user_id": resolved_user, "status": "Active"},
 		pluck="name",
 	)
-	instructors = (
-		frappe.get_all(
-			"Instructor",
-			filters={"employee": ["in", employees], "status": "Active"},
-			pluck="name",
-		)
-		if employees
-		else []
+	if not employees:
+		return []
+	instructors = frappe.get_all(
+		"Instructor",
+		filters={"employee": ["in", employees], "status": "Active"},
+		pluck="name",
 	)
-	instructors = list(dict.fromkeys(instructors))
+	return list(dict.fromkeys(instructors))
+
+
+def resolve_exact_instructor_for_user(
+	user: str | None = None,
+	*,
+	required: bool = False,
+) -> str:
+	"""Return exactly one active Instructor identity or fail closed when required."""
+	resolved_user = user or frappe.session.user
+	instructors = get_active_instructor_names_for_user(resolved_user)
+	if len(instructors) == 1:
+		return instructors[0]
+	if not required:
+		return ""
+	if not instructors:
+		frappe.throw(
+			_("Your User account is not linked to exactly one active Employee and Instructor record. Contact an academic administrator."),
+			frappe.PermissionError,
+		)
+	frappe.throw(
+		_("Your User account resolves to more than one active Instructor. Academic capability access is blocked until the identity mapping is corrected."),
+		frappe.PermissionError,
+	)
+
+
+def get_user_instructor_names(
+	user: str | None = None,
+	*,
+	required: bool = False,
+) -> list[str]:
+	"""Resolve limited Teacher/Instructor users without changing existing role behavior."""
+	resolved_user = user or frappe.session.user
+	if not is_limited_instructor_user(resolved_user):
+		return []
+	instructors = get_active_instructor_names_for_user(resolved_user)
 	if required and not instructors:
 		frappe.throw(
 			_("Your User account is not linked to an active Employee and Instructor record. Contact an academic administrator."),
