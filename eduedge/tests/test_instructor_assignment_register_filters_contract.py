@@ -199,7 +199,7 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
             'frappe.require("edgesuite_ui.bundle.js"',
             '"eduedge_instructor_assignment_register_filters.bundle.js"',
             "frappe.require(filterBundle",
-            "mount_instructor_assignments_with_register_filters",
+            "mount_instructor_assignments_with_register_runtime",
             "window.installInstructorAssignmentRegisterFilters",
             "mount_instructor_assignments(wrapper, visitId, page, $loading, fail)",
         ):
