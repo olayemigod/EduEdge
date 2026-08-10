@@ -40,6 +40,8 @@ LIFECYCLE_AUDIT_FIELDS = (
     "transferred_from_assignment",
     "transferred_to_assignment",
     "transfer_reason",
+    "prepared_from_assignment",
+    "preparation_reason",
 )
 
 
@@ -255,7 +257,7 @@ class EduEdgeInstructorAssignment(Document):
                 continue
             frappe.throw(
                 _(
-                    "Existing Instructor Assignment responsibility cannot be edited in place. Use End, Replace, Transfer or Copy lifecycle actions so history remains intact."
+                    "Existing Instructor Assignment responsibility cannot be edited in place. Use End, Replace, Transfer or Prepare Next Term / Session actions so history remains intact."
                 ),
                 frappe.ValidationError,
             )
@@ -339,6 +341,24 @@ class EduEdgeInstructorAssignment(Document):
         if self.transferred_to_assignment and not self.ended_on:
             frappe.throw(
                 _("An assignment linked to a transfer successor must already be ended."),
+                frappe.ValidationError,
+            )
+
+        if self.prepared_from_assignment and self.prepared_from_assignment == self.name:
+            frappe.throw(_("An Instructor Assignment cannot be prepared from itself."), frappe.ValidationError)
+        if self.prepared_from_assignment and (self.replaces_assignment or self.transferred_from_assignment):
+            frappe.throw(
+                _("An Instructor Assignment can have only one incoming lifecycle origin: Replace / Handover, Transfer, or Next Period Preparation."),
+                frappe.ValidationError,
+            )
+        if self.prepared_from_assignment and not str(self.preparation_reason or "").strip():
+            frappe.throw(
+                _("Prepared assignments require a Preparation Reason."),
+                frappe.ValidationError,
+            )
+        if self.preparation_reason and not self.prepared_from_assignment:
+            frappe.throw(
+                _("Preparation Reason requires a Prepared From Assignment link."),
                 frappe.ValidationError,
             )
 
