@@ -83,7 +83,7 @@ ROUTE_REQUIREMENTS = {
 	# Scheme of Work is exposed to users who can read Subject masters, while the
 	# workbench APIs remain the authoritative exact Branch/Class/Subject permission gate.
 	# We intentionally do not grant broad DocType read permission to Instructor roles.
-	"/app/eduedge-scheme-of-work": (("course", "read"),),
+	"/app/eduedge-schemes-of-work": (("course", "read"),),
 	# Lesson Plans are reached through teaching-assignment visibility. The workbench
 	# APIs separately enforce exact Instructor identity, assignment, Branch and Scheme context.
 	"/app/eduedge-lesson-plans": (("instructor_assignment", "read"),),
