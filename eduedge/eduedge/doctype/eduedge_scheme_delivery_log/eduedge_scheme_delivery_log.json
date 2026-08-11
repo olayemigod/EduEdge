@@ -72,14 +72,7 @@
  "module": "EduEdge",
  "name": "EduEdge Scheme Delivery Log",
  "owner": "Administrator",
- "permissions": [
-  {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager"},
-  {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"EduEdge Super Administrator"},
-  {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"EduEdge Administrator"},
-  {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"School Administrator"},
-  {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Academic Administrator"},
-  {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Education Manager"}
- ],
+ "permissions": [],
  "search_fields": "scheme_of_work,scheme_title_snapshot,course_name_snapshot,topic_name_snapshot,instructor,school_branch,program_offering,student_group",
  "sort_field":"logged_on",
  "sort_order":"DESC",
