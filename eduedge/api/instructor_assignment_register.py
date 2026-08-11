@@ -65,6 +65,16 @@ REGISTER_FIELDS = [
 ]
 
 
+def _row_value(row, key: str, default=None):
+    if hasattr(row, "get"):
+        return row.get(key, default)
+    return getattr(row, key, default)
+
+
+def _row_name(row) -> str:
+    return str(_row_value(row, "name", "") or "").strip()
+
+
 def _parse_filters(value: str | dict | None) -> dict:
     if isinstance(value, str):
         try:
@@ -185,10 +195,10 @@ def _search_text(row, maps: dict) -> str:
 
 def _label_maps(allowed, offering_rows, groups, courses) -> dict:
     return {
-        "branches": {row.name: row for row in allowed},
-        "offerings": {row.name: row for row in offering_rows},
-        "groups": {row.name: row for row in groups},
-        "courses": {row.name: row for row in courses},
+        "branches": {_row_name(row): row for row in allowed if _row_name(row)},
+        "offerings": {_row_name(row): row for row in offering_rows if _row_name(row)},
+        "groups": {_row_name(row): row for row in groups if _row_name(row)},
+        "courses": {_row_name(row): row for row in courses if _row_name(row)},
     }
 
 
@@ -256,27 +266,27 @@ def _filter_register_rows(instructor: str, allowed_names: list[str], filters: di
 
 
 def _validate_filter_context(filters: dict, allowed, offering_rows, groups, courses) -> None:
-    allowed_names = {row.name for row in allowed}
+    allowed_names = {_row_name(row) for row in allowed if _row_name(row)}
     if filters.get("branch") and filters["branch"] not in allowed_names:
         frappe.throw(_("The selected register Branch / Campus is not available to your user."), frappe.PermissionError)
 
-    offering_map = {row.name: row for row in offering_rows}
+    offering_map = {_row_name(row): row for row in offering_rows if _row_name(row)}
     if filters.get("program_offering"):
         offering = offering_map.get(filters["program_offering"])
         if not offering:
             frappe.throw(_("The selected register Class / Programme Offering is not available to your user."), frappe.PermissionError)
-        if filters.get("branch") and offering.school_branch != filters["branch"]:
+        if filters.get("branch") and _row_value(offering, "school_branch") != filters["branch"]:
             frappe.throw(_("The selected register Class does not belong to the selected Branch."), frappe.ValidationError)
-        if filters.get("academic_year") and offering.academic_year != filters["academic_year"]:
+        if filters.get("academic_year") and _row_value(offering, "academic_year") != filters["academic_year"]:
             frappe.throw(_("The selected register Class does not belong to the selected Academic Session."), frappe.ValidationError)
-        if filters.get("academic_term") and offering.academic_term != filters["academic_term"]:
+        if filters.get("academic_term") and _row_value(offering, "academic_term") != filters["academic_term"]:
             frappe.throw(_("The selected register Class does not belong to the selected Term / Semester."), frappe.ValidationError)
 
-    group_map = {row.name: row for row in groups}
+    group_map = {_row_name(row): row for row in groups if _row_name(row)}
     if filters.get("student_group") and filters["student_group"] not in group_map:
         frappe.throw(_("The selected register Class Arm is not available to your user."), frappe.PermissionError)
 
-    course_map = {row.name: row for row in courses}
+    course_map = {_row_name(row): row for row in courses if _row_name(row)}
     if filters.get("course") and filters["course"] not in course_map:
         frappe.throw(_("The selected register Subject / Course is not available to your user."), frappe.PermissionError)
 
@@ -299,7 +309,7 @@ def get_instructor_assignment_register_page(
     """
     core._require_read()
     allowed = core._allowed_branches()
-    allowed_names = [row.name for row in allowed]
+    allowed_names = [_row_name(row) for row in allowed if _row_name(row)]
 
     selected = core._list_values(branches)
     if selected and any(name not in allowed_names for name in selected):
@@ -310,14 +320,15 @@ def get_instructor_assignment_register_page(
 
     instructors = _instructors()
     if not instructor and not _can_manage_assignments() and len(instructors) == 1:
-        instructor = instructors[0].name
-    selected_instructor = next((row for row in instructors if row.name == instructor), None)
+        instructor = _row_name(instructors[0])
+    selected_instructor = next((row for row in instructors if _row_name(row) == instructor), None)
     if instructor and not selected_instructor:
         frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
 
     offering_rows, groups, courses, course_map, configured_course_map = _all_options(allowed)
     requested_offerings = core._list_values(offerings)
-    if requested_offerings and any(name not in {row.name for row in offering_rows} for name in requested_offerings):
+    offering_names = {_row_name(row) for row in offering_rows if _row_name(row)}
+    if requested_offerings and any(name not in offering_names for name in requested_offerings):
         frappe.throw(_("One or more selected Classes are not available to your user."), frappe.PermissionError)
 
     filters = _parse_filters(register_filters)
