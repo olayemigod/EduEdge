@@ -17,7 +17,7 @@ from eduedge.education.curriculum_fields import (
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import assignment_capability_enforcement_enabled
 from eduedge.education.instructor_scope import get_active_instructor_names_for_user, is_limited_instructor_user
-from eduedge.education.offerings import assert_branch_access
+from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
@@ -90,11 +90,13 @@ def _offering_options(
 		filters=filters,
 		fields=[
 			"name", "offering_title", "program", "academic_year", "academic_term",
-			"school_branch", "institution", "period_start_date", "period_end_date", "is_active",
+			"school_branch", "institution", "start_date", "end_date", "is_active",
 		],
-		order_by="period_start_date desc, offering_title asc",
+		order_by="academic_year desc, academic_term desc, offering_title asc",
 		limit_page_length=500,
 	)
+	for row in rows:
+		row["period_start_date"], row["period_end_date"] = resolve_program_offering_period_dates(row)
 	# Normal selection is active-only. A historical Offering is retained only when it
 	# was explicitly requested and backs an existing Scheme. This lets approved history
 	# reopen without making an inactive academic period available for new planning.
