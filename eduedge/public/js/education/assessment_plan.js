@@ -20,15 +20,22 @@ frappe.ui.form.on("Assessment Plan", {
 		frm.set_query("room", () => ({
 			filters: { eduedge_school_branch: frm.doc.eduedge_school_branch },
 		}));
-		for (const fieldname of ["examiner", "supervisor"]) {
-			frm.set_query(fieldname, () => ({
-				query: "eduedge.api.academic_operations.instructor_query",
-				filters: {
-					school_branch: frm.doc.eduedge_school_branch,
-					reference_date: frm.doc.schedule_date,
-				},
-			}));
-		}
+		frm.set_query("examiner", () => ({
+			query: "eduedge.api.teaching_assignment_options.course_schedule_instructor_query",
+			filters: {
+				eduedge_school_branch: frm.doc.eduedge_school_branch,
+				student_group: frm.doc.student_group,
+				course: frm.doc.course,
+				reference_date: frm.doc.schedule_date,
+			},
+		}));
+		frm.set_query("supervisor", () => ({
+			query: "eduedge.api.academic_operations.instructor_query",
+			filters: {
+				school_branch: frm.doc.eduedge_school_branch,
+				reference_date: frm.doc.schedule_date,
+			},
+		}));
 	},
 	eduedge_school_branch(frm) {
 		frm.set_value("student_group", null);
@@ -50,6 +57,9 @@ frappe.ui.form.on("Assessment Plan", {
 		frm.set_value("room", null);
 		frm.set_value("examiner", null);
 		frm.set_value("supervisor", null);
+	},
+	course(frm) {
+		frm.set_value("examiner", null);
 	},
 	schedule_date(frm) {
 		frm.set_value("student_group", null);
