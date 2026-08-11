@@ -62,7 +62,7 @@ class TestSchemeDeliveryContract(unittest.TestCase):
         self.assertNotIn("item.save()", source)
 
     def test_delivery_ui_uses_scoped_api_and_no_direct_database_writes(self):
-        panel = (APP / "public" / "js" / "eduedge_scheme_of_work" / "SchemeDeliveryPanel.vue").read_text()
+        panel = (APP / "public" / "js" / "eduedge_ui" / "components" / "SchemeDeliveryPanel.vue").read_text()
         root = (APP / "public" / "js" / "eduedge_scheme_of_work" / "EduEdgeSchemeOfWork.vue").read_text()
         self.assertIn("Teaching Progress", panel)
         self.assertIn("append-only", panel)
@@ -71,6 +71,7 @@ class TestSchemeDeliveryContract(unittest.TestCase):
         self.assertIn("log_scheme_delivery", panel)
         self.assertIn('type: "POST"', panel)
         self.assertIn("SchemeDeliveryPanel", root)
+        self.assertIn("../eduedge_ui/components/SchemeDeliveryPanel.vue", root)
         for forbidden in ("frappe.db.set_value", "frappe.db.insert", "frappe.db.delete_doc"):
             self.assertNotIn(forbidden, panel)
 
