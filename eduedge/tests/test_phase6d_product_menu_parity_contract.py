@@ -11,7 +11,7 @@ PHASE6D_ROUTES = (
     "/app/eduedge-instructors",
     "/app/eduedge-instructor-assignments",
     "/app/eduedge-curriculum",
-    "/app/eduedge-scheme-of-work",
+    "/app/eduedge-schemes-of-work",
     "/app/eduedge-lesson-plans",
     "/app/eduedge-program-offerings",
     "/app/eduedge-academic-operations",
