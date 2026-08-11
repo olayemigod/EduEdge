@@ -19,6 +19,60 @@ PURPOSE_FIELD = {
 }
 
 
+def academic_period_dates(academic_year: str | None, academic_term: str | None = None) -> tuple[str | None, str | None]:
+	"""Resolve academic period bounds from native Education masters.
+
+	EduEdge Program Offering does not own `period_start_date` / `period_end_date`
+	columns. Academic Term dates are preferred when a Term exists; Academic Year is
+	the fallback. Keep this helper permission-neutral for server-side validation and
+	workbench option preparation.
+	"""
+	if academic_term:
+		row = frappe.db.get_value(
+			"Academic Term",
+			academic_term,
+			["term_start_date", "term_end_date"],
+			as_dict=True,
+		) or {}
+		if row.get("term_start_date") or row.get("term_end_date"):
+			return row.get("term_start_date"), row.get("term_end_date")
+	if academic_year:
+		row = frappe.db.get_value(
+			"Academic Year",
+			academic_year,
+			["year_start_date", "year_end_date"],
+			as_dict=True,
+		) or {}
+		return row.get("year_start_date"), row.get("year_end_date")
+	return None, None
+
+
+def resolve_program_offering_period_dates(offering) -> tuple[str | None, str | None]:
+	"""Return effective Offering period dates without querying nonexistent fields.
+
+	Explicit Program Offering `start_date` / `end_date` are authoritative where set.
+	Missing sides fall back to the selected Academic Term/Year. `offering` may be a
+	name, dict, frappe._dict, or Document.
+	"""
+	if isinstance(offering, str):
+		row = frappe.db.get_value(
+			"EduEdge Program Offering",
+			offering,
+			["start_date", "end_date", "academic_year", "academic_term"],
+			as_dict=True,
+		) or {}
+	else:
+		row = offering
+	if not row:
+		return None, None
+	getter = row.get if hasattr(row, "get") else lambda key: getattr(row, key, None)
+	fallback_start, fallback_end = academic_period_dates(
+		getter("academic_year"),
+		getter("academic_term"),
+	)
+	return getter("start_date") or fallback_start, getter("end_date") or fallback_end
+
+
 def validate_program_offering(
 	*,
 	branch: str | None,
