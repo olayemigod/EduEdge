@@ -17,7 +17,7 @@ from eduedge.education.instructor_scope import (
     is_limited_instructor_user,
     resolve_exact_instructor_for_user,
 )
-from eduedge.education.offerings import assert_branch_access
+from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
 from eduedge.eduedge.doctype.eduedge_lesson_plan.eduedge_lesson_plan import (
     LESSON_PLAN_ACTION_FLAG,
@@ -236,26 +236,29 @@ def _offering_options(branch: str, assignments: list[dict]) -> list[dict]:
             "academic_year",
             "academic_term",
             "school_branch",
-            "period_start_date",
-            "period_end_date",
+            "start_date",
+            "end_date",
             "is_active",
         ],
-        order_by="period_start_date desc, offering_title asc",
+        order_by="academic_year desc, academic_term desc, offering_title asc",
         limit_page_length=500,
     )
-    return [
-        {
-            "value": row.name,
-            "label": row.offering_title or row.name,
-            "program": row.program,
-            "academic_year": row.academic_year,
-            "academic_term": row.academic_term or "",
-            "period_start_date": row.period_start_date,
-            "period_end_date": row.period_end_date,
-            "is_active": bool(cint(row.is_active)),
-        }
-        for row in rows
-    ]
+    result = []
+    for row in rows:
+        period_start, period_end = resolve_program_offering_period_dates(row)
+        result.append(
+            {
+                "value": row.name,
+                "label": row.offering_title or row.name,
+                "program": row.program,
+                "academic_year": row.academic_year,
+                "academic_term": row.academic_term or "",
+                "period_start_date": period_start,
+                "period_end_date": period_end,
+                "is_active": bool(cint(row.is_active)),
+            }
+        )
+    return result
 
 
 def _group_options(branch: str, offering: str, assignments: list[dict]) -> list[dict]:
