@@ -113,6 +113,8 @@ def fee_structure_query(user: str | None = None) -> str:
 
 def has_academic_institution_permission(doc, user=None, permission_type=None) -> bool:
 	resolved_user = user or frappe.session.user
+	if doc and getattr(doc, "doctype", None) == "Instructor":
+		return has_instructor_permission(doc, resolved_user, permission_type)
 	if not doc or not _should_scope(resolved_user):
 		return True
 	meta = frappe.get_meta(doc.doctype)
