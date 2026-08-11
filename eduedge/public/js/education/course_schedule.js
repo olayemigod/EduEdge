@@ -15,8 +15,13 @@ function setCourseScheduleQueries(frm) {
 		},
 	}));
 	frm.set_query("instructor", () => ({
-		query: "eduedge.api.academic_operations.instructor_query",
-		filters: { eduedge_school_branch: frm.doc.eduedge_school_branch, reference_date: frm.doc.schedule_date },
+		query: "eduedge.api.teaching_assignment_options.course_schedule_instructor_query",
+		filters: {
+			eduedge_school_branch: frm.doc.eduedge_school_branch,
+			student_group: frm.doc.student_group,
+			course: frm.doc.course,
+			reference_date: frm.doc.schedule_date,
+		},
 	}));
 	frm.set_query("room", () => ({
 		query: "eduedge.api.academic_operations.room_query",
@@ -55,6 +60,10 @@ frappe.ui.form.on("Course Schedule", {
 		else setCourseScheduleQueries(frm);
 	},
 	student_group(frm) { applyStudentGroupContext(frm); },
+	async course(frm) {
+		await frm.set_value("instructor", null);
+		setCourseScheduleQueries(frm);
+	},
 	async schedule_date(frm) {
 		frm.__eduedge_student_group_program = "";
 		await frm.set_value({ student_group: null, course: null, instructor: null, room: null, eduedge_school_branch: null });
