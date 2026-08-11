@@ -9,6 +9,7 @@ from eduedge.education.academic_operations import assert_instructor_assignment
 from eduedge.education.curriculum_permissions import is_teacher_user
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import require_instructor_assignment_capability
+from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import require_course_assignment
 
@@ -52,22 +53,48 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 				_("Assessment room must belong to the selected School Branch / Campus."),
 				frappe.ValidationError,
 			)
+	_validate_examiner_and_supervisor(doc)
+
+
+def _validate_examiner_and_supervisor(doc) -> None:
+	"""Keep Subject examination responsibility separate from Branch supervision."""
 	reference_date = doc.schedule_date or nowdate()
-	for fieldname, label in (("examiner", _("Examiner")), ("supervisor", _("Supervisor"))):
-		instructor = doc.get(fieldname)
-		if not instructor:
-			continue
+	if doc.get("examiner"):
 		try:
 			assert_instructor_assignment(
-				instructor,
+				doc.examiner,
+				doc.get(BRANCH_FIELD),
+				reference_date=reference_date,
+			)
+			assert_schedule_instructor_assignment(
+				frappe._dict(
+					{
+						"instructor": doc.examiner,
+						"student_group": doc.student_group,
+						"course": doc.course,
+						"schedule_date": reference_date,
+						BRANCH_FIELD: doc.get(BRANCH_FIELD),
+					}
+				)
+			)
+		except frappe.ValidationError:
+			frappe.throw(
+				_("Examiner {0} must have an effective Subject Instructor Assignment for this Class, Subject and assessment date.").format(doc.examiner),
+				frappe.ValidationError,
+			)
+
+	if doc.get("supervisor"):
+		try:
+			# A Supervisor/Invigilator does not need to teach the assessed Subject. The
+			# operational requirement here is valid Branch eligibility on the date.
+			assert_instructor_assignment(
+				doc.supervisor,
 				doc.get(BRANCH_FIELD),
 				reference_date=reference_date,
 			)
 		except frappe.ValidationError:
 			frappe.throw(
-				_("{0} {1} is not assigned to School Branch / Campus {2}.").format(
-					label, instructor, doc.get(BRANCH_FIELD)
-				),
+				_("Supervisor {0} must have active Branch eligibility for the assessment date.").format(doc.supervisor),
 				frappe.ValidationError,
 			)
 
