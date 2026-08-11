@@ -81,6 +81,8 @@ function buildEduEdgeProductMenu() {
 	const students = term("student", { plural: true, fallback: __("Students") });
 	const applicants = term("student_applicant", { plural: true, fallback: __("Applicants") });
 	const groups = term("student_group", { plural: true, fallback: __("Classes") });
+	const courses = term("course", { plural: true, fallback: __("Courses / Subjects") });
+	const topics = term("topic", { plural: true, fallback: __("Topics") });
 	const assessments = term("assessment", { plural: true, fallback: __("Assessments") });
 
 	return {
@@ -108,25 +110,32 @@ function buildEduEdgeProductMenu() {
 			{
 				key: "students-admissions",
 				label: "Students & Admissions",
-				description: `Admissions, applicants, and ${students.toLowerCase()}`,
+				description: `Admissions, applicants, ${students.toLowerCase()}, enrollments, and teaching staff`,
 				icon: "students",
 				items: [
 					item("Admissions", "Configure and publish admission windows", "clipboard", "/app/eduedge-admissions", { keywords: ["admission", "session", "programme"], quick_action: true }),
 					item(applicants, `Review prospective ${students.toLowerCase()}`, "user", "/app/eduedge-applicants", { keywords: ["applicant", "application", "enrolment"] }),
 					item(students, `${student} records, profiles, and branch context`, "students", "/app/eduedge-students", { keywords: ["student", "pupil", "learner", "profile"], quick_action: true }),
+					item("Student Enrollments", "Enroll Students into active Programme Offerings", "assignment", "/app/eduedge-student-enrollments", { keywords: ["student", "enrollment", "programme", "class"] }),
+					item("Instructors", "Instructor identity, qualification, specialisation, and eligibility", "users", "/app/eduedge-instructors", { keywords: ["instructor", "teacher", "lecturer", "identity", "employee"] }),
+					item("Instructor Assignments", "Assign Instructors to Branches, Classes, Class Arms, and Subjects", "assignment", "/app/eduedge-instructor-assignments", { keywords: ["instructor", "teacher", "assignment", "subject", "class", "handover", "transfer"] }),
 				],
 			},
 			{
 				key: "academic-setup",
 				label: "Academic Setup",
-				description: `${programmes}, offerings, ${groups.toLowerCase()}, schedules, and attendance`,
+				description: `${programmes}, curriculum, offerings, ${groups.toLowerCase()}, planning, schedules, and readiness`,
 				icon: "graduation",
 				items: [
 					item("Academic Foundation", "Academic structure, levels, and calendars", "book", "/app/eduedge-academic-foundation", { keywords: ["academic", "foundation", "calendar", "level"] }),
 					item(`${academicYears} & ${academicTerms}`, `Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`, "calendar", "/app/eduedge-academic-sessions", { keywords: ["academic", "session", "year", "term", "semester", "calendar"] }),
 					item(programmes, `Maintain the ${programme.toLowerCase()} catalogue`, "book", "/app/eduedge-programs", { keywords: ["programme", "class", "catalogue", "course"] }),
+					item(`${courses} & ${topics}`, "Manage Institution curriculum, grading, and class-aware Topics", "book", "/app/eduedge-curriculum", { keywords: ["curriculum", "subject", "course", "topic", "grading"] }),
+					item("Scheme of Work", "Plan, approve, version, and track curriculum delivery", "book", "/app/eduedge-scheme-of-work", { keywords: ["scheme", "curriculum", "topic", "teaching", "delivery"] }),
+					item("Lesson Plans", "Prepare, submit, review, and approve lessons from the approved Scheme of Work", "book", "/app/eduedge-lesson-plans", { keywords: ["lesson", "plan", "teacher", "scheme", "teaching evidence"] }),
 					item(offerings, `${programmes} available by campus and session`, "layers", "/app/eduedge-program-offerings", { keywords: ["programme", "class", "offering", "academic year"] }),
 					item("Academic Operations", `Run ${groups.toLowerCase()}, schedules, and attendance`, "calendar", "/app/eduedge-academic-operations", { keywords: ["class", "schedule", "attendance"], quick_action: true }),
+					item("Academic Readiness", "Assignment coverage, Instructor identity, Scheme approval, curriculum delivery, and assessment planning", "report", "/app/eduedge-academic-readiness", { keywords: ["readiness", "assignment", "identity", "scheme", "delivery", "assessment"], quick_action: true }),
 				],
 			},
 			{
