@@ -84,7 +84,7 @@
 							<label><span>Home Institution *</span><select v-model="draft.eduedge_institution" class="form-control" :disabled="!canEdit" @change="homeInstitutionChanged"><option value="">Select Home Institution</option><option v-for="row in data.allowed_institutions" :key="row.name" :value="row.name">{{ row.institution_name || row.name }}</option></select></label>
 							<label><span>Primary Branch / Campus</span><select v-model="draft.eduedge_primary_branch" class="form-control" :disabled="!canEdit || !draft.eduedge_institution"><option value="">Institution-wide / no Primary Branch</option><option v-for="row in profileBranches" :key="row.name" :value="row.name">{{ row.branch_name || row.name }}</option></select><small>Optional. Other Branches are granted through Instructor Assignments.</small></label>
 							<label><span>Department / School Section</span><select v-model="draft.department" class="form-control" :disabled="!canEdit || !draft.eduedge_institution"><option value="">Not assigned</option><option v-for="row in profileDepartments" :key="row.name" :value="row.name">{{ row.department_name || row.name }}</option></select></label>
-							<label><span>Linked Employee</span><select v-model="draft.employee" class="form-control" :disabled="!canEdit"><option value="">No Employee link</option><option v-for="row in data.employees" :key="row.name" :value="row.name">{{ row.employee_name || row.name }}{{ row.user_id ? ` · ${row.user_id}` : ' · no login' }}</option></select><small>Assignment-driven teaching access requires one active User → Employee → Instructor mapping.</small></label>
+							<label><span>Linked Employee</span><select v-model="draft.employee" class="form-control" :disabled="!canEdit || optionsLoading || !draft.eduedge_institution"><option value="">No Employee link</option><option v-for="row in data.employees" :key="row.name" :value="row.name">{{ row.employee_name || row.name }}{{ row.user_id ? ` · ${row.user_id}` : ' · no login' }}</option></select><small>Only active Employees from the Home Institution's Company are loaded. Assignment-driven teaching access requires one active User → Employee → Instructor mapping.</small></label>
 							<label><span>Gender</span><select v-model="draft.gender" class="form-control" :disabled="!canEdit"><option value="">Not specified</option><option v-for="row in data.genders" :key="row.name" :value="row.name">{{ row.name }}</option></select></label>
 							<label><span>Email</span><input v-model.trim="draft.eduedge_email" type="email" class="form-control" :disabled="!canEdit" /></label>
 							<label><span>Mobile number</span><input v-model.trim="draft.eduedge_mobile" class="form-control" :disabled="!canEdit" /></label>
@@ -97,9 +97,9 @@
 							<h3>Branch eligibility</h3>
 							<EdgeEmptyState v-if="!draft.branch_eligibility?.length" title="Institution-wide profile" description="No Branch eligibility has been assigned yet." />
 							<div v-else class="assignment-list"><article v-for="row in draft.branch_eligibility" :key="row.name"><strong>{{ branchLabel(row.school_branch) }}</strong><small>{{ row.is_primary ? 'Primary Branch' : 'Additional Branch' }} · {{ row.enabled ? 'Active' : 'Disabled' }}</small></article></div>
-							<h3>Current Instructor Assignments</h3>
+							<h3>Instructor Assignment History</h3>
 							<EdgeEmptyState v-if="!draft.assignments?.length" title="No Instructor Assignment" description="Assign this Instructor to one or more Institutions, Branches, Classes, Class Arms and Subjects." />
-							<div v-else class="assignment-list"><article v-for="row in draft.assignments" :key="row.name"><strong>{{ row.assignment_title || row.assignment_type }}</strong><small>{{ institutionLabel(row.institution) }} · {{ branchLabel(row.school_branch) }} · {{ row.student_group || row.program_offering }} · {{ row.course || 'Whole class' }} · {{ row.enabled ? 'Active' : 'Disabled' }}</small></article></div>
+							<div v-else class="assignment-list"><article v-for="row in draft.assignments" :key="row.name"><strong>{{ row.assignment_title || row.assignment_type }}</strong><small>{{ institutionLabel(row.institution) }} · {{ branchLabel(row.school_branch) }} · {{ row.student_group || row.program_offering }} · {{ row.course || 'Whole class' }} · {{ row.enabled ? 'Enabled' : 'Disabled' }}</small></article></div>
 						</template>
 						<p v-if="saveError" class="people-error">{{ saveError }}</p>
 					</article>
@@ -176,11 +176,13 @@ export default {
 		},
 		async loadProfileOptions(institution) {
 			this.profileDepartments = [];
+			this.data.employees = [];
 			if (!institution) return;
 			this.optionsLoading = true;
 			try {
 				const response = await frappe.call("eduedge.api.instructor_profiles.get_instructors_page", { institution, start: 0, page_length: 1 });
 				this.profileDepartments = response.message?.departments || [];
+				this.data.employees = response.message?.employees || [];
 			} catch (error) { this.saveError = error?.message || "Instructor Institution options could not be loaded."; }
 			finally { this.optionsLoading = false; }
 		},
@@ -193,6 +195,7 @@ export default {
 		async homeInstitutionChanged() {
 			if (!this.profileBranches.some((row) => row.name === this.draft.eduedge_primary_branch)) this.draft.eduedge_primary_branch = "";
 			this.draft.department = "";
+			this.draft.employee = "";
 			await this.loadProfileOptions(this.draft.eduedge_institution);
 		},
 		async newInstructor() {
