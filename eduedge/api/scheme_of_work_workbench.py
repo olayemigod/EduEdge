@@ -22,6 +22,8 @@ from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE,
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
+SCHEME_DOCTYPE = "EduEdge Scheme of Work"
+
 
 def _label_rows(rows, value_field: str, label_field: str) -> list[dict]:
 	return [
@@ -35,7 +37,7 @@ def _label_rows(rows, value_field: str, label_field: str) -> list[dict]:
 	]
 
 
-def _assignment_rows(branch: str) -> list[dict]:
+def _assignment_rows(branch: str, *, include_history: bool = False) -> list[dict]:
 	if not is_limited_instructor_user():
 		return []
 	instructors = get_active_instructor_names_for_user()
@@ -55,53 +57,98 @@ def _assignment_rows(branch: str) -> list[dict]:
 		],
 		limit_page_length=0,
 	)
+	if include_history:
+		return [dict(row) for row in rows]
 	today = getdate(nowdate())
 	return [dict(row) for row in rows if not row.valid_to or getdate(row.valid_to) >= today]
 
 
-def _offering_options(branch: str, assignments: list[dict]) -> list[dict]:
-	filters = {"school_branch": branch, "is_active": 1}
+def _historical_scheme_exists(branch: str, offering: str, student_group: str = "") -> bool:
+	if not offering:
+		return False
+	filters = {"school_branch": branch, "program_offering": offering}
+	if student_group:
+		filters["student_group"] = student_group
+	return bool(frappe.db.exists(SCHEME_DOCTYPE, filters))
+
+
+def _offering_options(
+	branch: str,
+	assignments: list[dict],
+	*,
+	requested_offering: str = "",
+) -> list[dict]:
+	filters: dict = {"school_branch": branch}
+	allowed_assignment_names: set[str] | None = None
 	if is_limited_instructor_user():
-		names = sorted({row.get("program_offering") for row in assignments if row.get("program_offering")})
-		filters["name"] = ["in", names or ["__none__"]]
+		allowed_assignment_names = {
+			row.get("program_offering") for row in assignments if row.get("program_offering")
+		}
+		filters["name"] = ["in", sorted(allowed_assignment_names) or ["__none__"]]
 	rows = frappe.get_list(
 		"EduEdge Program Offering",
 		filters=filters,
 		fields=[
 			"name", "offering_title", "program", "academic_year", "academic_term",
-			"school_branch", "institution", "period_start_date", "period_end_date",
+			"school_branch", "institution", "period_start_date", "period_end_date", "is_active",
 		],
 		order_by="period_start_date desc, offering_title asc",
 		limit_page_length=500,
 	)
-	return _label_rows(rows, "name", "offering_title")
+	# Normal selection is active-only. A historical Offering is retained only when it
+	# was explicitly requested and backs an existing Scheme. This lets approved history
+	# reopen without making an inactive academic period available for new planning.
+	visible = [row for row in rows if cint(row.is_active)]
+	requested = str(requested_offering or "").strip()
+	if requested and requested not in {row.name for row in visible} and _historical_scheme_exists(branch, requested):
+		candidate = next((row for row in rows if row.name == requested), None)
+		if candidate and (allowed_assignment_names is None or requested in allowed_assignment_names):
+			visible.append(candidate)
+	return _label_rows(visible, "name", "offering_title")
 
 
-def _group_options(branch: str, offering: str, assignments: list[dict]) -> list[dict]:
+def _group_options(
+	branch: str,
+	offering: str,
+	assignments: list[dict],
+	*,
+	requested_group: str = "",
+) -> list[dict]:
 	if not offering:
 		return []
 	meta = frappe.get_meta("Student Group")
-	filters = {BRANCH_FIELD: branch, "disabled": 0}
+	filters: dict = {BRANCH_FIELD: branch}
 	if meta.has_field(OFFERING_FIELD):
 		filters[OFFERING_FIELD] = offering
+	allowed_groups: set[str] | None = None
+	class_wide = False
 	if is_limited_instructor_user():
 		offering_rows = [row for row in assignments if row.get("program_offering") == offering]
 		class_wide = any((row.get("assignment_scope") or CLASS_ARM_SCOPE) == CLASS_SCOPE for row in offering_rows)
 		if not class_wide:
-			groups = sorted({row.get("student_group") for row in offering_rows if row.get("student_group")})
-			filters["name"] = ["in", groups or ["__none__"]]
-	fields = ["name", "student_group_name", BRANCH_FIELD]
+			allowed_groups = {row.get("student_group") for row in offering_rows if row.get("student_group")}
+			filters["name"] = ["in", sorted(allowed_groups) or ["__none__"]]
+	fields = ["name", "student_group_name", "disabled", BRANCH_FIELD]
 	if meta.has_field(OFFERING_FIELD):
 		fields.append(OFFERING_FIELD)
 	if meta.has_field("eduedge_display_name"):
 		fields.append("eduedge_display_name")
 	rows = frappe.get_list("Student Group", filters=filters, fields=fields, order_by="student_group_name asc", limit_page_length=500)
+	requested = str(requested_group or "").strip()
+	visible = []
+	for row in rows:
+		if not cint(row.disabled):
+			visible.append(row)
+			continue
+		if requested and row.name == requested and _historical_scheme_exists(branch, offering, requested):
+			visible.append(row)
 	return [
 		{
 			"value": row.name,
 			"label": row.get("eduedge_display_name") or row.student_group_name or row.name,
+			"disabled": bool(cint(row.disabled)),
 		}
-		for row in rows
+		for row in visible
 	]
 
 
@@ -199,15 +246,16 @@ def get_scheme_workbench(
 	if not branch or branch not in branch_names:
 		frappe.throw(_("Select a permitted Branch / Campus."), frappe.PermissionError)
 	assert_branch_access(branch)
-	assignments = _assignment_rows(branch)
-	offerings = _offering_options(branch, assignments)
-	offering_names = {row["value"] for row in offerings}
 	offering = str(program_offering or "").strip()
+	group = str(student_group or "").strip()
+	include_history = bool(offering and _historical_scheme_exists(branch, offering, group))
+	assignments = _assignment_rows(branch, include_history=include_history)
+	offerings = _offering_options(branch, assignments, requested_offering=offering)
+	offering_names = {row["value"] for row in offerings}
 	if offering and offering not in offering_names:
 		frappe.throw(_("Select a permitted Class / Programme Offering."), frappe.PermissionError)
-	groups = _group_options(branch, offering, assignments)
+	groups = _group_options(branch, offering, assignments, requested_group=group)
 	group_names = {row["value"] for row in groups}
-	group = str(student_group or "").strip()
 	if group and group not in group_names:
 		frappe.throw(_("Select a permitted Class Arm / Student Group."), frappe.PermissionError)
 	courses = _course_options(offering, group, assignments)
@@ -226,6 +274,13 @@ def get_scheme_workbench(
 		page_length=page_length,
 	)
 	selected_course = next((row for row in courses if row["value"] == subject), None)
+	selected_offering = next((row for row in offerings if row["value"] == offering), None)
+	can_create_in_context = bool(
+		subject
+		and selected_offering
+		and cint(selected_offering.get("is_active"))
+		and (selected_course or {}).get("can_manage", _is_manager())
+	)
 	return {
 		"filters": {
 			"school_branch": branch,
@@ -244,6 +299,6 @@ def get_scheme_workbench(
 		"permissions": {
 			"is_manager": _is_manager(),
 			"is_limited_instructor": is_limited_instructor_user(),
-			"can_create_in_context": bool(subject and (selected_course or {}).get("can_manage", _is_manager())),
+			"can_create_in_context": can_create_in_context,
 		},
 	}
