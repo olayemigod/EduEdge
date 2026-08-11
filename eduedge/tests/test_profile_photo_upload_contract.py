@@ -18,11 +18,18 @@ class TestProfilePhotoUploadContract(unittest.TestCase):
 		self.assertIn('MAX_PROFILE_IMAGE_BYTES = 2 * 1024 * 1024', upload)
 		self.assertIn('ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}', upload)
 		self.assertIn('ALLOWED_IMAGE_MIMETYPES = {"image/jpeg", "image/png", "image/webp"}', upload)
+		self.assertIn('_detect_image_mimetype(content)', upload)
+		self.assertIn('content.startswith(b"\\xff\\xd8\\xff")', upload)
+		self.assertIn('content.startswith(b"\\x89PNG\\r\\n\\x1a\\n")', upload)
+		self.assertIn('content[:4] == b"RIFF"', upload)
+		self.assertIn('content[8:12] == b"WEBP"', upload)
+		self.assertIn('"Only genuine JPG, PNG, and WebP images are allowed."', upload)
 		self.assertIn('"User",\n\t\tuser,', upload)
 		self.assertIn('is_private=1', upload)
 		self.assertIn('df="user_image"', upload)
 		self.assertNotIn('target_user', upload)
 		self.assertNotIn('ignore_permissions', upload)
+		self.assertNotIn('import filetype', upload)
 
 	def test_uploader_uses_custom_method_without_direct_user_attachment(self):
 		bundle = (APP / "public" / "js" / "eduedge_profile_identity.bundle.js").read_text()
