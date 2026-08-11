@@ -110,3 +110,83 @@ def before_validate_instructor(doc, method=None) -> None:
 				_("Department / School Section must belong to the Instructor's Home Institution."),
 				frappe.ValidationError,
 			)
+	_validate_instructor_employee_identity(doc)
+
+
+def _validate_instructor_employee_identity(doc) -> None:
+	"""Prevent new ambiguous User -> Employee -> Instructor mappings without rewriting legacy history."""
+	if not doc.get("employee") or doc.get("status") != "Active":
+		return
+	before = doc.get_doc_before_save()
+	mapping_changed = bool(
+		doc.is_new()
+		or not before
+		or before.get("employee") != doc.get("employee")
+		or before.get("status") != doc.get("status")
+	)
+	if not mapping_changed:
+		return
+	if not frappe.db.exists("DocType", "Employee"):
+		return
+	employee = frappe.db.get_value(
+		"Employee",
+		doc.employee,
+		["name", "employee_name", "status", "user_id"],
+		as_dict=True,
+	)
+	if not employee:
+		frappe.throw(_("Select a valid Employee for this Instructor."), frappe.ValidationError)
+	if employee.status != "Active":
+		frappe.throw(_("An active Instructor must link to an active Employee."), frappe.ValidationError)
+
+	other_same_employee = frappe.get_all(
+		"Instructor",
+		filters={
+			"employee": employee.name,
+			"status": "Active",
+			"name": ["!=", doc.name or ""],
+		},
+		pluck="name",
+		limit_page_length=2,
+	)
+	if other_same_employee:
+		frappe.throw(
+			_("Employee {0} is already linked to another active Instructor ({1}).").format(
+				employee.employee_name or employee.name,
+				other_same_employee[0],
+			),
+			frappe.ValidationError,
+		)
+
+	user_id = str(employee.user_id or "").strip()
+	if not user_id:
+		return
+	active_employees = frappe.get_all(
+		"Employee",
+		filters={"user_id": user_id, "status": "Active"},
+		pluck="name",
+		limit_page_length=3,
+	)
+	if len(active_employees) > 1:
+		frappe.throw(
+			_("User {0} is linked to more than one active Employee. Correct the Employee mapping before linking this Instructor.").format(user_id),
+			frappe.ValidationError,
+		)
+	other_user_instructors = frappe.get_all(
+		"Instructor",
+		filters={
+			"employee": ["in", active_employees or [employee.name]],
+			"status": "Active",
+			"name": ["!=", doc.name or ""],
+		},
+		pluck="name",
+		limit_page_length=2,
+	)
+	if other_user_instructors:
+		frappe.throw(
+			_("User {0} already resolves to another active Instructor ({1}).").format(
+				user_id,
+				other_user_instructors[0],
+			),
+			frappe.ValidationError,
+		)
