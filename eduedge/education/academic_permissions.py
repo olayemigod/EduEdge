@@ -3,11 +3,7 @@ from __future__ import annotations
 import frappe
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
-from eduedge.services.branch_context import (
-	get_allowed_institutions,
-	get_allowed_school_branches,
-	is_branch_access_enforced,
-)
+from eduedge.services.branch_context import get_allowed_institutions, is_branch_access_enforced
 
 PRIVILEGED_ROLES = {
 	"System Manager",
@@ -65,36 +61,35 @@ def student_house_query(user: str | None = None) -> str:
 
 
 def instructor_query(user: str | None = None) -> str:
-	"""Keep historical Instructor identities visible inside the user's permitted scope.
+	"""Keep historical Instructor identities visible inside allowed Institutions.
 
-	Legacy Instructor masters can have a blank Home Institution while still being the
-	authoritative identity on historical Branch/academic assignments. Hiding those rows
-	breaks audit history and lifecycle links, so scoped users may see them when any
-	Instructor assignment places them in an allowed Branch.
+	The central Institution resolver remains authoritative. Legacy Instructor masters
+	with a blank Home Institution may still be visible when historical Branch or
+	Academic Assignments place them inside one of those allowed Institutions.
 	"""
 	resolved_user = user or frappe.session.user
 	if not _should_scope(resolved_user):
 		return ""
 	institutions = _allowed_institutions(resolved_user)
-	branches = _allowed_branches(resolved_user)
+	if not institutions:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
 	conditions: list[str] = []
 	meta = frappe.get_meta("Instructor")
-	if institutions and meta.has_field(INSTITUTION_FIELD):
-		values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
+	if meta.has_field(INSTITUTION_FIELD):
 		conditions.append(f"`tabInstructor`.`{INSTITUTION_FIELD}` in ({values})")
-	if branches and frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
-		values = ", ".join(frappe.db.escape(value) for value in sorted(branches))
+	if frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
 		conditions.append(
 			"exists (select 1 from `tabEduEdge Instructor Branch Assignment` branch_assignment "
+			"inner join `tabEduEdge School Branch` branch on branch.name = branch_assignment.school_branch "
 			"where branch_assignment.instructor = `tabInstructor`.name "
-			f"and branch_assignment.school_branch in ({values}))"
+			f"and branch.institution in ({values}))"
 		)
-	if branches and frappe.db.exists("DocType", "EduEdge Instructor Assignment"):
-		values = ", ".join(frappe.db.escape(value) for value in sorted(branches))
+	if frappe.db.exists("DocType", "EduEdge Instructor Assignment"):
 		conditions.append(
 			"exists (select 1 from `tabEduEdge Instructor Assignment` academic_assignment "
 			"where academic_assignment.instructor = `tabInstructor`.name "
-			f"and academic_assignment.school_branch in ({values}))"
+			f"and academic_assignment.institution in ({values}))"
 		)
 	return "(" + " OR ".join(conditions) + ")" if conditions else "1=0"
 
@@ -137,17 +132,25 @@ def has_instructor_permission(doc, user=None, permission_type=None) -> bool:
 	if not doc or getattr(doc, "is_new", lambda: False)():
 		return True
 	institutions = _allowed_institutions(resolved_user)
-	branches = _allowed_branches(resolved_user)
+	if not institutions:
+		return False
 	if doc.meta.has_field(INSTITUTION_FIELD) and doc.get(INSTITUTION_FIELD) in institutions:
 		return True
-	if not branches:
-		return False
-	for doctype in ("EduEdge Instructor Branch Assignment", "EduEdge Instructor Assignment"):
-		if not frappe.db.exists("DocType", doctype):
-			continue
-		if frappe.db.exists(
-			doctype,
-			{"instructor": doc.name, "school_branch": ["in", sorted(branches)]},
+	if frappe.db.exists("DocType", "EduEdge Instructor Assignment") and frappe.db.exists(
+		"EduEdge Instructor Assignment",
+		{"instructor": doc.name, "institution": ["in", sorted(institutions)]},
+	):
+		return True
+	if frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
+		institution_branches = frappe.get_all(
+			"EduEdge School Branch",
+			filters={"institution": ["in", sorted(institutions)]},
+			pluck="name",
+			limit_page_length=0,
+		)
+		if institution_branches and frappe.db.exists(
+			"EduEdge Instructor Branch Assignment",
+			{"instructor": doc.name, "school_branch": ["in", institution_branches]},
 		):
 			return True
 	return False
@@ -172,14 +175,6 @@ def _allowed_institutions(user: str) -> set[str]:
 	return {
 		row.get("name")
 		for row in get_allowed_institutions(user=user)
-		if row.get("name")
-	}
-
-
-def _allowed_branches(user: str) -> set[str]:
-	return {
-		row.get("name")
-		for row in get_allowed_school_branches(user=user)
 		if row.get("name")
 	}
 
