@@ -38,7 +38,6 @@ def _assignment_exists_sql(*, table: str, capability: str, user: str, result_mod
     if not frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
         return "1=0"
 
-    assignment = "assignment"
     if result_mode:
         plan_table = "`tabAssessment Plan` plan"
         group_table = "`tabStudent Group` student_group"
@@ -60,21 +59,21 @@ def _assignment_exists_sql(*, table: str, capability: str, user: str, result_mod
     return f"""
         exists (
             select 1
-            from `tabEduEdge Instructor Assignment` {assignment}
+            from `tabEduEdge Instructor Assignment` assignment
             {plan_join}
-            where {assignment}.instructor = {frappe.db.escape(instructor)}
-                and {assignment}.enabled = 1
-                and {assignment}.`{capability}` = 1
-                and {assignment}.school_branch = {branch_expr}
-                and {assignment}.program_offering = student_group.`{OFFERING_FIELD}`
-                and {assignment}.course = {course_expr}
-                and ({assignment}.valid_from is null or {assignment}.valid_from <= {date_expr})
-                and ({assignment}.valid_to is null or {assignment}.valid_to >= {date_expr})
+            where assignment.instructor = {frappe.db.escape(instructor)}
+                and assignment.enabled = 1
+                and assignment.`{capability}` = 1
+                and assignment.school_branch = {branch_expr}
+                and assignment.program_offering = student_group.`{OFFERING_FIELD}`
+                and assignment.course = {course_expr}
+                and (assignment.valid_from is null or assignment.valid_from <= {date_expr})
+                and (assignment.valid_to is null or assignment.valid_to >= {date_expr})
                 and (
-                    {assignment}.assignment_scope = {frappe.db.escape(CLASS_SCOPE)}
+                    assignment.assignment_scope = {frappe.db.escape(CLASS_SCOPE)}
                     or (
-                        {assignment}.assignment_scope = {frappe.db.escape(CLASS_ARM_SCOPE)}
-                        and {assignment}.student_group = {group_expr}
+                        assignment.assignment_scope = {frappe.db.escape(CLASS_ARM_SCOPE)}
+                        and assignment.student_group = {group_expr}
                     )
                 )
         )
