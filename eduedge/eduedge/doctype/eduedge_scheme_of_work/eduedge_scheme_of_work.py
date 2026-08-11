@@ -15,7 +15,7 @@ from eduedge.education.curriculum_fields import (
 	TOPIC_SCOPE_INSTITUTION,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.education.offerings import assert_branch_access
+from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
 
 SCHEME_ACTION_FLAG = "in_eduedge_scheme_of_work_action"
 SCHEME_STATUSES = {"Draft", "Approved", "Retired"}
@@ -103,8 +103,8 @@ class EduEdgeSchemeOfWork(Document):
 				"program",
 				"academic_year",
 				"academic_term",
-				"period_start_date",
-				"period_end_date",
+				"start_date",
+				"end_date",
 				"is_active",
 			],
 			as_dict=True,
@@ -120,8 +120,9 @@ class EduEdgeSchemeOfWork(Document):
 		self.institution = offering.institution
 		self.academic_year = offering.academic_year
 		self.academic_term = offering.academic_term or None
-		self.period_start_date = offering.period_start_date
-		self.period_end_date = offering.period_end_date
+		period_start, period_end = resolve_program_offering_period_dates(offering)
+		self.period_start_date = period_start
+		self.period_end_date = period_end
 		self._offering = offering
 
 	def _validate_student_group(self) -> None:
