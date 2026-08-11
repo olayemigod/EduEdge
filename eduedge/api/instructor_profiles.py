@@ -7,6 +7,10 @@ from frappe import _
 from frappe.utils import cint, getdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.instructor_scope import (
+	get_instructor_identity_state,
+	get_instructor_identity_states,
+)
 from eduedge.education.people_fields import INSTRUCTOR_PRIMARY_BRANCH_FIELD
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import (
@@ -164,14 +168,22 @@ def _operational_instructor_names(institution: str, branch: str, branches: list[
 		if (not institution or row.get("institution") == institution)
 		and (not branch or row["name"] == branch)
 	]
-	assignment_names = set(
+	branch_assignment_names = set(
 		frappe.get_list(
 			"EduEdge Instructor Branch Assignment",
-			filters={"school_branch": ["in", eligible_branches], "enabled": 1},
+			filters={"school_branch": ["in", eligible_branches]},
 			pluck="instructor",
 			limit_page_length=0,
 		)
 	) if eligible_branches and frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment") else set()
+	academic_assignment_names = set(
+		frappe.get_list(
+			"EduEdge Instructor Assignment",
+			filters={"school_branch": ["in", eligible_branches]},
+			pluck="instructor",
+			limit_page_length=0,
+		)
+	) if eligible_branches and frappe.db.exists("DocType", "EduEdge Instructor Assignment") else set()
 
 	filters: dict[str, Any] = {}
 	meta = frappe.get_meta("Instructor")
@@ -182,7 +194,7 @@ def _operational_instructor_names(institution: str, branch: str, branches: list[
 	home_names = set(
 		frappe.get_list("Instructor", filters=filters, pluck="name", limit_page_length=0)
 	) if filters else set()
-	return assignment_names | home_names
+	return branch_assignment_names | academic_assignment_names | home_names
 
 
 def _earliest(values: list) -> Any:
@@ -236,6 +248,7 @@ def _instructor_detail(name: str) -> dict:
 	doc = frappe.get_doc("Instructor", name)
 	doc.check_permission("read")
 	result = doc.as_dict(no_nulls=False)
+	result["identity"] = get_instructor_identity_state(doc.name)
 	result["assignments"] = frappe.get_list(
 		"EduEdge Instructor Assignment",
 		filters={"instructor": doc.name},
@@ -316,11 +329,13 @@ def get_instructors_page(
 	rows = rows[:length]
 	institution_map = {row["name"]: row for row in institutions}
 	branch_map = {row["name"]: row for row in branches}
+	identity_map = get_instructor_identity_states([row.name for row in rows])
 	for row in rows:
 		home = institution_map.get(row.get(INSTITUTION_FIELD)) or {}
 		primary = branch_map.get(row.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD)) or {}
 		row["institution_name"] = home.get("institution_name") or row.get(INSTITUTION_FIELD)
 		row["primary_branch_name"] = primary.get("branch_name") or row.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+		row["identity"] = identity_map.get(row.name, {})
 
 	selected_institution = institution_map.get(resolved_institution) or {}
 	selected_branch = branch_map.get(resolved_branch) or {}
@@ -339,7 +354,7 @@ def get_instructors_page(
 		"employees": frappe.get_list(
 			"Employee",
 			filters={"status": "Active"},
-			fields=["name", "employee_name", "department", "gender"],
+			fields=["name", "employee_name", "department", "gender", "user_id", "status"],
 			order_by="employee_name asc",
 			limit_page_length=1000,
 		) if frappe.db.exists("DocType", "Employee") and frappe.has_permission("Employee", "read") else [],
