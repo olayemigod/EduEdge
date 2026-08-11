@@ -4,14 +4,12 @@ from contextlib import contextmanager
 
 import frappe
 from frappe import _
-from frappe.utils import cint, now_datetime
+from frappe.utils import cint, getdate, now_datetime, nowdate
 
-from eduedge.education.instructor_assignment_capabilities import (
-	assignment_capability_enforcement_enabled,
-	get_matching_instructor_capability_assignments,
-)
-from eduedge.education.instructor_scope import is_limited_instructor_user
+from eduedge.education.instructor_assignment_capabilities import assignment_capability_enforcement_enabled
+from eduedge.education.instructor_scope import get_active_instructor_names_for_user, is_limited_instructor_user
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
 from eduedge.eduedge.doctype.eduedge_scheme_of_work.eduedge_scheme_of_work import (
 	SCHEME_ACTION_FLAG,
 	snapshot_scheme_context,
@@ -19,6 +17,7 @@ from eduedge.eduedge.doctype.eduedge_scheme_of_work.eduedge_scheme_of_work impor
 from eduedge.platform.access import require_eduedge_access
 
 SCHEME_DOCTYPE = "EduEdge Scheme of Work"
+ASSIGNMENT_DOCTYPE = "EduEdge Instructor Assignment"
 SCHEME_MANAGER_ROLES = {
 	"Administrator",
 	"System Manager",
@@ -55,6 +54,84 @@ def _is_manager() -> bool:
 	)
 
 
+def _date_overlap(start_a, end_a, start_b, end_b) -> bool:
+	minimum = getdate("1900-01-01")
+	maximum = getdate("2999-12-31")
+	a_start = getdate(start_a) if start_a else minimum
+	a_end = getdate(end_a) if end_a else maximum
+	b_start = getdate(start_b) if start_b else minimum
+	b_end = getdate(end_b) if end_b else maximum
+	return a_start <= b_end and b_start <= a_end
+
+
+def _assignment_scope_matches(row, student_group: str) -> bool:
+	scope = row.get("assignment_scope") or CLASS_ARM_SCOPE
+	if scope == CLASS_SCOPE:
+		return True
+	return bool(student_group and scope == CLASS_ARM_SCOPE and row.get("student_group") == student_group)
+
+
+def _scheme_assignment_rows(doc) -> tuple[str, list[dict]]:
+	"""Return the exact Subject assignments that overlap the Scheme academic period.
+
+	Scheme access must survive a mid-term handover: a replacement Instructor who starts
+	later in the term still needs the approved Scheme for the remaining curriculum, while
+	a former Instructor must not keep current write authority merely because they covered
+	the first day of the term.
+	"""
+	instructors = get_active_instructor_names_for_user(frappe.session.user)
+	if len(instructors) != 1:
+		return "ambiguous" if instructors else "missing", []
+	instructor = instructors[0]
+	rows = frappe.get_all(
+		ASSIGNMENT_DOCTYPE,
+		filters={
+			"instructor": instructor,
+			"school_branch": doc.school_branch,
+			"program_offering": doc.program_offering,
+			"course": doc.course,
+			"assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)],
+			"enabled": 1,
+		},
+		fields=[
+			"name",
+			"assignment_scope",
+			"student_group",
+			"valid_from",
+			"valid_to",
+			"can_view_subject_content",
+			"can_manage_subject_topics",
+		],
+		order_by="valid_from asc, modified desc",
+		limit_page_length=200,
+	)
+	matched = [
+		dict(row)
+		for row in rows
+		if _assignment_scope_matches(row, str(doc.student_group or ""))
+		and _date_overlap(row.valid_from, row.valid_to, doc.period_start_date, doc.period_end_date)
+	]
+	return "resolved", matched
+
+
+def _write_reference_date(doc):
+	today = getdate(nowdate())
+	start = getdate(doc.period_start_date) if doc.period_start_date else None
+	end = getdate(doc.period_end_date) if doc.period_end_date else None
+	if start and today < start:
+		return start
+	if end and today > end:
+		return today
+	return today
+
+
+def _effective_on(row: dict, reference_date) -> bool:
+	return bool(
+		(not row.get("valid_from") or getdate(row.get("valid_from")) <= reference_date)
+		and (not row.get("valid_to") or getdate(row.get("valid_to")) >= reference_date)
+	)
+
+
 def _context_authorized(doc, *, write: bool) -> bool:
 	assert_branch_access(doc.school_branch)
 	if _is_manager():
@@ -64,22 +141,27 @@ def _context_authorized(doc, *, write: bool) -> bool:
 		return True
 	if not is_limited_instructor_user():
 		frappe.throw(_("You are not permitted to manage Schemes of Work."), frappe.PermissionError)
-	identity_status, _instructor, assignments = get_matching_instructor_capability_assignments(
-		user=frappe.session.user,
-		school_branch=doc.school_branch,
-		program_offering=doc.program_offering,
-		student_group=doc.student_group,
-		course=doc.course,
-		on_date=doc.period_start_date,
-	)
-	if identity_status != "resolved" or not assignments:
+
+	identity_status, overlapping = _scheme_assignment_rows(doc)
+	if identity_status != "resolved" or not overlapping:
 		frappe.throw(
 			_("Your exact Instructor Assignment does not cover this Scheme's Branch, Class, Class Arm and Subject context."),
 			frappe.PermissionError,
 		)
+
+	matched = overlapping
+	if write:
+		reference_date = _write_reference_date(doc)
+		matched = [row for row in overlapping if _effective_on(row, reference_date)]
+		if not matched:
+			frappe.throw(
+				_("Your current or scheduled Instructor Assignment does not permit editing this Scheme of Work now."),
+				frappe.PermissionError,
+			)
+
 	if assignment_capability_enforcement_enabled():
 		capability = "can_manage_subject_topics" if write else "can_view_subject_content"
-		if not any(cint(row.get(capability)) for row in assignments):
+		if not any(cint(row.get(capability)) for row in matched):
 			frappe.throw(
 				_("Your exact Instructor Assignment does not grant the required curriculum capability for this Scheme of Work."),
 				frappe.PermissionError,
@@ -202,6 +284,10 @@ def save_scheme(payload) -> dict:
 		doc = frappe.get_doc(SCHEME_DOCTYPE, name)
 		if doc.status != "Draft":
 			frappe.throw(_("Approved Schemes of Work are immutable. Create a new version instead."), frappe.ValidationError)
+		# Authorise the original record before applying caller-controlled context.
+		# Without this check a limited Instructor who learned another Draft ID could
+		# rewrite it into a context they are authorised to manage.
+		_context_authorized(doc, write=True)
 	else:
 		doc = frappe.new_doc(SCHEME_DOCTYPE)
 		doc.version_no = 1
