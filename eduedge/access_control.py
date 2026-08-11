@@ -87,6 +87,8 @@ ROUTE_REQUIREMENTS = {
 	# Lesson Plans are reached through teaching-assignment visibility. The workbench
 	# APIs separately enforce exact Instructor identity, assignment, Branch and Scheme context.
 	"/app/eduedge-lesson-plans": (("instructor_assignment", "read"),),
+	# Academic Readiness is a management-only intelligence page. The API separately enforces academic-management roles and Branch access.
+	"/app/eduedge-academic-readiness": (("program_offering", "read"),),
 	"/app/eduedge-class-arms": (("student_group", "read"),),
 	"/app/eduedge-academic-operations": (
 		("student_attendance", "create"),
