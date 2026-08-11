@@ -52,7 +52,7 @@ class TestPhase6DPermissionModelContract(unittest.TestCase):
         access = (APP / "access_control.py").read_text(encoding="utf-8")
         for token in (
             '"/app/eduedge-instructor-assignments": (("instructor_assignment", "read"),)',
-            '"/app/eduedge-scheme-of-work": (("course", "read"),)',
+            '"/app/eduedge-schemes-of-work": (("course", "read"),)',
             '"/app/eduedge-lesson-plans": (("instructor_assignment", "read"),)',
             '"/app/eduedge-academic-readiness": (("program_offering", "read"),)',
             "workbench APIs remain the authoritative exact Branch/Class/Subject permission gate",
