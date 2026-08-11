@@ -5,7 +5,7 @@
 		:tenant-name="selectedBranch?.institution_name || ''"
 		:branch-name="selectedBranch?.branch_name || 'Scheme of Work'"
 		:menu-items="menuItems"
-		active-route="/app/eduedge-scheme-of-work"
+		active-route="/app/eduedge-schemes-of-work"
 		@navigate="openRoute"
 	>
 		<EdgePageLayout>
