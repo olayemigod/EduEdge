@@ -54,16 +54,29 @@ class TestSchemeOfWorkFoundationContract(unittest.TestCase):
         self.assertIn("doc.snapshot_on = doc.approved_on", api)
         self.assertIn('previous.status = "Retired"', api)
 
-    def test_instructor_authoring_uses_exact_assignment_and_capability_governance(self):
+    def test_instructor_authoring_uses_exact_assignment_period_and_capability_governance(self):
         api = (APP / "api" / "scheme_of_work.py").read_text()
         for token in (
-            "get_matching_instructor_capability_assignments",
+            "get_active_instructor_names_for_user",
+            "def _scheme_assignment_rows",
+            "_date_overlap(row.valid_from, row.valid_to, doc.period_start_date, doc.period_end_date)",
+            "def _write_reference_date",
+            "def _effective_on",
             'capability = "can_manage_subject_topics" if write else "can_view_subject_content"',
             "assignment_capability_enforcement_enabled()",
             "does not cover this Scheme's Branch, Class, Class Arm and Subject context",
+            "Your current or scheduled Instructor Assignment does not permit editing this Scheme of Work now",
             "Only academic management can approve a Scheme of Work",
         ):
             self.assertIn(token, api)
+
+    def test_existing_draft_is_authorised_before_caller_context_is_applied(self):
+        api = (APP / "api" / "scheme_of_work.py").read_text()
+        block = api[api.index("def save_scheme"):api.index("def approve_scheme")]
+        original_auth = block.index("_context_authorized(doc, write=True)")
+        caller_mutation = block.index("for fieldname in EDITABLE_FIELDS")
+        self.assertLess(original_auth, caller_mutation)
+        self.assertIn("rewrite it into a context they are authorised to manage", block)
 
     def test_versioning_never_mutates_approved_content_in_place(self):
         api = (APP / "api" / "scheme_of_work.py").read_text()
