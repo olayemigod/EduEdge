@@ -77,20 +77,25 @@ def _eligible_assignment_rows(scheme, delivered_on, *, instructor: str | None = 
 	]
 
 
+def _exact_limited_instructor() -> str:
+	instructors = get_active_instructor_names_for_user()
+	if len(instructors) != 1:
+		frappe.throw(
+			_("Your User account must resolve to exactly one active Instructor before Scheme delivery can be used."),
+			frappe.PermissionError,
+		)
+	return instructors[0]
+
+
 def _resolve_delivery_assignment(scheme, delivered_on, instructor: str | None = None) -> dict:
 	assert_branch_access(scheme.school_branch)
 	requested_instructor = str(instructor or "").strip()
 	limited = is_limited_instructor_user()
 	if limited:
-		instructors = get_active_instructor_names_for_user()
-		if len(instructors) != 1:
-			frappe.throw(
-				_("Your User account must resolve to exactly one active Instructor before Scheme delivery can be logged."),
-				frappe.PermissionError,
-			)
-		if requested_instructor and requested_instructor != instructors[0]:
+		exact_instructor = _exact_limited_instructor()
+		if requested_instructor and requested_instructor != exact_instructor:
 			frappe.throw(_("You cannot log Scheme delivery for another Instructor."), frappe.PermissionError)
-		requested_instructor = instructors[0]
+		requested_instructor = exact_instructor
 	elif _is_manager():
 		if not requested_instructor:
 			frappe.throw(_("Select the Instructor who delivered this Scheme item."), frappe.ValidationError)
@@ -220,7 +225,7 @@ def get_delivery_instructor_options(name: str, delivered_on: str | None = None) 
 		rows = _eligible_assignment_rows(
 			scheme,
 			date,
-			instructor=(get_active_instructor_names_for_user() or [""])[0],
+			instructor=_exact_limited_instructor(),
 		)
 	else:
 		rows = _eligible_assignment_rows(scheme, date)
