@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, getdate
+from frappe.utils import cint, getdate, nowdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.instructor_scope import (
@@ -20,6 +20,7 @@ from eduedge.services.branch_context import (
 )
 
 MAX_PAGE_LENGTH = 50
+MAX_EMPLOYEE_OPTIONS = 250
 ALL_INSTITUTIONS_KEY = "__all__"
 GLOBAL_INSTRUCTOR_ROLES = {
 	"System Manager",
@@ -284,6 +285,32 @@ def _departments(institution: str) -> list[dict]:
 	)
 
 
+def _employee_options(institution: str) -> list[dict]:
+	"""Return only active Employees relevant to the selected Home Institution.
+
+	Employee is a dependent field of Home Institution. Do not expose/load the entire
+	Employee table into the Instructor page. Global administrators select a Home
+	Institution first; the UI then reloads this bounded, company-scoped option set.
+	"""
+	if (
+		not institution
+		or institution == ALL_INSTITUTIONS_KEY
+		or not frappe.db.exists("DocType", "Employee")
+		or not frappe.has_permission("Employee", "read")
+	):
+		return []
+	company = frappe.db.get_value("EduEdge Institution", institution, "company")
+	if not company:
+		return []
+	return frappe.get_list(
+		"Employee",
+		filters={"status": "Active", "company": company},
+		fields=["name", "employee_name", "department", "gender", "user_id", "status", "company"],
+		order_by="employee_name asc",
+		limit_page_length=MAX_EMPLOYEE_OPTIONS,
+	)
+
+
 @frappe.whitelist()
 def get_instructors_page(
 	institution: str | None = None,
@@ -351,13 +378,7 @@ def get_instructors_page(
 		"instructors": rows,
 		"instructor": _instructor_detail(instructor) if instructor else None,
 		"departments": _departments(resolved_institution),
-		"employees": frappe.get_list(
-			"Employee",
-			filters={"status": "Active"},
-			fields=["name", "employee_name", "department", "gender", "user_id", "status"],
-			order_by="employee_name asc",
-			limit_page_length=1000,
-		) if frappe.db.exists("DocType", "Employee") and frappe.has_permission("Employee", "read") else [],
+		"employees": _employee_options(resolved_institution),
 		"genders": frappe.get_list("Gender", fields=["name"], order_by="name asc", limit_page_length=100),
 		"permissions": {
 			"can_create": frappe.has_permission("Instructor", "create"),
@@ -367,24 +388,58 @@ def get_instructors_page(
 	}
 
 
-def _ensure_branch_eligibility(instructor: str, branch: str) -> None:
-	assignment_name = frappe.db.get_value(
-		"EduEdge Instructor Branch Assignment",
-		{"instructor": instructor, "school_branch": branch},
-		"name",
+def _covers_date(row, day) -> bool:
+	return bool(
+		cint(row.get("enabled"))
+		and (not row.get("valid_from") or getdate(row.get("valid_from")) <= day)
+		and (not row.get("valid_to") or getdate(row.get("valid_to")) >= day)
 	)
-	if assignment_name:
-		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", assignment_name)
+
+
+def _ensure_branch_eligibility(instructor: str, branch: str) -> None:
+	"""Make the selected Branch primary for *current* eligibility without rewriting history."""
+	today = getdate(nowdate())
+	periods = frappe.get_all(
+		"EduEdge Instructor Branch Assignment",
+		filters={"instructor": instructor},
+		fields=["name", "school_branch", "enabled", "is_primary", "valid_from", "valid_to"],
+		order_by="valid_from asc, modified asc",
+		limit_page_length=0,
+	)
+	current_target = [row for row in periods if row.school_branch == branch and _covers_date(row, today)]
+	if len(current_target) > 1:
+		frappe.throw(
+			_("More than one current Branch eligibility period exists for this Instructor and Branch. Resolve Branch eligibility before setting a Primary Branch."),
+			frappe.ValidationError,
+		)
+
+	# Demote only another *currently effective* primary period. Historical and future
+	# primary periods are not rewritten by saving the Instructor profile.
+	for row in periods:
+		if row.school_branch == branch or not cint(row.is_primary) or not _covers_date(row, today):
+			continue
+		other = frappe.get_doc("EduEdge Instructor Branch Assignment", row.name)
+		other.check_permission("write")
+		other.is_primary = 0
+		other.save()
+
+	if current_target:
+		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", current_target[0].name)
 		doc.check_permission("write")
-	else:
-		if not frappe.has_permission("EduEdge Instructor Branch Assignment", "create"):
-			frappe.throw(_("You are not permitted to create Instructor Branch eligibility."), frappe.PermissionError)
-		doc = frappe.new_doc("EduEdge Instructor Branch Assignment")
-		doc.instructor = instructor
-		doc.school_branch = branch
+		if not cint(doc.is_primary):
+			doc.is_primary = 1
+			doc.save()
+		return
+
+	if not frappe.has_permission("EduEdge Instructor Branch Assignment", "create"):
+		frappe.throw(_("You are not permitted to create Instructor Branch eligibility."), frappe.PermissionError)
+	doc = frappe.new_doc("EduEdge Instructor Branch Assignment")
+	doc.instructor = instructor
+	doc.school_branch = branch
 	doc.enabled = 1
 	doc.is_primary = 1
-	doc.valid_from = doc.valid_from or frappe.utils.nowdate()
+	doc.valid_from = today
+	doc.valid_to = None
 	doc.save()
 
 
@@ -421,6 +476,17 @@ def save_instructor(payload: str | dict) -> dict:
 		department_institution = frappe.db.get_value("Department", department, INSTITUTION_FIELD)
 		if department_institution and department_institution != institution:
 			frappe.throw(_("Department / School Section must belong to the Instructor's Home Institution."), frappe.ValidationError)
+
+	employee = str(data.get("employee") or "").strip()
+	if employee:
+		if not frappe.has_permission("Employee", "read"):
+			frappe.throw(_("You are not permitted to link Employee records."), frappe.PermissionError)
+		company = frappe.db.get_value("EduEdge Institution", institution, "company")
+		employee_row = frappe.db.get_value("Employee", employee, ["status", "company"], as_dict=True)
+		if not employee_row or employee_row.status != "Active":
+			frappe.throw(_("Select an active Employee."), frappe.ValidationError)
+		if company and employee_row.company != company:
+			frappe.throw(_("Linked Employee must belong to the Home Institution's Company."), frappe.ValidationError)
 
 	for fieldname in INSTRUCTOR_FIELDS:
 		if doc.meta.has_field(fieldname) and fieldname in data:
