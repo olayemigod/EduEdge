@@ -43,7 +43,7 @@ ITEM_BUSINESS_FIELDS = (
 )
 
 
-class EduEdgeSchemeOfWork(Document):
+class EduEdgeSchemeofWork(Document):
 	def before_insert(self) -> None:
 		self.prepared_by = self.prepared_by or frappe.session.user
 
@@ -253,7 +253,12 @@ class EduEdgeSchemeOfWork(Document):
 		return " · ".join(str(value) for value in parts if value)
 
 
-def snapshot_scheme_context(doc: EduEdgeSchemeOfWork) -> None:
+# Frappe resolves controller classes by removing spaces/hyphens from the DocType
+# name exactly. Keep the former Pythonic spelling as an alias for internal imports.
+EduEdgeSchemeOfWork = EduEdgeSchemeofWork
+
+
+def snapshot_scheme_context(doc: EduEdgeSchemeofWork) -> None:
 	"""Capture readable curriculum labels at approval time without changing source masters."""
 	doc.offering_title_snapshot = doc._offering.offering_title or doc.program_offering
 	doc.course_name_snapshot = frappe.db.get_value("Course", doc.course, "course_name") or doc.course
