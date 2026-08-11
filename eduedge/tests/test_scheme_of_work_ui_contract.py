@@ -8,7 +8,8 @@ APP = ROOT / "eduedge"
 
 class TestSchemeOfWorkUIContract(unittest.TestCase):
     def test_page_loader_uses_edgesuite_and_product_bundle(self):
-        source = (APP / "eduedge" / "page" / "eduedge_scheme_of_work" / "eduedge_scheme_of_work.js").read_text(encoding="utf-8")
+        source = (APP / "eduedge" / "page" / "eduedge_schemes_of_work" / "eduedge_schemes_of_work.js").read_text(encoding="utf-8")
+        self.assertIn('frappe.pages["eduedge-schemes-of-work"]', source)
         self.assertIn('frappe.require("edgesuite_ui.bundle.js"', source)
         self.assertIn('frappe.require("eduedge_scheme_of_work.bundle.js"', source)
         self.assertIn("window.createEduEdgeSchemeOfWorkApp", source)
@@ -69,9 +70,9 @@ class TestSchemeOfWorkUIContract(unittest.TestCase):
     def test_navigation_and_access_manifest_register_scheme_route(self):
         navigation = (APP / "public" / "js" / "eduedge_ui" / "navigation.js").read_text(encoding="utf-8")
         access = (APP / "access_control.py").read_text(encoding="utf-8")
-        self.assertIn('menuItem(__("Scheme of Work"), "/app/eduedge-scheme-of-work"', navigation)
-        self.assertIn('"/app/eduedge-scheme-of-work"', navigation)
-        self.assertIn('"/app/eduedge-scheme-of-work": (("course", "read"),)', access)
+        self.assertIn('menuItem(__("Scheme of Work"), "/app/eduedge-schemes-of-work"', navigation)
+        self.assertIn('"/app/eduedge-scheme-of-work": "/app/eduedge-schemes-of-work"', navigation)
+        self.assertIn('"/app/eduedge-schemes-of-work": (("course", "read"),)', access)
         self.assertIn("We intentionally do not grant broad DocType read permission to Instructor roles", access)
 
 
