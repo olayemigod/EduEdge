@@ -56,7 +56,7 @@ class TestAcademicReadinessContract(unittest.TestCase):
             "_select_scheme_for_context",
             "_delivery_state",
             '"/app/eduedge-instructor-assignments"',
-            '"/app/eduedge-scheme-of-work"',
+            '"/app/eduedge-schemes-of-work"',
         ):
             self.assertIn(token, source)
 
