@@ -4,7 +4,7 @@ from contextlib import contextmanager
 
 import frappe
 from frappe import _
-from frappe.utils import cint, getdate, now_datetime, nowdate
+from frappe.utils import cint, getdate, now_datetime
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -387,32 +387,78 @@ def _scheme_items(scheme_name: str) -> list[dict]:
 def _instructor_options(branch: str, offering: str, group: str, course: str, lesson_date: str) -> list[dict]:
     if not offering or not course or not lesson_date:
         return []
-    if is_limited_instructor_user():
-        names = get_active_instructor_names_for_user()
-        if len(names) != 1:
+    reference_date = getdate(lesson_date)
+    limited = is_limited_instructor_user()
+    filters: dict = {
+        "school_branch": branch,
+        "program_offering": offering,
+        "course": course,
+        "assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)],
+        "enabled": 1,
+    }
+    if limited:
+        exact = resolve_exact_instructor_for_user(required=False)
+        if not exact:
             return []
-        candidates = names
-    else:
-        candidates = frappe.get_all("Instructor", filters={"status": "Active"}, pluck="name", limit_page_length=0)
+        filters["instructor"] = exact
+    rows = frappe.get_all(
+        "EduEdge Instructor Assignment",
+        filters=filters,
+        fields=[
+            "name",
+            "assignment_title",
+            "instructor",
+            "assignment_scope",
+            "student_group",
+            "valid_from",
+            "valid_to",
+            "can_view_subject_content",
+        ],
+        order_by="valid_from desc, modified desc",
+        limit_page_length=500,
+    )
+    exact_arm = []
+    class_wide = []
+    for row in rows:
+        if row.valid_from and getdate(row.valid_from) > reference_date:
+            continue
+        if row.valid_to and getdate(row.valid_to) < reference_date:
+            continue
+        if limited and assignment_capability_enforcement_enabled() and not cint(row.can_view_subject_content):
+            continue
+        scope = row.assignment_scope or CLASS_ARM_SCOPE
+        if group and scope == CLASS_ARM_SCOPE and row.student_group == group:
+            exact_arm.append(row)
+        elif scope == CLASS_SCOPE:
+            class_wide.append(row)
+    eligible = exact_arm + class_wide
+    instructor_names = []
+    first_assignment = {}
+    for row in eligible:
+        if row.instructor in first_assignment:
+            continue
+        first_assignment[row.instructor] = row
+        instructor_names.append(row.instructor)
+    if not instructor_names:
+        return []
+    instructor_rows = frappe.get_list(
+        "Instructor",
+        filters={"name": ["in", instructor_names], "status": "Active"},
+        fields=["name", "instructor_name"],
+        order_by="instructor_name asc",
+        limit_page_length=min(len(instructor_names), 500),
+    )
     visible = []
-    for instructor in candidates:
-        try:
-            assignment = resolve_lesson_instructor_assignment(
-                instructor=instructor,
-                school_branch=branch,
-                program_offering=offering,
-                student_group=group,
-                course=course,
-                lesson_date=lesson_date,
-            )
-        except frappe.ValidationError:
+    for instructor in instructor_rows:
+        assignment = first_assignment.get(instructor.name)
+        if not assignment:
             continue
         visible.append(
             {
-                "value": instructor,
-                "label": frappe.db.get_value("Instructor", instructor, "instructor_name") or instructor,
-                "assignment": assignment.get("name"),
-                "assignment_title": assignment.get("assignment_title") or assignment.get("name"),
+                "value": instructor.name,
+                "label": instructor.instructor_name or instructor.name,
+                "assignment": assignment.name,
+                "assignment_title": assignment.assignment_title or assignment.name,
             }
         )
     return visible
