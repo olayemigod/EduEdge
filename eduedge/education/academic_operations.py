@@ -173,6 +173,7 @@ def _validate_schedule_course(doc, group_context) -> None:
 
 
 def before_validate_student_attendance(doc, method=None) -> None:
+	_resolve_exact_attendance_schedule(doc)
 	schedule = (
 		frappe.db.get_value("Course Schedule", doc.course_schedule, ["name", "student_group", "schedule_date", BRANCH_FIELD], as_dict=True)
 		if doc.course_schedule else None
@@ -203,6 +204,36 @@ def before_validate_student_attendance(doc, method=None) -> None:
 		if not is_member:
 			frappe.throw(_("Student {0} is not an active member of Student Group {1}.").format(doc.student, group_name), frappe.ValidationError)
 	_validate_attendance_duplicate(doc)
+
+
+def _resolve_exact_attendance_schedule(doc) -> None:
+	"""Bind direct attendance to one exact scheduled session, or fail closed.
+
+	If the caller already supplied a Course Schedule, the normal validation path
+	below remains authoritative. Without one, unscheduled attendance is allowed only
+	when no matching schedule exists for the same Student Group and date.
+	"""
+	if doc.course_schedule or not doc.student_group or not doc.date:
+		return
+	filters = {"student_group": doc.student_group, "schedule_date": doc.date}
+	group_branch = _linked_branch("Student Group", doc.student_group)
+	if group_branch and frappe.get_meta("Course Schedule").has_field(BRANCH_FIELD):
+		filters[BRANCH_FIELD] = group_branch
+	matches = frappe.get_all(
+		"Course Schedule",
+		filters=filters,
+		fields=["name"],
+		order_by="from_time asc, name asc",
+		limit_page_length=2,
+	)
+	if len(matches) == 1:
+		doc.course_schedule = matches[0].name
+		return
+	if len(matches) > 1:
+		frappe.throw(
+			_("More than one Course Schedule exists for this Class and date. Select the exact scheduled session before saving attendance."),
+			frappe.ValidationError,
+		)
 
 
 def _validate_attendance_duplicate(doc) -> None:
