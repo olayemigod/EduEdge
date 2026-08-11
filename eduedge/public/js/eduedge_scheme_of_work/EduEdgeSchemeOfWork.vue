@@ -101,6 +101,11 @@
 								</article>
 							</div>
 							<label class="notes"><span>Internal Notes</span><textarea v-model.trim="draft.notes" class="form-control" rows="3" :disabled="!editable"></textarea></label>
+							<SchemeDeliveryPanel
+								v-if="draft.name && ['Approved', 'Retired'].includes(draft.status)"
+								:scheme="draft"
+								:is-manager="Boolean(data.permissions?.is_manager)"
+							/>
 						</template>
 						<p v-if="saveError" class="scheme-error">{{ saveError }}</p>
 					</article>
@@ -112,6 +117,7 @@
 
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
+import SchemeDeliveryPanel from "./SchemeDeliveryPanel.vue";
 
 const blankData = () => ({
 	allowed_branches: [], offerings: [], groups: [], courses: [], topics: [], schemes: [],
@@ -129,6 +135,7 @@ const blankScheme = (filters = {}, offering = null) => ({
 
 export default {
 	name: "EduEdgeSchemeOfWork",
+	components: { SchemeDeliveryPanel },
 	data() {
 		return {
 			menuItems: EDUEDGE_MENU_ITEMS, data: blankData(), filters: { school_branch: "", program_offering: "", student_group: "", course: "", status: "", start: 0 },
