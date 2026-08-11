@@ -80,6 +80,10 @@ ROUTE_REQUIREMENTS = {
 		("course", "read"),
 		("topic", "read"),
 	),
+	# Scheme of Work is exposed to users who can read Subject masters, while the
+	# workbench APIs remain the authoritative exact Branch/Class/Subject permission gate.
+	# We intentionally do not grant broad DocType read permission to Instructor roles.
+	"/app/eduedge-scheme-of-work": (("course", "read"),),
 	"/app/eduedge-class-arms": (("student_group", "read"),),
 	"/app/eduedge-academic-operations": (
 		("student_attendance", "create"),
