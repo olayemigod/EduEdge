@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 
 import frappe
 from frappe import _
@@ -23,6 +24,11 @@ from eduedge.platform.access import require_eduedge_access
 LOG_DOCTYPE = "EduEdge Scheme Delivery Log"
 SCHEME_DOCTYPE = "EduEdge Scheme of Work"
 LESSON_DOCTYPE = "EduEdge Lesson Plan"
+MAX_EVIDENCE_BYTES = 10 * 1024 * 1024
+ALLOWED_EVIDENCE_EXTENSIONS = {
+	".jpg", ".jpeg", ".png", ".webp", ".pdf",
+	".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt",
+}
 STATUS_TRANSITIONS = {
 	"": {"Started", "Completed", "Deferred"},
 	"Started": {"Progress Update", "Completed", "Deferred"},
@@ -176,6 +182,57 @@ def _validate_delivery_lesson_plan(lesson_plan: str | None, scheme, item_referen
 	return lesson.name
 
 
+def _validated_evidence_file(evidence: str | None):
+	"""Resolve an uploaded private File owned by the current user.
+
+	The delivery API never accepts external URLs or another user's attachment as
+	classroom evidence. Generic FileUploader uploads remain unattached until the
+	append-only delivery log has been successfully created, then the File is bound to
+	that exact log row.
+	"""
+	file_url = str(evidence or "").strip()
+	if not file_url:
+		return None
+	if not file_url.startswith("/private/files/"):
+		frappe.throw(_("Teaching Evidence must be uploaded as a private EduEdge file."), frappe.ValidationError)
+	rows = frappe.get_all(
+		"File",
+		filters={"file_url": file_url},
+		fields=[
+			"name", "file_name", "file_url", "file_size", "is_private", "owner",
+			"attached_to_doctype", "attached_to_name", "attached_to_field",
+		],
+		limit_page_length=2,
+	)
+	if len(rows) != 1:
+		frappe.throw(_("Teaching Evidence upload could not be resolved safely."), frappe.ValidationError)
+	row = rows[0]
+	if not cint(row.is_private):
+		frappe.throw(_("Teaching Evidence must remain private."), frappe.ValidationError)
+	if row.owner != frappe.session.user:
+		frappe.throw(_("You can attach only Teaching Evidence uploaded by your current user."), frappe.PermissionError)
+	if row.attached_to_doctype or row.attached_to_name:
+		frappe.throw(_("This Teaching Evidence file is already attached to another record."), frappe.ValidationError)
+	if cint(row.file_size or 0) > MAX_EVIDENCE_BYTES:
+		frappe.throw(_("Teaching Evidence must not exceed 10 MB."), frappe.ValidationError)
+	extension = Path(str(row.file_name or "")).suffix.lower()
+	if extension not in ALLOWED_EVIDENCE_EXTENSIONS:
+		frappe.throw(
+			_("Teaching Evidence supports images, PDF, Office documents and plain text only."),
+			frappe.ValidationError,
+		)
+	return frappe.get_doc("File", row.name)
+
+
+def _bind_evidence_file(file_doc, log_name: str) -> None:
+	if not file_doc:
+		return
+	file_doc.attached_to_doctype = LOG_DOCTYPE
+	file_doc.attached_to_name = log_name
+	file_doc.attached_to_field = "evidence"
+	file_doc.save(ignore_permissions=True)
+
+
 def _latest_item_log(scheme_name: str, item_reference: str) -> dict | None:
 	rows = frappe.get_all(
 		LOG_DOCTYPE,
@@ -238,23 +295,45 @@ def _item_state(scheme, item, logs: list[dict]) -> dict:
 	}
 
 
+def _enrich_log_instructor_names(logs: list[dict]) -> list[dict]:
+	names = {str(row.get("instructor") or "") for row in logs if row.get("instructor")}
+	labels = {}
+	if names:
+		labels = {
+			row.name: row.instructor_name or row.name
+			for row in frappe.get_all(
+				"Instructor",
+				filters={"name": ["in", sorted(names)]},
+				fields=["name", "instructor_name"],
+				limit_page_length=len(names),
+			)
+		}
+	for row in logs:
+		row["instructor_name"] = labels.get(row.get("instructor")) or row.get("instructor") or ""
+	return logs
+
+
 @frappe.whitelist()
 def get_scheme_delivery_state(name: str) -> dict:
 	require_eduedge_access(feature_key="academics", action="view_scheme_delivery")
 	scheme = frappe.get_doc(SCHEME_DOCTYPE, name)
 	_context_authorized(scheme, write=False)
-	logs = frappe.get_all(
-		LOG_DOCTYPE,
-		filters={"scheme_of_work": scheme.name},
-		fields=[
-			"name", "scheme_item_reference", "scheme_item_sequence", "delivery_status", "delivered_on",
-			"periods_delivered", "instructor", "instructor_assignment", "lesson_plan", "topic_name_snapshot",
-			"logged_by", "logged_on", "notes", "evidence", "creation",
-		],
-		order_by="logged_on asc, creation asc",
-		limit_page_length=0,
-	)
-	items = [_item_state(scheme, item, [dict(row) for row in logs]) for item in scheme.get("items") or []]
+	logs = [
+		dict(row)
+		for row in frappe.get_all(
+			LOG_DOCTYPE,
+			filters={"scheme_of_work": scheme.name},
+			fields=[
+				"name", "scheme_item_reference", "scheme_item_sequence", "delivery_status", "delivered_on",
+				"periods_delivered", "instructor", "instructor_assignment", "lesson_plan", "topic_name_snapshot",
+				"logged_by", "logged_on", "notes", "evidence", "creation",
+			],
+			order_by="logged_on asc, creation asc",
+			limit_page_length=0,
+		)
+	]
+	logs = _enrich_log_instructor_names(logs)
+	items = [_item_state(scheme, item, logs) for item in scheme.get("items") or []]
 	total_estimated = sum(row["estimated_periods"] for row in items)
 	total_delivered = sum(row["periods_delivered"] for row in items)
 	completed = sum(1 for row in items if row["latest_status"] == "Completed")
@@ -262,7 +341,7 @@ def get_scheme_delivery_state(name: str) -> dict:
 		"scheme": scheme.name,
 		"status": scheme.status,
 		"items": items,
-		"logs": [dict(row) for row in reversed(logs)],
+		"logs": list(reversed(logs)),
 		"summary": {
 			"item_count": len(items),
 			"completed_items": completed,
@@ -337,6 +416,7 @@ def log_scheme_delivery(
 	scheme = frappe.get_doc(SCHEME_DOCTYPE, name)
 	if scheme.status != "Approved":
 		frappe.throw(_("Scheme delivery can be logged only while the Scheme of Work is Approved."), frappe.ValidationError)
+	_context_authorized(scheme, write=False)
 	item = _scheme_item(scheme, str(item_reference or "").strip())
 	date = getdate(delivered_on or nowdate())
 	if scheme.period_start_date and date < getdate(scheme.period_start_date):
@@ -352,6 +432,7 @@ def log_scheme_delivery(
 		date,
 		assignment["instructor"],
 	)
+	evidence_file = _validated_evidence_file(evidence)
 
 	log = frappe.new_doc(LOG_DOCTYPE)
 	log.scheme_of_work = scheme.name
@@ -379,9 +460,10 @@ def log_scheme_delivery(
 	log.logged_by = frappe.session.user
 	log.logged_on = now_datetime()
 	log.notes = str(notes or "").strip()
-	log.evidence = str(evidence or "").strip() or None
+	log.evidence = evidence_file.file_url if evidence_file else None
 	with _delivery_action():
 		log.insert(ignore_permissions=True)
+	_bind_evidence_file(evidence_file, log.name)
 	return {
 		"log": log.name,
 		"delivery_status": log.delivery_status,
