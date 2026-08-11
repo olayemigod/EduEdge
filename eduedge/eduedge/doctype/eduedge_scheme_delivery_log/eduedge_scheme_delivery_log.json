@@ -75,7 +75,7 @@
  "name": "EduEdge Scheme Delivery Log",
  "owner": "Administrator",
  "permissions": [],
- "search_fields": "scheme_of_work,scheme_title_snapshot,course_name_snapshot,topic_name_snapshot,instructor,school_branch,program_offering,student_group,lesson_plan",
+ "search_fields": "scheme_title_snapshot,course_name_snapshot,offering_title_snapshot,topic_name_snapshot,instructor,school_branch",
  "sort_field":"logged_on",
  "sort_order":"DESC",
  "states":[],
