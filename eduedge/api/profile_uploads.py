@@ -20,6 +20,21 @@ def _require_login() -> str:
 	return user
 
 
+def _detect_image_mimetype(content: bytes) -> str:
+	"""Detect the small allowlisted image set from file signatures.
+
+	Do not trust the filename or browser-provided MIME type for profile photos.
+	Only genuine JPEG, PNG and WebP payloads are accepted.
+	"""
+	if content.startswith(b"\xff\xd8\xff"):
+		return "image/jpeg"
+	if content.startswith(b"\x89PNG\r\n\x1a\n"):
+		return "image/png"
+	if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+		return "image/webp"
+	return ""
+
+
 def _uploaded_image() -> tuple[str, bytes]:
 	filename = str(getattr(frappe.local, "uploaded_filename", "") or "").strip()
 	content = getattr(frappe.local, "uploaded_file", None)
@@ -34,9 +49,14 @@ def _uploaded_image() -> tuple[str, bytes]:
 		frappe.throw(_("Profile photos must not exceed 2 MB."), frappe.ValidationError)
 
 	extension = Path(filename).suffix.lower()
-	mimetype = (guess_type(filename)[0] or "").lower()
-	if extension not in ALLOWED_IMAGE_EXTENSIONS or mimetype not in ALLOWED_IMAGE_MIMETYPES:
-		frappe.throw(_("Only JPG, PNG, and WebP images are allowed."), frappe.ValidationError)
+	declared_mimetype = (guess_type(filename)[0] or "").lower()
+	detected_mimetype = _detect_image_mimetype(content)
+	if (
+		extension not in ALLOWED_IMAGE_EXTENSIONS
+		or declared_mimetype not in ALLOWED_IMAGE_MIMETYPES
+		or detected_mimetype not in ALLOWED_IMAGE_MIMETYPES
+	):
+		frappe.throw(_("Only genuine JPG, PNG, and WebP images are allowed."), frappe.ValidationError)
 	return filename, content
 
 
