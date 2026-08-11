@@ -16,7 +16,7 @@
 			<div class="coverage-track"><span :style="{ width: `${Math.min(Math.max(state.summary.coverage_percent || 0, 0), 100)}%` }"></span></div>
 			<EdgeActionBar
 				v-if="scheme.status === 'Approved'"
-				label="Delivery updates are append-only. Each update records the exact Instructor Assignment active on the delivery date. An Approved Lesson Plan and classroom evidence can be linked without changing the approved Scheme."
+				label="Delivery updates are append-only. Each update records the exact Instructor Assignment active on the delivery date. An Approved Lesson Plan and private classroom evidence can be linked without changing the approved Scheme."
 			/>
 			<EdgeActionBar
 				v-else
@@ -47,7 +47,7 @@
 					<label v-if="isManager"><span>Instructor</span><select v-model="form.instructor" class="form-control" :disabled="instructorsLoading" @change="instructorChanged"><option value="">Select Instructor</option><option v-for="row in instructorOptions" :key="row.value" :value="row.value">{{ row.label }}</option></select><small>Only Instructors with an effective exact Subject assignment on this date are shown.</small></label>
 					<label class="wide"><span>Approved Lesson Plan</span><select v-model="form.lesson_plan" class="form-control" :disabled="lessonPlansLoading || !form.instructor"><option value="">No linked Lesson Plan</option><option v-for="row in lessonPlanOptions" :key="row.value" :value="row.value">{{ row.label }}</option></select><small>Optional. Only Approved Lesson Plans for this exact Scheme item, Instructor and Delivery Date are shown.</small></label>
 					<label class="wide"><span>Delivery Notes</span><textarea v-model.trim="form.notes" class="form-control" rows="2" placeholder="Optional teaching progress, challenges, follow-up or deferment note"></textarea></label>
-					<div class="evidence-field wide"><span>Teaching Evidence</span><div class="evidence-actions"><button type="button" class="edge-button" @click="attachEvidence">{{ form.evidence ? 'Replace Evidence' : 'Attach Evidence' }}</button><button v-if="form.evidence" type="button" class="edge-button" @click="form.evidence = ''">Remove</button><a v-if="form.evidence" :href="form.evidence" target="_blank" rel="noopener noreferrer">Open attached evidence</a></div><small>Optional classroom evidence such as a worksheet, teaching material, activity output or appropriate classroom photo. Avoid unnecessary sensitive Student data.</small></div>
+					<div class="evidence-field wide"><span>Teaching Evidence</span><div class="evidence-actions"><button type="button" class="edge-button" @click="attachEvidence">{{ form.evidence ? 'Replace Evidence' : 'Attach Evidence' }}</button><button v-if="form.evidence" type="button" class="edge-button" @click="form.evidence = ''">Remove</button><a v-if="form.evidence" :href="form.evidence" target="_blank" rel="noopener noreferrer">Open attached evidence</a></div><small>Optional private classroom evidence such as a worksheet, teaching material, activity output or appropriate classroom photo. Avoid unnecessary sensitive Student data.</small></div>
 				</div>
 				<div class="form-actions"><button type="button" class="edge-button edge-button--primary" :disabled="saving || !canSubmit" @click="submitUpdate">{{ saving ? 'Recording...' : 'Record Delivery Update' }}</button></div>
 				<p v-if="formError" class="delivery-error">{{ formError }}</p>
@@ -58,7 +58,7 @@
 				<EdgeEmptyState v-if="!state.logs.length" title="No delivery history" description="Delivery updates will appear here after teaching progress is recorded." />
 				<div v-else class="history-list">
 					<article v-for="row in state.logs.slice(0, 20)" :key="row.name">
-						<div><strong>{{ row.topic_name_snapshot }} · {{ row.delivery_status }}</strong><small>{{ row.delivered_on }} · {{ formatNumber(row.periods_delivered) }} periods · {{ row.instructor }}</small><small v-if="row.lesson_plan || row.evidence">{{ row.lesson_plan ? 'Approved Lesson Plan linked' : '' }}{{ row.lesson_plan && row.evidence ? ' · ' : '' }}{{ row.evidence ? 'Teaching evidence attached' : '' }}</small></div>
+						<div><strong>{{ row.topic_name_snapshot }} · {{ row.delivery_status }}</strong><small>{{ row.delivered_on }} · {{ formatNumber(row.periods_delivered) }} periods · {{ row.instructor_name || row.instructor }}</small><small v-if="row.lesson_plan || row.evidence">{{ row.lesson_plan ? 'Approved Lesson Plan linked' : '' }}{{ row.lesson_plan && row.evidence ? ' · ' : '' }}{{ row.evidence ? 'Teaching evidence attached' : '' }}</small></div>
 						<div class="history-meta"><small>{{ row.notes || `Logged by ${row.logged_by}` }}</small><span><button v-if="row.lesson_plan" type="button" class="link-button" @click="openLessonPlan(row.lesson_plan)">Open Lesson Plan</button><a v-if="row.evidence" :href="row.evidence" target="_blank" rel="noopener noreferrer">Open Evidence</a></span></div>
 					</article>
 				</div>
@@ -173,6 +173,8 @@ export default {
 			}
 			new frappe.ui.FileUploader({
 				allow_multiple: false,
+				is_private: 1,
+				restrictions: { max_file_size: 10 * 1024 * 1024 },
 				on_success: (file) => {
 					this.form.evidence = file?.file_url || "";
 					this.formError = "";
