@@ -228,14 +228,23 @@ class EduEdgeLessonPlan(Document):
             "course": self.course,
             "lesson_date": self.lesson_date,
             "scheme_item_reference": self.scheme_item_reference,
-            "period_label": self.period_label or "",
         }
         if self.student_group:
             filters["student_group"] = self.student_group
         else:
             filters["student_group"] = ["is", "not set"]
-        existing = frappe.get_all("EduEdge Lesson Plan", filters=filters, pluck="name", limit_page_length=2)
-        existing = [name for name in existing if name != self.name]
+        candidates = frappe.get_all(
+            "EduEdge Lesson Plan",
+            filters=filters,
+            fields=["name", "period_label"],
+            limit_page_length=20,
+        )
+        target_period = str(self.period_label or "").strip()
+        existing = [
+            row.name
+            for row in candidates
+            if row.name != self.name and str(row.period_label or "").strip() == target_period
+        ]
         if existing:
             frappe.throw(
                 _("A Lesson Plan already exists for this Instructor, Class, Subject, Scheme item, Lesson Date and Period / Slot."),
