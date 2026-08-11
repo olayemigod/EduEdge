@@ -401,7 +401,7 @@ def _attention_route(row_type: str, context: dict | None = None, instructor: str
 			},
 		}
 	return {
-		"route": "/app/eduedge-scheme-of-work",
+		"route": "/app/eduedge-schemes-of-work",
 		"query": {
 			"branch": context.get("school_branch") or "",
 			"offering": context.get("program_offering") or "",
