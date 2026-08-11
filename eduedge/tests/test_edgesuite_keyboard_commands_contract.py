@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
+COMMAND_PALETTE_CSS = APP / "public/css/eduedge_compact_navigation.css"
 
 
 class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
@@ -52,6 +53,28 @@ class TestEdgeSuiteKeyboardCommandsContract(unittest.TestCase):
 		keyboard = hooks.index('"/assets/eduedge/js/eduedge_keyboard_shortcuts.js"')
 		menu = hooks.index('"eduedge_product_menu.bundle.js"')
 		self.assertLess(keyboard, menu)
+
+	def test_command_palette_uses_edgesuite_theme_tokens(self):
+		css = COMMAND_PALETTE_CSS.read_text()
+		for expected in (
+			"--edge-text-muted",
+			"--edge-bg",
+			"--edge-border",
+			"--edge-text",
+			"--edge-primary",
+			"--edge-surface",
+		):
+			self.assertIn(expected, css)
+
+		palette_css = css[css.index(".eduedge-command-palette") :]
+		for forbidden in (
+			"var(--text-muted)",
+			"var(--control-bg)",
+			"var(--border-color)",
+			"var(--text-color)",
+			"rgba(0, 0, 0, .04)",
+		):
+			self.assertNotIn(forbidden, palette_css)
 
 
 if __name__ == "__main__":
