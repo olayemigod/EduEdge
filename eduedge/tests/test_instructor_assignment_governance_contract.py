@@ -93,16 +93,23 @@ class TestInstructorAssignmentGovernanceContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-    def test_governed_disable_can_narrow_access_even_if_instructor_or_branch_access_changed(self):
+    def test_governed_disable_or_closure_can_narrow_access_after_instructor_or_branch_changes(self):
         source = self._controller()
         for token in (
             "governed_disable = bool(",
+            "governed_closure = bool(",
             "in_eduedge_assignment_lifecycle",
-            "instructor.status != \"Active\" and not governed_disable",
-            "if governed_disable:",
-            "narrows access rather than granting it",
+            'instructor.status != "Active" and not (governed_disable or governed_closure)',
+            "if governed_disable or governed_closure:",
+            "Governed Disable/End/Replace/Transfer source updates narrow or close",
         ):
             self.assertIn(token, source)
+        for closure_token in (
+            "self.ended_on and not before.ended_on",
+            "self.replaced_by_assignment and not before.replaced_by_assignment",
+            "self.transferred_to_assignment and not before.transferred_to_assignment",
+        ):
+            self.assertIn(closure_token, source)
 
     def test_governance_actions_write_a_durable_reason_log(self):
         source = self._api()
