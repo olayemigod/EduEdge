@@ -10,7 +10,7 @@ from frappe.utils import cint, flt, getdate
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_scope import get_instructor_identity_states
-from eduedge.education.offerings import assert_branch_access
+from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
@@ -83,12 +83,19 @@ def _offering_rows(
 		filters=filters,
 		fields=[
 			"name", "offering_title", "institution", "school_branch", "program", "academic_year",
-			"academic_term", "period_start_date", "period_end_date", "is_active",
+			"academic_term", "start_date", "end_date", "is_active",
 		],
-		order_by="period_start_date desc, offering_title asc",
+		order_by="academic_year desc, academic_term desc, offering_title asc",
 		limit_page_length=0,
 	)
-	return [dict(row) for row in rows]
+	result = []
+	for row in rows:
+		value = dict(row)
+		period_start, period_end = resolve_program_offering_period_dates(value)
+		value["period_start_date"] = period_start
+		value["period_end_date"] = period_end
+		result.append(value)
+	return result
 
 
 def _group_rows(branch: str, offerings: list[dict], *, include_historical: bool = False) -> list[dict]:
