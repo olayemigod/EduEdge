@@ -195,15 +195,27 @@ class EduEdgeInstructorAssignment(Document):
             and int(before.enabled or 0) == 1
             and int(self.enabled or 0) == 0
         )
+        governed_closure = bool(
+            before
+            and lifecycle_action
+            and int(before.enabled or 0) == int(self.enabled or 0)
+            and (
+                (self.ended_on and not before.ended_on)
+                or (before.valid_to != self.valid_to and self.valid_to)
+                or (self.replaced_by_assignment and not before.replaced_by_assignment)
+                or (self.transferred_to_assignment and not before.transferred_to_assignment)
+            )
+        )
         if not instructor:
             frappe.throw(_("Select a valid Instructor."), frappe.ValidationError)
-        if instructor.status != "Active" and not governed_disable:
+        if instructor.status != "Active" and not (governed_disable or governed_closure):
             frappe.throw(_("Select an active Instructor."), frappe.ValidationError)
         frappe.get_doc("Instructor", self.instructor).check_permission("read")
-        if governed_disable:
-            # Disabling a future responsibility must remain possible when an Instructor
-            # has since become inactive or Branch Eligibility has been withdrawn. It
-            # narrows access rather than granting it and leaves Branch Eligibility alone.
+        if governed_disable or governed_closure:
+            # Governed Disable/End/Replace/Transfer source updates narrow or close an
+            # existing responsibility. They must remain possible after the Instructor
+            # has left or Branch eligibility has been withdrawn. Creation, successors,
+            # re-enable and widening operations remain strict.
             self.instructor_name = instructor.instructor_name
             return
         has_explicit_access = _has_branch_eligibility(
