@@ -79,8 +79,8 @@ class TestLessonPlanFoundationContract(unittest.TestCase):
             "_scheme_options",
             "_scheme_items",
             "_instructor_options",
+            'limit = min(max(cint(page_length) or 25, 1), 50)',
             'page_length=min(limit * 3 + 1, 151)',
-            'page_length=min(max(cint(page_length) or 25, 1), 50)',
         ):
             self.assertIn(token, source)
 
