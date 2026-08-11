@@ -5,6 +5,7 @@ const FAVORITES_STATE_VERSION = "v1";
 const COMPACT_STYLESHEET = "/assets/eduedge/css/eduedge_compact_navigation.css";
 const EDUEDGE_ROUTE_ALIASES = Object.freeze({
 	"/app/eduedge-instructor-branch-assignment": "/app/eduedge-instructor-assignments",
+	"/app/eduedge-scheme-of-work": "/app/eduedge-schemes-of-work",
 });
 
 export const EDUEDGE_CRITICAL_CBT_ROUTES = Object.freeze([
@@ -157,7 +158,7 @@ export function buildEduEdgeMenuItems() {
 			menuItem(`${academicYears} & ${academicTerms}`, "/app/eduedge-academic-sessions", "calendar", __(`Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`)),
 			menuItem(programmes, "/app/eduedge-programs", "book", __(`${programmes} catalogue`)),
 			menuItem(`${courses} & ${topics}`, "/app/eduedge-curriculum", "book", __(`Manage Institution curriculum, grading, and class-aware ${topics.toLowerCase()}`)),
-			menuItem(__("Scheme of Work"), "/app/eduedge-scheme-of-work", "book", __("Plan, approve, version, and snapshot term curriculum delivery")),
+			menuItem(__("Scheme of Work"), "/app/eduedge-schemes-of-work", "book", __("Plan, approve, version, and snapshot term curriculum delivery")),
 			menuItem(__("Lesson Plans"), "/app/eduedge-lesson-plans", "book", __("Prepare, submit, review, and approve lessons from the approved Scheme of Work")),
 			menuItem(offerings, "/app/eduedge-program-offerings", "layers", __(`${programmes} by campus and ${academicYear}`)),
 			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __(`${groups}, ${sessions}, and attendance`)),
@@ -217,7 +218,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-class-arms", "/app/eduedge-admissions", "/app/eduedge-applicants",
 	"/app/eduedge-students", "/app/eduedge-student-enrollments", "/app/eduedge-instructors",
 	"/app/eduedge-instructor-assignments", "/app/eduedge-programs", "/app/eduedge-curriculum",
-	"/app/eduedge-scheme-of-work", "/app/eduedge-lesson-plans", "/app/eduedge-program-offerings", "/app/eduedge-academic-foundation", "/app/eduedge-academic-sessions", "/app/eduedge-academic-readiness",
+	"/app/eduedge-schemes-of-work", "/app/eduedge-lesson-plans", "/app/eduedge-program-offerings", "/app/eduedge-academic-foundation", "/app/eduedge-academic-sessions", "/app/eduedge-academic-readiness",
 	"/app/eduedge-cbt-operations", "/app/eduedge-cbt-schedules", "/app/eduedge-cbt-invigilation",
 	"/app/eduedge-cbt-marking", "/app/eduedge-cbt-review-workbench", "/app/eduedge-exam-templates",
 	"/app/eduedge-exam-template-builder", "/app/eduedge-question-bank", "/app/eduedge-question-responsibilities",
