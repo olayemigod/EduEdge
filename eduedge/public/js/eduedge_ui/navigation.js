@@ -161,6 +161,7 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Lesson Plans"), "/app/eduedge-lesson-plans", "book", __("Prepare, submit, review, and approve lessons from the approved Scheme of Work")),
 			menuItem(offerings, "/app/eduedge-program-offerings", "layers", __(`${programmes} by campus and ${academicYear}`)),
 			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __(`${groups}, ${sessions}, and attendance`)),
+			menuItem(__("Academic Readiness"), "/app/eduedge-academic-readiness", "report", __("Management view of assignment coverage, Instructor identity, Scheme approval, curriculum delivery, and assessment planning activity")),
 		]),
 		menuGroup("assessment-results", __("Assessments & Results"), "clipboard", [
 			menuItem(__(`${assessments} & Results`), "/app/eduedge-assessment-operations", "assessment", __(`Plan, approve, and publish ${assessments.toLowerCase()}`)),
@@ -216,7 +217,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-class-arms", "/app/eduedge-admissions", "/app/eduedge-applicants",
 	"/app/eduedge-students", "/app/eduedge-student-enrollments", "/app/eduedge-instructors",
 	"/app/eduedge-instructor-assignments", "/app/eduedge-programs", "/app/eduedge-curriculum",
-	"/app/eduedge-scheme-of-work", "/app/eduedge-lesson-plans", "/app/eduedge-program-offerings", "/app/eduedge-academic-foundation", "/app/eduedge-academic-sessions",
+	"/app/eduedge-scheme-of-work", "/app/eduedge-lesson-plans", "/app/eduedge-program-offerings", "/app/eduedge-academic-foundation", "/app/eduedge-academic-sessions", "/app/eduedge-academic-readiness",
 	"/app/eduedge-cbt-operations", "/app/eduedge-cbt-schedules", "/app/eduedge-cbt-invigilation",
 	"/app/eduedge-cbt-marking", "/app/eduedge-cbt-review-workbench", "/app/eduedge-exam-templates",
 	"/app/eduedge-exam-template-builder", "/app/eduedge-question-bank", "/app/eduedge-question-responsibilities",
