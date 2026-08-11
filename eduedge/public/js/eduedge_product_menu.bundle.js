@@ -131,7 +131,7 @@ function buildEduEdgeProductMenu() {
 					item(`${academicYears} & ${academicTerms}`, `Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`, "calendar", "/app/eduedge-academic-sessions", { keywords: ["academic", "session", "year", "term", "semester", "calendar"] }),
 					item(programmes, `Maintain the ${programme.toLowerCase()} catalogue`, "book", "/app/eduedge-programs", { keywords: ["programme", "class", "catalogue", "course"] }),
 					item(`${courses} & ${topics}`, "Manage Institution curriculum, grading, and class-aware Topics", "book", "/app/eduedge-curriculum", { keywords: ["curriculum", "subject", "course", "topic", "grading"] }),
-					item("Scheme of Work", "Plan, approve, version, and track curriculum delivery", "book", "/app/eduedge-scheme-of-work", { keywords: ["scheme", "curriculum", "topic", "teaching", "delivery"] }),
+					item("Scheme of Work", "Plan, approve, version, and track curriculum delivery", "book", "/app/eduedge-schemes-of-work", { keywords: ["scheme", "curriculum", "topic", "teaching", "delivery"] }),
 					item("Lesson Plans", "Prepare, submit, review, and approve lessons from the approved Scheme of Work", "book", "/app/eduedge-lesson-plans", { keywords: ["lesson", "plan", "teacher", "scheme", "teaching evidence"] }),
 					item(offerings, `${programmes} available by campus and session`, "layers", "/app/eduedge-program-offerings", { keywords: ["programme", "class", "offering", "academic year"] }),
 					item("Academic Operations", `Run ${groups.toLowerCase()}, schedules, and attendance`, "calendar", "/app/eduedge-academic-operations", { keywords: ["class", "schedule", "attendance"], quick_action: true }),
