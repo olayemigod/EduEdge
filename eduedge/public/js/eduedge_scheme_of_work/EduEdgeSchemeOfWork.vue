@@ -117,7 +117,7 @@
 
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
-import SchemeDeliveryPanel from "./SchemeDeliveryPanel.vue";
+import SchemeDeliveryPanel from "../eduedge_ui/components/SchemeDeliveryPanel.vue";
 
 const blankData = () => ({
 	allowed_branches: [], offerings: [], groups: [], courses: [], topics: [], schemes: [],
