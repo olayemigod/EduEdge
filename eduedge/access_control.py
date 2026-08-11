@@ -84,6 +84,9 @@ ROUTE_REQUIREMENTS = {
 	# workbench APIs remain the authoritative exact Branch/Class/Subject permission gate.
 	# We intentionally do not grant broad DocType read permission to Instructor roles.
 	"/app/eduedge-scheme-of-work": (("course", "read"),),
+	# Lesson Plans are reached through teaching-assignment visibility. The workbench
+	# APIs separately enforce exact Instructor identity, assignment, Branch and Scheme context.
+	"/app/eduedge-lesson-plans": (("instructor_assignment", "read"),),
 	"/app/eduedge-class-arms": (("student_group", "read"),),
 	"/app/eduedge-academic-operations": (
 		("student_attendance", "create"),
