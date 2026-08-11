@@ -3,7 +3,11 @@ from __future__ import annotations
 import frappe
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
-from eduedge.services.branch_context import get_allowed_institutions, is_branch_access_enforced
+from eduedge.services.branch_context import (
+	get_allowed_institutions,
+	get_allowed_school_branches,
+	is_branch_access_enforced,
+)
 
 PRIVILEGED_ROLES = {
 	"System Manager",
@@ -61,7 +65,38 @@ def student_house_query(user: str | None = None) -> str:
 
 
 def instructor_query(user: str | None = None) -> str:
-	return _institution_query("Instructor", INSTITUTION_FIELD, user)
+	"""Keep historical Instructor identities visible inside the user's permitted scope.
+
+	Legacy Instructor masters can have a blank Home Institution while still being the
+	authoritative identity on historical Branch/academic assignments. Hiding those rows
+	breaks audit history and lifecycle links, so scoped users may see them when any
+	Instructor assignment places them in an allowed Branch.
+	"""
+	resolved_user = user or frappe.session.user
+	if not _should_scope(resolved_user):
+		return ""
+	institutions = _allowed_institutions(resolved_user)
+	branches = _allowed_branches(resolved_user)
+	conditions: list[str] = []
+	meta = frappe.get_meta("Instructor")
+	if institutions and meta.has_field(INSTITUTION_FIELD):
+		values = ", ".join(frappe.db.escape(value) for value in sorted(institutions))
+		conditions.append(f"`tabInstructor`.`{INSTITUTION_FIELD}` in ({values})")
+	if branches and frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
+		values = ", ".join(frappe.db.escape(value) for value in sorted(branches))
+		conditions.append(
+			"exists (select 1 from `tabEduEdge Instructor Branch Assignment` branch_assignment "
+			"where branch_assignment.instructor = `tabInstructor`.name "
+			f"and branch_assignment.school_branch in ({values}))"
+		)
+	if branches and frappe.db.exists("DocType", "EduEdge Instructor Assignment"):
+		values = ", ".join(frappe.db.escape(value) for value in sorted(branches))
+		conditions.append(
+			"exists (select 1 from `tabEduEdge Instructor Assignment` academic_assignment "
+			"where academic_assignment.instructor = `tabInstructor`.name "
+			f"and academic_assignment.school_branch in ({values}))"
+		)
+	return "(" + " OR ".join(conditions) + ")" if conditions else "1=0"
 
 
 def assessment_group_query(user: str | None = None) -> str:
@@ -92,6 +127,30 @@ def has_academic_institution_permission(doc, user=None, permission_type=None) ->
 	return institution in _allowed_institutions(resolved_user)
 
 
+def has_instructor_permission(doc, user=None, permission_type=None) -> bool:
+	"""Record-level Instructor permission with safe legacy-history fallback."""
+	resolved_user = user or frappe.session.user
+	if not _should_scope(resolved_user):
+		return True
+	if not doc or getattr(doc, "is_new", lambda: False)():
+		return True
+	institutions = _allowed_institutions(resolved_user)
+	branches = _allowed_branches(resolved_user)
+	if doc.meta.has_field(INSTITUTION_FIELD) and doc.get(INSTITUTION_FIELD) in institutions:
+		return True
+	if not branches:
+		return False
+	for doctype in ("EduEdge Instructor Branch Assignment", "EduEdge Instructor Assignment"):
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		if frappe.db.exists(
+			doctype,
+			{"instructor": doc.name, "school_branch": ["in", sorted(branches)]},
+		):
+			return True
+	return False
+
+
 def _institution_query(doctype: str, fieldname: str, user: str | None) -> str:
 	resolved_user = user or frappe.session.user
 	if not _should_scope(resolved_user):
@@ -111,6 +170,14 @@ def _allowed_institutions(user: str) -> set[str]:
 	return {
 		row.get("name")
 		for row in get_allowed_institutions(user=user)
+		if row.get("name")
+	}
+
+
+def _allowed_branches(user: str) -> set[str]:
+	return {
+		row.get("name")
+		for row in get_allowed_school_branches(user=user)
 		if row.get("name")
 	}
 
