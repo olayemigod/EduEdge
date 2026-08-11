@@ -196,7 +196,7 @@ html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] 
 
 .eduedge-command-palette__hint,
 .eduedge-command-palette__empty {
-	color: var(--text-muted);
+	color: var(--edge-text-muted, var(--edge-color-ink-500, #617589));
 	font-size: .75rem;
 	margin: 0;
 }
@@ -220,15 +220,15 @@ html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] 
 
 .eduedge-command-palette__result:hover,
 .eduedge-command-palette__result.is-selected {
-	background: var(--control-bg);
-	border-color: var(--border-color);
+	background: var(--edge-bg, var(--edge-color-surface-muted, #f6f8fa));
+	border-color: var(--edge-border, var(--edge-color-border, #dfe6ec));
 }
 
 .eduedge-command-palette__open,
 .eduedge-command-palette__favorite {
 	background: transparent;
 	border: 0;
-	color: var(--text-color);
+	color: var(--edge-text, var(--edge-color-ink-950, #102235));
 }
 
 .eduedge-command-palette__open {
@@ -242,13 +242,17 @@ html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] 
 }
 
 .eduedge-command-palette__favorite {
-	border-left: 1px solid var(--border-color);
+	border-left: 1px solid var(--edge-border, var(--edge-color-border, #dfe6ec));
 	font-size: 1.05rem;
 	padding: 0;
 }
 
 .eduedge-command-palette__favorite:hover {
-	background: rgba(0, 0, 0, .04);
+	background: color-mix(
+		in srgb,
+		var(--edge-primary, var(--edge-color-brand-600, #0f64ab)) 8%,
+		var(--edge-surface, var(--edge-color-surface, #fff))
+	);
 }
 
 .eduedge-command-palette__open > span:first-child {
@@ -263,7 +267,7 @@ html[data-eduedge-density="touch"] .edge-app-shell[data-edge-product="eduedge"] 
 
 .eduedge-command-palette__open small,
 .eduedge-command-palette__section {
-	color: var(--text-muted);
+	color: var(--edge-text-muted, var(--edge-color-ink-500, #617589));
 	font-size: .72rem;
 }
 
