@@ -37,8 +37,8 @@ def is_limited_instructor_user(user: str | None = None) -> bool:
 def get_active_instructor_names_for_user(user: str | None = None) -> list[str]:
 	"""Resolve an authenticated User to active Instructor identities through Employee.
 
-	This helper never grants access by itself. Exact Instructor Assignment capability
-	checks consume it and fail closed unless the result is unique.
+	This helper intentionally does not grant access. Exact Instructor Assignment
+	capability checks consume it and fail closed unless the result is unique.
 	"""
 	resolved_user = user or frappe.session.user
 	if not resolved_user or resolved_user == "Guest":
