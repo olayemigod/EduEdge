@@ -3,6 +3,8 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from eduedge.education.custom_fields import BRANCH_FIELD
+
 LIMITED_INSTRUCTOR_ROLES = {"Teacher", "Instructor"}
 INSTRUCTOR_SCOPE_BYPASS_ROLES = {
 	"System Manager",
@@ -243,10 +245,53 @@ def get_instructor_identity_state(instructor: str) -> dict:
 
 
 def instructor_owns_schedule(schedule, user: str | None = None) -> bool:
+	"""Verify both Instructor identity and the schedule-date teaching responsibility."""
 	resolved_user = user or frappe.session.user
 	if not is_limited_instructor_user(resolved_user):
 		return True
 	if not schedule:
 		return False
-	instructor = schedule.get("instructor") if hasattr(schedule, "get") else None
-	return instructor in set(get_user_instructor_names(resolved_user))
+	exact_instructor = resolve_exact_instructor_for_user(resolved_user)
+	if not exact_instructor:
+		return False
+
+	def value(fieldname):
+		return schedule.get(fieldname) if hasattr(schedule, "get") else getattr(schedule, fieldname, None)
+
+	if value("instructor") != exact_instructor:
+		return False
+	context = frappe._dict(
+		{
+			"name": value("name"),
+			"instructor": value("instructor"),
+			"student_group": value("student_group"),
+			"course": value("course"),
+			"schedule_date": value("schedule_date"),
+			BRANCH_FIELD: value(BRANCH_FIELD),
+		}
+	)
+	if context.name and not all(
+		context.get(fieldname)
+		for fieldname in ("student_group", "course", "schedule_date", BRANCH_FIELD)
+	):
+		stored = frappe.db.get_value(
+			"Course Schedule",
+			context.name,
+			["name", "instructor", "student_group", "course", "schedule_date", BRANCH_FIELD],
+			as_dict=True,
+		) or {}
+		for fieldname in ("name", "instructor", "student_group", "course", "schedule_date", BRANCH_FIELD):
+			if not context.get(fieldname):
+				context[fieldname] = stored.get(fieldname)
+	if context.instructor != exact_instructor:
+		return False
+	if not all(context.get(fieldname) for fieldname in ("student_group", "course", BRANCH_FIELD)):
+		return False
+
+	from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
+
+	try:
+		assert_schedule_instructor_assignment(context)
+		return True
+	except (frappe.PermissionError, frappe.ValidationError):
+		return False
