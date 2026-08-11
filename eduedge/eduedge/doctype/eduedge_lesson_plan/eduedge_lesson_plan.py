@@ -7,6 +7,7 @@ from frappe.utils import cint, getdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import is_limited_instructor_user, resolve_exact_instructor_for_user
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
 
@@ -153,6 +154,7 @@ def snapshot_lesson_plan_context(doc) -> None:
 class EduEdgeLessonPlan(Document):
     def validate(self):
         self._validate_status()
+        self._validate_limited_instructor_identity()
         self._resolve_scheme_context()
         self._validate_lesson_date()
         self._resolve_teaching_assignment()
@@ -161,6 +163,29 @@ class EduEdgeLessonPlan(Document):
         if self.is_new() and not self.prepared_by:
             self.prepared_by = frappe.session.user
         self._protect_workflow_fields()
+
+    def _validate_limited_instructor_identity(self):
+        """Authorise the original Lesson Plan owner before accepting changed context.
+
+        Limited Teacher/Instructor users do not have broad DocType write permission;
+        governed APIs save on their behalf. A caller must therefore never be able to
+        take another Instructor's Draft/Returned Lesson Plan and rewrite its Instructor
+        or academic context into one they control.
+        """
+        if not is_limited_instructor_user():
+            return
+        exact_instructor = resolve_exact_instructor_for_user(required=True)
+        before = self.get_doc_before_save()
+        if before and before.instructor != exact_instructor:
+            frappe.throw(
+                _("You cannot modify another Instructor's Lesson Plan."),
+                frappe.PermissionError,
+            )
+        if self.instructor and self.instructor != exact_instructor:
+            frappe.throw(
+                _("You can prepare Lesson Plans only for your Instructor identity."),
+                frappe.PermissionError,
+            )
 
     def _validate_status(self):
         if self.status not in LESSON_PLAN_STATUSES:
