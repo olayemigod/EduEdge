@@ -22,6 +22,7 @@ from eduedge.platform.access import require_eduedge_access
 
 LOG_DOCTYPE = "EduEdge Scheme Delivery Log"
 SCHEME_DOCTYPE = "EduEdge Scheme of Work"
+LESSON_DOCTYPE = "EduEdge Lesson Plan"
 STATUS_TRANSITIONS = {
 	"": {"Started", "Completed", "Deferred"},
 	"Started": {"Progress Update", "Completed", "Deferred"},
@@ -117,6 +118,64 @@ def _resolve_delivery_assignment(scheme, delivered_on, instructor: str | None = 
 	return row
 
 
+def _lesson_plan_matches_scheme(lesson, scheme, item_reference: str, delivered_on, instructor: str) -> bool:
+	if lesson.status != "Approved":
+		return False
+	if lesson.scheme_of_work != scheme.name or lesson.scheme_item_reference != item_reference:
+		return False
+	if lesson.school_branch != scheme.school_branch or lesson.program_offering != scheme.program_offering:
+		return False
+	if (lesson.student_group or "") != (scheme.student_group or ""):
+		return False
+	if lesson.course != scheme.course or lesson.instructor != instructor:
+		return False
+	return getdate(lesson.lesson_date) == getdate(delivered_on)
+
+
+def _lesson_plan_options(scheme, item_reference: str, delivered_on, instructor: str) -> list[dict]:
+	if not item_reference or not delivered_on or not instructor:
+		return []
+	rows = frappe.get_all(
+		LESSON_DOCTYPE,
+		filters={
+			"scheme_of_work": scheme.name,
+			"scheme_item_reference": item_reference,
+			"school_branch": scheme.school_branch,
+			"program_offering": scheme.program_offering,
+			"course": scheme.course,
+			"instructor": instructor,
+			"lesson_date": getdate(delivered_on),
+			"status": "Approved",
+		},
+		fields=["name", "lesson_plan_title", "student_group", "period_label", "lesson_date"],
+		order_by="period_label asc, modified desc",
+		limit_page_length=50,
+	)
+	return [
+		{
+			"value": row.name,
+			"label": row.lesson_plan_title or row.name,
+			"period_label": row.period_label or "",
+			"lesson_date": row.lesson_date,
+		}
+		for row in rows
+		if (row.student_group or "") == (scheme.student_group or "")
+	]
+
+
+def _validate_delivery_lesson_plan(lesson_plan: str | None, scheme, item_reference: str, delivered_on, instructor: str) -> str | None:
+	name = str(lesson_plan or "").strip()
+	if not name:
+		return None
+	lesson = frappe.get_doc(LESSON_DOCTYPE, name)
+	if not _lesson_plan_matches_scheme(lesson, scheme, item_reference, delivered_on, instructor):
+		frappe.throw(
+			_("The selected Lesson Plan must be Approved and match this exact Scheme item, Branch, Class, Class Arm, Subject, Instructor and Delivery Date."),
+			frappe.ValidationError,
+		)
+	return lesson.name
+
+
 def _latest_item_log(scheme_name: str, item_reference: str) -> dict | None:
 	rows = frappe.get_all(
 		LOG_DOCTYPE,
@@ -189,7 +248,7 @@ def get_scheme_delivery_state(name: str) -> dict:
 		filters={"scheme_of_work": scheme.name},
 		fields=[
 			"name", "scheme_item_reference", "scheme_item_sequence", "delivery_status", "delivered_on",
-			"periods_delivered", "instructor", "instructor_assignment", "topic_name_snapshot",
+			"periods_delivered", "instructor", "instructor_assignment", "lesson_plan", "topic_name_snapshot",
 			"logged_by", "logged_on", "notes", "evidence", "creation",
 		],
 		order_by="logged_on asc, creation asc",
@@ -246,6 +305,22 @@ def get_delivery_instructor_options(name: str, delivered_on: str | None = None) 
 	return result
 
 
+@frappe.whitelist()
+def get_delivery_lesson_plan_options(
+	name: str,
+	item_reference: str,
+	delivered_on: str | None = None,
+	instructor: str | None = None,
+) -> list[dict]:
+	require_eduedge_access(feature_key="academics", action="view_scheme_delivery")
+	scheme = frappe.get_doc(SCHEME_DOCTYPE, name)
+	_context_authorized(scheme, write=False)
+	date = delivered_on or nowdate()
+	assignment = _resolve_delivery_assignment(scheme, date, instructor=instructor)
+	_scheme_item(scheme, str(item_reference or "").strip())
+	return _lesson_plan_options(scheme, str(item_reference or "").strip(), date, assignment["instructor"])
+
+
 @frappe.whitelist(methods=["POST"])
 def log_scheme_delivery(
 	name: str,
@@ -254,6 +329,7 @@ def log_scheme_delivery(
 	delivered_on: str | None = None,
 	periods_delivered: float | int | str = 0,
 	instructor: str | None = None,
+	lesson_plan: str | None = None,
 	notes: str | None = None,
 	evidence: str | None = None,
 ) -> dict:
@@ -269,6 +345,13 @@ def log_scheme_delivery(
 		frappe.throw(_("Delivery Date cannot extend beyond the Scheme academic period."), frappe.ValidationError)
 	assignment = _resolve_delivery_assignment(scheme, date, instructor=instructor)
 	_validate_transition(scheme, item, delivery_status)
+	lesson_plan_name = _validate_delivery_lesson_plan(
+		lesson_plan,
+		scheme,
+		item.name,
+		date,
+		assignment["instructor"],
+	)
 
 	log = frappe.new_doc(LOG_DOCTYPE)
 	log.scheme_of_work = scheme.name
@@ -286,6 +369,7 @@ def log_scheme_delivery(
 	log.topic = item.topic
 	log.instructor = assignment["instructor"]
 	log.instructor_assignment = assignment["name"]
+	log.lesson_plan = lesson_plan_name
 	log.scheme_title_snapshot = scheme.scheme_title
 	log.course_name_snapshot = scheme.course_name_snapshot or frappe.db.get_value("Course", scheme.course, "course_name") or scheme.course
 	log.offering_title_snapshot = scheme.offering_title_snapshot or frappe.db.get_value("EduEdge Program Offering", scheme.program_offering, "offering_title") or scheme.program_offering
@@ -303,5 +387,7 @@ def log_scheme_delivery(
 		"delivery_status": log.delivery_status,
 		"instructor": log.instructor,
 		"instructor_assignment": log.instructor_assignment,
+		"lesson_plan": log.lesson_plan,
+		"evidence": log.evidence,
 		"state": get_scheme_delivery_state(scheme.name),
 	}
