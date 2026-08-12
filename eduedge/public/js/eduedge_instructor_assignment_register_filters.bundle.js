@@ -118,12 +118,97 @@ function ensureRegisterTabStyles() {
 	style.id = "eduedge-instructor-assignment-register-tabs-style";
 	style.textContent = `
 		.eduedge-instructor-assignment-tabs-layout { grid-template-columns: minmax(0, 1fr) !important; }
+		.eduedge-instructor-assignment-record-toolbar { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; padding:.8rem .9rem; border:1px solid var(--border-color); border-radius:12px; background:var(--card-bg); }
+		.eduedge-instructor-assignment-record-toolbar__identity { display:grid; gap:.2rem; min-width:min(32rem,100%); }
+		.eduedge-instructor-assignment-record-toolbar__identity strong { font-size:.95rem; }
+		.eduedge-instructor-assignment-record-toolbar__identity small { color:var(--text-muted); }
+		.eduedge-instructor-assignment-record-toolbar__actions { display:flex; align-items:end; gap:.5rem; flex-wrap:wrap; }
+		.eduedge-instructor-assignment-record-toolbar label { display:grid; gap:.3rem; font-size:.72rem; font-weight:700; min-width:16rem; }
 		.eduedge-instructor-assignment-tabs { display:flex; flex-wrap:wrap; gap:.45rem; padding:.15rem 0; }
 		.eduedge-instructor-assignment-tabs button { background:var(--control-bg); border:1px solid var(--border-color); border-radius:999px; color:var(--text-color); cursor:pointer; font-size:.78rem; font-weight:700; padding:.45rem .75rem; }
 		.eduedge-instructor-assignment-tabs button.is-active { border-color:var(--primary); color:var(--primary); background:var(--card-bg); }
 		.eduedge-instructor-assignment-tabs button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+		.eduedge-assignment-planner-open { scroll-margin-top:1rem; }
+		@media(max-width:700px){.eduedge-instructor-assignment-record-toolbar,.eduedge-instructor-assignment-record-toolbar__actions{align-items:stretch;flex-direction:column}.eduedge-instructor-assignment-record-toolbar label{min-width:0;width:100%}.eduedge-instructor-assignment-record-toolbar__actions .edge-button{width:100%}}
 	`;
 	document.head.appendChild(style);
+}
+
+function plannerParts() {
+	const plannerPanel = panelByHeading("Who is being assigned?");
+	if (!plannerPanel) return null;
+	const rowsStack = plannerPanel.nextElementSibling?.classList?.contains("rows-stack")
+		? plannerPanel.nextElementSibling
+		: null;
+	const actionPanel = rowsStack?.nextElementSibling?.classList?.contains("assignment-panel")
+		? rowsStack.nextElementSibling
+		: null;
+	return { plannerPanel, rowsStack, actionPanel };
+}
+
+function applyPlannerVisibility(proxy, parts, toolbar) {
+	if (!parts) return;
+	const open = Boolean(proxy.canManage && proxy.assignmentPlannerOpen);
+	for (const element of [parts.plannerPanel, parts.rowsStack, parts.actionPanel]) {
+		if (element) element.hidden = !open;
+	}
+	parts.plannerPanel?.classList.toggle("eduedge-assignment-planner-open", open);
+	const button = toolbar?.querySelector("[data-eduedge-toggle-assignment-planner]");
+	if (button) {
+		button.textContent = open ? "Close Assignment Planner" : "Add Assignment";
+		button.setAttribute("aria-expanded", open ? "true" : "false");
+	}
+}
+
+function syncToolbarInstructor(proxy, toolbar) {
+	const select = toolbar?.querySelector("select[data-eduedge-view-instructor]");
+	if (!select) return;
+	const current = proxy.instructor || "";
+	select.innerHTML = '<option value="">Select Instructor</option>';
+	for (const row of proxy.data?.instructors || []) {
+		const option = document.createElement("option");
+		option.value = row.name;
+		option.textContent = row.instructor_name || row.name;
+		select.appendChild(option);
+	}
+	select.value = current;
+}
+
+function ensureViewFirstPlanner(proxy) {
+	const root = assignmentRoot();
+	const parts = plannerParts();
+	if (!root || !proxy?.canManage || !parts) return;
+	ensureRegisterTabStyles();
+	let toolbar = root.querySelector("[data-eduedge-instructor-record-toolbar]");
+	if (!toolbar) {
+		toolbar = document.createElement("section");
+		toolbar.className = "eduedge-instructor-assignment-record-toolbar";
+		toolbar.dataset.eduedgeInstructorRecordToolbar = "1";
+		toolbar.innerHTML = `
+			<div class="eduedge-instructor-assignment-record-toolbar__identity">
+				<strong>Instructor records</strong>
+				<small>Review assignments and Branch eligibility first. Open the planner only when you need to add responsibility.</small>
+			</div>
+			<div class="eduedge-instructor-assignment-record-toolbar__actions">
+				<label><span>Instructor</span><select class="form-control" data-eduedge-view-instructor></select></label>
+				<button type="button" class="edge-button edge-button--primary" data-eduedge-toggle-assignment-planner aria-expanded="false">Add Assignment</button>
+			</div>
+		`;
+		parts.plannerPanel.insertAdjacentElement("beforebegin", toolbar);
+		toolbar.querySelector("select[data-eduedge-view-instructor]")?.addEventListener("change", async (event) => {
+			proxy.instructor = event.target.value || "";
+			proxy.invalidatePreview?.();
+			await proxy.load?.();
+		});
+		toolbar.querySelector("[data-eduedge-toggle-assignment-planner]")?.addEventListener("click", () => {
+			proxy.assignmentPlannerOpen = !proxy.assignmentPlannerOpen;
+			const currentParts = plannerParts();
+			applyPlannerVisibility(proxy, currentParts, toolbar);
+			if (proxy.assignmentPlannerOpen) currentParts?.plannerPanel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+		});
+	}
+	syncToolbarInstructor(proxy, toolbar);
+	applyPlannerVisibility(proxy, parts, toolbar);
 }
 
 function applyRegisterTab(proxy, layout, registerPanel, eligibilityPanel, tabs) {
@@ -186,7 +271,9 @@ export function createEduEdgeInstructorAssignmentRegisterFiltersApp(rootProps = 
 }
 
 function mountRegisterFilters(proxy) {
-	if (!proxy?.loaded || !proxy.instructor) return null;
+	if (!proxy?.loaded) return null;
+	ensureViewFirstPlanner(proxy);
+	if (!proxy.instructor) return null;
 	ensureRegisterTabs(proxy);
 	const panel = findRegisterPanel();
 	if (!panel) return null;
@@ -232,6 +319,7 @@ function install(component) {
 			registerMeta: {},
 			registerFilterLoading: false,
 			assignmentRegisterTab: DEFAULT_REGISTER_TAB,
+			assignmentPlannerOpen: false,
 		};
 	};
 
@@ -296,6 +384,7 @@ function install(component) {
 			});
 			updateUrl(this);
 			await this.$nextTick?.();
+			ensureViewFirstPlanner(this);
 			ensureRegisterTabs(this);
 			mountRegisterFilters(this);
 			return result;
