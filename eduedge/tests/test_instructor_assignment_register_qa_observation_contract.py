@@ -10,6 +10,15 @@ RUNTIME = (
     / "js"
     / "eduedge_instructor_assignment_register_filters.bundle.js"
 )
+FILTERS = (
+    ROOT
+    / "eduedge"
+    / "public"
+    / "js"
+    / "eduedge_ui"
+    / "components"
+    / "InstructorAssignmentRegisterFilters.vue"
+)
 
 
 class TestInstructorAssignmentRegisterQAObservationContract(unittest.TestCase):
@@ -40,7 +49,36 @@ class TestInstructorAssignmentRegisterQAObservationContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-    def test_tabs_use_existing_register_panels_without_changing_business_data(self):
+    def test_page_is_view_first_and_planner_opens_only_from_add_action(self):
+        source = RUNTIME.read_text(encoding="utf-8")
+        for token in (
+            "assignmentPlannerOpen: false",
+            'panelByHeading("Who is being assigned?")',
+            "Instructor records",
+            "Add Assignment",
+            "Close Assignment Planner",
+            "data-eduedge-toggle-assignment-planner",
+            "element.hidden = !open",
+            "proxy.assignmentPlannerOpen = !proxy.assignmentPlannerOpen",
+        ):
+            self.assertIn(token, source)
+
+    def test_filters_are_grouped_into_quick_context_and_optional_advanced_sections(self):
+        source = FILTERS.read_text(encoding="utf-8")
+        for token in (
+            "Quick views",
+            "Lifecycle",
+            "Academic context",
+            "More Filters",
+            "Hide More Filters",
+            "advancedOpen",
+            "Search assignments",
+            "eduedge-register-primary-grid",
+            "eduedge-register-advanced-grid",
+        ):
+            self.assertIn(token, source)
+
+    def test_tabs_and_view_first_ui_do_not_change_business_data(self):
         source = RUNTIME.read_text(encoding="utf-8")
         self.assertIn('panelByHeading("Instructor Assignment Register")', source)
         self.assertIn('panelByHeading("Branch Eligibility Periods")', source)
