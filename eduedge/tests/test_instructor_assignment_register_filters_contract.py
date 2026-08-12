@@ -113,7 +113,8 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
     def test_filter_ui_cascades_branch_session_term_class_arm_and_subject(self):
         component = self._component()
         for token in (
-            "Smart register filters",
+            "Register filters",
+            "Academic context",
             "Branch / Campus",
             "Academic Session",
             "Term / Semester",
@@ -123,7 +124,7 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
             "Lifecycle Status",
             "History From",
             "History To",
-            "Search",
+            "Search assignments",
             "branchChanged()",
             "academicYearChanged()",
             "academicTermChanged()",
@@ -135,9 +136,10 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, component)
 
-    def test_filter_ui_exposes_presets_counts_chips_and_pagination(self):
+    def test_filter_ui_exposes_presets_counts_chips_pagination_and_collapsible_advanced_filters(self):
         component = self._component()
         for token in (
+            "Quick views",
             "Current + Upcoming",
             "Current",
             "Scheduled",
@@ -148,6 +150,8 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
             "All History",
             "activeChips",
             "Clear Filters",
+            "More Filters",
+            "advancedOpen",
             "Showing {{ register.from_row }}–{{ register.to_row }} of {{ register.total }}",
             "Previous",
             "Next",
