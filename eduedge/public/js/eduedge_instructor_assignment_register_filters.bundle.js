@@ -4,6 +4,7 @@ import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 const BASE_PAGE_METHOD = "eduedge.api.instructor_assignments.get_instructor_assignments_page";
 const FILTERED_PAGE_METHOD = "eduedge.api.instructor_assignment_register.get_instructor_assignment_register_page";
 const FILTER_PREFIX = "assignment_";
+const DEFAULT_REGISTER_TAB = "register";
 const filterApps = new WeakMap();
 
 const FILTER_KEYS = [
@@ -95,12 +96,78 @@ function redirectPageCall(proxy, originalCall) {
 	};
 }
 
-function findRegisterPanel() {
-	const root = document.querySelector(".eduedge-instructor-assignments-root");
+function assignmentRoot() {
+	return document.querySelector(".eduedge-instructor-assignments-root");
+}
+
+function panelByHeading(title) {
+	const root = assignmentRoot();
 	if (!root) return null;
 	return [...root.querySelectorAll(".assignment-panel")].find(
-		(panel) => panel.querySelector(".assignment-heading h2")?.textContent?.trim() === "Instructor Assignment Register",
+		(panel) => panel.querySelector(".assignment-heading h2")?.textContent?.trim() === title,
 	) || null;
+}
+
+function findRegisterPanel() {
+	return panelByHeading("Instructor Assignment Register");
+}
+
+function ensureRegisterTabStyles() {
+	if (document.getElementById("eduedge-instructor-assignment-register-tabs-style")) return;
+	const style = document.createElement("style");
+	style.id = "eduedge-instructor-assignment-register-tabs-style";
+	style.textContent = `
+		.eduedge-instructor-assignment-tabs-layout { grid-template-columns: minmax(0, 1fr) !important; }
+		.eduedge-instructor-assignment-tabs { display:flex; flex-wrap:wrap; gap:.45rem; padding:.15rem 0; }
+		.eduedge-instructor-assignment-tabs button { background:var(--control-bg); border:1px solid var(--border-color); border-radius:999px; color:var(--text-color); cursor:pointer; font-size:.78rem; font-weight:700; padding:.45rem .75rem; }
+		.eduedge-instructor-assignment-tabs button.is-active { border-color:var(--primary); color:var(--primary); background:var(--card-bg); }
+		.eduedge-instructor-assignment-tabs button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+	`;
+	document.head.appendChild(style);
+}
+
+function applyRegisterTab(proxy, layout, registerPanel, eligibilityPanel, tabs) {
+	const requested = proxy.assignmentRegisterTab === "eligibility" ? "eligibility" : DEFAULT_REGISTER_TAB;
+	const active = requested === "eligibility" && eligibilityPanel ? "eligibility" : DEFAULT_REGISTER_TAB;
+	proxy.assignmentRegisterTab = active;
+	registerPanel.hidden = active !== DEFAULT_REGISTER_TAB;
+	if (eligibilityPanel) eligibilityPanel.hidden = active !== "eligibility";
+	for (const button of tabs.querySelectorAll("button[data-register-tab]")) {
+		const selected = button.dataset.registerTab === active;
+		button.classList.toggle("is-active", selected);
+		button.setAttribute("aria-selected", selected ? "true" : "false");
+		button.tabIndex = selected ? 0 : -1;
+	}
+	layout.dataset.activeRegisterTab = active;
+}
+
+function ensureRegisterTabs(proxy) {
+	const registerPanel = findRegisterPanel();
+	const eligibilityPanel = panelByHeading("Branch Eligibility Periods");
+	const layout = registerPanel?.closest(".register-layout");
+	if (!layout || !registerPanel || !eligibilityPanel) return;
+	ensureRegisterTabStyles();
+	layout.classList.add("eduedge-instructor-assignment-tabs-layout");
+	let tabs = layout.querySelector(":scope > [data-eduedge-assignment-register-tabs]");
+	if (!tabs) {
+		tabs = document.createElement("div");
+		tabs.className = "eduedge-instructor-assignment-tabs";
+		tabs.dataset.eduedgeAssignmentRegisterTabs = "1";
+		tabs.setAttribute("role", "tablist");
+		tabs.setAttribute("aria-label", "Instructor assignment records");
+		tabs.innerHTML = `
+			<button type="button" role="tab" data-register-tab="register">Instructor Assignment Register</button>
+			<button type="button" role="tab" data-register-tab="eligibility">Branch Eligibility Periods</button>
+		`;
+		layout.prepend(tabs);
+		for (const button of tabs.querySelectorAll("button[data-register-tab]")) {
+			button.addEventListener("click", () => {
+				proxy.assignmentRegisterTab = button.dataset.registerTab || DEFAULT_REGISTER_TAB;
+				applyRegisterTab(proxy, layout, registerPanel, eligibilityPanel, tabs);
+			});
+		}
+	}
+	applyRegisterTab(proxy, layout, registerPanel, eligibilityPanel, tabs);
 }
 
 function syncRegisterHeading(proxy, panel) {
@@ -119,25 +186,35 @@ export function createEduEdgeInstructorAssignmentRegisterFiltersApp(rootProps = 
 }
 
 function mountRegisterFilters(proxy) {
-	if (!proxy?.loaded || !proxy.instructor) return;
+	if (!proxy?.loaded || !proxy.instructor) return null;
+	ensureRegisterTabs(proxy);
 	const panel = findRegisterPanel();
-	if (!panel) return;
+	if (!panel) return null;
 	syncRegisterHeading(proxy, panel);
 
 	const existing = filterApps.get(proxy);
+	if (existing?.host?.isConnected && existing.instructor === proxy.instructor) {
+		return existing;
+	}
+	// Never replace the child filter app while its request is still settling. The
+	// old implementation remounted it with busy=true, which could strand the new
+	// app in a permanent Filtering state.
+	if (proxy.registerFilterLoading) return existing || null;
 	if (existing) {
 		try { existing.app?.unmount?.(); } catch (error) { console.error("Failed to refresh Instructor Assignment filters", error); }
 		existing.host?.remove?.();
 	}
 
 	const heading = panel.querySelector(":scope > .assignment-heading");
-	if (!heading) return;
+	if (!heading) return null;
 	const host = document.createElement("div");
 	host.className = "eduedge-instructor-assignment-register-filter-host";
 	heading.insertAdjacentElement("afterend", host);
 	const app = createEduEdgeInstructorAssignmentRegisterFiltersApp({ controller: proxy });
 	app.mount(host);
-	filterApps.set(proxy, { app, host });
+	const mounted = { app, host, instructor: proxy.instructor };
+	filterApps.set(proxy, mounted);
+	return mounted;
 }
 
 function install(component) {
@@ -154,6 +231,7 @@ function install(component) {
 			registerPageSize: 50,
 			registerMeta: {},
 			registerFilterLoading: false,
+			assignmentRegisterTab: DEFAULT_REGISTER_TAB,
 		};
 	};
 
@@ -177,6 +255,8 @@ function install(component) {
 			await this.load?.();
 		} finally {
 			this.registerFilterLoading = false;
+			await this.$nextTick?.();
+			mountRegisterFilters(this);
 		}
 	};
 	methods.setRegisterPage = async function (page) {
@@ -188,6 +268,8 @@ function install(component) {
 			await this.load?.();
 		} finally {
 			this.registerFilterLoading = false;
+			await this.$nextTick?.();
+			mountRegisterFilters(this);
 		}
 	};
 
@@ -214,6 +296,7 @@ function install(component) {
 			});
 			updateUrl(this);
 			await this.$nextTick?.();
+			ensureRegisterTabs(this);
 			mountRegisterFilters(this);
 			return result;
 		};
