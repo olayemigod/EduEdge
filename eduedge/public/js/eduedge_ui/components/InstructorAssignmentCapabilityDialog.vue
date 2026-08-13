@@ -214,17 +214,19 @@ export default {
 </script>
 
 <style scoped>
-.eduedge-assignment-capability-dialog { display: grid; gap: 1rem; }
+.eduedge-assignment-capability-dialog { display: grid; gap: 1rem; color: var(--edge-color-ink-950, #122033); }
 .eduedge-assignment-capability-source, .eduedge-assignment-capability-note, .eduedge-assignment-capability-audit { border: 1px solid var(--edge-color-border, #d8e2ee); border-radius: .85rem; display: grid; gap: .35rem; padding: .9rem; }
-.eduedge-assignment-capability-source { background: var(--edge-color-surface-subtle, #f7f9fc); }
+.eduedge-assignment-capability-source { background: var(--edge-color-surface-muted, var(--edge-color-surface, #ffffff)); color: var(--edge-color-ink-950, #122033); }
 .eduedge-assignment-capability-source p { margin: 0; }
 .eduedge-assignment-capability-source small, .eduedge-assignment-capability-note small, .eduedge-assignment-capability-audit small, .eduedge-assignment-capability-option small { color: var(--edge-color-ink-500, #687a90); }
 .eduedge-assignment-capability-grid { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.eduedge-assignment-capability-option { align-items: flex-start; border: 1px solid var(--edge-color-border, #d8e2ee); border-radius: .75rem; display: flex; gap: .65rem; padding: .75rem; }
+.eduedge-assignment-capability-option { align-items: flex-start; background: var(--edge-color-surface, transparent); border: 1px solid var(--edge-color-border, #d8e2ee); border-radius: .75rem; display: flex; gap: .65rem; padding: .75rem; }
 .eduedge-assignment-capability-option > span { display: grid; gap: .2rem; }
 .eduedge-assignment-capability-option input { margin-top: .2rem; }
 .eduedge-assignment-capability-reason { display: grid; gap: .4rem; }
 .eduedge-assignment-capability-reason > span { font-size: .76rem; font-weight: 800; }
-.eduedge-assignment-capability-error { color: var(--edge-color-danger-700, #b42318); font-size: .76rem; margin: 0; }
+.eduedge-assignment-capability-reason textarea.form-control { background: var(--edge-color-control-surface, var(--edge-color-surface, #ffffff)); border-color: var(--edge-color-control-border, var(--edge-color-border, #d8e2ee)); color: var(--edge-color-control-text, var(--edge-color-ink-950, #122033)); }
+.eduedge-assignment-capability-reason textarea.form-control::placeholder { color: var(--edge-color-ink-400, #8998a8); opacity: 1; }
+.eduedge-assignment-capability-error { color: var(--edge-color-danger-text, var(--edge-color-danger, #b42318)); font-size: .76rem; margin: 0; }
 @media (max-width: 620px) { .eduedge-assignment-capability-grid { grid-template-columns: 1fr; } }
 </style>
