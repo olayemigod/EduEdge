@@ -3,14 +3,9 @@
 		<div class="eduedge-register-filter-heading">
 			<div>
 				<p class="edge-eyebrow">Register filters</p>
-				<strong>Start with a quick view, then narrow by academic context only when needed.</strong>
+				<strong>Use a quick view or search first. Open More Filters only when you need academic or historical detail.</strong>
 			</div>
-			<div class="eduedge-register-heading-actions">
-				<button type="button" class="edge-button" :disabled="busy" @click="advancedOpen = !advancedOpen">
-					{{ advancedOpen ? 'Hide More Filters' : 'More Filters' }}
-				</button>
-				<button type="button" class="edge-button" :disabled="busy" @click="resetFilters">Clear Filters</button>
-			</div>
+			<button type="button" class="edge-button" :disabled="busy" @click="resetFilters">Clear Filters</button>
 		</div>
 
 		<section class="eduedge-register-filter-section">
@@ -54,121 +49,144 @@
 			</div>
 		</section>
 
-		<section class="eduedge-register-filter-section eduedge-register-context-section">
-			<div class="eduedge-register-section-heading">
-				<span>Academic context</span>
-				<small>Filters cascade from Branch and Session down to Class Arm and Subject</small>
-			</div>
-			<div class="eduedge-register-filter-grid eduedge-register-primary-grid">
-				<label>
-					<span>Instructor</span>
-					<select v-model="draft.instructor" class="form-control" :disabled="busy || !canManage" @change="instructorChanged">
-						<option value="">Select Instructor</option>
-						<option v-for="row in instructors" :key="row.name" :value="row.name">{{ row.instructor_name || row.name }}</option>
-					</select>
-				</label>
+		<button
+			type="button"
+			class="eduedge-register-more-toggle"
+			:class="{ 'is-open': advancedOpen }"
+			:disabled="busy"
+			:aria-expanded="advancedOpen ? 'true' : 'false'"
+			aria-controls="eduedge-assignment-more-filters"
+			@click="advancedOpen = !advancedOpen"
+		>
+			<span class="eduedge-register-more-toggle-copy">
+				<strong>More Filters</strong>
+				<small>Academic context, responsibility details, origin and history</small>
+			</span>
+			<span class="eduedge-register-more-toggle-state">{{ advancedOpen ? 'Hide ▲' : 'Show ▼' }}</span>
+		</button>
 
-				<label>
-					<span>Branch / Campus</span>
-					<select v-model="draft.branch" class="form-control" :disabled="busy" @change="branchChanged">
-						<option value="">All available Branches</option>
-						<option v-for="row in branches" :key="row.name" :value="row.name">{{ row.branch_name || row.name }}</option>
-					</select>
-				</label>
+		<section
+			v-if="advancedOpen"
+			id="eduedge-assignment-more-filters"
+			class="eduedge-register-more-panel"
+			aria-label="More Instructor Assignment filters"
+		>
+			<section class="eduedge-register-filter-section eduedge-register-context-section">
+				<div class="eduedge-register-section-heading">
+					<span>Academic context</span>
+					<small>Filters cascade from Branch and Session down to Class Arm and Subject</small>
+				</div>
+				<div class="eduedge-register-filter-grid eduedge-register-primary-grid">
+					<label>
+						<span>Instructor</span>
+						<select v-model="draft.instructor" class="form-control" :disabled="busy || !canManage" @change="instructorChanged">
+							<option value="">Select Instructor</option>
+							<option v-for="row in instructors" :key="row.name" :value="row.name">{{ row.instructor_name || row.name }}</option>
+						</select>
+					</label>
 
-				<label>
-					<span>Academic Session</span>
-					<select v-model="draft.academic_year" class="form-control" :disabled="busy" @change="academicYearChanged">
-						<option value="">All Sessions</option>
-						<option v-for="value in academicYears" :key="value" :value="value">{{ value }}</option>
-					</select>
-				</label>
+					<label>
+						<span>Branch / Campus</span>
+						<select v-model="draft.branch" class="form-control" :disabled="busy" @change="branchChanged">
+							<option value="">All available Branches</option>
+							<option v-for="row in branches" :key="row.name" :value="row.name">{{ row.branch_name || row.name }}</option>
+						</select>
+					</label>
 
-				<label>
-					<span>Term / Semester</span>
-					<select v-model="draft.academic_term" class="form-control" :disabled="busy || !draft.academic_year" @change="academicTermChanged">
-						<option value="">All Terms / Semesters</option>
-						<option v-for="value in academicTerms" :key="value" :value="value">{{ value }}</option>
-					</select>
-				</label>
+					<label>
+						<span>Academic Session</span>
+						<select v-model="draft.academic_year" class="form-control" :disabled="busy" @change="academicYearChanged">
+							<option value="">All Sessions</option>
+							<option v-for="value in academicYears" :key="value" :value="value">{{ value }}</option>
+						</select>
+					</label>
 
-				<label class="wide">
-					<span>Class / Programme Offering</span>
-					<select v-model="draft.program_offering" class="form-control" :disabled="busy" @change="offeringChanged">
-						<option value="">All Classes / Programme Offerings</option>
-						<option v-for="row in offeringOptions" :key="row.name" :value="row.name">{{ row.offering_title || row.program || row.name }}</option>
-					</select>
-				</label>
+					<label>
+						<span>Term / Semester</span>
+						<select v-model="draft.academic_term" class="form-control" :disabled="busy || !draft.academic_year" @change="academicTermChanged">
+							<option value="">All Terms / Semesters</option>
+							<option v-for="value in academicTerms" :key="value" :value="value">{{ value }}</option>
+						</select>
+					</label>
 
-				<label>
-					<span>Class Arm</span>
-					<select v-model="draft.student_group" class="form-control" :disabled="busy || !draft.program_offering" @change="invalidatePreset">
-						<option value="">All Class Arms</option>
-						<option v-for="row in groupOptions" :key="row.name" :value="row.name">{{ row.eduedge_display_name || row.student_group_name || row.name }}</option>
-					</select>
-				</label>
+					<label class="wide">
+						<span>Class / Programme Offering</span>
+						<select v-model="draft.program_offering" class="form-control" :disabled="busy" @change="offeringChanged">
+							<option value="">All Classes / Programme Offerings</option>
+							<option v-for="row in offeringOptions" :key="row.name" :value="row.name">{{ row.offering_title || row.program || row.name }}</option>
+						</select>
+					</label>
 
-				<label>
-					<span>Subject / Course</span>
-					<select v-model="draft.course" class="form-control" :disabled="busy || !draft.program_offering" @change="invalidatePreset">
-						<option value="">All Subjects / Courses</option>
-						<option v-for="row in courseOptions" :key="row.name" :value="row.name">{{ row.course_name || row.name }}</option>
-					</select>
-				</label>
-			</div>
-		</section>
+					<label>
+						<span>Class Arm</span>
+						<select v-model="draft.student_group" class="form-control" :disabled="busy || !draft.program_offering" @change="invalidatePreset">
+							<option value="">All Class Arms</option>
+							<option v-for="row in groupOptions" :key="row.name" :value="row.name">{{ row.eduedge_display_name || row.student_group_name || row.name }}</option>
+						</select>
+					</label>
 
-		<section v-if="advancedOpen" class="eduedge-register-filter-section eduedge-register-advanced-section">
-			<div class="eduedge-register-section-heading">
-				<span>More filters</span>
-				<small>Use these for responsibility type, provenance and historical audit searches</small>
-			</div>
-			<div class="eduedge-register-filter-grid eduedge-register-advanced-grid">
-				<label>
-					<span>Assignment Type</span>
-					<select v-model="draft.assignment_type" class="form-control" :disabled="busy" @change="invalidatePreset">
-						<option value="">All Types</option>
-						<option v-for="value in assignmentTypes" :key="value" :value="value">{{ value }}</option>
-					</select>
-				</label>
+					<label>
+						<span>Subject / Course</span>
+						<select v-model="draft.course" class="form-control" :disabled="busy || !draft.program_offering" @change="invalidatePreset">
+							<option value="">All Subjects / Courses</option>
+							<option v-for="row in courseOptions" :key="row.name" :value="row.name">{{ row.course_name || row.name }}</option>
+						</select>
+					</label>
+				</div>
+			</section>
 
-				<label>
-					<span>Assignment Scope</span>
-					<select v-model="draft.assignment_scope" class="form-control" :disabled="busy" @change="invalidatePreset">
-						<option value="">All Scopes</option>
-						<option v-for="value in assignmentScopes" :key="value" :value="value">{{ value }}</option>
-					</select>
-				</label>
+			<section class="eduedge-register-filter-section eduedge-register-advanced-section">
+				<div class="eduedge-register-section-heading">
+					<span>Responsibility & history</span>
+					<small>Use these for responsibility type, provenance and historical audit searches</small>
+				</div>
+				<div class="eduedge-register-filter-grid eduedge-register-advanced-grid">
+					<label>
+						<span>Assignment Type</span>
+						<select v-model="draft.assignment_type" class="form-control" :disabled="busy" @change="invalidatePreset">
+							<option value="">All Types</option>
+							<option v-for="value in assignmentTypes" :key="value" :value="value">{{ value }}</option>
+						</select>
+					</label>
 
-				<label>
-					<span>Lifecycle Status</span>
-					<select v-model="draft.lifecycle_status" class="form-control" :disabled="busy" @change="statusChanged">
-						<option value="">Preset / All Statuses</option>
-						<option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
-					</select>
-				</label>
+					<label>
+						<span>Assignment Scope</span>
+						<select v-model="draft.assignment_scope" class="form-control" :disabled="busy" @change="invalidatePreset">
+							<option value="">All Scopes</option>
+							<option v-for="value in assignmentScopes" :key="value" :value="value">{{ value }}</option>
+						</select>
+					</label>
 
-				<label>
-					<span>Origin</span>
-					<select v-model="draft.origin" class="form-control" :disabled="busy" @change="invalidatePreset">
-						<option value="">Any Origin</option>
-						<option value="Normal">Normal assignment</option>
-						<option value="Prepared">Prepared from earlier period</option>
-						<option value="Replacement">Replacement / Handover</option>
-						<option value="Transfer">Transfer</option>
-					</select>
-				</label>
+					<label>
+						<span>Lifecycle Status</span>
+						<select v-model="draft.lifecycle_status" class="form-control" :disabled="busy" @change="statusChanged">
+							<option value="">Preset / All Statuses</option>
+							<option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
+						</select>
+					</label>
 
-				<label>
-					<span>History From</span>
-					<input v-model="draft.date_from" type="date" class="form-control" :disabled="busy" @change="invalidatePreset" />
-				</label>
+					<label>
+						<span>Origin</span>
+						<select v-model="draft.origin" class="form-control" :disabled="busy" @change="invalidatePreset">
+							<option value="">Any Origin</option>
+							<option value="Normal">Normal assignment</option>
+							<option value="Prepared">Prepared from earlier period</option>
+							<option value="Replacement">Replacement / Handover</option>
+							<option value="Transfer">Transfer</option>
+						</select>
+					</label>
 
-				<label>
-					<span>History To</span>
-					<input v-model="draft.date_to" type="date" class="form-control" :disabled="busy" @change="invalidatePreset" />
-				</label>
-			</div>
+					<label>
+						<span>History From</span>
+						<input v-model="draft.date_from" type="date" class="form-control" :disabled="busy" @change="invalidatePreset" />
+					</label>
+
+					<label>
+						<span>History To</span>
+						<input v-model="draft.date_to" type="date" class="form-control" :disabled="busy" @change="invalidatePreset" />
+					</label>
+				</div>
+			</section>
 		</section>
 
 		<section class="eduedge-register-filter-section eduedge-register-search-section">
@@ -228,7 +246,13 @@ function unique(values) {
 
 function hasAdvancedFilters(filters = {}) {
 	return Boolean(
-		filters.assignment_type
+		filters.branch
+		|| filters.academic_year
+		|| filters.academic_term
+		|| filters.program_offering
+		|| filters.student_group
+		|| filters.course
+		|| filters.assignment_type
 		|| filters.assignment_scope
 		|| filters.lifecycle_status
 		|| filters.origin
@@ -399,5 +423,5 @@ export default {
 </script>
 
 <style scoped>
-.eduedge-assignment-register-filters{display:grid;gap:.75rem;margin:.75rem 0 1rem}.eduedge-register-filter-heading,.eduedge-register-filter-footer,.eduedge-register-search-section{display:flex;align-items:center;justify-content:space-between;gap:.75rem}.eduedge-register-filter-heading>div:first-child,.eduedge-register-filter-footer>div:first-child{display:grid;gap:.15rem}.eduedge-register-filter-heading p{margin:0}.eduedge-register-filter-heading strong{font-size:.83rem}.eduedge-register-heading-actions{display:flex;gap:.45rem;flex-wrap:wrap}.eduedge-register-filter-section{display:grid;gap:.55rem;padding:.7rem;border:1px solid var(--edge-color-border,var(--border-color));border-radius:10px;background:var(--edge-color-surface-subtle,var(--control-bg))}.eduedge-register-section-heading{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem}.eduedge-register-section-heading span{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.eduedge-register-section-heading small,.eduedge-register-filter-footer small{color:var(--edge-color-ink-500,var(--text-muted));font-size:.68rem}.eduedge-register-presets,.eduedge-register-status-counts,.eduedge-register-chips{display:flex;flex-wrap:wrap;gap:.4rem}.eduedge-register-preset,.eduedge-register-count,.eduedge-register-chips button{background:var(--edge-color-surface,var(--card-bg));border:1px solid var(--edge-color-border,var(--border-color));border-radius:999px;cursor:pointer;font-size:.7rem;font-weight:700;padding:.34rem .58rem}.eduedge-register-preset.is-active,.eduedge-register-count.is-active{border-color:var(--edge-color-brand-500,var(--primary));color:var(--edge-color-brand-700,var(--primary))}.eduedge-register-count{display:inline-flex;align-items:center;gap:.35rem}.eduedge-register-count strong{font-size:.76rem}.eduedge-register-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.eduedge-register-filter-grid label,.eduedge-register-search-section label{display:grid;gap:.3rem;min-width:0}.eduedge-register-filter-grid label>span,.eduedge-register-search-section label>span{font-size:.69rem;font-weight:800}.eduedge-register-filter-grid .wide{grid-column:span 2}.eduedge-register-search-section{padding:.65rem .7rem}.eduedge-register-search-section label{flex:1}.eduedge-register-search-section .edge-button{flex:0 0 auto;align-self:end}.eduedge-register-pagination{display:flex;align-items:center;justify-content:flex-end;gap:.45rem;flex-wrap:wrap}.eduedge-register-pagination span{font-size:.72rem;font-weight:700}@media(max-width:1000px){.eduedge-register-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.eduedge-register-filter-grid .wide{grid-column:1/-1}}@media(max-width:650px){.eduedge-register-filter-heading,.eduedge-register-filter-footer,.eduedge-register-search-section,.eduedge-register-section-heading{align-items:stretch;flex-direction:column}.eduedge-register-filter-grid{grid-template-columns:1fr}.eduedge-register-filter-grid .wide{grid-column:auto}.eduedge-register-pagination{justify-content:flex-start}.eduedge-register-search-section .edge-button{width:100%}}
+.eduedge-assignment-register-filters{display:grid;gap:.75rem;margin:.75rem 0 1rem}.eduedge-register-filter-heading,.eduedge-register-filter-footer,.eduedge-register-search-section{display:flex;align-items:center;justify-content:space-between;gap:.75rem}.eduedge-register-filter-heading>div:first-child,.eduedge-register-filter-footer>div:first-child{display:grid;gap:.15rem}.eduedge-register-filter-heading p{margin:0}.eduedge-register-filter-heading strong{font-size:.83rem}.eduedge-register-filter-section{display:grid;gap:.55rem;padding:.7rem;border:1px solid var(--edge-color-border,var(--border-color));border-radius:10px;background:var(--edge-color-surface-subtle,var(--control-bg))}.eduedge-register-section-heading{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem}.eduedge-register-section-heading span{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.eduedge-register-section-heading small,.eduedge-register-filter-footer small{color:var(--edge-color-ink-500,var(--text-muted));font-size:.68rem}.eduedge-register-presets,.eduedge-register-status-counts,.eduedge-register-chips{display:flex;flex-wrap:wrap;gap:.4rem}.eduedge-register-preset,.eduedge-register-count,.eduedge-register-chips button{background:var(--edge-color-surface,var(--card-bg));border:1px solid var(--edge-color-border,var(--border-color));border-radius:999px;cursor:pointer;font-size:.7rem;font-weight:700;padding:.34rem .58rem}.eduedge-register-preset.is-active,.eduedge-register-count.is-active{border-color:var(--edge-color-brand-500,var(--primary));color:var(--edge-color-brand-700,var(--primary))}.eduedge-register-count{display:inline-flex;align-items:center;gap:.35rem}.eduedge-register-count strong{font-size:.76rem}.eduedge-register-more-toggle{display:flex;align-items:center;justify-content:space-between;gap:1rem;width:100%;padding:.8rem .9rem;border:1px solid var(--edge-color-brand-500,var(--primary));border-radius:10px;background:var(--edge-color-surface,var(--card-bg));color:var(--text-color);cursor:pointer;text-align:left}.eduedge-register-more-toggle:hover,.eduedge-register-more-toggle.is-open{background:var(--edge-color-surface-subtle,var(--control-bg))}.eduedge-register-more-toggle:disabled{cursor:wait;opacity:.65}.eduedge-register-more-toggle-copy{display:grid;gap:.15rem}.eduedge-register-more-toggle-copy strong{font-size:.8rem}.eduedge-register-more-toggle-copy small{color:var(--edge-color-ink-500,var(--text-muted));font-size:.69rem}.eduedge-register-more-toggle-state{flex:0 0 auto;font-size:.72rem;font-weight:800;color:var(--edge-color-brand-700,var(--primary))}.eduedge-register-more-panel{display:grid;gap:.65rem;padding:.65rem;border:1px dashed var(--edge-color-border,var(--border-color));border-radius:10px;background:var(--edge-color-surface,var(--card-bg))}.eduedge-register-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.eduedge-register-filter-grid label,.eduedge-register-search-section label{display:grid;gap:.3rem;min-width:0}.eduedge-register-filter-grid label>span,.eduedge-register-search-section label>span{font-size:.69rem;font-weight:800}.eduedge-register-filter-grid .wide{grid-column:span 2}.eduedge-register-search-section{padding:.65rem .7rem}.eduedge-register-search-section label{flex:1}.eduedge-register-search-section .edge-button{flex:0 0 auto;align-self:end}.eduedge-register-pagination{display:flex;align-items:center;justify-content:flex-end;gap:.45rem;flex-wrap:wrap}.eduedge-register-pagination span{font-size:.72rem;font-weight:700}@media(max-width:1000px){.eduedge-register-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.eduedge-register-filter-grid .wide{grid-column:1/-1}}@media(max-width:650px){.eduedge-register-filter-heading,.eduedge-register-filter-footer,.eduedge-register-search-section,.eduedge-register-section-heading,.eduedge-register-more-toggle{align-items:stretch;flex-direction:column}.eduedge-register-more-toggle-state{align-self:flex-start}.eduedge-register-filter-grid{grid-template-columns:1fr}.eduedge-register-filter-grid .wide{grid-column:auto}.eduedge-register-pagination{justify-content:flex-start}.eduedge-register-search-section .edge-button{width:100%}}
 </style>
