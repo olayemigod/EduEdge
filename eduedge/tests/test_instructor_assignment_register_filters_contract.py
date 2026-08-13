@@ -136,7 +136,7 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, component)
 
-    def test_filter_ui_exposes_presets_counts_chips_pagination_and_collapsible_advanced_filters(self):
+    def test_filter_ui_exposes_presets_counts_chips_pagination_and_visible_more_filters_toggle(self):
         component = self._component()
         for token in (
             "Quick views",
@@ -152,11 +152,34 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
             "Clear Filters",
             "More Filters",
             "advancedOpen",
+            'aria-controls="eduedge-assignment-more-filters"',
+            "eduedge-register-more-toggle",
+            "Show ▼",
+            "Hide ▲",
             "Showing {{ register.from_row }}–{{ register.to_row }} of {{ register.total }}",
             "Previous",
             "Next",
             "Apply Filters",
             "register.scan_truncated",
+        ):
+            self.assertIn(token, component)
+
+    def test_academic_context_lives_inside_more_filters_and_active_context_reopens_it(self):
+        component = self._component()
+        more_panel = component.index('v-if="advancedOpen"')
+        academic_context = component.index("<span>Academic context</span>")
+        responsibility_history = component.index("<span>Responsibility & history</span>")
+        search = component.index("Search assignments")
+        self.assertLess(more_panel, academic_context)
+        self.assertLess(academic_context, responsibility_history)
+        self.assertLess(responsibility_history, search)
+        for token in (
+            "filters.branch",
+            "filters.academic_year",
+            "filters.academic_term",
+            "filters.program_offering",
+            "filters.student_group",
+            "filters.course",
         ):
             self.assertIn(token, component)
 
