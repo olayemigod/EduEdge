@@ -63,20 +63,25 @@ class TestInstructorAssignmentRegisterQAObservationContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-    def test_filters_are_grouped_into_quick_context_and_optional_advanced_sections(self):
+    def test_filters_are_grouped_into_quick_views_and_explicit_more_filters(self):
         source = FILTERS.read_text(encoding="utf-8")
         for token in (
             "Quick views",
             "Lifecycle",
             "Academic context",
+            "Responsibility & history",
             "More Filters",
-            "Hide More Filters",
+            "Show ▼",
+            "Hide ▲",
             "advancedOpen",
+            'aria-controls="eduedge-assignment-more-filters"',
+            "eduedge-register-more-toggle",
             "Search assignments",
             "eduedge-register-primary-grid",
             "eduedge-register-advanced-grid",
         ):
             self.assertIn(token, source)
+        self.assertLess(source.index('v-if="advancedOpen"'), source.index("<span>Academic context</span>"))
 
     def test_tabs_and_view_first_ui_do_not_change_business_data(self):
         source = RUNTIME.read_text(encoding="utf-8")
