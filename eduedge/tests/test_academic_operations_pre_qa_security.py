@@ -68,15 +68,20 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		self.assertIn("for update", operations)
 		self.assertIn("Student Attendance already exists for this Student", operations)
 
-	def test_academic_operations_ui_hides_unauthorised_actions(self):
-		component = (APP / "public" / "js" / "eduedge_academic_operations" / "EduEdgeAcademicOperations.vue").read_text(encoding="utf-8")
+	def test_command_centre_hides_unauthorised_navigation_and_attendance_editor_is_focused(self):
+		command = (APP / "public" / "js" / "eduedge_academic_operations" / "EduEdgeAcademicOperations.vue").read_text(encoding="utf-8")
+		attendance = (APP / "public" / "js" / "eduedge_attendance" / "EduEdgeAttendance.vue").read_text(encoding="utf-8")
 		for token in (
 			"canCreateStudentGroup", "canCreateCourseSchedule", "canReadRooms",
 			"canReadInstructorAssignments", "canManageAttendance", "canSubmitAttendance",
-			"frappe.datetime?.get_today?.()", "this.register.course_schedule?.name",
+			"frappe.datetime?.get_today?.()",
 		):
-			self.assertIn(token, component)
-		self.assertIn(':disabled="student.locked || saving || !canManageAttendance"', component)
+			self.assertIn(token, command)
+		self.assertIn("canManageAttendance", attendance)
+		self.assertIn("canSubmitAttendance", attendance)
+		self.assertIn("course_schedule: this.filters.course_schedule", attendance)
+		self.assertIn(':disabled="student.locked || saving || !canManageAttendance"', attendance)
+		self.assertNotIn("saveRegister(submit)", command)
 
 	def test_offering_context_rejects_unclassified_native_links(self):
 		controller = (APP / "eduedge" / "doctype" / "eduedge_program_offering" / "eduedge_program_offering.py").read_text(encoding="utf-8")
