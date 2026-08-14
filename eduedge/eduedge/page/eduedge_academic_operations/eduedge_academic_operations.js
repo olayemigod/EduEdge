@@ -39,26 +39,29 @@ frappe.pages["eduedge-academic-operations"].on_page_show = function (wrapper) {
 		if (wrapper.current_visit_id !== visitId) return;
 		frappe.require("eduedge_academic_operations.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (
-				!window.EduEdgeAcademicOperations ||
-				typeof window.createEduEdgeAcademicOperationsApp !== "function"
-			) {
-				fail(__("The EduEdge Academic Operations bundle is unavailable or incomplete."));
-				return;
-			}
-			$loading.remove();
-			const root = $(
-				'<div class="eduedge-academic-operations-root" data-edge-product="eduedge"></div>'
-			).appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeAcademicOperationsApp({
-					pageName: "eduedge-academic-operations",
-				});
-				wrapper.vue_app.mount(root[0]);
-			} catch (error) {
-				console.error("Failed to mount EduEdge Academic Operations", error);
-				fail(error.message || String(error));
-			}
+			frappe.require("eduedge_academic_operations_schedule_action.bundle.js", () => {
+				if (wrapper.current_visit_id !== visitId) return;
+				if (
+					!window.EduEdgeAcademicOperations ||
+					typeof window.createEduEdgeAcademicOperationsApp !== "function"
+				) {
+					fail(__("The EduEdge Academic Operations bundle is unavailable or incomplete."));
+					return;
+				}
+				$loading.remove();
+				const root = $(
+					'<div class="eduedge-academic-operations-root" data-edge-product="eduedge"></div>'
+				).appendTo(page.body);
+				try {
+					wrapper.vue_app = window.createEduEdgeAcademicOperationsApp({
+						pageName: "eduedge-academic-operations",
+					});
+					wrapper.vue_app.mount(root[0]);
+				} catch (error) {
+					console.error("Failed to mount EduEdge Academic Operations", error);
+					fail(error.message || String(error));
+				}
+			});
 		});
 	});
 };
