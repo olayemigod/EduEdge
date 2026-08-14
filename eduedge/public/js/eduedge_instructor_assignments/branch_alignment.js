@@ -2,6 +2,7 @@ import EduEdgeInstructorAssignments from "./EduEdgeInstructorAssignments.vue";
 
 const LEGACY_BRANCH_ONLY_SCOPE = "Branch Access Only";
 const STYLE_ID = "eduedge-instructor-branch-alignment-style";
+const REVIEW_METHOD = "eduedge.api.instructor_branch_eligibility.get_instructor_branch_eligibility_review";
 
 function assignmentRoot() {
 	return document.querySelector(".eduedge-instructor-assignments-root");
@@ -37,6 +38,16 @@ function ensureStyles() {
 			font-size: .72rem;
 			line-height: 1.45;
 		}
+		.eduedge-instructor-branch-review {
+			background: var(--edge-color-surface-soft, var(--edge-color-surface-muted, var(--card-bg)));
+			border: 1px solid var(--edge-color-border-strong, var(--edge-color-border, var(--border-color)));
+			border-radius: 8px;
+			display: grid;
+			gap: .25rem;
+			margin-top: .4rem;
+			padding: .55rem .65rem;
+		}
+		.eduedge-instructor-branch-review strong { color: var(--edge-color-brand-text, var(--primary)); }
 	`;
 	document.head.appendChild(style);
 }
@@ -60,28 +71,78 @@ function syncPlannerLanguage(root) {
 	}
 }
 
-function syncEligibilityBoundary() {
+function reviewBranchNames(review) {
+	return (review?.rows || [])
+		.filter((row) => row.review_required)
+		.map((row) => row.branch_name || row.school_branch)
+		.filter(Boolean);
+}
+
+function syncEligibilityHeading(proxy) {
 	const panel = panelByHeading("Branch Eligibility Periods");
-	if (!panel || panel.querySelector("[data-eduedge-instructor-branch-boundary]")) return;
+	const summary = panel?.querySelector(":scope > .assignment-heading > span");
+	const review = proxy?.__eduedgeBranchEligibilityReview;
+	if (!summary || !review) return;
+	const enabled = Number(review.active_branch_count || 0);
+	const periods = Number(review.period_count || 0);
+	const pending = Number(review.review_required_count || 0);
+	summary.textContent = `${enabled} enabled Branch${enabled === 1 ? "" : "es"} · ${periods} Period${periods === 1 ? "" : "s"}${pending ? ` · ${pending} review` : ""}`;
+}
+
+function syncEligibilityBoundary(proxy) {
+	const panel = panelByHeading("Branch Eligibility Periods");
+	if (!panel) return;
 	const heading = panel.querySelector(":scope > .assignment-heading");
 	if (!heading) return;
-	const note = document.createElement("div");
-	note.className = "eduedge-instructor-branch-boundary";
-	note.dataset.eduedgeInstructorBranchBoundary = "1";
+	let note = panel.querySelector("[data-eduedge-instructor-branch-boundary]");
+	if (!note) {
+		note = document.createElement("div");
+		note.className = "eduedge-instructor-branch-boundary";
+		note.dataset.eduedgeInstructorBranchBoundary = "1";
+		heading.insertAdjacentElement("afterend", note);
+	}
+
+	const review = proxy?.__eduedgeBranchEligibilityReview;
+	const names = reviewBranchNames(review);
 	note.innerHTML = `
 		<strong>Instructor Branch Eligibility is not User Branch Access.</strong>
 		<span>Eligibility defines the Branches where this Instructor may receive academic responsibilities. It does not grant the linked User permission to operate in those Branches.</span>
 		<small>User access, Branch switching and security scope are managed separately under Branch Governance. The header Branch is navigation context and does not narrow this Instructor's eligibility history.</small>
+		${names.length ? `
+			<div class="eduedge-instructor-branch-review" data-eduedge-eligibility-review-required>
+				<strong>Review required · ${names.length} enabled eligibility record${names.length === 1 ? "" : "s"} have no supporting academic assignment</strong>
+				<span>${names.join(", ")}</span>
+				<small>This can be intentional eligibility granted before assignment, or legacy/stale history. EduEdge will not remove it automatically; confirm intent before disabling.</small>
+			</div>
+		` : ""}
 	`;
-	heading.insertAdjacentElement("afterend", note);
 }
 
-function syncPresentation() {
+function syncPresentation(proxy) {
 	ensureStyles();
 	const root = assignmentRoot();
 	if (!root) return;
 	syncPlannerLanguage(root);
-	syncEligibilityBoundary();
+	syncEligibilityHeading(proxy);
+	syncEligibilityBoundary(proxy);
+}
+
+async function loadEligibilityReview(proxy) {
+	if (!proxy?.instructor) {
+		proxy.__eduedgeBranchEligibilityReview = null;
+		return null;
+	}
+	try {
+		const response = await frappe.call(REVIEW_METHOD, { instructor: proxy.instructor });
+		proxy.__eduedgeBranchEligibilityReview = response.message || null;
+		await proxy.$nextTick?.();
+		syncPresentation(proxy);
+		return proxy.__eduedgeBranchEligibilityReview;
+	} catch (error) {
+		console.error("Instructor Branch Eligibility review could not load", error);
+		proxy.__eduedgeBranchEligibilityReview = null;
+		return null;
+	}
 }
 
 function install(component) {
@@ -104,7 +165,8 @@ function install(component) {
 		methods.load = async function (...args) {
 			const result = await existingLoad.apply(this, args);
 			await this.$nextTick?.();
-			syncPresentation();
+			syncPresentation(this);
+			await loadEligibilityReview(this);
 			return result;
 		};
 	}
@@ -113,7 +175,7 @@ function install(component) {
 	if (typeof existingAddBranchAccessRow === "function") {
 		methods.addBranchAccessRow = function (...args) {
 			const result = existingAddBranchAccessRow.apply(this, args);
-			this.$nextTick?.(() => syncPresentation());
+			this.$nextTick?.(() => syncPresentation(this));
 			return result;
 		};
 	}
@@ -123,7 +185,7 @@ function install(component) {
 		methods.previewPlan = async function (...args) {
 			const result = await existingPreviewPlan.apply(this, args);
 			await this.$nextTick?.();
-			syncPresentation();
+			syncPresentation(this);
 			return result;
 		};
 	}
@@ -131,7 +193,7 @@ function install(component) {
 	const existingMounted = component.mounted;
 	component.mounted = function (...args) {
 		const result = typeof existingMounted === "function" ? existingMounted.apply(this, args) : undefined;
-		this.$nextTick?.(() => syncPresentation());
+		this.$nextTick?.(() => syncPresentation(this));
 		return result;
 	};
 }
