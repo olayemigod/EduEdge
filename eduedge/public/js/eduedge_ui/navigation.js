@@ -153,7 +153,7 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Instructors"), "/app/eduedge-instructors", "users", __("Instructor identity, qualification, specialisation, and eligibility")),
 			menuItem(__("Instructor Assignments"), "/app/eduedge-instructor-assignments", "assignment", __("Assign Instructors to multiple Branches, Classes, Class Arms, and Subjects")),
 		]),
-		menuGroup("academic-setup", __("Academics"), "book", [
+		menuGroup("academic-setup", __("Academic Setup"), "book", [
 			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __("Daily academic command centre, alerts, and shortcuts")),
 			menuItem(__("Teaching Schedule"), "/app/eduedge-teaching-schedule", "calendar", __(`Day, week, upcoming ${sessions.toLowerCase()}, and room usage`)),
 			menuItem(__("Attendance"), "/app/eduedge-attendance", "clipboard", __("Take attendance, review registers, and resolve missing registers")),
