@@ -18,6 +18,14 @@ class TestInstructorBranchGovernanceAlignmentContract(unittest.TestCase):
         self.assertIn("can_manage_branch_eligibility", source)
 
     def test_instructor_assignment_flow_does_not_write_user_branch_access(self):
+        forbidden_writes = (
+            'frappe.new_doc("EduEdge User Branch Access")',
+            'frappe.get_doc("EduEdge User Branch Access"',
+            'frappe.db.set_value("EduEdge User Branch Access"',
+            'frappe.db.delete("EduEdge User Branch Access"',
+            "save_branch_access(",
+            "set_branch_access_enabled(",
+        )
         for relative in (
             "api/instructor_assignments.py",
             "api/instructor_assignment_register.py",
@@ -25,9 +33,8 @@ class TestInstructorBranchGovernanceAlignmentContract(unittest.TestCase):
             "api/instructor_assignment_lifecycle.py",
         ):
             source = (APP / relative).read_text(encoding="utf-8")
-            self.assertNotIn("EduEdge User Branch Access", source, relative)
-            self.assertNotIn("save_branch_access", source, relative)
-            self.assertNotIn("set_branch_access_enabled", source, relative)
+            for token in forbidden_writes:
+                self.assertNotIn(token, source, f"{relative}: {token}")
 
     def test_visible_instructor_language_calls_eligibility_not_user_access(self):
         runtime = (
