@@ -9,12 +9,15 @@ APP = ROOT / "eduedge"
 class TestAcademicOperationsRefactorContract(unittest.TestCase):
     def test_focused_pages_are_installed_and_navigable(self):
         navigation = (APP / "public/js/eduedge_ui/navigation.js").read_text(encoding="utf-8")
+        product_menu = (APP / "public/js/eduedge_product_menu.bundle.js").read_text(encoding="utf-8")
         access = (APP / "access_control.py").read_text(encoding="utf-8")
         for route in ("/app/eduedge-teaching-schedule", "/app/eduedge-attendance"):
             self.assertIn(route, navigation)
+            self.assertIn(route, product_menu)
             self.assertIn(route, access)
         for page in ("eduedge_teaching_schedule", "eduedge_attendance"):
             page_dir = APP / "eduedge/page" / page
+            self.assertTrue((page_dir / "__init__.py").exists())
             self.assertTrue((page_dir / f"{page}.json").exists())
             self.assertTrue((page_dir / f"{page}.js").exists())
 
@@ -23,6 +26,8 @@ class TestAcademicOperationsRefactorContract(unittest.TestCase):
         self.assertIn("Daily academic command centre", source)
         self.assertIn("/app/eduedge-teaching-schedule", source)
         self.assertIn("/app/eduedge-attendance", source)
+        self.assertIn("Scheduled attendance coverage", source)
+        self.assertIn("Room usage", source)
         self.assertNotIn("saveRegister(submit)", source)
         self.assertNotIn("/app/course-schedule/new-course-schedule", source)
 
@@ -31,6 +36,8 @@ class TestAcademicOperationsRefactorContract(unittest.TestCase):
         api = (APP / "api/teaching_schedule.py").read_text(encoding="utf-8")
         for token in ("Day", "Week", "Upcoming", "Rooms", "/app/course-schedule/new-course-schedule"):
             self.assertIn(token, source)
+        self.assertIn('params.get("date")', source)
+        self.assertIn('params.get("view")', source)
         self.assertIn('frappe.has_permission("Course Schedule", "read")', api)
         self.assertIn('"Course Schedule"', api)
         self.assertIn("is_limited_instructor_user", api)
@@ -41,6 +48,7 @@ class TestAcademicOperationsRefactorContract(unittest.TestCase):
         self.assertIn("Take Attendance", source)
         self.assertIn("Missing Registers", source)
         self.assertIn("course_schedule: this.filters.course_schedule", source)
+        self.assertIn('params.get("course_schedule")', source)
         self.assertIn("get_attendance_register", source)
         self.assertIn("save_attendance_register", source)
         self.assertIn("Submitted attendance remains immutable", source)
