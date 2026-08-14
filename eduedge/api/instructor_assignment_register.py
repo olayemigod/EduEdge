@@ -352,7 +352,16 @@ def get_instructor_assignment_register_page(
     start = (page - 1) * page_size
     assignments = filtered_rows[start : start + page_size]
 
-    register_branches = selected or allowed_names
+    # The shell/header Branch is navigation context and selected Branches seed the
+    # assignment planner only. Branch Eligibility belongs to the Instructor, so its
+    # visible history spans every Branch this manager is permitted to see. This keeps
+    # Instructor eligibility distinct from User Branch Access / Branch Governance.
+    eligibility_branches = allowed_names
+    can_manage_branch_eligibility = bool(
+        frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
+        or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
+    )
+
     return {
         "allowed_branches": allowed,
         "selected_branches": selected,
@@ -364,7 +373,7 @@ def get_instructor_assignment_register_page(
         "course_map": {key: sorted(values) for key, values in course_map.items()},
         "configured_course_map": {key: sorted(values) for key, values in configured_course_map.items()},
         "assignments": assignments,
-        "branch_assignments": core._branch_assignment_rows(instructor, register_branches) if _can_manage_assignments() else [],
+        "branch_assignments": core._branch_assignment_rows(instructor, eligibility_branches) if _can_manage_assignments() else [],
         "assignment_types": list(ASSIGNMENT_TYPES),
         "assignment_scopes": list(BULK_SCOPES),
         "subject_required_types": sorted(SUBJECT_REQUIRED_TYPES),
@@ -388,9 +397,9 @@ def get_instructor_assignment_register_page(
             "can_manage": _can_manage_assignments(),
             "can_create": frappe.has_permission("EduEdge Instructor Assignment", "create"),
             "can_write": frappe.has_permission("EduEdge Instructor Assignment", "write"),
-            "can_manage_branch_access": bool(
-                frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
-                or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
-            ),
+            "can_manage_branch_eligibility": can_manage_branch_eligibility,
+            # Compatibility alias for older page/runtime code. This does not refer
+            # to EduEdge User Branch Access and may be removed after consolidation.
+            "can_manage_branch_access": can_manage_branch_eligibility,
         },
     }
