@@ -153,7 +153,11 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Instructors"), "/app/eduedge-instructors", "users", __("Instructor identity, qualification, specialisation, and eligibility")),
 			menuItem(__("Instructor Assignments"), "/app/eduedge-instructor-assignments", "assignment", __("Assign Instructors to multiple Branches, Classes, Class Arms, and Subjects")),
 		]),
-		menuGroup("academic-setup", __("Academic Setup"), "book", [
+		menuGroup("academic-setup", __("Academics"), "book", [
+			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __("Daily academic command centre, alerts, and shortcuts")),
+			menuItem(__("Teaching Schedule"), "/app/eduedge-teaching-schedule", "calendar", __(`Day, week, upcoming ${sessions.toLowerCase()}, and room usage`)),
+			menuItem(__("Attendance"), "/app/eduedge-attendance", "clipboard", __("Take attendance, review registers, and resolve missing registers")),
+			menuItem(__("Academic Readiness"), "/app/eduedge-academic-readiness", "report", __("Management view of assignment coverage, Instructor identity, Scheme approval, curriculum delivery, and assessment planning activity")),
 			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and Institution calendars`)),
 			menuItem(`${academicYears} & ${academicTerms}`, "/app/eduedge-academic-sessions", "calendar", __(`Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`)),
 			menuItem(programmes, "/app/eduedge-programs", "book", __(`${programmes} catalogue`)),
@@ -161,8 +165,6 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Scheme of Work"), "/app/eduedge-schemes-of-work", "book", __("Plan, approve, version, and snapshot term curriculum delivery")),
 			menuItem(__("Lesson Plans"), "/app/eduedge-lesson-plans", "book", __("Prepare, submit, review, and approve lessons from the approved Scheme of Work")),
 			menuItem(offerings, "/app/eduedge-program-offerings", "layers", __(`${programmes} by campus and ${academicYear}`)),
-			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __(`${groups}, ${sessions}, and attendance`)),
-			menuItem(__("Academic Readiness"), "/app/eduedge-academic-readiness", "report", __("Management view of assignment coverage, Instructor identity, Scheme approval, curriculum delivery, and assessment planning activity")),
 		]),
 		menuGroup("assessment-results", __("Assessments & Results"), "clipboard", [
 			menuItem(__(`${assessments} & Results`), "/app/eduedge-assessment-operations", "assessment", __(`Plan, approve, and publish ${assessments.toLowerCase()}`)),
@@ -215,6 +217,7 @@ document.addEventListener("page-change", refreshEduEdgeMenuItems);
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home", "/app/eduedge-my-profile", "/app/eduedge-academic-operations",
+	"/app/eduedge-teaching-schedule", "/app/eduedge-attendance",
 	"/app/eduedge-class-arms", "/app/eduedge-admissions", "/app/eduedge-applicants",
 	"/app/eduedge-students", "/app/eduedge-student-enrollments", "/app/eduedge-instructors",
 	"/app/eduedge-instructor-assignments", "/app/eduedge-programs", "/app/eduedge-curriculum",
