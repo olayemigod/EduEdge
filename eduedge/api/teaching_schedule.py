@@ -41,6 +41,12 @@ def _group_labels(names: list[str]) -> dict[str, str]:
 	return {row.name: row.student_group_name or row.name for row in rows}
 
 
+def _require_schedule_read() -> None:
+	operations.base._require_academic_operator()
+	if not frappe.has_permission("Course Schedule", "read"):
+		frappe.throw(_("You are not permitted to view Teaching Schedules."), frappe.PermissionError)
+
+
 @frappe.whitelist()
 def get_teaching_schedule_context(
 	branch: str | None = None,
@@ -48,7 +54,7 @@ def get_teaching_schedule_context(
 	view: str = "day",
 ) -> dict:
 	"""Return a focused, permission-aware view over native Course Schedule records."""
-	operations._require_operations_read()
+	_require_schedule_read()
 	view = str(view or "day").strip().lower()
 	if view not in VALID_VIEWS:
 		frappe.throw(_("Select a valid Teaching Schedule view."), frappe.ValidationError)
