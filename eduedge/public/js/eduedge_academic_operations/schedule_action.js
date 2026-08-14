@@ -1,12 +1,29 @@
 const COURSE_SCHEDULE_CREATE_ROUTE = "/app/course-schedule/new-course-schedule";
 
+function clientCanCreateCourseSchedule() {
+	try {
+		if (typeof frappe?.model?.can_create === "function") {
+			return Boolean(frappe.model.can_create("Course Schedule"));
+		}
+	} catch (error) {
+		console.warn("Unable to resolve client Course Schedule create permission", error);
+	}
+	return false;
+}
+
 export function installAcademicOperationsScheduleAction(component) {
 	if (!component || component.__eduedgeScheduleActionInstalled) return;
 	component.__eduedgeScheduleActionInstalled = true;
 
 	const computed = component.computed || (component.computed = {});
 	computed.canCreateCourseSchedule = function () {
-		return Boolean(this.permissions?.can_create_course_schedule);
+		// The operations-context permission remains the normal source of truth for
+		// visibility. Frappe boot permissions are a safe UI fallback when a stale or
+		// partial context payload omits/misstates the flag; the native DocType route
+		// and server permission checks still govern actual creation.
+		return Boolean(
+			this.permissions?.can_create_course_schedule || clientCanCreateCourseSchedule(),
+		);
 	};
 
 	const methods = component.methods || (component.methods = {});
