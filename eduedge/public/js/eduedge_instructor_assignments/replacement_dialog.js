@@ -1,3 +1,4 @@
+import "../eduedge_instructor_assignment_end.bundle.js";
 import InstructorAssignmentReplacementDialog from "../eduedge_ui/components/InstructorAssignmentReplacementDialog.vue";
 import { createEduEdgeApp } from "../eduedge_ui/app_factory";
 
