@@ -129,6 +129,7 @@ export default {
 			activeTab: "take",
 			tabs: [{ key: "take", label: "Take Attendance" }, { key: "registers", label: "Registers" }, { key: "missing", label: "Missing Registers" }],
 			filters: { branch: "", date: today, course_schedule: "", student_group: "" },
+			pendingCourseSchedule: "",
 			context: emptyContext(), register: emptyRegister(),
 		};
 	},
@@ -142,6 +143,8 @@ export default {
 	mounted() {
 		const params = new URLSearchParams(window.location.search || "");
 		if (params.get("date")) this.filters.date = params.get("date");
+		if (["take", "registers", "missing"].includes(params.get("tab"))) this.activeTab = params.get("tab");
+		this.pendingCourseSchedule = params.get("course_schedule") || "";
 		this.loadContext();
 	},
 	methods: {
@@ -155,7 +158,19 @@ export default {
 				this.context = response.message || emptyContext();
 				this.filters.branch = this.context.filters?.branch || this.filters.branch;
 				this.filters.date = this.context.filters?.date || this.filters.date;
-				if (!this.context.schedules.some((row) => row.name === this.filters.course_schedule)) { this.filters.course_schedule = ""; this.filters.student_group = ""; this.register = emptyRegister(); }
+				if (this.pendingCourseSchedule) {
+					this.filters.course_schedule = this.pendingCourseSchedule;
+					this.pendingCourseSchedule = "";
+					const schedule = this.context.schedules.find((row) => row.name === this.filters.course_schedule);
+					if (schedule) {
+						this.filters.student_group = schedule.student_group || "";
+						if (this.activeTab === "take") await this.loadRegister();
+					} else {
+						this.filters.course_schedule = ""; this.filters.student_group = ""; this.register = emptyRegister();
+					}
+				} else if (!this.context.schedules.some((row) => row.name === this.filters.course_schedule)) {
+					this.filters.course_schedule = ""; this.filters.student_group = ""; this.register = emptyRegister();
+				}
 			} catch (error) { this.error = error?.message || "Attendance context could not be loaded."; }
 			finally { this.loading = false; }
 		},
