@@ -127,7 +127,12 @@ export default {
 			return this.context.start_date === this.context.end_date ? this.context.start_date : `${this.context.start_date} – ${this.context.end_date}`;
 		},
 	},
-	mounted() { this.load(); },
+	mounted() {
+		const params = new URLSearchParams(window.location.search || "");
+		if (params.get("date")) this.filters.reference_date = params.get("date");
+		if (["day", "week", "upcoming", "rooms"].includes(params.get("view"))) this.filters.view = params.get("view");
+		this.load();
+	},
 	methods: {
 		openRoute: openEduEdgeRoute,
 		formatTime(value) { return String(value || "").slice(0, 5) || "—"; },
