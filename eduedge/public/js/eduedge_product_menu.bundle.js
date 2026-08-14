@@ -124,9 +124,13 @@ function buildEduEdgeProductMenu() {
 			{
 				key: "academic-setup",
 				label: "Academic Setup",
-				description: `${programmes}, curriculum, offerings, ${groups.toLowerCase()}, planning, schedules, and readiness`,
+				description: `${programmes}, curriculum, offerings, ${groups.toLowerCase()}, planning, schedules, attendance, and readiness`,
 				icon: "graduation",
 				items: [
+					item("Academic Operations", "Daily academic command centre, alerts, and shortcuts", "calendar", "/app/eduedge-academic-operations", { keywords: ["academic", "operations", "class", "schedule", "attendance", "dashboard"], quick_action: true }),
+					item("Teaching Schedule", "Review day, week, upcoming sessions, and room usage", "calendar", "/app/eduedge-teaching-schedule", { keywords: ["schedule", "timetable", "class", "room", "instructor"], quick_action: true }),
+					item("Attendance", "Take attendance, review registers, and resolve missing registers", "clipboard", "/app/eduedge-attendance", { keywords: ["attendance", "register", "present", "absent", "missing"], quick_action: true }),
+					item("Academic Readiness", "Assignment coverage, Instructor identity, Scheme approval, curriculum delivery, and assessment planning", "report", "/app/eduedge-academic-readiness", { keywords: ["readiness", "assignment", "identity", "scheme", "delivery", "assessment"], quick_action: true }),
 					item("Academic Foundation", "Academic structure, levels, and calendars", "book", "/app/eduedge-academic-foundation", { keywords: ["academic", "foundation", "calendar", "level"] }),
 					item(`${academicYears} & ${academicTerms}`, `Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`, "calendar", "/app/eduedge-academic-sessions", { keywords: ["academic", "session", "year", "term", "semester", "calendar"] }),
 					item(programmes, `Maintain the ${programme.toLowerCase()} catalogue`, "book", "/app/eduedge-programs", { keywords: ["programme", "class", "catalogue", "course"] }),
@@ -134,8 +138,6 @@ function buildEduEdgeProductMenu() {
 					item("Scheme of Work", "Plan, approve, version, and track curriculum delivery", "book", "/app/eduedge-schemes-of-work", { keywords: ["scheme", "curriculum", "topic", "teaching", "delivery"] }),
 					item("Lesson Plans", "Prepare, submit, review, and approve lessons from the approved Scheme of Work", "book", "/app/eduedge-lesson-plans", { keywords: ["lesson", "plan", "teacher", "scheme", "teaching evidence"] }),
 					item(offerings, `${programmes} available by campus and session`, "layers", "/app/eduedge-program-offerings", { keywords: ["programme", "class", "offering", "academic year"] }),
-					item("Academic Operations", `Run ${groups.toLowerCase()}, schedules, and attendance`, "calendar", "/app/eduedge-academic-operations", { keywords: ["class", "schedule", "attendance"], quick_action: true }),
-					item("Academic Readiness", "Assignment coverage, Instructor identity, Scheme approval, curriculum delivery, and assessment planning", "report", "/app/eduedge-academic-readiness", { keywords: ["readiness", "assignment", "identity", "scheme", "delivery", "assessment"], quick_action: true }),
 				],
 			},
 			{
