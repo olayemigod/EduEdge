@@ -18,17 +18,19 @@ class TestOperationalRouteVisibilityContract(unittest.TestCase):
 				return ast.literal_eval(node.value)
 		self.fail("ROUTE_REQUIREMENTS was not found")
 
-	def test_academic_operations_requires_attendance_operation_right(self):
-		requirements = self._route_requirements()["/app/eduedge-academic-operations"]
+	def test_academic_command_centre_and_focused_pages_use_read_visibility(self):
+		routes = self._route_requirements()
 		self.assertEqual(
-			set(requirements),
+			set(routes["/app/eduedge-academic-operations"]),
 			{
-				("student_attendance", "create"),
-				("student_attendance", "write"),
+				("course_schedule", "read"),
+				("student_attendance", "read"),
 			},
 		)
-		self.assertNotIn(("student_group", "read"), requirements)
-		self.assertNotIn(("room", "read"), requirements)
+		self.assertEqual(routes["/app/eduedge-teaching-schedule"], (("course_schedule", "read"),))
+		self.assertEqual(routes["/app/eduedge-attendance"], (("student_attendance", "read"),))
+		self.assertNotIn(("student_group", "read"), routes["/app/eduedge-academic-operations"])
+		self.assertNotIn(("room", "read"), routes["/app/eduedge-academic-operations"])
 
 	def test_assessment_operations_requires_create_or_write(self):
 		requirements = self._route_requirements()["/app/eduedge-assessment-operations"]
