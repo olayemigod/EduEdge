@@ -91,9 +91,11 @@ ROUTE_REQUIREMENTS = {
 	"/app/eduedge-academic-readiness": (("program_offering", "read"),),
 	"/app/eduedge-class-arms": (("student_group", "read"),),
 	"/app/eduedge-academic-operations": (
-		("student_attendance", "create"),
-		("student_attendance", "write"),
+		("course_schedule", "read"),
+		("student_attendance", "read"),
 	),
+	"/app/eduedge-teaching-schedule": (("course_schedule", "read"),),
+	"/app/eduedge-attendance": (("student_attendance", "read"),),
 	"/app/eduedge-admissions": (("student_admission", "read"),),
 	"/app/eduedge-applicants": (("student_applicant", "read"),),
 	"/app/eduedge-students": (("student", "read"),),
