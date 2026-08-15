@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
 from typing import Any
 
 import frappe
@@ -10,13 +9,11 @@ from frappe.utils import cint, getdate, nowdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_progression import (
-	LEVEL_PROGRESSION,
 	PROGRAM_ALLOW_REPETITION_FIELD,
 	PROGRAM_PROGRESSION_MODE_FIELD,
 	PROGRESSION_LEVEL_FIELD,
 	get_program_progression,
 	progression_target,
-	validate_level_for_program,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.enrollment_progression_fields import (
@@ -153,13 +150,46 @@ def _planned_target_map(enrollment_names: list[str]) -> dict[str, dict]:
 	return result
 
 
+def _active_group_students(
+	student_group: str,
+	*,
+	branch: str,
+	academic_year: str,
+	program: str,
+) -> list[str]:
+	"""Resolve a source Class Arm before paging Program Enrollments.
+
+	The group itself is permission-checked and must match the explicit Branch,
+	Academic Session and Programme filter. This prevents a crafted Class Arm name
+	from widening or crossing the progression scope.
+	"""
+	group = frappe.get_doc("Student Group", student_group)
+	group.check_permission("read")
+	if cint(group.disabled):
+		frappe.throw(_("Selected source Class Arm / Group is disabled."), frappe.ValidationError)
+	if group.get(BRANCH_FIELD) != branch:
+		frappe.throw(_("Selected source Class Arm / Group belongs to another Branch / Campus."), frappe.PermissionError)
+	if group.academic_year != academic_year:
+		frappe.throw(_("Selected source Class Arm / Group belongs to another Academic Session."), frappe.ValidationError)
+	if group.program != program:
+		frappe.throw(_("Selected source Class Arm / Group belongs to another Class / Programme."), frappe.ValidationError)
+
+	students: list[str] = []
+	for row in group.get("students") or []:
+		if row.meta.has_field("active") and not cint(row.active):
+			continue
+		if row.student:
+			students.append(row.student)
+	return list(dict.fromkeys(students))
+
+
 def _source_group_map(branch: str, academic_year: str, students: list[str]) -> dict[str, dict]:
 	if not students:
 		return {}
 	groups = frappe.get_list(
 		"Student Group",
 		filters={BRANCH_FIELD: branch, "academic_year": academic_year, "disabled": 0},
-		fields=["name", "student_group_name", "program", OFFERING_FIELD, PROGRESSION_LEVEL_FIELD],
+		fields=["name", "student_group_name", "program", "course", "academic_year", OFFERING_FIELD, PROGRESSION_LEVEL_FIELD],
 		order_by="student_group_name asc",
 		page_length=500,
 	)
@@ -284,6 +314,21 @@ def get_student_progression_page(
 		filters["academic_year"] = source_academic_year
 	if program:
 		filters["program"] = program
+	if student_group:
+		if not source_academic_year or not program:
+			frappe.throw(
+				_("Select the source Academic Session and Class / Programme before filtering by Class Arm / Group."),
+				frappe.ValidationError,
+			)
+		group_students = _active_group_students(
+			student_group,
+			branch=branch,
+			academic_year=source_academic_year,
+			program=program,
+		)
+		# A deliberately impossible Student name keeps pagination and has_more accurate
+		# when the selected Class Arm has an empty roster.
+		filters["student"] = ["in", group_students or ["__eduedge_no_student__"]]
 	or_filters = None
 	if search:
 		or_filters = {"student": ["like", f"%{search}%"], "student_name": ["like", f"%{search}%"]}
@@ -306,12 +351,6 @@ def get_student_progression_page(
 	statuses = _status_map([row.name for row in rows])
 	planned = _planned_target_map([row.name for row in rows])
 	groups = _source_group_map(branch, source_academic_year, students) if source_academic_year else {}
-	if student_group:
-		allowed_students = {
-			student for student, group in groups.items() if group.get("name") == student_group
-		}
-		rows = [row for row in rows if row.student in allowed_students]
-		students = [row.student for row in rows]
 	evidence = _evidence_map(branch, source_academic_year, students) if source_academic_year else {student: {} for student in students}
 
 	program_names = list({row.program for row in rows if row.program})
@@ -350,9 +389,14 @@ def get_student_progression_page(
 		order_by="program_name asc",
 		page_length=500,
 	)
+	group_filters: dict = {BRANCH_FIELD: branch, "disabled": 0}
+	if source_academic_year:
+		group_filters["academic_year"] = source_academic_year
+	if program:
+		group_filters["program"] = program
 	groups_list = frappe.get_list(
 		"Student Group",
-		filters={BRANCH_FIELD: branch, "academic_year": source_academic_year, "disabled": 0} if source_academic_year else {BRANCH_FIELD: branch, "disabled": 0},
+		filters=group_filters,
 		fields=["name", "student_group_name", "program", PROGRESSION_LEVEL_FIELD],
 		order_by="student_group_name asc",
 		page_length=500,
