@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 
 from eduedge.cbt.result_sync_fields import ensure_result_sync_custom_fields
+from eduedge.education.academic_progression import ensure_academic_progression_foundation
 from eduedge.education.class_arm_identity import ensure_class_arm_foundation
 from eduedge.education.curriculum_fields import ensure_curriculum_management_foundation
 from eduedge.education.custom_fields import (
@@ -10,6 +11,7 @@ from eduedge.education.custom_fields import (
 	ensure_education_custom_fields,
 )
 from eduedge.education.enrollment_field_setup import ensure_program_enrollment_branch_selector
+from eduedge.education.enrollment_progression_fields import ensure_enrollment_progression_fields
 from eduedge.education.institution_type_defaults import apply_institution_type_defaults
 from eduedge.education.institution_types import ensure_institution_type_foundation
 from eduedge.education.native_hierarchy_migration import ensure_native_academic_context_foundation
@@ -37,6 +39,13 @@ ROLE_DESK_ACCESS = {
 }
 
 
+def _ensure_academic_progression() -> None:
+	# Create Program/Enrollment/Student Group progression fields before the
+	# Enrollment lineage fields that depend on the same native academic records.
+	ensure_academic_progression_foundation()
+	ensure_enrollment_progression_fields()
+
+
 def after_install() -> None:
 	ensure_institution_type_foundation()
 	apply_institution_type_defaults()
@@ -45,6 +54,7 @@ def after_install() -> None:
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
 	ensure_class_arm_foundation()
+	_ensure_academic_progression()
 	ensure_people_operations_foundation()
 	ensure_curriculum_management_foundation()
 	ensure_teaching_assignment_foundation()
@@ -63,6 +73,7 @@ def after_migrate() -> None:
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
 	ensure_class_arm_foundation()
+	_ensure_academic_progression()
 	ensure_people_operations_foundation()
 	ensure_curriculum_management_foundation()
 	ensure_teaching_assignment_foundation()
