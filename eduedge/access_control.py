@@ -100,6 +100,7 @@ ROUTE_REQUIREMENTS = {
 	"/app/eduedge-applicants": (("student_applicant", "read"),),
 	"/app/eduedge-students": (("student", "read"),),
 	"/app/eduedge-student-enrollments": (("program_enrollment", "read"),),
+	"/app/eduedge-student-progression": (("program_enrollment", "read"),),
 	"/app/eduedge-instructors": (("instructor", "read"),),
 	"/app/eduedge-instructor-assignments": (("instructor_assignment", "read"),),
 	"/app/eduedge-programs": (("program", "read"),),
