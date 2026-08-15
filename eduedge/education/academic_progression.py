@@ -43,7 +43,10 @@ PROGRESSION_CUSTOM_FIELDS = {
 			"fieldname": PROGRAM_SEQUENCE_FIELD,
 			"fieldtype": "Int",
 			"label": "Progression Sequence",
-			"default": 10,
+			# Custom Field.default is Text in Frappe v16. Keep metadata defaults
+			# serialized as strings so create_custom_fields(update=True) can safely
+			# version existing Custom Field records during repeated migrations.
+			"default": "10",
 		},
 		{
 			"fieldname": "eduedge_progression_column",
@@ -61,13 +64,13 @@ PROGRESSION_CUSTOM_FIELDS = {
 			"fieldname": PROGRAM_TERMINAL_FIELD,
 			"fieldtype": "Check",
 			"label": "Terminal Program / Class",
-			"default": 0,
+			"default": "0",
 		},
 		{
 			"fieldname": PROGRAM_ALLOW_REPETITION_FIELD,
 			"fieldtype": "Check",
 			"label": "Allow Repetition",
-			"default": 1,
+			"default": "1",
 		},
 	],
 	"Program Enrollment": [
