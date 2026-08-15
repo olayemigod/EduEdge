@@ -126,7 +126,7 @@ function withFavorites(groups) {
 export function buildEduEdgeMenuItems() {
 	const programmes = term("programme", { plural: true, fallback: __("Programmes") });
 	const offerings = term("programme_offering", { plural: true, fallback: __("Programme Offerings") });
-	const groups = term("student_group", { plural: true, fallback: __("Classes") });
+	const classArms = term("student_group", { plural: true, fallback: __("Class Arms") });
 	const sessions = term("class_session", { plural: true, fallback: __("Schedules") });
 	const courses = term("course", { plural: true, fallback: __("Courses / Subjects") });
 	const topics = term("topic", { plural: true, fallback: __("Topics") });
@@ -161,10 +161,11 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and Institution calendars`)),
 			menuItem(`${academicYears} & ${academicTerms}`, "/app/eduedge-academic-sessions", "calendar", __(`Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`)),
 			menuItem(programmes, "/app/eduedge-programs", "book", __(`${programmes} catalogue`)),
+			menuItem(offerings, "/app/eduedge-program-offerings", "layers", __(`${programmes} offered by campus for an ${academicYear}`)),
+			menuItem(classArms, "/app/eduedge-class-arms", "layers", __("Manage session-wide Class Arms and bulk next-session preparation")),
 			menuItem(`${courses} & ${topics}`, "/app/eduedge-curriculum", "book", __(`Manage Institution curriculum, grading, and class-aware ${topics.toLowerCase()}`)),
 			menuItem(__("Scheme of Work"), "/app/eduedge-schemes-of-work", "book", __("Plan, approve, version, and snapshot term curriculum delivery")),
 			menuItem(__("Lesson Plans"), "/app/eduedge-lesson-plans", "book", __("Prepare, submit, review, and approve lessons from the approved Scheme of Work")),
-			menuItem(offerings, "/app/eduedge-program-offerings", "layers", __(`${programmes} by campus and ${academicYear}`)),
 		]),
 		menuGroup("assessment-results", __("Assessments & Results"), "clipboard", [
 			menuItem(__(`${assessments} & Results`), "/app/eduedge-assessment-operations", "assessment", __(`Plan, approve, and publish ${assessments.toLowerCase()}`)),
@@ -187,7 +188,7 @@ export function buildEduEdgeMenuItems() {
 		], { feature: "cbt" }),
 		menuGroup("institution-access", __("Institution & Access"), "building", [
 			menuItem(__("Institution Profile"), "/app/eduedge-institution-profile", "building", __("Identity, branding, and contacts")),
-			menuItem(__("Institution Structure"), "/app/eduedge-institution-structure", "layers", __("Institution types and terminology")),
+			menuItem(__("Institution Structure"), "/app/eduedge-institution-structure", "layers", __("Institution types and academic terminology")),
 			menuItem(__("Institution Operations"), "/app/eduedge-institution-operations-settings", "settings", __("Workflow preferences and defaults")),
 			menuItem(__("School Branches"), "/app/eduedge-school-branches", "building", __("Campus identity and defaults")),
 			menuItem(__("Branch Governance"), "/app/eduedge-branch-governance", "shield", __("Campus access and accounting readiness")),
