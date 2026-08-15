@@ -24,6 +24,15 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
         self.assertIn("Primary and Secondary Classes cannot use Level Progression", source)
         self.assertIn("Tertiary and Training Programmes progress through Academic Levels", source)
 
+    def test_progression_custom_field_defaults_are_text_serialized_for_frappe16_migrations(self):
+        source = (APP / "education/academic_progression.py").read_text(encoding="utf-8")
+        for token in ('"default": "10"', '"default": "0"', '"default": "1"'):
+            self.assertIn(token, source)
+        for forbidden in ('"default": 10', '"default": 0', '"default": 1'):
+            self.assertNotIn(forbidden, source)
+        self.assertIn("Custom Field.default is Text in Frappe v16", source)
+        self.assertIn("create_custom_fields(available, update=True)", source)
+
     def test_progression_prepares_destination_enrollment_as_draft_only(self):
         source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
         prepare = source.split("def _prepare_target_enrollment", 1)[1].split("@frappe.whitelist", 1)[0]
