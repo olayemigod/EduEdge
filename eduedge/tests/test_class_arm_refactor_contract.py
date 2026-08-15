@@ -57,25 +57,31 @@ class TestClassArmRefactorContract(unittest.TestCase):
         self.assertNotIn('doc.append("instructors"', api)
         self.assertIn("openInstructorAssignments", ui)
 
-    def test_session_rollover_is_post_only_later_session_and_enrollment_revalidated(self):
-        api = (APP / "api/class_arms.py").read_text(encoding="utf-8")
+    def test_session_rollover_is_post_only_later_session_and_structural_before_progression(self):
         rollover = (APP / "api/class_arm_session_rollover.py").read_text(encoding="utf-8")
         ui = (APP / "public/js/eduedge_class_arms/EduEdgeClassArms.vue").read_text(encoding="utf-8")
+        request_guard = (APP / "security/request_method.py").read_text(encoding="utf-8")
         for endpoint in (
+            "preview_class_arm_session_rollover",
             "execute_selected_class_arm_session_rollover",
             "preview_single_class_arm_session_rollover",
             "execute_single_class_arm_session_rollover",
         ):
             self.assertIn(f"def {endpoint}", rollover)
-        self.assertGreaterEqual(rollover.count('@frappe.whitelist(methods=["POST"])'), 3)
-        self.assertIn("Select a later destination Academic Session", api)
-        self.assertIn("Program Enrollment", api)
-        self.assertIn('"docstatus": 1', api)
-        self.assertIn("enrollment_filters[OFFERING_FIELD] = context.name", api)
-        self.assertIn("PREVIOUS_GROUP_FIELD", api)
+        self.assertGreaterEqual(rollover.count('@frappe.whitelist(methods=["POST"])'), 4)
+        self.assertIn("Select a later destination Academic Session", rollover)
+        self.assertIn("PREVIOUS_GROUP_FIELD", (APP / "education/class_arm_identity.py").read_text(encoding="utf-8"))
         self.assertIn("previous_student_group=source_doc.name", rollover)
-        self.assertIn("Source Session records", ui)
-        self.assertIn("historical assessments/results/CBT records will remain unchanged", ui)
+        self.assertIn('"student_roster_carried_forward": False', rollover)
+        self.assertIn('"student_progression_required": True', rollover)
+        create_block = rollover.split("def _create_destination_group", 1)[1].split("def _single_source_context", 1)[0]
+        self.assertNotIn("_merge_students", create_block)
+        self.assertIn("Deliberately leave the destination roster empty", create_block)
+        self.assertIn("Student Progression", ui)
+        self.assertIn("destination roster starts empty", ui)
+        self.assertIn("Existing Assessment Plans, Assessment Results, Result Publications, CBT Schedules, attempts and CBT Results remain historical", ui)
+        self.assertIn('"eduedge.api.class_arms.preview_class_arm_session_rollover": "eduedge.api.class_arm_session_rollover.preview_class_arm_session_rollover"', request_guard)
+        self.assertIn('"eduedge.api.class_arms.execute_class_arm_session_rollover": "eduedge.api.class_arm_session_rollover.execute_all_class_arm_session_rollover"', request_guard)
 
     def test_branch_security_hooks_cover_class_arm_master(self):
         hooks = (APP / "hooks.py").read_text(encoding="utf-8")
