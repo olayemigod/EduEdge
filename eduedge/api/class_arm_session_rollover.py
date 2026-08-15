@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, getdate
 
 from eduedge.api import class_arms as class_arm_api
 from eduedge.education.academic_fields import OFFERING_FIELD
@@ -22,15 +22,18 @@ MAX_SELECTION = 500
 
 DOWNSTREAM_ALIGNMENT = {
 	"class_arm_scope": "Academic Session",
+	"student_roster_carried_forward": False,
+	"student_progression_required": True,
 	"term_scope": "Assessment Plans, Result Publication and CBT Schedules",
 	"assessment_plans_carried_forward": False,
 	"assessment_results_carried_forward": False,
 	"cbt_schedules_carried_forward": False,
 	"cbt_attempts_or_results_carried_forward": False,
 	"message": (
-		"Only the next-session Class Arm Student Group and destination-session eligible roster are prepared. "
-		"Assessment Plans, Assessment Results, CBT Schedules, attempts and results remain exact historical records. "
-		"Create the destination session/term academic activities against the newly prepared Student Group."
+		"Next-session Class Arm preparation creates structure only and does not copy Students. "
+		"Student Progression prepares and submits each destination Program Enrollment, then allocates the Student "
+		"to a prepared destination Class Arm. Assessment Plans, Assessment Results, CBT Schedules, attempts and "
+		"results remain exact historical records."
 	),
 }
 
@@ -38,6 +41,12 @@ DOWNSTREAM_ALIGNMENT = {
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required."), frappe.PermissionError)
+
+
+def _require_read_permission() -> None:
+	_require_login()
+	if not frappe.has_permission("Student Group", "read"):
+		frappe.throw(_("You are not permitted to view Class Arms."), frappe.PermissionError)
 
 
 def _require_create_permission() -> None:
@@ -94,8 +103,156 @@ def _selected_plan_rows(plan: dict, identities: list[str]) -> list[dict]:
 	return [rows_by_identity[identity] for identity in identities]
 
 
+def _source_student_count(student_group: str | None) -> int:
+	if not student_group:
+		return 0
+	return cint(
+		frappe.db.count(
+			"Student Group Student",
+			{
+				"parent": student_group,
+				"parenttype": "Student Group",
+				"active": 1,
+			},
+		)
+	)
+
+
+def _structural_rollover_row(source: dict, destinations: list[dict]) -> dict:
+	"""Plan destination structure without depending on next-session enrollment.
+
+	Class Arms are prepared before Student Progression. The source roster is shown only
+	as an operational count; no learner is copied to the destination Student Group here.
+	"""
+	if source.get("blocked_reason"):
+		return {
+			"class_arm_identity": source.get("class_arm_identity"),
+			"status": "blocked",
+			"reason": source.get("blocked_reason"),
+		}
+
+	identity = frappe.db.get_value(
+		CLASS_ARM_DOCTYPE,
+		source.get(CLASS_ARM_FIELD),
+		["name", "class_arm_name", "class_arm_code", "program", "enabled"],
+		as_dict=True,
+	)
+	if not identity or not cint(identity.enabled):
+		return {
+			"source": source.get("name"),
+			"class_arm_identity": source.get(CLASS_ARM_FIELD),
+			"status": "blocked",
+			"reason": "Reusable Class Arm identity is missing or disabled.",
+		}
+
+	source_offering_name = source.get(OFFERING_FIELD)
+	if not source_offering_name:
+		return {
+			"source": source.get("name"),
+			"class_arm_identity": identity.name,
+			"display_name": identity.class_arm_name,
+			"program": identity.program,
+			"status": "blocked",
+			"reason": "Source Class Arm has no Programme Offering.",
+		}
+
+	source_offering = class_arm_api._get_offering(
+		source_offering_name,
+		source.get(BRANCH_FIELD),
+		require_enrollment=False,
+		allow_legacy_term=True,
+		require_active=False,
+	)
+	destination, reason = class_arm_api._match_destination_offering(source_offering, destinations)
+	if reason:
+		return {
+			"source": source.get("name"),
+			"class_arm_identity": identity.name,
+			"display_name": identity.class_arm_name,
+			"program": identity.program,
+			"status": "blocked",
+			"legacy_source": bool(source.get("legacy_source")),
+			"reason": reason,
+		}
+
+	existing = frappe.db.exists(
+		"Student Group",
+		{
+			CLASS_ARM_FIELD: identity.name,
+			OFFERING_FIELD: destination["name"],
+			"academic_term": ["is", "not set"],
+		},
+	)
+	source_count = _source_student_count(source.get("name"))
+	return {
+		"source": source.get("name"),
+		"class_arm_identity": identity.name,
+		"display_name": identity.class_arm_name,
+		"class_arm_code": identity.class_arm_code,
+		"program": identity.program,
+		"source_offering": source_offering.name,
+		"destination_offering": destination["name"],
+		"destination_academic_year": destination["academic_year"],
+		"status": "existing" if existing else "ready",
+		"existing_student_group": existing,
+		"legacy_source": bool(source.get("legacy_source")),
+		"source_student_count": source_count,
+		"students_pending_progression": source_count,
+		# Compatibility metrics remain zero because structural rollover deliberately
+		# does not classify or copy destination students before progression approval.
+		"eligible_students": [],
+		"eligible_count": 0,
+		"excluded_students": [],
+		"excluded_count": 0,
+	}
+
+
+def _structural_session_rollover_plan(
+	branch: str,
+	source_academic_year: str,
+	destination_academic_year: str,
+) -> dict:
+	_require_read_permission()
+	branch, selected_branch, _branches = class_arm_api._resolve_branch(branch)
+	if not source_academic_year or not destination_academic_year:
+		frappe.throw(_("Source and destination Academic Sessions are required."), frappe.ValidationError)
+	if source_academic_year == destination_academic_year:
+		frappe.throw(_("Destination Academic Session must be different from the source Session."), frappe.ValidationError)
+	class_arm_api._assert_year_read(source_academic_year)
+	class_arm_api._assert_year_read(destination_academic_year)
+	source_start = frappe.db.get_value("Academic Year", source_academic_year, "year_start_date")
+	destination_start = frappe.db.get_value("Academic Year", destination_academic_year, "year_start_date")
+	if source_start and destination_start and getdate(destination_start) <= getdate(source_start):
+		frappe.throw(_("Select a later destination Academic Session."), frappe.ValidationError)
+
+	destinations = class_arm_api._destination_offerings(branch, destination_academic_year)
+	rows = [
+		_structural_rollover_row(source, destinations)
+		for source in class_arm_api._select_source_groups(branch, source_academic_year)
+	]
+	return {
+		"branch": selected_branch,
+		"source_academic_year": source_academic_year,
+		"destination_academic_year": destination_academic_year,
+		"rows": rows,
+		"summary": {
+			"total": len(rows),
+			"ready": sum(1 for row in rows if row.get("status") == "ready"),
+			"existing": sum(1 for row in rows if row.get("status") == "existing"),
+			"blocked": sum(1 for row in rows if row.get("status") == "blocked"),
+			"source_students": sum(cint(row.get("source_student_count")) for row in rows),
+			"students_pending_progression": sum(cint(row.get("students_pending_progression")) for row in rows),
+			# Compatibility fields retained for older clients; structural rollover never
+			# copies learners into the destination group.
+			"students_to_carry": 0,
+			"students_excluded": 0,
+		},
+		"downstream_alignment": dict(DOWNSTREAM_ALIGNMENT),
+	}
+
+
 def _create_destination_group(row: dict, branch: str) -> tuple[dict, bool]:
-	"""Create exactly one destination-session Student Group from a revalidated plan row."""
+	"""Create one empty next-session Student Group from a revalidated structural plan."""
 	if row.get("status") != "ready":
 		frappe.throw(_("Only a ready Class Arm can be created."), frappe.ValidationError)
 
@@ -124,8 +281,8 @@ def _create_destination_group(row: dict, branch: str) -> tuple[dict, bool]:
 			"display_name": identity.class_arm_name,
 			"source": source_doc.name,
 			"destination_offering": destination.name,
-			"eligible_count": cint(row.get("eligible_count")),
-			"excluded_count": cint(row.get("excluded_count")),
+			"source_student_count": cint(row.get("source_student_count")),
+			"students_pending_progression": cint(row.get("students_pending_progression")),
 		}, False
 
 	doc = frappe.new_doc("Student Group")
@@ -151,18 +308,18 @@ def _create_destination_group(row: dict, branch: str) -> tuple[dict, bool]:
 		# across sessions. Student Progression moves learners to a different Level/group;
 		# Class Arm rollover must not silently promote the structure itself.
 		doc.set(PROGRESSION_LEVEL_FIELD, source_doc.get(PROGRESSION_LEVEL_FIELD))
-	class_arm_api._merge_students(
-		doc,
-		[{"student": student.get("name")} for student in row.get("eligible_students") or []],
-	)
+	# Deliberately leave the destination roster empty. Student Progression creates a
+	# submitted destination Program Enrollment first, then allocates the learner to
+	# the selected destination Class Arm. This keeps structure preparation independent
+	# from progression approval and prevents circular next-session setup dependencies.
 	doc.save()
 	return {
 		"name": doc.name,
 		"display_name": identity.class_arm_name,
 		"source": source_doc.name,
 		"destination_offering": destination.name,
-		"eligible_count": cint(row.get("eligible_count")),
-		"excluded_count": cint(row.get("excluded_count")),
+		"source_student_count": cint(row.get("source_student_count")),
+		"students_pending_progression": cint(row.get("students_pending_progression")),
 	}, True
 
 
@@ -190,7 +347,7 @@ def _single_source_context(source: str) -> tuple[frappe.model.document.Document,
 
 def _single_plan(source: str, destination_academic_year: str) -> tuple[dict, dict]:
 	doc, branch = _single_source_context(source)
-	plan = class_arm_api._session_rollover_plan(
+	plan = _structural_session_rollover_plan(
 		branch,
 		doc.academic_year,
 		destination_academic_year,
@@ -217,17 +374,29 @@ def _single_plan(source: str, destination_academic_year: str) -> tuple[dict, dic
 
 
 @frappe.whitelist(methods=["POST"])
+def preview_class_arm_session_rollover(
+	branch: str,
+	source_academic_year: str,
+	destination_academic_year: str,
+) -> dict:
+	"""Preview next-session Class Arm structure without copying learner rosters."""
+	_require_login()
+	require_eduedge_access(feature_key="academics", action="preview_class_arm_session_rollover")
+	return _structural_session_rollover_plan(branch, source_academic_year, destination_academic_year)
+
+
+@frappe.whitelist(methods=["POST"])
 def execute_selected_class_arm_session_rollover(
 	branch: str,
 	source_academic_year: str,
 	destination_academic_year: str,
 	class_arm_identities: Any,
 ) -> dict:
-	"""Prepare only the Class Arms explicitly selected from a fresh rollover plan."""
+	"""Prepare only explicitly selected Class Arm structures from a fresh plan."""
 	_require_create_permission()
 	require_eduedge_access(feature_key="academics", action="execute_selected_class_arm_session_rollover")
 	identities = _parse_identity_selection(class_arm_identities)
-	plan = class_arm_api._session_rollover_plan(branch, source_academic_year, destination_academic_year)
+	plan = _structural_session_rollover_plan(branch, source_academic_year, destination_academic_year)
 	rows = _selected_plan_rows(plan, identities)
 
 	created: list[dict] = []
@@ -255,6 +424,42 @@ def execute_selected_class_arm_session_rollover(
 		"blocked_count": len(blocked),
 		"downstream_alignment": dict(DOWNSTREAM_ALIGNMENT),
 	}
+
+
+@frappe.whitelist(methods=["POST"])
+def execute_all_class_arm_session_rollover(
+	branch: str,
+	source_academic_year: str,
+	destination_academic_year: str,
+) -> dict:
+	"""Compatibility action: prepare every ready structural Class Arm in one governed batch."""
+	_require_create_permission()
+	require_eduedge_access(feature_key="academics", action="execute_all_class_arm_session_rollover")
+	plan = _structural_session_rollover_plan(branch, source_academic_year, destination_academic_year)
+	identities = [
+		row.get("class_arm_identity")
+		for row in plan.get("rows") or []
+		if row.get("status") == "ready" and row.get("class_arm_identity")
+	]
+	if not identities:
+		return {
+			"source_academic_year": source_academic_year,
+			"destination_academic_year": destination_academic_year,
+			"selected_count": 0,
+			"created": [],
+			"existing": [row for row in plan.get("rows") or [] if row.get("status") == "existing"],
+			"blocked": [row for row in plan.get("rows") or [] if row.get("status") == "blocked"],
+			"created_count": 0,
+			"existing_count": sum(1 for row in plan.get("rows") or [] if row.get("status") == "existing"),
+			"blocked_count": sum(1 for row in plan.get("rows") or [] if row.get("status") == "blocked"),
+			"downstream_alignment": dict(DOWNSTREAM_ALIGNMENT),
+		}
+	return execute_selected_class_arm_session_rollover(
+		branch=branch,
+		source_academic_year=source_academic_year,
+		destination_academic_year=destination_academic_year,
+		class_arm_identities=identities,
+	)
 
 
 @frappe.whitelist(methods=["POST"])
