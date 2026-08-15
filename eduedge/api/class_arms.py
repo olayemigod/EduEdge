@@ -209,13 +209,19 @@ def get_class_arms_page(
 	}
 
 
-def _get_offering(offering: str, branch: str, *, require_enrollment: bool = True) -> frappe._dict:
+def _get_offering(
+	offering: str,
+	branch: str,
+	*,
+	require_enrollment: bool = True,
+	require_active: bool = True,
+) -> frappe._dict:
 	doc = frappe.get_doc("EduEdge Program Offering", offering)
 	doc.check_permission("read")
 	assert_branch_access(doc.school_branch)
 	if doc.school_branch != branch:
 		frappe.throw(_("Programme Offering must belong to the selected Branch / Campus."), frappe.ValidationError)
-	if not cint(doc.is_active):
+	if require_active and not cint(doc.is_active):
 		frappe.throw(_("Select an active Programme Offering."), frappe.ValidationError)
 	if require_enrollment and not cint(doc.enrollment_enabled):
 		frappe.throw(_("Select a Programme Offering that is available for enrollment."), frappe.ValidationError)
@@ -590,7 +596,12 @@ def _rollover_plan(source: str, destination_offering: str) -> dict:
 	source_offering_name = source_doc.get(OFFERING_FIELD)
 	if not source_offering_name:
 		frappe.throw(_("Source Class Arm is not linked to a Programme Offering."), frappe.ValidationError)
-	source_context = _get_offering(source_offering_name, branch, require_enrollment=False)
+	source_context = _get_offering(
+		source_offering_name,
+		branch,
+		require_enrollment=False,
+		require_active=False,
+	)
 	destination = _get_offering(destination_offering, branch)
 	if destination.institution != source_context.institution or destination.institution != identity.institution:
 		frappe.throw(_("Destination Offering must belong to the same Institution."), frappe.ValidationError)
