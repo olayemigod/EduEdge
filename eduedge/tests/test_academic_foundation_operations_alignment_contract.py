@@ -59,8 +59,10 @@ class TestAcademicFoundationOperationsAlignmentContract(unittest.TestCase):
 		self.assertIn("_institution_academic_years", api)
 		self.assertIn("_institution_calendar_terms", api)
 		self.assertIn("assert_institution_calendar_context", controller)
-		self.assertIn("self.department = frappe.db.get_value(\"Program\", self.program, \"department\")", controller)
+		self.assertIn("_enforce_sessional_scope", controller)
+		self.assertIn('self.department = frappe.db.get_value("Program", self.program, "department")', controller)
 		self.assertIn("draftProgramChanged", component)
+		self.assertIn("Not part of Programme Offering identity", component)
 		self.assertNotIn("academicLevel", component)
 		self.assertIn("programme_offerings_safe.save_programme_offering", hooks)
 
@@ -95,12 +97,14 @@ class TestAcademicFoundationOperationsAlignmentContract(unittest.TestCase):
 		self.assertIn("applyStudentGroupContext", schedule_js)
 		self.assertIn("schedule_date(frm)", schedule_js)
 
-	def test_offering_page_uses_direct_institution_terminology(self):
+	def test_offering_page_uses_direct_institution_terminology_but_no_term_identity(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text()
 		bundle = (APP / "public" / "js" / "eduedge_programme_offerings.bundle.js").read_text()
 		self.assertIn('term("academic_year"', component)
-		self.assertIn('term("academic_term"', component)
 		self.assertIn('term("department"', component)
+		self.assertNotIn('term("academic_term"', component)
+		self.assertIn("Terms / Semesters", component)
+		self.assertIn("Not part of Programme Offering identity", component)
 		self.assertIn("createEduEdgeProgrammeOfferingsApp", bundle)
 		self.assertNotIn("applyProgrammeOfferingLevelCascade", bundle)
 
