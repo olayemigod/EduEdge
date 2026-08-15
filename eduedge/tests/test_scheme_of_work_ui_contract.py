@@ -23,9 +23,11 @@ class TestSchemeOfWorkUIContract(unittest.TestCase):
             "<EdgeFilterBar",
             "branchChanged()",
             "offeringChanged()",
+            "termChanged()",
             "groupChanged()",
             "courseChanged()",
             'this.filters.program_offering = ""',
+            'this.filters.academic_term = ""',
             'this.filters.student_group = ""',
             'this.filters.course = ""',
         ):
@@ -34,7 +36,7 @@ class TestSchemeOfWorkUIContract(unittest.TestCase):
     def test_ui_uses_governed_post_actions_and_no_direct_database_mutation(self):
         source = (APP / "public" / "js" / "eduedge_scheme_of_work" / "EduEdgeSchemeOfWork.vue").read_text(encoding="utf-8")
         for method in (
-            "eduedge.api.scheme_of_work.save_scheme",
+            "eduedge.api.scheme_of_work_sessional.save_scheme",
             "eduedge.api.scheme_of_work.approve_scheme",
             "eduedge.api.scheme_of_work.create_next_version",
             "eduedge.api.scheme_of_work.retire_scheme",
@@ -54,6 +56,7 @@ class TestSchemeOfWorkUIContract(unittest.TestCase):
 
     def test_workbench_filters_exact_assignment_curriculum_and_preserves_history(self):
         source = (APP / "api" / "scheme_of_work_workbench.py").read_text(encoding="utf-8")
+        sessional = (APP / "api" / "scheme_of_work_workbench_sessional.py").read_text(encoding="utf-8")
         for token in (
             "get_active_instructor_names_for_user",
             "COURSE_REQUIRED_TYPES",
@@ -66,6 +69,9 @@ class TestSchemeOfWorkUIContract(unittest.TestCase):
             'and cint(selected_offering.get("is_active"))',
         ):
             self.assertIn(token, source)
+        self.assertIn("_historical_term_option", sessional)
+        self.assertIn('"historical_scheme": True', sessional)
+        self.assertIn('and not (selected_term or {}).get("historical_scheme")', sessional)
 
     def test_navigation_and_access_manifest_register_scheme_route(self):
         navigation = (APP / "public" / "js" / "eduedge_ui" / "navigation.js").read_text(encoding="utf-8")
