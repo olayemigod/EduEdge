@@ -12,12 +12,13 @@ class TestClassArmSessionRolloverContract(unittest.TestCase):
         ui = (APP / "public/js/eduedge_class_arms/EduEdgeClassArms.vue").read_text(encoding="utf-8")
 
         for endpoint in (
+            "preview_class_arm_session_rollover",
             "execute_selected_class_arm_session_rollover",
             "preview_single_class_arm_session_rollover",
             "execute_single_class_arm_session_rollover",
         ):
             self.assertIn(f"def {endpoint}", api)
-        self.assertGreaterEqual(api.count('@frappe.whitelist(methods=["POST"])'), 3)
+        self.assertGreaterEqual(api.count('@frappe.whitelist(methods=["POST"])'), 4)
         self.assertIn("class_arm_identities", api)
         self.assertIn("_selected_plan_rows", api)
         self.assertIn("Carry {{ classArmSingular }} Forward", ui)
@@ -32,14 +33,17 @@ class TestClassArmSessionRolloverContract(unittest.TestCase):
         self.assertIn("Historical term-bound Class Arms cannot be carried forward individually", api)
         self.assertIn("if doc.academic_term", api)
         self.assertIn("if cint(doc.disabled)", api)
-        self.assertIn("_session_rollover_plan", api)
+        self.assertIn("_structural_session_rollover_plan", api)
 
-    def test_rollover_prepares_student_group_only_and_preserves_lineage(self):
+    def test_rollover_prepares_empty_student_group_structure_and_preserves_lineage(self):
         api = (APP / "api/class_arm_session_rollover.py").read_text(encoding="utf-8")
         create_block = api.split("def _create_destination_group", 1)[1].split("def _single_source_context", 1)[0]
         self.assertIn('frappe.new_doc("Student Group")', create_block)
         self.assertIn("previous_student_group=source_doc.name", create_block)
-        self.assertIn("_merge_students", create_block)
+        self.assertNotIn("_merge_students", create_block)
+        self.assertIn("Deliberately leave the destination roster empty", create_block)
+        self.assertIn('"student_roster_carried_forward": False', api)
+        self.assertIn('"student_progression_required": True', api)
         for forbidden in (
             'frappe.new_doc("Assessment Plan")',
             'frappe.new_doc("Assessment Result")',
@@ -48,6 +52,15 @@ class TestClassArmSessionRolloverContract(unittest.TestCase):
             'frappe.new_doc("EduEdge CBT Attempt")',
         ):
             self.assertNotIn(forbidden, create_block)
+
+    def test_structural_plan_does_not_depend_on_destination_enrollment_eligibility(self):
+        api = (APP / "api/class_arm_session_rollover.py").read_text(encoding="utf-8")
+        plan_block = api.split("def _structural_rollover_row", 1)[1].split("def _create_destination_group", 1)[0]
+        self.assertNotIn("_eligible_students", plan_block)
+        self.assertIn("source_student_count", plan_block)
+        self.assertIn("students_pending_progression", plan_block)
+        self.assertIn('"eligible_students": []', plan_block)
+        self.assertIn('"students_to_carry": 0', plan_block)
 
     def test_downstream_history_is_explicitly_not_copied(self):
         api = (APP / "api/class_arm_session_rollover.py").read_text(encoding="utf-8")
@@ -76,8 +89,8 @@ class TestClassArmSessionRolloverContract(unittest.TestCase):
 
     def test_execute_replans_before_mutating_destination(self):
         api = (APP / "api/class_arm_session_rollover.py").read_text(encoding="utf-8")
-        execute_block = api.split("def execute_selected_class_arm_session_rollover", 1)[1].split("def preview_single_class_arm_session_rollover", 1)[0]
-        self.assertIn("_session_rollover_plan", execute_block)
+        execute_block = api.split("def execute_selected_class_arm_session_rollover", 1)[1].split("def execute_all_class_arm_session_rollover", 1)[0]
+        self.assertIn("_structural_session_rollover_plan", execute_block)
         self.assertIn("_selected_plan_rows", execute_block)
         self.assertIn("_create_destination_group", execute_block)
         self.assertIn("existing = frappe.db.exists", api)
