@@ -80,7 +80,7 @@ function buildEduEdgeProductMenu() {
 	const student = term("student", { fallback: __("Student") });
 	const students = term("student", { plural: true, fallback: __("Students") });
 	const applicants = term("student_applicant", { plural: true, fallback: __("Applicants") });
-	const groups = term("student_group", { plural: true, fallback: __("Classes") });
+	const classArms = term("student_group", { plural: true, fallback: __("Class Arms") });
 	const courses = term("course", { plural: true, fallback: __("Courses / Subjects") });
 	const topics = term("topic", { plural: true, fallback: __("Topics") });
 	const assessments = term("assessment", { plural: true, fallback: __("Assessments") });
@@ -124,7 +124,7 @@ function buildEduEdgeProductMenu() {
 			{
 				key: "academic-setup",
 				label: "Academic Setup",
-				description: `${programmes}, curriculum, offerings, ${groups.toLowerCase()}, planning, schedules, attendance, and readiness`,
+				description: `${programmes}, curriculum, offerings, ${classArms.toLowerCase()}, planning, schedules, attendance, and readiness`,
 				icon: "graduation",
 				items: [
 					item("Academic Operations", "Daily academic command centre, alerts, and shortcuts", "calendar", "/app/eduedge-academic-operations", { keywords: ["academic", "operations", "class", "schedule", "attendance", "dashboard"], quick_action: true }),
@@ -134,10 +134,11 @@ function buildEduEdgeProductMenu() {
 					item("Academic Foundation", "Academic structure, levels, and calendars", "book", "/app/eduedge-academic-foundation", { keywords: ["academic", "foundation", "calendar", "level"] }),
 					item(`${academicYears} & ${academicTerms}`, `Configure ${academicYears.toLowerCase()} and their ${academicTerms.toLowerCase()}`, "calendar", "/app/eduedge-academic-sessions", { keywords: ["academic", "session", "year", "term", "semester", "calendar"] }),
 					item(programmes, `Maintain the ${programme.toLowerCase()} catalogue`, "book", "/app/eduedge-programs", { keywords: ["programme", "class", "catalogue", "course"] }),
+					item(offerings, `${programmes} available by campus and Academic Session`, "layers", "/app/eduedge-program-offerings", { keywords: ["programme", "class", "offering", "academic session"] }),
+					item(classArms, "Manage session-wide Class Arms and bulk next-session preparation", "layers", "/app/eduedge-class-arms", { keywords: ["class arm", "student group", "session", "rollover", "promotion"], quick_action: true }),
 					item(`${courses} & ${topics}`, "Manage Institution curriculum, grading, and class-aware Topics", "book", "/app/eduedge-curriculum", { keywords: ["curriculum", "subject", "course", "topic", "grading"] }),
 					item("Scheme of Work", "Plan, approve, version, and track curriculum delivery", "book", "/app/eduedge-schemes-of-work", { keywords: ["scheme", "curriculum", "topic", "teaching", "delivery"] }),
 					item("Lesson Plans", "Prepare, submit, review, and approve lessons from the approved Scheme of Work", "book", "/app/eduedge-lesson-plans", { keywords: ["lesson", "plan", "teacher", "scheme", "teaching evidence"] }),
-					item(offerings, `${programmes} available by campus and session`, "layers", "/app/eduedge-program-offerings", { keywords: ["programme", "class", "offering", "academic year"] }),
 				],
 			},
 			{
