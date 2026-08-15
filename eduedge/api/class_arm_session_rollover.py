@@ -8,6 +8,7 @@ from frappe.utils import cint
 
 from eduedge.api import class_arms as class_arm_api
 from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.education.academic_progression import PROGRESSION_LEVEL_FIELD
 from eduedge.education.class_arm_identity import (
 	CLASS_ARM_DOCTYPE,
 	CLASS_ARM_FIELD,
@@ -145,6 +146,11 @@ def _create_destination_group(row: dict, branch: str) -> tuple[dict, bool]:
 	doc.course = source_doc.course
 	doc.max_strength = source_doc.max_strength
 	doc.disabled = 0
+	if doc.meta.has_field(PROGRESSION_LEVEL_FIELD) and source_doc.meta.has_field(PROGRESSION_LEVEL_FIELD):
+		# The structural Class Arm/lecture group remains at the same Academic Level
+		# across sessions. Student Progression moves learners to a different Level/group;
+		# Class Arm rollover must not silently promote the structure itself.
+		doc.set(PROGRESSION_LEVEL_FIELD, source_doc.get(PROGRESSION_LEVEL_FIELD))
 	class_arm_api._merge_students(
 		doc,
 		[{"student": student.get("name")} for student in row.get("eligible_students") or []],
