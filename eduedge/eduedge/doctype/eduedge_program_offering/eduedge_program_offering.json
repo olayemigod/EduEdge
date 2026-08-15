@@ -39,7 +39,7 @@
   {"fieldname":"program","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Program","options":"Program","reqd":1},
   {"description":"Native Faculty, School, Department, or School Section inherited from the Program.","fetch_from":"program.department","fieldname":"department","fieldtype":"Link","in_standard_filter":1,"label":"Department / School Section","options":"Department","read_only":1},
   {"fieldname":"academic_year","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Academic Year","options":"Academic Year","reqd":1},
-  {"fieldname":"academic_term","fieldtype":"Link","in_standard_filter":1,"label":"Academic Term","options":"Academic Term"},
+  {"description":"Legacy compatibility only. New Programme Offerings are sessional and must not be term-bound.","fieldname":"academic_term","fieldtype":"Link","hidden":1,"label":"Legacy Academic Term","options":"Academic Term","read_only":1},
   {"fieldname":"student_batch","fieldtype":"Link","in_standard_filter":1,"label":"Student Batch / Cohort","options":"Student Batch Name"},
   {"fieldname":"identity_section","fieldtype":"Section Break","label":"Offering Identity and Delivery"},
   {"fieldname":"offering_title","fieldtype":"Data","in_list_view":1,"label":"Offering Title","reqd":1},
@@ -62,7 +62,7 @@
   {"description":"Deprecated. Program and Student Group are authoritative.","fieldname":"academic_level","fieldtype":"Link","hidden":1,"label":"Legacy Academic Level","options":"EduEdge Academic Level","read_only":1}
  ],
  "links": [],
- "modified": "2026-07-30 00:00:00.000000",
+ "modified": "2026-08-15 16:07:00.000000",
  "modified_by": "Administrator",
  "module": "EduEdge",
  "name": "EduEdge Program Offering",
@@ -74,7 +74,7 @@
   {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"Academic Administrator","share":1,"write":1},
   {"export":1,"print":1,"read":1,"report":1,"role":"Academics User"}
  ],
- "search_fields": "offering_title,offering_code,program,department,school_branch,academic_year,academic_term,study_mode,delivery_mode",
+ "search_fields": "offering_title,offering_code,program,department,school_branch,academic_year,study_mode,delivery_mode",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
