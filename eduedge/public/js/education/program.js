@@ -26,9 +26,38 @@ async function applyProgramTerminology(frm) {
 	if (frm.fields_dict.eduedge_academic_section) {
 		frm.set_df_property("eduedge_academic_section", "label", academicSection);
 	}
-	for (const fieldname of ["program_name", "program_abbreviation", "department", "courses", "eduedge_academic_section"]) {
+	if (frm.fields_dict.eduedge_next_program) {
+		frm.set_df_property("eduedge_next_program", "label", `Next ${programme}`);
+	}
+	if (frm.fields_dict.eduedge_terminal_program) {
+		frm.set_df_property("eduedge_terminal_program", "label", `Terminal ${programme}`);
+	}
+	for (const fieldname of [
+		"program_name", "program_abbreviation", "department", "courses", "eduedge_academic_section",
+		"eduedge_next_program", "eduedge_terminal_program",
+	]) {
 		if (frm.fields_dict[fieldname]) frm.refresh_field(fieldname);
 	}
+}
+
+function setupProgressionQueries(frm) {
+	if (frm.fields_dict.eduedge_next_program) {
+		frm.set_query("eduedge_next_program", () => ({
+			filters: {
+				eduedge_institution: frm.doc.eduedge_institution || "",
+				name: ["!=", frm.doc.name || ""],
+			},
+		}));
+	}
+}
+
+function addProgressionAction(frm) {
+	if (frm.is_new() || !frm.doc.name) return;
+	if (!frm.fields_dict.eduedge_progression_mode) return;
+	frm.add_custom_button(__("Student Progression"), () => {
+		const params = new URLSearchParams({ program: frm.doc.name });
+		window.location.href = `/app/eduedge-student-progression?${params.toString()}`;
+	}, __("Academic Progression"));
 }
 
 frappe.ui.form.on("Program", {
@@ -37,17 +66,36 @@ frappe.ui.form.on("Program", {
 			query: "eduedge.api.academic_context.institution_scoped_query",
 			filters: { institution: frm.doc.eduedge_institution },
 		}));
+		setupProgressionQueries(frm);
 	},
 
 	refresh(frm) {
 		applyProgramTerminology(frm);
+		setupProgressionQueries(frm);
+		addProgressionAction(frm);
 	},
 
 	eduedge_institution(frm) {
 		const updates = {};
 		if (frm.doc.department) updates.department = null;
 		if (frm.doc.eduedge_academic_section) updates.eduedge_academic_section = null;
+		if (frm.doc.eduedge_next_program) updates.eduedge_next_program = null;
 		const apply = Object.keys(updates).length ? frm.set_value(updates) : Promise.resolve();
-		Promise.resolve(apply).finally(() => applyProgramTerminology(frm));
+		Promise.resolve(apply).finally(() => {
+			setupProgressionQueries(frm);
+			applyProgramTerminology(frm);
+		});
+	},
+
+	eduedge_progression_mode(frm) {
+		if (frm.doc.eduedge_progression_mode !== "Program Promotion" && frm.doc.eduedge_next_program) {
+			frm.set_value("eduedge_next_program", null);
+		}
+	},
+
+	eduedge_terminal_program(frm) {
+		if (frm.doc.eduedge_terminal_program && frm.doc.eduedge_next_program) {
+			frm.set_value("eduedge_next_program", null);
+		}
 	},
 });
