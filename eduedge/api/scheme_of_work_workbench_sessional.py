@@ -76,6 +76,31 @@ def _term_options(offering: frappe._dict | None) -> list[dict]:
 	]
 
 
+def _historical_term_option(branch: str, offering: str, academic_term: str) -> dict | None:
+	if not branch or not offering or not academic_term:
+		return None
+	row = frappe.db.get_value(
+		scheme_api.SCHEME_DOCTYPE,
+		{
+			"school_branch": branch,
+			"program_offering": offering,
+			"academic_term": academic_term,
+		},
+		["academic_term", "period_start_date", "period_end_date"],
+		as_dict=True,
+	)
+	if not row:
+		return None
+	return {
+		"value": row.academic_term,
+		"label": f"{row.academic_term} · Historical",
+		"start_date": row.period_start_date,
+		"end_date": row.period_end_date,
+		"historical_scheme": True,
+		"legacy_offering": False,
+	}
+
+
 def _term_scoped_schemes(
 	*,
 	school_branch: str,
@@ -153,6 +178,7 @@ def get_scheme_workbench(
 		page_length=1,
 	)
 	resolved_offering = str(payload.get("filters", {}).get("program_offering") or "").strip()
+	branch = str(payload.get("filters", {}).get("school_branch") or "").strip()
 	offering = _offering_row(resolved_offering)
 	terms = _term_options(offering)
 	term_names = {row["value"] for row in terms}
@@ -162,12 +188,19 @@ def get_scheme_workbench(
 			frappe.throw(_("Historical term-bound Offering can only use its recorded Academic Term."), frappe.ValidationError)
 		requested_term = offering.academic_term
 	elif requested_term and requested_term not in term_names:
-		frappe.throw(
-			_("Select an Academic Term / Semester configured in the Institution Academic Calendar for this Session."),
-			frappe.ValidationError,
-		)
+		# Do not make approved academic history disappear merely because the current
+		# Institution Calendar was later disabled or reconfigured. Such a Term is
+		# viewable as historical but is never made available for new planning.
+		historical = _historical_term_option(branch, resolved_offering, requested_term)
+		if historical:
+			terms.append(historical)
+			term_names.add(requested_term)
+		else:
+			frappe.throw(
+				_("Select an Academic Term / Semester configured in the Institution Academic Calendar for this Session."),
+				frappe.ValidationError,
+			)
 
-	branch = str(payload.get("filters", {}).get("school_branch") or "").strip()
 	group = str(payload.get("filters", {}).get("student_group") or "").strip()
 	subject = str(payload.get("filters", {}).get("course") or "").strip()
 	schemes = _term_scoped_schemes(
@@ -188,9 +221,11 @@ def get_scheme_workbench(
 		"has_more": bool(schemes["has_more"]),
 	}
 	payload.setdefault("filters", {})["academic_term"] = requested_term
+	selected_term = next((row for row in terms if row["value"] == requested_term), None)
 	payload.setdefault("permissions", {})["can_create_in_context"] = bool(
 		payload.get("permissions", {}).get("can_create_in_context")
 		and requested_term
+		and not (selected_term or {}).get("historical_scheme")
 	)
-	payload["selected_term"] = next((row for row in terms if row["value"] == requested_term), None)
+	payload["selected_term"] = selected_term
 	return payload
