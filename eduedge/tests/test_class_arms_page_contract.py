@@ -21,17 +21,22 @@ class TestClassArmsPageContract(unittest.TestCase):
 		self.assertIn("createEduEdgeClassArmsApp", bundle)
 		self.assertIn("window.EduEdgeClassArms", bundle)
 
-	def test_manager_uses_native_student_group_truth(self):
+	def test_manager_uses_native_student_group_as_period_truth(self):
 		api = (APP / "api" / "class_arms.py").read_text(encoding="utf-8")
 		for token in (
 			'frappe.get_list(\n\t\t"Student Group"',
 			'frappe.new_doc("Student Group")',
 			'doc.append(\n\t\t\t"students"',
-			'doc.append("instructors"',
+			"generate_operational_group_name",
+			"CLASS_ARM_FIELD",
+			"OFFERING_FIELD",
 			"doc.save()",
 			'require_eduedge_access(feature_key="academics", action="save_class_arm")',
 		):
 			self.assertIn(token, api)
+		self.assertNotIn('doc.append("instructors"', api)
+		self.assertNotIn('doc.set("instructors", [])', api)
+		self.assertIn("Teaching responsibility is managed through Instructor Assignments", api)
 		self.assertNotIn("ignore_permissions", api)
 		self.assertNotIn("frappe.db.set_value", api)
 
@@ -46,7 +51,7 @@ class TestClassArmsPageContract(unittest.TestCase):
 		):
 			self.assertIn(token, api)
 
-	def test_page_supports_context_cascade_student_roster_and_assignment_handoff(self):
+	def test_page_supports_context_cascade_student_roster_assignment_handoff_and_rollover(self):
 		component = (APP / "public" / "js" / "eduedge_class_arms" / "EduEdgeClassArms.vue").read_text(encoding="utf-8")
 		for token in (
 			"draftBranchChanged",
@@ -55,6 +60,9 @@ class TestClassArmsPageContract(unittest.TestCase):
 			"Only enabled students with submitted enrollment in this exact Programme Offering and Branch",
 			"toggleStudent",
 			"save_class_arm",
+			"Prepare Next Period",
+			"preview_class_arm_rollover",
+			"execute_class_arm_rollover",
 			"openInstructorAssignments",
 			"/app/eduedge-instructor-assignments",
 			"Assign Instructor",
@@ -63,6 +71,7 @@ class TestClassArmsPageContract(unittest.TestCase):
 			self.assertIn(token, component)
 		self.assertNotIn("Create an enabled Instructor Branch Assignment", component)
 		self.assertNotIn("toggleInstructor", component)
+		self.assertNotIn("instructors: JSON.stringify", component)
 
 	def test_academic_operations_uses_edgesuite_class_arm_workflow(self):
 		component = (APP / "public" / "js" / "eduedge_academic_operations" / "EduEdgeAcademicOperations.vue").read_text(encoding="utf-8")
