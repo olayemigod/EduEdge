@@ -6,6 +6,7 @@ from frappe.utils import cint
 
 from eduedge.education import academic_validation as base
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.academic_progression import validate_program_progression
 from eduedge.education.institution_department_root import (
 	INSTITUTION_ROOT_FLAG,
 	INSTITUTION_ROOT_OWNER,
@@ -120,6 +121,8 @@ def before_validate_program(doc, method=None) -> None:
 		)
 	if department:
 		_validate_department(department, institution)
+
+	validate_program_progression(doc)
 
 	if not doc.is_new() and frappe.db.exists("EduEdge Program Offering", {"program": doc.name}):
 		base._block_reassignment(doc, INSTITUTION_FIELD, _("Institution"))
