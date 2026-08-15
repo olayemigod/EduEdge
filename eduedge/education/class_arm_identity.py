@@ -5,11 +5,11 @@ import hashlib
 import frappe
 from frappe import _
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-from frappe.utils import cint, getdate
+from frappe.utils import cint
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
+from eduedge.education.offerings import assert_branch_access
 
 CLASS_ARM_DOCTYPE = "EduEdge Class Arm"
 CLASS_ARM_FIELD = "eduedge_class_arm"
@@ -36,7 +36,7 @@ def ensure_class_arm_foundation() -> None:
 					"in_list_view": 1,
 					"in_standard_filter": 1,
 					"insert_after": OFFERING_FIELD,
-					"description": "Reusable Class Arm identity shared by this Class Arm across academic periods.",
+					"description": "Reusable Class Arm identity shared by this Class Arm across Academic Sessions.",
 				},
 				{
 					"fieldname": DISPLAY_NAME_FIELD,
@@ -45,16 +45,16 @@ def ensure_class_arm_foundation() -> None:
 					"read_only": 1,
 					"in_list_view": 1,
 					"insert_after": CLASS_ARM_FIELD,
-					"description": "School-facing Class Arm label. The native Student Group name remains the technical operational identity.",
+					"description": "School-facing Class Arm label. The native Student Group name remains the technical session identity.",
 				},
 				{
 					"fieldname": PREVIOUS_GROUP_FIELD,
 					"fieldtype": "Link",
-					"label": "Previous Period Class Arm",
+					"label": "Previous Session Class Arm",
 					"options": "Student Group",
 					"read_only": 1,
 					"insert_after": DISPLAY_NAME_FIELD,
-					"description": "Previous operational Student Group in this Class Arm lineage.",
+					"description": "Previous Academic Session Student Group in this Class Arm lineage.",
 				},
 			],
 		},
@@ -121,30 +121,18 @@ def generate_operational_group_name(
 	academic_year: str | None = None,
 	academic_term: str | None = None,
 ) -> str:
+	"""Generate a collision-safe technical Student Group name per session.
+
+	`academic_term` remains in the signature only for compatibility with older callers;
+	it deliberately does not participate in the new identity.
+	"""
 	friendly_name = clean_class_arm_name(friendly_name) or "Class Arm"
-	context = " · ".join(value for value in (academic_year, academic_term) if value)
-	seed = "::".join(str(value or "") for value in (branch, program, offering, friendly_name.casefold()))
+	seed = "::".join(str(value or "") for value in (branch, program, offering, academic_year, friendly_name.casefold()))
 	digest = hashlib.sha1(seed.encode()).hexdigest()[:10].upper()
-	base = friendly_name[:72]
-	if context:
-		base = f"{base} · {context[:42]}"
+	base = friendly_name[:82]
+	if academic_year:
+		base = f"{base} · {str(academic_year)[:42]}"
 	return f"{base} · {digest}"[:140]
-
-
-def destination_is_later(source_offering, destination_offering) -> bool:
-	source_start, source_end = resolve_program_offering_period_dates(source_offering)
-	destination_start, destination_end = resolve_program_offering_period_dates(destination_offering)
-	source_start = getdate(source_start) if source_start else None
-	source_end = getdate(source_end) if source_end else None
-	destination_start = getdate(destination_start) if destination_start else None
-	destination_end = getdate(destination_end) if destination_end else None
-	if source_end and destination_start:
-		return destination_start > source_end
-	if source_start and destination_start:
-		return destination_start > source_start
-	if source_end and destination_end:
-		return destination_end > source_end
-	return False
 
 
 def validate_student_group_class_arm(doc) -> None:
@@ -171,20 +159,28 @@ def validate_student_group_class_arm(doc) -> None:
 	if meta.has_field(DISPLAY_NAME_FIELD):
 		doc.set(DISPLAY_NAME_FIELD, identity.class_arm_name)
 
-	if not doc.is_new():
-		fields = [BRANCH_FIELD, OFFERING_FIELD, "program", "academic_year", "academic_term", CLASS_ARM_FIELD]
-		fields = [field for field in fields if meta.has_field(field)]
-		original = frappe.db.get_value("Student Group", doc.name, fields, as_dict=True) or {}
-		for fieldname in fields:
-			old = original.get(fieldname)
-			if old and old != doc.get(fieldname):
-				frappe.throw(
-					_("Academic context cannot be changed on an existing Class Arm period. Prepare a new period instead."),
-					frappe.ValidationError,
-				)
+	if doc.is_new():
+		if doc.get("academic_term"):
+			frappe.throw(
+				_("Class Arms are sessional. Do not create a separate Class Arm for a Term / Semester."),
+				frappe.ValidationError,
+			)
+		return
+
+	fields = [BRANCH_FIELD, OFFERING_FIELD, "program", "academic_year", "academic_term", CLASS_ARM_FIELD]
+	fields = [field for field in fields if meta.has_field(field)]
+	original = frappe.db.get_value("Student Group", doc.name, fields, as_dict=True) or {}
+	for fieldname in fields:
+		old = original.get(fieldname)
+		if old != doc.get(fieldname) and (old or doc.get(fieldname)):
+			frappe.throw(
+				_("Academic context cannot be changed on an existing Class Arm session. Prepare the next Academic Session instead."),
+				frappe.ValidationError,
+			)
 
 
 def backfill_class_arm_identities() -> None:
+	"""Attach reusable identities to existing Student Groups without rewriting history."""
 	if not frappe.db.exists("DocType", CLASS_ARM_DOCTYPE):
 		return
 	meta = frappe.get_meta("Student Group")
