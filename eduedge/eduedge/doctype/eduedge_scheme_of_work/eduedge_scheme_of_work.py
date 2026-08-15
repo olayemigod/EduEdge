@@ -16,6 +16,7 @@ from eduedge.education.curriculum_fields import (
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
+from eduedge.services.academic_calendar import assert_institution_calendar_context
 
 SCHEME_ACTION_FLAG = "in_eduedge_scheme_of_work_action"
 SCHEME_STATUSES = {"Draft", "Approved", "Retired"}
@@ -24,6 +25,7 @@ IMMUTABLE_AFTER_APPROVAL = (
 	"program_offering",
 	"student_group",
 	"course",
+	"academic_term",
 	"version_no",
 	"supersedes_scheme",
 	"items",
@@ -119,10 +121,45 @@ class EduEdgeSchemeofWork(Document):
 		self.school_branch = offering.school_branch
 		self.institution = offering.institution
 		self.academic_year = offering.academic_year
-		self.academic_term = offering.academic_term or None
-		period_start, period_end = resolve_program_offering_period_dates(offering)
-		self.period_start_date = period_start
-		self.period_end_date = period_end
+
+		# Grandfather old term-bound Programme Offerings exactly as recorded. New
+		# sessional Programme Offerings intentionally have no Term; the Scheme is the
+		# term-scoped object and resolves its period from the Institution Calendar.
+		if offering.academic_term:
+			if self.academic_term and self.academic_term != offering.academic_term:
+				frappe.throw(
+					_("Scheme Academic Term must match this historical term-bound Programme Offering."),
+					frappe.ValidationError,
+				)
+			self.academic_term = offering.academic_term
+			period_start, period_end = resolve_program_offering_period_dates(offering)
+			self.period_start_date = period_start
+			self.period_end_date = period_end
+		else:
+			before = self.get_doc_before_save()
+			if not self.academic_term and before and before.academic_term:
+				self.academic_term = before.academic_term
+			if not self.academic_term:
+				# Never manufacture a Term for previously-approved history. Old history
+				# may remain readable, but every new/editable sessional Scheme must make
+				# its Term explicit.
+				if before and before.status in {"Approved", "Retired"} and not before.academic_term:
+					self.period_start_date = before.period_start_date
+					self.period_end_date = before.period_end_date
+					self._offering = offering
+					return
+				frappe.throw(
+					_("Select the Academic Term / Semester for this Scheme of Work."),
+					frappe.ValidationError,
+				)
+			calendar_context = assert_institution_calendar_context(
+				branch=offering.school_branch,
+				academic_year=offering.academic_year,
+				academic_term=self.academic_term,
+			)
+			self.academic_term = calendar_context.get("academic_term") or self.academic_term
+			self.period_start_date = calendar_context.get("period_start_date")
+			self.period_end_date = calendar_context.get("period_end_date")
 		self._offering = offering
 
 	def _validate_student_group(self) -> None:
@@ -142,7 +179,7 @@ class EduEdgeSchemeofWork(Document):
 		if group.academic_year and group.academic_year != self.academic_year:
 			frappe.throw(_("Class Arm Academic Session must match the Class / Programme Offering."), frappe.ValidationError)
 		if group.academic_term and group.academic_term != self.academic_term:
-			frappe.throw(_("Class Arm Term must match the Class / Programme Offering."), frappe.ValidationError)
+			frappe.throw(_("Historical Class Arm Term must match the Scheme Academic Term."), frappe.ValidationError)
 		if meta.has_field(OFFERING_FIELD) and group.get(OFFERING_FIELD) and group.get(OFFERING_FIELD) != self.program_offering:
 			frappe.throw(_("Class Arm must belong to the selected Class / Programme Offering."), frappe.ValidationError)
 		self._student_group = group
@@ -214,16 +251,16 @@ class EduEdgeSchemeofWork(Document):
 		previous = frappe.db.get_value(
 			"EduEdge Scheme of Work",
 			self.supersedes_scheme,
-			["status", "school_branch", "program_offering", "student_group", "course", "version_no"],
+			["status", "school_branch", "program_offering", "student_group", "course", "academic_term", "version_no"],
 			as_dict=True,
 		)
 		if not previous or previous.status not in {"Approved", "Retired"}:
 			frappe.throw(_("A new Scheme version must supersede an Approved or Retired Scheme."), frappe.ValidationError)
 		if any(
 			str(previous.get(fieldname) or "") != str(self.get(fieldname) or "")
-			for fieldname in ("school_branch", "program_offering", "student_group", "course")
+			for fieldname in ("school_branch", "program_offering", "student_group", "course", "academic_term")
 		):
-			frappe.throw(_("A new Scheme version must keep the same Branch, Class, Class Arm and Subject context."), frappe.ValidationError)
+			frappe.throw(_("A new Scheme version must keep the same Branch, Class, Class Arm, Subject and Academic Term context."), frappe.ValidationError)
 		if cint(self.version_no) <= cint(previous.version_no):
 			frappe.throw(_("A new Scheme Version must be greater than the previous version."), frappe.ValidationError)
 
@@ -234,6 +271,7 @@ class EduEdgeSchemeofWork(Document):
 				"school_branch": self.school_branch,
 				"program_offering": self.program_offering,
 				"course": self.course,
+				"academic_term": self.academic_term or ["is", "not set"],
 				"version_no": cint(self.version_no),
 				"name": ["!=", self.name or ""],
 			},
@@ -241,7 +279,7 @@ class EduEdgeSchemeofWork(Document):
 			limit_page_length=20,
 		)
 		if any(str(row.student_group or "") == str(self.student_group or "") for row in rows):
-			frappe.throw(_("This Scheme context already has the selected Version number."), frappe.DuplicateEntryError)
+			frappe.throw(_("This Scheme context already has the selected Version number for this Academic Term."), frappe.DuplicateEntryError)
 
 	def _build_title(self) -> str:
 		offering = self._offering.offering_title or self.program_offering
@@ -249,7 +287,7 @@ class EduEdgeSchemeofWork(Document):
 		group = ""
 		if self.student_group:
 			group = getattr(getattr(self, "_student_group", None), "student_group_name", None) or self.student_group
-		parts = [course, offering, group, _("Version {0}").format(cint(self.version_no))]
+		parts = [course, offering, group, self.academic_term, _("Version {0}").format(cint(self.version_no))]
 		return " · ".join(str(value) for value in parts if value)
 
 
