@@ -57,7 +57,7 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		self.assertNotIn("frappe.db.set_value", api)
 		self.assertNotIn("Academic Level", api)
 
-	def test_dedicated_page_exposes_institution_calendar_capacity_and_identity(self):
+	def test_dedicated_page_exposes_sessional_context_calendar_capacity_and_identity(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text(encoding="utf-8")
 		for token in (
 			"<EdgeAppShell",
@@ -65,6 +65,7 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 			"admission_status",
 			"enrollment_status",
 			"identity_locked",
+			"identityFieldsLocked",
 			"draftInstitutionChanged",
 			"draftBranchChanged",
 			"draftProgramChanged",
@@ -73,11 +74,15 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 			"All permitted Branches in Institution",
 			"Resolved Institution Calendar",
 			"draftDepartmentName",
+			"Not part of Programme Offering identity",
+			"Full Academic Session",
 		):
 			self.assertIn(token, component)
-		self.assertIn(':disabled="draft.identity_locked"', component)
+		self.assertIn(':disabled="identityFieldsLocked"', component)
 		self.assertIn('this.filters.branch = ""', component)
 		self.assertIn('frappe.set_route("Form", "EduEdge Program Offering", name)', component)
+		self.assertNotIn('v-model="filters.academic_term"', component)
+		self.assertNotIn('v-model="draft.academic_term"', component)
 		self.assertNotIn("academicLevel", component)
 
 	def test_calendar_title_prefers_human_readable_session_over_internal_hash(self):
