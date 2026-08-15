@@ -36,11 +36,12 @@ class TestClassArmRefactorContract(unittest.TestCase):
         self.assertIn("CLASS_ARM_FIELD", source)
         self.assertIn("OFFERING_FIELD", source)
 
-    def test_existing_period_context_is_server_immutable(self):
+    def test_existing_session_context_is_server_immutable_and_legacy_history_is_protected(self):
         source = (APP / "api/class_arms.py").read_text(encoding="utf-8")
         identity = (APP / "education/class_arm_identity.py").read_text(encoding="utf-8")
-        self.assertIn("cannot be moved to another Branch / Campus", source)
-        self.assertIn("cannot be moved to another Programme Offering", source)
+        self.assertIn("An existing Class Arm cannot be moved to another Branch, Offering, or Academic Session", source)
+        self.assertIn("Legacy term-bound Class Arms are historical", source)
+        self.assertIn('"academic_term": None', source)
         self.assertIn("Academic context cannot be changed on an existing Class Arm period", identity)
         for fieldname in ("BRANCH_FIELD", "OFFERING_FIELD", '"program"', '"academic_year"', '"academic_term"', "CLASS_ARM_FIELD"):
             self.assertIn(fieldname, identity)
@@ -49,21 +50,31 @@ class TestClassArmRefactorContract(unittest.TestCase):
         api = (APP / "api/class_arms.py").read_text(encoding="utf-8")
         ui = (APP / "public/js/eduedge_class_arms/EduEdgeClassArms.vue").read_text(encoding="utf-8")
         self.assertIn("Teaching responsibility is managed through Instructor Assignments", api)
+        self.assertIn("if instructor_rows:", api)
         self.assertNotIn('instructors: JSON.stringify', ui)
         self.assertNotIn('doc.set("instructors", [])', api)
-        self.assertIn("Existing native instructor child rows are deliberately left untouched", api)
+        self.assertNotIn('doc.append("instructors"', api)
+        self.assertIn("openInstructorAssignments", ui)
 
-    def test_rollover_is_post_only_later_period_and_enrollment_revalidated(self):
+    def test_session_rollover_is_post_only_later_session_and_enrollment_revalidated(self):
         api = (APP / "api/class_arms.py").read_text(encoding="utf-8")
-        for endpoint in ("preview_class_arm_rollover", "execute_class_arm_rollover"):
-            self.assertIn(f"def {endpoint}", api)
-        self.assertGreaterEqual(api.count('@frappe.whitelist(methods=["POST"])'), 3)
-        self.assertIn("destination_is_later", api)
+        rollover = (APP / "api/class_arm_session_rollover.py").read_text(encoding="utf-8")
+        ui = (APP / "public/js/eduedge_class_arms/EduEdgeClassArms.vue").read_text(encoding="utf-8")
+        for endpoint in (
+            "execute_selected_class_arm_session_rollover",
+            "preview_single_class_arm_session_rollover",
+            "execute_single_class_arm_session_rollover",
+        ):
+            self.assertIn(f"def {endpoint}", rollover)
+        self.assertGreaterEqual(rollover.count('@frappe.whitelist(methods=["POST"])'), 3)
+        self.assertIn("Select a later destination Academic Session", api)
         self.assertIn("Program Enrollment", api)
-        self.assertIn("docstatus", api)
-        self.assertIn("existing_student_group", api)
+        self.assertIn('"docstatus": 1', api)
+        self.assertIn("enrollment_filters[OFFERING_FIELD] = context.name", api)
         self.assertIn("PREVIOUS_GROUP_FIELD", api)
-        self.assertIn("Source remains unchanged", (APP / "public/js/eduedge_class_arms/EduEdgeClassArms.vue").read_text(encoding="utf-8"))
+        self.assertIn("previous_student_group=source_doc.name", rollover)
+        self.assertIn("Source Session records", ui)
+        self.assertIn("historical assessments/results/CBT records will remain unchanged", ui)
 
     def test_branch_security_hooks_cover_class_arm_master(self):
         hooks = (APP / "hooks.py").read_text(encoding="utf-8")
