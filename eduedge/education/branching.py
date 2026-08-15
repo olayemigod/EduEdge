@@ -20,6 +20,7 @@ from eduedge.education.academic_progression import (
 )
 from eduedge.education.class_arm_identity import validate_student_group_class_arm
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.enrollment_progression_fields import PROGRESSION_SOURCE_FIELD
 from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import (
 	get_context_branch,
@@ -86,6 +87,24 @@ def before_validate_program_enrollment(doc, method=None) -> None:
 	_validate_student_enrollment_institution(doc, student_branch)
 	validate_program_enrollment(doc)
 	validate_progression_level_on_enrollment(doc)
+	_prepare_native_required_courses_for_progression(doc)
+
+
+def _prepare_native_required_courses_for_progression(doc) -> None:
+	"""Let Frappe Education populate required Programme courses on first insert.
+
+	Student Progression creates a destination Enrollment draft. It must not silently
+	enroll every optional Programme Course. Clearing the freshly constructed child
+	table here lets native ProgramEnrollment.validate() populate only required courses.
+	After the draft exists, administrators may still add permitted optional courses
+	through the normal Enrollment workflow before submission.
+	"""
+	if not doc.is_new() or not doc.meta.has_field(PROGRESSION_SOURCE_FIELD):
+		return
+	if not doc.get(PROGRESSION_SOURCE_FIELD):
+		return
+	if doc.meta.has_field("courses"):
+		doc.set("courses", [])
 
 
 def before_validate_student_group(doc, method=None) -> None:
