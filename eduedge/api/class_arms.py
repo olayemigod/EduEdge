@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, getdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.class_arm_identity import (
@@ -13,12 +14,11 @@ from eduedge.education.class_arm_identity import (
 	DISPLAY_NAME_FIELD,
 	PREVIOUS_GROUP_FIELD,
 	clean_class_arm_name,
-	destination_is_later,
 	generate_operational_group_name,
 	get_or_create_class_arm,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.education.offerings import assert_branch_access
+from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -85,25 +85,12 @@ def _resolve_branch(branch: str | None) -> tuple[str, dict, list[dict]]:
 def _student_group_fields() -> list[str]:
 	meta = frappe.get_meta("Student Group")
 	fields = [
-		"name",
-		"student_group_name",
-		"group_based_on",
-		"program",
-		"course",
-		"academic_year",
-		"academic_term",
-		"batch",
-		"max_strength",
-		"disabled",
-		"modified",
+		"name", "student_group_name", "group_based_on", "program", "course",
+		"academic_year", "academic_term", "batch", "max_strength", "disabled", "modified",
 	]
 	for fieldname in (
-		DISPLAY_NAME_FIELD,
-		CLASS_ARM_FIELD,
-		PREVIOUS_GROUP_FIELD,
-		BRANCH_FIELD,
-		INSTITUTION_FIELD,
-		OFFERING_FIELD,
+		DISPLAY_NAME_FIELD, CLASS_ARM_FIELD, PREVIOUS_GROUP_FIELD,
+		BRANCH_FIELD, INSTITUTION_FIELD, OFFERING_FIELD,
 	):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
@@ -144,13 +131,14 @@ def _attach_group_summary(rows: list[dict]) -> None:
 		row["class_arm_identity"] = dict(identity) if identity else None
 		row["student_count"] = counts.get(row.get("name"), 0)
 		row["instructor_names"] = []
+		row["legacy_term_bound"] = bool(row.get("academic_term"))
 
 
 @frappe.whitelist()
 def get_class_arms_page(
 	branch: str | None = None,
 	academic_year: str | None = None,
-	academic_term: str | None = None,
+	academic_term: str | None = None,  # accepted only for old bookmarked URLs
 	search: str | None = None,
 	start: int | str = 0,
 	page_length: int | str = DEFAULT_PAGE_LENGTH,
@@ -162,8 +150,6 @@ def get_class_arms_page(
 	filters: dict[str, Any] = {BRANCH_FIELD: branch}
 	if str(academic_year or "").strip():
 		filters["academic_year"] = str(academic_year).strip()
-	if str(academic_term or "").strip():
-		filters["academic_term"] = str(academic_term).strip()
 	search = str(search or "").strip()
 	or_filters = None
 	if search:
@@ -179,7 +165,7 @@ def get_class_arms_page(
 		filters=filters,
 		or_filters=or_filters,
 		fields=_student_group_fields(),
-		order_by="disabled asc, academic_year desc, academic_term desc, student_group_name asc",
+		order_by="disabled asc, academic_year desc, student_group_name asc, modified desc",
 		start=start,
 		page_length=page_length + 1,
 	)
@@ -193,7 +179,6 @@ def get_class_arms_page(
 		"filters": {
 			"branch": branch,
 			"academic_year": str(academic_year or "").strip(),
-			"academic_term": str(academic_term or "").strip(),
 			"search": search,
 		},
 		"paging": {
@@ -214,6 +199,7 @@ def _get_offering(
 	branch: str,
 	*,
 	require_enrollment: bool = True,
+	allow_legacy_term: bool = False,
 	require_active: bool = True,
 ) -> frappe._dict:
 	doc = frappe.get_doc("EduEdge Program Offering", offering)
@@ -225,6 +211,11 @@ def _get_offering(
 		frappe.throw(_("Select an active Programme Offering."), frappe.ValidationError)
 	if require_enrollment and not cint(doc.enrollment_enabled):
 		frappe.throw(_("Select a Programme Offering that is available for enrollment."), frappe.ValidationError)
+	if doc.academic_term and not allow_legacy_term:
+		frappe.throw(
+			_("Select a sessional Programme Offering. Term-bound Offerings are retained only as legacy academic history."),
+			frappe.ValidationError,
+		)
 	return frappe._dict(
 		{
 			"name": doc.name,
@@ -241,14 +232,23 @@ def _get_offering(
 			"delivery_mode": doc.delivery_mode,
 			"start_date": doc.start_date,
 			"end_date": doc.end_date,
+			"is_active": cint(doc.is_active),
+			"enrollment_enabled": cint(doc.enrollment_enabled),
 		}
 	)
 
 
-def _offering_options(branch: str, program: str | None = None) -> list[dict]:
+def _offering_options(branch: str, academic_year: str | None = None, program: str | None = None) -> list[dict]:
 	if not frappe.has_permission("EduEdge Program Offering", "read"):
 		return []
-	filters: dict[str, Any] = {"school_branch": branch, "is_active": 1, "enrollment_enabled": 1}
+	filters: dict[str, Any] = {
+		"school_branch": branch,
+		"is_active": 1,
+		"enrollment_enabled": 1,
+		"academic_term": ["is", "not set"],
+	}
+	if academic_year:
+		filters["academic_year"] = academic_year
 	if program:
 		filters["program"] = program
 	rows = frappe.get_list(
@@ -256,10 +256,9 @@ def _offering_options(branch: str, program: str | None = None) -> list[dict]:
 		filters=filters,
 		fields=[
 			"name", "offering_title", "offering_code", "institution", "program", "department",
-			"academic_year", "academic_term", "student_batch", "study_mode", "delivery_mode",
-			"start_date", "end_date",
+			"academic_year", "student_batch", "study_mode", "delivery_mode", "start_date", "end_date",
 		],
-		order_by="start_date asc, academic_year asc, offering_title asc",
+		order_by="academic_year desc, program asc, offering_title asc",
 		page_length=MAX_OPTION_ROWS,
 	)
 	return [dict(row) for row in rows]
@@ -310,8 +309,6 @@ def _eligible_students(branch: str, context: frappe._dict, class_arm: str | None
 	enrollment_meta = frappe.get_meta("Program Enrollment")
 	if enrollment_meta.has_field(OFFERING_FIELD):
 		enrollment_filters[OFFERING_FIELD] = context.name
-	if context.academic_term:
-		enrollment_filters["academic_term"] = context.academic_term
 	if context.student_batch:
 		enrollment_filters["student_batch_name"] = context.student_batch
 	enrollments = frappe.get_list(
@@ -325,7 +322,7 @@ def _eligible_students(branch: str, context: frappe._dict, class_arm: str | None
 		student_names.extend(
 			frappe.get_all(
 				"Student Group Student",
-				filters={"parent": class_arm, "parenttype": "Student Group", "active": 1},
+				filters={"parent": class_arm, "parenttype": "Student Group"},
 				pluck="student",
 				limit_page_length=MAX_OPTION_ROWS,
 			)
@@ -361,12 +358,27 @@ def get_class_arm_options(branch: str | None = None, offering: str | None = None
 		"selected_branch": selected_branch,
 		"allowed_branches": branches,
 		"offerings": _offering_options(branch),
+		"academic_years": _academic_year_options(),
 		"context": dict(context),
 		"class_arm_identities": [dict(row) for row in identities],
 		"courses": _course_options(context.get("program")),
 		"students": _eligible_students(branch, context, class_arm) if context else [],
 		"instructors": [],
 	}
+
+
+def _academic_year_options() -> list[dict]:
+	if not frappe.has_permission("Academic Year", "read"):
+		return []
+	return [
+		dict(row)
+		for row in frappe.get_list(
+			"Academic Year",
+			fields=["name", "year_start_date", "year_end_date"],
+			order_by="year_start_date desc, name desc",
+			page_length=MAX_OPTION_ROWS,
+		)
+	]
 
 
 @frappe.whitelist()
@@ -385,6 +397,7 @@ def get_class_arm(name: str) -> dict:
 			["name", "class_arm_name", "class_arm_code", "default_capacity", "enabled"],
 			as_dict=True,
 		)
+	legacy = bool(doc.academic_term)
 	return {
 		"name": doc.name,
 		"display_name": identity.class_arm_name if identity else (doc.get(DISPLAY_NAME_FIELD) or doc.student_group_name or doc.name),
@@ -402,15 +415,13 @@ def get_class_arm(name: str) -> dict:
 		"course": doc.course,
 		"max_strength": cint(doc.max_strength),
 		"disabled": cint(doc.disabled),
+		"legacy_term_bound": legacy,
 		"students": [
 			{"student": row.student, "student_name": row.student_name, "group_roll_number": row.group_roll_number, "active": cint(row.active)}
 			for row in doc.get("students") or []
 		],
-		"instructors": [
-			{"instructor": row.instructor, "instructor_name": row.instructor_name}
-			for row in doc.get("instructors") or []
-		],
-		"can_write": bool(doc.has_permission("write")),
+		"instructors": [],
+		"can_write": bool(doc.has_permission("write") and not legacy),
 	}
 
 
@@ -432,6 +443,8 @@ def _assert_unique(rows: list[dict], fieldname: str, label: str) -> None:
 
 
 def _set_operational_context(doc, context: frappe._dict, identity, *, previous_student_group: str | None = None) -> None:
+	if context.academic_term:
+		frappe.throw(_("Class Arms require a sessional Programme Offering."), frappe.ValidationError)
 	values = {
 		BRANCH_FIELD: context.school_branch,
 		INSTITUTION_FIELD: context.institution,
@@ -441,7 +454,7 @@ def _set_operational_context(doc, context: frappe._dict, identity, *, previous_s
 		PREVIOUS_GROUP_FIELD: previous_student_group,
 		"program": context.program,
 		"academic_year": context.academic_year,
-		"academic_term": context.academic_term or None,
+		"academic_term": None,
 		"batch": context.student_batch or None,
 	}
 	for fieldname, value in values.items():
@@ -449,17 +462,29 @@ def _set_operational_context(doc, context: frappe._dict, identity, *, previous_s
 			doc.set(fieldname, value)
 
 
-def _set_students(doc, student_rows: list[dict]) -> None:
-	doc.set("students", [])
+def _merge_students(doc, student_rows: list[dict]) -> None:
+	"""Update a session roster without deleting historical child rows."""
+	selected = {}
 	for row in student_rows:
 		student = str(row.get("student") or row.get("name") or "").strip()
-		if not student:
+		if student:
+			selected[student] = row
+
+	existing = {row.student: row for row in doc.get("students") or [] if row.student}
+	for student, child in existing.items():
+		incoming = selected.pop(student, None)
+		if incoming is None:
+			child.active = 0
 			continue
+		child.active = 1
+		roll = cint(incoming.get("group_roll_number"))
+		child.group_roll_number = roll or None
+	for student, incoming in selected.items():
 		doc.append(
 			"students",
 			{
 				"student": student,
-				"group_roll_number": cint(row.get("group_roll_number")) or None,
+				"group_roll_number": cint(incoming.get("group_roll_number")) or None,
 				"active": 1,
 			},
 		)
@@ -507,26 +532,19 @@ def save_class_arm(
 	if class_arm:
 		doc = frappe.get_doc("Student Group", class_arm)
 		doc.check_permission("write")
+		if doc.academic_term:
+			frappe.throw(
+				_("Legacy term-bound Class Arms are historical. Create or prepare the sessional Class Arm instead of editing this period record."),
+				frappe.ValidationError,
+			)
 		if doc.get(BRANCH_FIELD):
 			assert_branch_access(doc.get(BRANCH_FIELD))
-		if doc.get(BRANCH_FIELD) and doc.get(BRANCH_FIELD) != branch:
-			frappe.throw(_("An existing Class Arm period cannot be moved to another Branch / Campus."), frappe.ValidationError)
-		if doc.get(OFFERING_FIELD) and doc.get(OFFERING_FIELD) != offering:
-			frappe.throw(_("An existing Class Arm period cannot be moved to another Programme Offering. Prepare a new period instead."), frappe.ValidationError)
-		identity_name = doc.get(CLASS_ARM_FIELD)
-		if identity_name:
-			identity = frappe.get_doc(CLASS_ARM_DOCTYPE, identity_name)
-			identity.check_permission("read")
-			if clean_class_arm_name(identity.class_arm_name).casefold() != friendly_name.casefold():
-				frappe.throw(_("Rename the reusable Class Arm identity separately; an operational period cannot change identity."), frappe.ValidationError)
-		else:
-			identity = get_or_create_class_arm(
-				branch=branch,
-				program=context.program,
-				friendly_name=friendly_name,
-				institution=context.institution,
-				default_capacity=capacity,
-			)
+		if doc.get(BRANCH_FIELD) != branch or doc.get(OFFERING_FIELD) != offering:
+			frappe.throw(_("An existing Class Arm cannot be moved to another Branch, Offering, or Academic Session."), frappe.ValidationError)
+		identity = frappe.get_doc(CLASS_ARM_DOCTYPE, doc.get(CLASS_ARM_FIELD))
+		identity.check_permission("read")
+		if clean_class_arm_name(identity.class_arm_name).casefold() != friendly_name.casefold():
+			frappe.throw(_("Rename the reusable Class Arm identity separately; a session record cannot change identity."), frappe.ValidationError)
 	else:
 		if not frappe.has_permission("Student Group", "create"):
 			frappe.throw(_("You are not permitted to create Class Arms."), frappe.PermissionError)
@@ -539,11 +557,11 @@ def save_class_arm(
 		)
 		existing = frappe.db.exists(
 			"Student Group",
-			{CLASS_ARM_FIELD: identity.name, OFFERING_FIELD: context.name},
+			{CLASS_ARM_FIELD: identity.name, OFFERING_FIELD: context.name, "academic_term": ["is", "not set"]},
 		)
 		if existing:
 			frappe.throw(
-				_("{0} already has an operational Class Arm for this Programme Offering.").format(identity.class_arm_name),
+				_("{0} already exists for this Academic Session and Programme Offering.").format(identity.class_arm_name),
 				frappe.DuplicateEntryError,
 			)
 		doc = frappe.new_doc("Student Group")
@@ -553,7 +571,6 @@ def save_class_arm(
 			program=context.program,
 			offering=context.name,
 			academic_year=context.academic_year,
-			academic_term=context.academic_term,
 		)
 
 	_set_operational_context(doc, context, identity, previous_student_group=doc.get(PREVIOUS_GROUP_FIELD))
@@ -561,9 +578,7 @@ def save_class_arm(
 	doc.course = course or None
 	doc.max_strength = capacity
 	doc.disabled = cint(disabled)
-	_set_students(doc, student_rows)
-	# Existing native instructor child rows are deliberately left untouched for historical compatibility.
-	# New Class Arms never receive Instructor rows; EduEdge Instructor Assignment is authoritative.
+	_merge_students(doc, student_rows)
 	doc.save()
 	return {
 		"name": doc.name,
@@ -571,144 +586,262 @@ def save_class_arm(
 		"class_arm_identity": identity.name,
 		"branch": doc.get(BRANCH_FIELD),
 		"offering": doc.get(OFFERING_FIELD),
-		"student_count": len(doc.get("students") or []),
-		"instructor_count": len(doc.get("instructors") or []),
+		"academic_year": doc.academic_year,
+		"student_count": sum(1 for row in doc.get("students") or [] if cint(row.active)),
 		"full_form_route": f"/app/student-group/{doc.name}",
 	}
 
 
-def _rollover_plan(source: str, destination_offering: str) -> dict:
-	_require_read()
-	source_doc = frappe.get_doc("Student Group", source)
-	source_doc.check_permission("read")
-	branch = source_doc.get(BRANCH_FIELD)
-	if not branch:
-		frappe.throw(_("Source Class Arm has no Branch / Campus context."), frappe.ValidationError)
-	assert_branch_access(branch)
-	identity_name = source_doc.get(CLASS_ARM_FIELD)
-	if not identity_name:
-		frappe.throw(_("Source Class Arm has no reusable Class Arm identity. Run migration before rollover."), frappe.ValidationError)
-	identity = frappe.get_doc(CLASS_ARM_DOCTYPE, identity_name)
-	identity.check_permission("read")
-	if not cint(identity.enabled):
-		frappe.throw(_("The reusable Class Arm identity is disabled."), frappe.ValidationError)
+def _source_group_sort_key(row: dict) -> tuple[date, date, str]:
+	offering = row.get(OFFERING_FIELD)
+	start = end = None
+	if offering:
+		start, end = resolve_program_offering_period_dates(offering)
+	return (
+		getdate(end) if end else date.min,
+		getdate(start) if start else date.min,
+		str(row.get("modified") or ""),
+	)
 
-	source_offering_name = source_doc.get(OFFERING_FIELD)
+
+def _select_source_groups(branch: str, academic_year: str) -> list[dict]:
+	rows = [
+		dict(row)
+		for row in frappe.get_list(
+			"Student Group",
+			filters={BRANCH_FIELD: branch, "academic_year": academic_year, "disabled": 0, CLASS_ARM_FIELD: ["is", "set"]},
+			fields=_student_group_fields(),
+			order_by="modified desc",
+			page_length=MAX_OPTION_ROWS,
+		)
+	]
+	by_identity: dict[str, list[dict]] = {}
+	for row in rows:
+		by_identity.setdefault(row.get(CLASS_ARM_FIELD), []).append(row)
+	selected = []
+	for identity, candidates in by_identity.items():
+		sessional = [row for row in candidates if not row.get("academic_term")]
+		if len(sessional) == 1:
+			chosen = sessional[0]
+			chosen["legacy_source"] = False
+			selected.append(chosen)
+			continue
+		if len(sessional) > 1:
+			selected.append({"class_arm_identity": identity, "blocked_reason": "More than one sessional Student Group exists for this Class Arm and Academic Session."})
+			continue
+		chosen = max(candidates, key=_source_group_sort_key)
+		chosen["legacy_source"] = True
+		selected.append(chosen)
+	return selected
+
+
+def _offering_signature(row: dict | frappe._dict) -> tuple[str, str, str, str]:
+	return (
+		str(row.get("program") or ""),
+		str(row.get("student_batch") or ""),
+		str(row.get("study_mode") or ""),
+		str(row.get("delivery_mode") or ""),
+	)
+
+
+def _destination_offerings(branch: str, academic_year: str) -> list[dict]:
+	return _offering_options(branch, academic_year=academic_year)
+
+
+def _match_destination_offering(source_offering: frappe._dict, destinations: list[dict]) -> tuple[dict | None, str | None]:
+	exact = [row for row in destinations if _offering_signature(row) == _offering_signature(source_offering)]
+	if len(exact) == 1:
+		return exact[0], None
+	if len(exact) > 1:
+		return None, "More than one destination Programme Offering matches the source delivery context."
+	program_only = [row for row in destinations if row.get("program") == source_offering.program]
+	if len(program_only) == 1:
+		return program_only[0], None
+	if not program_only:
+		return None, "No active sessional destination Programme Offering exists for this Class / Programme."
+	return None, "More than one destination Programme Offering exists for this Class / Programme; align cohort and delivery mode first."
+
+
+def _rollover_row(source: dict, destinations: list[dict]) -> dict:
+	if source.get("blocked_reason"):
+		return {
+			"class_arm_identity": source.get("class_arm_identity"),
+			"status": "blocked",
+			"reason": source.get("blocked_reason"),
+		}
+	identity = frappe.db.get_value(
+		CLASS_ARM_DOCTYPE,
+		source.get(CLASS_ARM_FIELD),
+		["name", "class_arm_name", "class_arm_code", "program", "enabled"],
+		as_dict=True,
+	)
+	if not identity or not cint(identity.enabled):
+		return {"source": source.get("name"), "status": "blocked", "reason": "Reusable Class Arm identity is missing or disabled."}
+	source_offering_name = source.get(OFFERING_FIELD)
 	if not source_offering_name:
-		frappe.throw(_("Source Class Arm is not linked to a Programme Offering."), frappe.ValidationError)
-	source_context = _get_offering(
+		return {"source": source.get("name"), "display_name": identity.class_arm_name, "status": "blocked", "reason": "Source Class Arm has no Programme Offering."}
+	source_offering = _get_offering(
 		source_offering_name,
-		branch,
+		source.get(BRANCH_FIELD),
 		require_enrollment=False,
+		allow_legacy_term=True,
 		require_active=False,
 	)
-	destination = _get_offering(destination_offering, branch)
-	if destination.institution != source_context.institution or destination.institution != identity.institution:
-		frappe.throw(_("Destination Offering must belong to the same Institution."), frappe.ValidationError)
-	if destination.program != source_context.program or destination.program != identity.program:
-		frappe.throw(_("Destination Offering must be for the same Class / Programme."), frappe.ValidationError)
-	if destination.name == source_context.name or not destination_is_later(source_context, destination):
-		frappe.throw(_("Select a later Programme Offering for this Class Arm."), frappe.ValidationError)
-
+	destination, reason = _match_destination_offering(source_offering, destinations)
+	if reason:
+		return {
+			"source": source.get("name"),
+			"class_arm_identity": identity.name,
+			"display_name": identity.class_arm_name,
+			"program": identity.program,
+			"status": "blocked",
+			"legacy_source": bool(source.get("legacy_source")),
+			"reason": reason,
+		}
 	existing = frappe.db.exists(
 		"Student Group",
-		{CLASS_ARM_FIELD: identity.name, OFFERING_FIELD: destination.name},
+		{CLASS_ARM_FIELD: identity.name, OFFERING_FIELD: destination["name"], "academic_term": ["is", "not set"]},
 	)
-	source_students = [row.student for row in source_doc.get("students") or [] if row.student and cint(row.active)]
-	eligible_rows = _eligible_students(branch, destination)
+	source_students = frappe.get_all(
+		"Student Group Student",
+		filters={"parent": source.get("name"), "parenttype": "Student Group", "active": 1},
+		pluck="student",
+		limit_page_length=MAX_OPTION_ROWS,
+	)
+	destination_context = frappe._dict(destination)
+	eligible_rows = _eligible_students(source.get(BRANCH_FIELD), destination_context)
 	eligible_by_name = {row.get("name"): row for row in eligible_rows}
 	carried = [eligible_by_name[name] for name in source_students if name in eligible_by_name]
 	excluded_names = [name for name in source_students if name not in eligible_by_name]
-	excluded = []
-	if excluded_names:
-		student_rows = frappe.get_list(
-			"Student",
-			filters={"name": ["in", excluded_names]},
-			fields=["name", "student_name"],
-			page_length=len(excluded_names),
-		)
-		excluded_by_name = {row.name: row for row in student_rows}
-		excluded = [
-			{
-				"name": name,
-				"student_name": excluded_by_name.get(name).student_name if excluded_by_name.get(name) else name,
-				"reason": "No submitted enrollment for the destination Programme Offering",
-			}
-			for name in excluded_names
-		]
 	return {
-		"source": {
-			"name": source_doc.name,
-			"display_name": identity.class_arm_name,
-			"offering": source_context.name,
-			"offering_title": source_context.offering_title,
-			"academic_year": source_context.academic_year,
-			"academic_term": source_context.academic_term,
-		},
-		"destination": dict(destination),
-		"class_arm_identity": {
-			"name": identity.name,
-			"class_arm_name": identity.class_arm_name,
-			"class_arm_code": identity.class_arm_code,
-		},
+		"source": source.get("name"),
+		"class_arm_identity": identity.name,
+		"display_name": identity.class_arm_name,
+		"class_arm_code": identity.class_arm_code,
+		"program": identity.program,
+		"source_offering": source_offering.name,
+		"destination_offering": destination["name"],
+		"destination_academic_year": destination["academic_year"],
+		"status": "existing" if existing else "ready",
 		"existing_student_group": existing,
+		"legacy_source": bool(source.get("legacy_source")),
 		"eligible_students": carried,
-		"excluded_students": excluded,
+		"excluded_students": excluded_names,
 		"eligible_count": len(carried),
-		"excluded_count": len(excluded),
+		"excluded_count": len(excluded_names),
+	}
+
+
+def _session_rollover_plan(branch: str, source_academic_year: str, destination_academic_year: str) -> dict:
+	_require_read()
+	branch, selected_branch, _branches = _resolve_branch(branch)
+	if not source_academic_year or not destination_academic_year:
+		frappe.throw(_("Source and destination Academic Sessions are required."), frappe.ValidationError)
+	if source_academic_year == destination_academic_year:
+		frappe.throw(_("Destination Academic Session must be different from the source Session."), frappe.ValidationError)
+	_assert_year_read(source_academic_year)
+	_assert_year_read(destination_academic_year)
+	source_start = frappe.db.get_value("Academic Year", source_academic_year, "year_start_date")
+	destination_start = frappe.db.get_value("Academic Year", destination_academic_year, "year_start_date")
+	if source_start and destination_start and getdate(destination_start) <= getdate(source_start):
+		frappe.throw(_("Select a later destination Academic Session."), frappe.ValidationError)
+	destinations = _destination_offerings(branch, destination_academic_year)
+	rows = [_rollover_row(source, destinations) for source in _select_source_groups(branch, source_academic_year)]
+	return {
+		"branch": selected_branch,
+		"source_academic_year": source_academic_year,
+		"destination_academic_year": destination_academic_year,
+		"rows": rows,
+		"summary": {
+			"total": len(rows),
+			"ready": sum(1 for row in rows if row.get("status") == "ready"),
+			"existing": sum(1 for row in rows if row.get("status") == "existing"),
+			"blocked": sum(1 for row in rows if row.get("status") == "blocked"),
+			"students_to_carry": sum(cint(row.get("eligible_count")) for row in rows),
+			"students_excluded": sum(cint(row.get("excluded_count")) for row in rows),
+		},
+	}
+
+
+def _assert_year_read(name: str) -> None:
+	if not frappe.db.exists("Academic Year", name):
+		frappe.throw(_("Academic Session {0} does not exist.").format(name), frappe.DoesNotExistError)
+	frappe.get_doc("Academic Year", name).check_permission("read")
+
+
+@frappe.whitelist(methods=["POST"])
+def preview_class_arm_session_rollover(branch: str, source_academic_year: str, destination_academic_year: str) -> dict:
+	_require_login()
+	require_eduedge_access(feature_key="academics", action="preview_class_arm_session_rollover")
+	return _session_rollover_plan(branch, source_academic_year, destination_academic_year)
+
+
+@frappe.whitelist(methods=["POST"])
+def execute_class_arm_session_rollover(branch: str, source_academic_year: str, destination_academic_year: str) -> dict:
+	_require_login()
+	require_eduedge_access(feature_key="academics", action="execute_class_arm_session_rollover")
+	if not frappe.has_permission("Student Group", "create"):
+		frappe.throw(_("You are not permitted to create Class Arms for the next Academic Session."), frappe.PermissionError)
+	plan = _session_rollover_plan(branch, source_academic_year, destination_academic_year)
+	created = []
+	existing = []
+	blocked = []
+	for row in plan["rows"]:
+		if row.get("status") == "existing":
+			existing.append(row)
+			continue
+		if row.get("status") != "ready":
+			blocked.append(row)
+			continue
+		source_doc = frappe.get_doc("Student Group", row["source"])
+		identity = frappe.get_doc(CLASS_ARM_DOCTYPE, row["class_arm_identity"])
+		destination = _get_offering(row["destination_offering"], branch)
+		doc = frappe.new_doc("Student Group")
+		doc.student_group_name = generate_operational_group_name(
+			friendly_name=identity.class_arm_name,
+			branch=branch,
+			program=destination.program,
+			offering=destination.name,
+			academic_year=destination.academic_year,
+		)
+		_set_operational_context(doc, destination, identity, previous_student_group=source_doc.name)
+		doc.group_based_on = source_doc.group_based_on
+		doc.course = source_doc.course
+		doc.max_strength = source_doc.max_strength
+		doc.disabled = 0
+		_merge_students(doc, [{"student": student.get("name")} for student in row.get("eligible_students") or []])
+		doc.save()
+		created.append({
+			"name": doc.name,
+			"display_name": identity.class_arm_name,
+			"source": source_doc.name,
+			"destination_offering": destination.name,
+			"eligible_count": row.get("eligible_count", 0),
+			"excluded_count": row.get("excluded_count", 0),
+		})
+	return {
+		"source_academic_year": source_academic_year,
+		"destination_academic_year": destination_academic_year,
+		"created": created,
+		"existing": existing,
+		"blocked": blocked,
+		"created_count": len(created),
+		"existing_count": len(existing),
+		"blocked_count": len(blocked),
 	}
 
 
 @frappe.whitelist(methods=["POST"])
 def preview_class_arm_rollover(source: str, destination_offering: str) -> dict:
-	_require_login()
-	require_eduedge_access(feature_key="academics", action="preview_class_arm_rollover")
-	return _rollover_plan(source, destination_offering)
+	frappe.throw(
+		_("Term-by-term Class Arm preparation has been retired. Use Bulk Prepare Next Academic Session."),
+		frappe.ValidationError,
+	)
 
 
 @frappe.whitelist(methods=["POST"])
 def execute_class_arm_rollover(source: str, destination_offering: str) -> dict:
-	_require_login()
-	require_eduedge_access(feature_key="academics", action="execute_class_arm_rollover")
-	if not frappe.has_permission("Student Group", "create"):
-		frappe.throw(_("You are not permitted to create Class Arm periods."), frappe.PermissionError)
-	plan = _rollover_plan(source, destination_offering)
-	if plan.get("existing_student_group"):
-		return {
-			"status": "existing",
-			"name": plan["existing_student_group"],
-			"display_name": plan["class_arm_identity"]["class_arm_name"],
-			"eligible_count": plan["eligible_count"],
-			"excluded_count": plan["excluded_count"],
-		}
-
-	source_doc = frappe.get_doc("Student Group", source)
-	identity = frappe.get_doc(CLASS_ARM_DOCTYPE, plan["class_arm_identity"]["name"])
-	destination = frappe._dict(plan["destination"])
-	doc = frappe.new_doc("Student Group")
-	doc.student_group_name = generate_operational_group_name(
-		friendly_name=identity.class_arm_name,
-		branch=destination.school_branch,
-		program=destination.program,
-		offering=destination.name,
-		academic_year=destination.academic_year,
-		academic_term=destination.academic_term,
+	frappe.throw(
+		_("Term-by-term Class Arm preparation has been retired. Use Bulk Prepare Next Academic Session."),
+		frappe.ValidationError,
 	)
-	_set_operational_context(doc, destination, identity, previous_student_group=source_doc.name)
-	doc.group_based_on = source_doc.group_based_on
-	doc.course = source_doc.course
-	doc.max_strength = source_doc.max_strength
-	doc.disabled = source_doc.disabled
-	_set_students(doc, [{"student": row.get("name")} for row in plan["eligible_students"]])
-	doc.save()
-	return {
-		"status": "created",
-		"name": doc.name,
-		"display_name": identity.class_arm_name,
-		"source": source_doc.name,
-		"destination_offering": destination.name,
-		"eligible_count": plan["eligible_count"],
-		"excluded_count": plan["excluded_count"],
-		"excluded_students": plan["excluded_students"],
-		"full_form_route": f"/app/student-group/{doc.name}",
-	}
