@@ -21,15 +21,16 @@ class TestClassArmsPageContract(unittest.TestCase):
 		self.assertIn("createEduEdgeClassArmsApp", bundle)
 		self.assertIn("window.EduEdgeClassArms", bundle)
 
-	def test_manager_uses_native_student_group_as_period_truth(self):
+	def test_manager_uses_native_student_group_as_session_truth(self):
 		api = (APP / "api" / "class_arms.py").read_text(encoding="utf-8")
 		for token in (
-			'frappe.get_list(\n\t\t"Student Group"',
+			'"Student Group"',
 			'frappe.new_doc("Student Group")',
-			'doc.append(\n\t\t\t"students"',
+			'"students"',
 			"generate_operational_group_name",
 			"CLASS_ARM_FIELD",
 			"OFFERING_FIELD",
+			'"academic_term": None',
 			"doc.save()",
 			'require_eduedge_access(feature_key="academics", action="save_class_arm")',
 		):
@@ -40,18 +41,21 @@ class TestClassArmsPageContract(unittest.TestCase):
 		self.assertNotIn("ignore_permissions", api)
 		self.assertNotIn("frappe.db.set_value", api)
 
-	def test_options_are_branch_offering_and_enrollment_scoped(self):
+	def test_options_are_branch_sessional_offering_and_enrollment_scoped(self):
 		api = (APP / "api" / "class_arms.py").read_text(encoding="utf-8")
 		for token in (
 			"assert_branch_access",
-			'"school_branch": branch, "is_active": 1, "enrollment_enabled": 1',
+			'"school_branch": branch',
+			'"is_active": 1',
+			'"enrollment_enabled": 1',
+			'"academic_term": ["is", "not set"]',
 			'"docstatus": 1',
 			'enrollment_filters[OFFERING_FIELD] = context.name',
 			'_assert_unique(student_rows, "student", _("Student"))',
 		):
 			self.assertIn(token, api)
 
-	def test_page_supports_context_cascade_student_roster_assignment_handoff_and_rollover(self):
+	def test_page_supports_context_roster_assignment_and_both_session_rollover_modes(self):
 		component = (APP / "public" / "js" / "eduedge_class_arms" / "EduEdgeClassArms.vue").read_text(encoding="utf-8")
 		for token in (
 			"draftBranchChanged",
@@ -60,15 +64,23 @@ class TestClassArmsPageContract(unittest.TestCase):
 			"Only enabled students with submitted enrollment in this exact Programme Offering and Branch",
 			"toggleStudent",
 			"save_class_arm",
-			"Prepare Next Period",
-			"preview_class_arm_rollover",
-			"execute_class_arm_rollover",
+			"Bulk Carry Class Arms Forward",
+			"Carry {{ classArmSingular }} Forward",
+			"preview_class_arm_session_rollover",
+			"execute_selected_class_arm_session_rollover",
+			"preview_single_class_arm_session_rollover",
+			"execute_single_class_arm_session_rollover",
+			"Select all ready",
+			"Clear selection",
+			"selected_class_arm_identities",
+			"Assessment, Results and CBT alignment",
 			"openInstructorAssignments",
 			"/app/eduedge-instructor-assignments",
 			"Assign Instructor",
 			"openFullForm",
 		):
 			self.assertIn(token, component)
+		self.assertNotIn("Prepare Next Period", component)
 		self.assertNotIn("Create an enabled Instructor Branch Assignment", component)
 		self.assertNotIn("toggleInstructor", component)
 		self.assertNotIn("instructors: JSON.stringify", component)
