@@ -34,6 +34,14 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
         self.assertIn('"academic_term": ["is", "not set"]', source)
         self.assertIn("destination Program Enrollments", source)
 
+    def test_native_enrollment_controller_keeps_required_course_authority(self):
+        branching = (APP / "education/branching.py").read_text(encoding="utf-8")
+        self.assertIn("def _prepare_native_required_courses_for_progression", branching)
+        self.assertIn("native ProgramEnrollment.validate() populate only required courses", branching)
+        self.assertIn("if not doc.is_new()", branching)
+        self.assertIn("doc.set(\"courses\", [])", branching)
+        self.assertIn("PROGRESSION_SOURCE_FIELD", branching)
+
     def test_finalization_requires_submitted_target_and_append_only_log(self):
         api = (APP / "api/student_progression.py").read_text(encoding="utf-8")
         log = (APP / "eduedge/doctype/eduedge_enrollment_status_log/eduedge_enrollment_status_log.py").read_text(encoding="utf-8")
