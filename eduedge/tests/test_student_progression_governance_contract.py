@@ -32,7 +32,7 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
         self.assertNotIn("doc.submit()", prepare)
         self.assertNotIn("target.submit()", prepare)
         self.assertIn('"academic_term": ["is", "not set"]', source)
-        self.assertIn("Destination Enrollments", source)
+        self.assertIn("destination Program Enrollments", source)
 
     def test_finalization_requires_submitted_target_and_append_only_log(self):
         api = (APP / "api/student_progression.py").read_text(encoding="utf-8")
