@@ -64,7 +64,7 @@ class TestInstitutionTypeProgrammeTerminologyContract(unittest.TestCase):
 		):
 			self.assertIn(token, component)
 
-	def test_offering_editor_follows_selected_branch_context(self):
+	def test_offering_editor_follows_selected_branch_context_without_term_identity(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text()
 		for token in (
 			"draftContext: {}",
@@ -72,10 +72,13 @@ class TestInstitutionTypeProgrammeTerminologyContract(unittest.TestCase):
 			"editorOfferingSingular",
 			"editorDepartmentSingular",
 			"editorAcademicYearSingular",
-			"editorAcademicTermSingular",
 			"this.draftContext = result.active_context || this.activeContext",
+			"Full Academic Session",
+			"Not part of Programme Offering identity",
 		):
 			self.assertIn(token, component)
+		self.assertNotIn("editorAcademicTermSingular", component)
+		self.assertNotIn('v-model="draft.academic_term"', component)
 
 	def test_native_program_form_uses_document_institution_context(self):
 		script = (APP / "public" / "js" / "education" / "program.js").read_text()
