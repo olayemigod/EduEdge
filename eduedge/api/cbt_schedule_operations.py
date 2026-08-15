@@ -18,6 +18,8 @@ from eduedge.api.cbt_schedule_operations_hardened import (
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
 
+_assign_template_student_group = hardened.assign_template_student_group
+
 
 def _session_term_compatible(group_term: str | None, selected_term: str | None) -> bool:
 	return not selected_term or not group_term or str(group_term) == str(selected_term)
@@ -95,9 +97,9 @@ def assign_template_student_group(schedule: str) -> dict:
 	so the retry becomes an idempotent skip rather than a duplicate failure.
 	"""
 	try:
-		return hardened.assign_template_student_group(schedule)
+		return _assign_template_student_group(schedule)
 	except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
-		return hardened.assign_template_student_group(schedule)
+		return _assign_template_student_group(schedule)
 
 
 __all__ = (
