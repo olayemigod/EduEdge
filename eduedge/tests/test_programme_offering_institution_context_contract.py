@@ -29,7 +29,7 @@ class TestProgrammeOfferingInstitutionContextContract(unittest.TestCase):
 		):
 			self.assertIn(token, api)
 
-	def test_backend_exposes_calendar_backed_sessions_and_terms(self):
+	def test_backend_exposes_calendar_backed_sessions_and_terms_for_downstream_operations(self):
 		api = (APP / "api" / "programme_offerings_safe.py").read_text(encoding="utf-8")
 		for token in (
 			"def _institution_academic_years",
@@ -55,7 +55,7 @@ class TestProgrammeOfferingInstitutionContextContract(unittest.TestCase):
 		self.assertNotIn("ignore_permissions=True", api)
 		self.assertNotIn("frappe.db.set_value", api)
 
-	def test_page_is_institution_first_and_cascades_children(self):
+	def test_page_is_institution_first_and_cascades_sessional_children(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text(encoding="utf-8")
 		institution_position = component.index('<span>Institution</span>')
 		branch_position = component.index('<span>Branch / Campus</span>')
@@ -64,15 +64,18 @@ class TestProgrammeOfferingInstitutionContextContract(unittest.TestCase):
 			'@change="filterInstitutionChanged"',
 			'@change="draftInstitutionChanged"',
 			"this.filters.branch = \"\"",
+			"this.filters.department = \"\"",
 			"this.filters.program = \"\"",
 			"this.filters.academic_year = \"\"",
-			"this.filters.academic_term = \"\"",
 			"this.draft.school_branch = \"\"",
+			"this.draft.department = \"\"",
 			"this.draft.program = \"\"",
 			"this.draft.academic_year = \"\"",
-			"this.draft.academic_term = \"\"",
 		):
 			self.assertIn(token, component)
+		self.assertNotIn('v-model="filters.academic_term"', component)
+		self.assertNotIn('v-model="draft.academic_term"', component)
+		self.assertIn("Not part of Programme Offering identity", component)
 
 	def test_page_displays_resolved_calendar_and_preserves_identity_lock(self):
 		component = (APP / "public" / "js" / "eduedge_programme_offerings" / "EduEdgeProgrammeOfferings.vue").read_text(encoding="utf-8")
@@ -81,8 +84,9 @@ class TestProgrammeOfferingInstitutionContextContract(unittest.TestCase):
 			"filterCalendar()",
 			"draftCalendar()",
 			"calendarRange(calendar)",
-			":disabled=\"draft.identity_locked\"",
-			"Create a new {{ editorOfferingSingular }} to change its identity",
+			"identityFieldsLocked",
+			':disabled="identityFieldsLocked"',
+			"Create a new {{ editorOfferingSingular }} to change its Branch",
 		):
 			self.assertIn(token, component)
 
