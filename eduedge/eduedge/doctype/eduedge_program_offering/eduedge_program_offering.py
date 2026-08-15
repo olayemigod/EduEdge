@@ -19,7 +19,7 @@ IDENTITY_FIELDS = (
 	"program",
 	"department",
 	"academic_year",
-	"academic_term",
+	"academic_term",  # legacy term-bound Offerings keep this immutable
 	"student_batch",
 	"study_mode",
 	"delivery_mode",
@@ -27,8 +27,17 @@ IDENTITY_FIELDS = (
 
 
 class EduEdgeProgramOffering(Document):
+	"""Branch + Programme + Academic Session availability.
+
+	EduEdge V1 originally allowed term-bound Offerings. Those records remain valid
+	historical references, but all new Offerings are sessional. Term / Semester is
+	an operational calendar dimension used by schedules, schemes, assessments and
+	date-bounded responsibilities, not part of a new Programme Offering identity.
+	"""
+
 	def before_validate(self) -> None:
 		self._derive_context()
+		self._enforce_sessional_scope()
 		self.offering_code = self._normalize_or_generate_code()
 		if not self.offering_title:
 			self.offering_title = " · ".join(
@@ -36,7 +45,6 @@ class EduEdgeProgramOffering(Document):
 				for value in (
 					self.program,
 					self.academic_year,
-					self.academic_term,
 					self.study_mode,
 					self.school_branch,
 				)
@@ -48,7 +56,7 @@ class EduEdgeProgramOffering(Document):
 		if not self.is_new() and self.has_value_changed("offering_code"):
 			frappe.throw(_("Offering Code cannot change after creation."), frappe.ValidationError)
 		self._validate_identity_changes()
-		self._validate_term()
+		self._validate_legacy_term()
 		self._validate_institution_calendar()
 		self._validate_institution_context()
 		self._validate_capacity()
@@ -72,6 +80,32 @@ class EduEdgeProgramOffering(Document):
 		if self.program:
 			self.department = frappe.db.get_value("Program", self.program, "department")
 
+	def _enforce_sessional_scope(self) -> None:
+		if self.is_new():
+			if self.academic_term:
+				frappe.throw(
+					_("Programme Offerings are sessional. Do not select a Term / Semester; configure periods in the Institution Academic Calendar."),
+					frappe.ValidationError,
+				)
+			self.academic_term = None
+			return
+
+		stored_term = frappe.db.get_value("EduEdge Program Offering", self.name, "academic_term")
+		if stored_term:
+			# Grandfather legacy records exactly as they were referenced. They may be
+			# closed or otherwise maintained, but cannot be converted in place.
+			if self.academic_term != stored_term:
+				frappe.throw(
+					_("This is a legacy term-bound Programme Offering. Its Term / Semester cannot be changed or cleared because historical records may reference it."),
+					frappe.ValidationError,
+				)
+			return
+		if self.academic_term:
+			frappe.throw(
+				_("Programme Offerings are sessional. Create term-specific schedules, schemes or assessments below the sessional Offering instead."),
+				frappe.ValidationError,
+			)
+
 	def _normalize_or_generate_code(self) -> str:
 		code = re.sub(r"[^A-Z0-9]+", "-", str(self.offering_code or "").strip().upper()).strip("-")
 		if code:
@@ -83,7 +117,6 @@ class EduEdgeProgramOffering(Document):
 				self.school_branch,
 				self.program,
 				self.academic_year,
-				self.academic_term,
 				self.student_batch,
 				self.study_mode,
 				self.delivery_mode,
@@ -114,7 +147,7 @@ class EduEdgeProgramOffering(Document):
 			)
 		return False
 
-	def _validate_term(self) -> None:
+	def _validate_legacy_term(self) -> None:
 		if not self.academic_term:
 			return
 		actual_year = frappe.db.get_value("Academic Term", self.academic_term, "academic_year")
@@ -242,6 +275,6 @@ class EduEdgeProgramOffering(Document):
 		)
 		if duplicate:
 			frappe.throw(
-				_("A matching Programme Offering already exists for this Branch, Programme, period, cohort, and delivery mode."),
+				_("A matching Programme Offering already exists for this Branch, Programme, Academic Session, cohort, and delivery mode."),
 				frappe.DuplicateEntryError,
 			)
