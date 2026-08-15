@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 
 from eduedge.cbt.result_sync_fields import ensure_result_sync_custom_fields
+from eduedge.education.class_arm_identity import ensure_class_arm_foundation
 from eduedge.education.curriculum_fields import ensure_curriculum_management_foundation
 from eduedge.education.custom_fields import (
 	backfill_education_branch_context,
@@ -43,6 +44,7 @@ def after_install() -> None:
 	ensure_education_custom_fields()
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
+	ensure_class_arm_foundation()
 	ensure_people_operations_foundation()
 	ensure_curriculum_management_foundation()
 	ensure_teaching_assignment_foundation()
@@ -60,6 +62,7 @@ def after_migrate() -> None:
 	ensure_education_custom_fields()
 	ensure_result_sync_custom_fields()
 	ensure_native_academic_context_foundation()
+	ensure_class_arm_foundation()
 	ensure_people_operations_foundation()
 	ensure_curriculum_management_foundation()
 	ensure_teaching_assignment_foundation()
