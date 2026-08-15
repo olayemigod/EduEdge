@@ -40,14 +40,10 @@ function setStudentGroupQueries(frm) {
 			course: frm.doc.course,
 		},
 	}));
-	frm.set_query("instructor", "instructors", () => ({
-		query: "eduedge.api.academic_operations.instructor_query",
-		filters: { eduedge_school_branch: frm.doc.eduedge_school_branch },
-	}));
 }
 
 async function applyStudentGroupOffering(frm) {
-	if (!frm.doc.eduedge_program_offering) return;
+	if (!frm.doc.eduedge_program_offering || !frm.is_new()) return;
 	const selectedOffering = frm.doc.eduedge_program_offering;
 	frm.__eduedge_applying_offering = true;
 	try {
@@ -70,19 +66,32 @@ async function applyStudentGroupOffering(frm) {
 	}
 }
 
-async function clearStudentGroupContext(frm, fields, { clearInstructors = false } = {}) {
-	if (frm.__eduedge_applying_offering || frm.__eduedge_clearing_context) return;
+async function clearStudentGroupContext(frm, fields) {
+	if (!frm.is_new() || frm.__eduedge_applying_offering || frm.__eduedge_clearing_context) return;
 	frm.__eduedge_clearing_context = true;
 	try {
 		const values = {};
 		for (const fieldname of fields) if (frm.doc[fieldname]) values[fieldname] = null;
 		if (Object.keys(values).length) await frappe.model.set_value(frm.doctype, frm.docname, values);
 		frm.clear_table("students");
-		if (clearInstructors) frm.clear_table("instructors");
-		frm.refresh_fields(clearInstructors ? ["students", "instructors"] : ["students"]);
+		frm.refresh_field("students");
 		setStudentGroupQueries(frm);
 	} finally {
 		frm.__eduedge_clearing_context = false;
+	}
+}
+
+function applyExistingPeriodLock(frm) {
+	const locked = !frm.is_new();
+	for (const fieldname of ["eduedge_school_branch", "eduedge_program_offering", "eduedge_class_arm", "program", "academic_year", "academic_term", "batch"]) {
+		if (frm.fields_dict[fieldname]) frm.set_df_property(fieldname, "read_only", locked ? 1 : frm.fields_dict[fieldname].df.read_only || 0);
+	}
+	if (frm.fields_dict.instructors) {
+		frm.set_df_property("instructors", "read_only", 1);
+		frm.set_df_property("instructors", "description", __("Historical native Instructor rows are read-only. Manage teaching responsibility through EduEdge Instructor Assignments."));
+	}
+	if (frm.fields_dict.eduedge_display_name) {
+		frm.set_df_property("eduedge_display_name", "description", __("Reusable school-facing Class Arm name. The native Student Group name is the period-specific technical identity."));
 	}
 }
 
@@ -93,9 +102,10 @@ frappe.ui.form.on("Student Group", {
 		frm.set_df_property("program", "label", frappe.eduedge?.term?.("programme", { fallback: __("Programme / Class") }) || __("Programme / Class"));
 		frm.set_df_property("academic_year", "label", frappe.eduedge?.term?.("academic_year", { fallback: __("Academic Session") }) || __("Academic Session"));
 		frm.set_df_property("academic_term", "label", frappe.eduedge?.term?.("academic_term", { fallback: __("Term / Semester") }) || __("Term / Semester"));
-		frm.set_df_property("student_group_name", "label", frappe.eduedge?.term?.("student_group", { fallback: __("Student Group / Class Arm / Level") }) || __("Student Group / Class Arm / Level"));
+		frm.set_df_property("student_group_name", "label", __("Operational Student Group ID"));
 		frm.set_df_property("course", "label", frappe.eduedge?.term?.("course", { fallback: __("Course / Subject") }) || __("Course / Subject"));
 		if (frm.fields_dict.eduedge_academic_level) frm.set_df_property("eduedge_academic_level", "hidden", 1);
+		applyExistingPeriodLock(frm);
 		setStudentGroupQueries(frm);
 	},
 	onload(frm) {
@@ -105,15 +115,11 @@ frappe.ui.form.on("Student Group", {
 		});
 	},
 	eduedge_program_offering(frm) { applyStudentGroupOffering(frm); },
-	eduedge_school_branch(frm) {
-		clearStudentGroupContext(frm, ["eduedge_program_offering", "eduedge_institution", "program", "academic_year", "academic_term", "batch", "course"], { clearInstructors: true });
-	},
+	eduedge_school_branch(frm) { clearStudentGroupContext(frm, ["eduedge_program_offering", "eduedge_institution", "program", "academic_year", "academic_term", "batch", "course"]); },
 	academic_year(frm) { clearStudentGroupContext(frm, ["eduedge_program_offering", "academic_term", "course"]); },
 	academic_term(frm) { clearStudentGroupContext(frm, ["eduedge_program_offering", "course"]); },
 	program(frm) { clearStudentGroupContext(frm, ["eduedge_program_offering", "course"]); },
 	batch(frm) { clearStudentGroupContext(frm, ["eduedge_program_offering"]); },
-	course(frm) { if (!frm.__eduedge_applying_offering) { frm.clear_table("students"); frm.refresh_field("students"); } },
-	group_based_on(frm) {
-		clearStudentGroupContext(frm, ["eduedge_program_offering", "program", "batch", "course"]);
-	},
+	course(frm) { if (frm.is_new() && !frm.__eduedge_applying_offering) { frm.clear_table("students"); frm.refresh_field("students"); } },
+	group_based_on(frm) { clearStudentGroupContext(frm, ["eduedge_program_offering", "program", "batch", "course"]); },
 });
