@@ -87,6 +87,12 @@ def resolve_exact_offering(doc, *, purpose: str) -> frappe._dict | None:
 
 
 def _matching_offerings(doc, *, purpose: str) -> list[frappe._dict]:
+	"""Prefer the sessional Offering; fall back to legacy term-bound history only.
+
+	Once a Branch/Class/Academic Session has a session-wide Offering, term-bearing
+	legacy records must not make new records ambiguous. Explicit legacy references
+	still remain valid through ``get_offering``.
+	"""
 	branch = doc.get(BRANCH_FIELD)
 	program = doc.get("program")
 	academic_year = doc.get("academic_year")
@@ -102,10 +108,14 @@ def _matching_offerings(doc, *, purpose: str) -> list[frappe._dict]:
 			PURPOSE_FIELD[purpose]: 1,
 		},
 		fields=["name", "academic_term"],
+		order_by="academic_term asc, modified desc",
 	)
+	sessional = [row for row in rows if not row.academic_term]
+	if sessional:
+		return sessional
 	academic_term = doc.get("academic_term")
 	if academic_term:
-		rows = [row for row in rows if not row.academic_term or row.academic_term == academic_term]
+		return [row for row in rows if row.academic_term == academic_term]
 	return rows
 
 
