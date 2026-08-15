@@ -42,7 +42,8 @@ class TestClassArmRefactorContract(unittest.TestCase):
         self.assertIn("An existing Class Arm cannot be moved to another Branch, Offering, or Academic Session", source)
         self.assertIn("Legacy term-bound Class Arms are historical", source)
         self.assertIn('"academic_term": None', source)
-        self.assertIn("Academic context cannot be changed on an existing Class Arm period", identity)
+        self.assertIn("Academic context cannot be changed on an existing Class Arm session", identity)
+        self.assertIn("Prepare the next Academic Session instead", identity)
         for fieldname in ("BRANCH_FIELD", "OFFERING_FIELD", '"program"', '"academic_year"', '"academic_term"', "CLASS_ARM_FIELD"):
             self.assertIn(fieldname, identity)
 
