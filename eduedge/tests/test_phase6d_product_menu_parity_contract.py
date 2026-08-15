@@ -8,6 +8,7 @@ APP = ROOT / "eduedge"
 
 PHASE6D_ROUTES = (
     "/app/eduedge-student-enrollments",
+    "/app/eduedge-student-progression",
     "/app/eduedge-instructors",
     "/app/eduedge-instructor-assignments",
     "/app/eduedge-curriculum",
@@ -44,6 +45,7 @@ class TestPhase6DProductMenuParityContract(unittest.TestCase):
         source = (APP / "public" / "js" / "eduedge_product_menu.bundle.js").read_text(encoding="utf-8")
         for label in (
             'item("Student Enrollments"',
+            'item("Student Progression"',
             'item("Instructors"',
             'item("Instructor Assignments"',
             'item("Scheme of Work"',
