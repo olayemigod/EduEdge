@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any
 
 import frappe
 from frappe import _
@@ -10,7 +9,7 @@ from frappe.utils import cint, getdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.education.offerings import assert_branch_access
+from eduedge.education.offerings import assert_branch_access, resolve_program_offering_period_dates
 
 CLASS_ARM_DOCTYPE = "EduEdge Class Arm"
 CLASS_ARM_FIELD = "eduedge_class_arm"
@@ -132,35 +131,13 @@ def generate_operational_group_name(
 	return f"{base} · {digest}"[:140]
 
 
-def offering_period(offering: Any) -> tuple[Any | None, Any | None]:
-	start = offering.get("start_date") if hasattr(offering, "get") else None
-	end = offering.get("end_date") if hasattr(offering, "get") else None
-	academic_term = offering.get("academic_term") if hasattr(offering, "get") else None
-	academic_year = offering.get("academic_year") if hasattr(offering, "get") else None
-
-	if academic_term and (not start or not end) and frappe.db.exists("DocType", "Academic Term"):
-		meta = frappe.get_meta("Academic Term")
-		for start_field, end_field in (("term_start_date", "term_end_date"), ("start_date", "end_date")):
-			if meta.has_field(start_field) and meta.has_field(end_field):
-				term = frappe.db.get_value("Academic Term", academic_term, [start_field, end_field], as_dict=True) or {}
-				start = start or term.get(start_field)
-				end = end or term.get(end_field)
-				break
-
-	if academic_year and (not start or not end) and frappe.db.exists("DocType", "Academic Year"):
-		meta = frappe.get_meta("Academic Year")
-		for start_field, end_field in (("year_start_date", "year_end_date"), ("start_date", "end_date")):
-			if meta.has_field(start_field) and meta.has_field(end_field):
-				year = frappe.db.get_value("Academic Year", academic_year, [start_field, end_field], as_dict=True) or {}
-				start = start or year.get(start_field)
-				end = end or year.get(end_field)
-				break
-	return (getdate(start) if start else None, getdate(end) if end else None)
-
-
-def destination_is_later(source_offering: Any, destination_offering: Any) -> bool:
-	source_start, source_end = offering_period(source_offering)
-	destination_start, destination_end = offering_period(destination_offering)
+def destination_is_later(source_offering, destination_offering) -> bool:
+	source_start, source_end = resolve_program_offering_period_dates(source_offering)
+	destination_start, destination_end = resolve_program_offering_period_dates(destination_offering)
+	source_start = getdate(source_start) if source_start else None
+	source_end = getdate(source_end) if source_end else None
+	destination_start = getdate(destination_start) if destination_start else None
+	destination_end = getdate(destination_end) if destination_end else None
 	if source_end and destination_start:
 		return destination_start > source_end
 	if source_start and destination_start:
