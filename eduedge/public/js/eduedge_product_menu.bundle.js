@@ -110,13 +110,14 @@ function buildEduEdgeProductMenu() {
 			{
 				key: "students-admissions",
 				label: "Students & Admissions",
-				description: `Admissions, applicants, ${students.toLowerCase()}, enrollments, and teaching staff`,
+				description: `Admissions, applicants, ${students.toLowerCase()}, enrollments, progression, and teaching staff`,
 				icon: "students",
 				items: [
 					item("Admissions", "Configure and publish admission windows", "clipboard", "/app/eduedge-admissions", { keywords: ["admission", "session", "programme"], quick_action: true }),
 					item(applicants, `Review prospective ${students.toLowerCase()}`, "user", "/app/eduedge-applicants", { keywords: ["applicant", "application", "enrolment"] }),
 					item(students, `${student} records, profiles, and branch context`, "students", "/app/eduedge-students", { keywords: ["student", "pupil", "learner", "profile"], quick_action: true }),
 					item("Student Enrollments", "Enroll Students into active Programme Offerings", "assignment", "/app/eduedge-student-enrollments", { keywords: ["student", "enrollment", "programme", "class"] }),
+					item("Student Progression", "Promote, progress, repeat, transfer, complete, or graduate Students with governed next-session Enrollment", "assignment", "/app/eduedge-student-progression", { keywords: ["student", "promotion", "progression", "repeat", "transfer", "graduate", "next session"], quick_action: true }),
 					item("Instructors", "Instructor identity, qualification, specialisation, and eligibility", "users", "/app/eduedge-instructors", { keywords: ["instructor", "teacher", "lecturer", "identity", "employee"] }),
 					item("Instructor Assignments", "Assign Instructors to Branches, Classes, Class Arms, and Subjects", "assignment", "/app/eduedge-instructor-assignments", { keywords: ["instructor", "teacher", "assignment", "subject", "class", "handover", "transfer"] }),
 				],
