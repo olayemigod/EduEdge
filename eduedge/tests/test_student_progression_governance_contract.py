@@ -69,6 +69,21 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
         self.assertIn("Automatic transfer is limited to Branches within the same Institution", log)
         self.assertIn("Target Class Arm / Group must belong to the destination Programme Offering", log)
 
+    def test_class_arm_filter_is_backend_validated_before_enrollment_pagination(self):
+        source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
+        helper = source.split("def _active_group_students", 1)[1].split("def _source_group_map", 1)[0]
+        page = source.split("def get_student_progression_page", 1)[1].split("def _source_enrollment", 1)[0]
+        for token in (
+            "group.check_permission(\"read\")",
+            "Selected source Class Arm / Group belongs to another Branch / Campus",
+            "Selected source Class Arm / Group belongs to another Academic Session",
+            "Selected source Class Arm / Group belongs to another Class / Programme",
+        ):
+            self.assertIn(token, helper)
+        self.assertIn("group_students = _active_group_students", page)
+        self.assertIn('filters["student"] = ["in", group_students or ["__eduedge_no_student__"]]', page)
+        self.assertLess(page.index('filters["student"]'), page.index('rows = frappe.get_list('))
+
     def test_results_and_cbt_are_evidence_not_rollover_copies(self):
         source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
         self.assertIn('"submitted_assessment_results"', source)
