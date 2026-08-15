@@ -36,7 +36,6 @@ PROGRESSION_CUSTOM_FIELDS = {
 			"fieldtype": "Select",
 			"label": "Progression Mode",
 			"options": f"{PROGRAM_PROMOTION}\n{LEVEL_PROGRESSION}\n{MANUAL_PROGRESSION}",
-			"default": MANUAL_PROGRESSION,
 			"in_standard_filter": 1,
 			"description": "Primary/Secondary Classes normally progress to another Class. Tertiary/Training Programmes normally progress through Academic Levels.",
 		},
@@ -79,7 +78,7 @@ PROGRESSION_CUSTOM_FIELDS = {
 			"options": "EduEdge Academic Level",
 			"in_list_view": 1,
 			"in_standard_filter": 1,
-			"description": "Required for Level-progression Programmes such as tertiary or structured training programmes.",
+			"description": "Required for Level-progression Programmes such as tertiary or structured training programmes. New admissions default to the first configured Level when left blank.",
 		},
 	],
 	"Student Group": [
@@ -228,6 +227,22 @@ def validate_level_for_program(
 	return row
 
 
+def initial_progression_level(program: str, institution: str | None) -> frappe._dict:
+	rows = frappe.get_all(
+		"EduEdge Academic Level",
+		filters={"program": program, "institution": institution, "enabled": 1},
+		fields=["name", "level_name", "level_code", "institution", "program", "sequence", "next_level", "is_terminal", "enabled"],
+		order_by="sequence asc, level_name asc",
+		limit_page_length=2,
+	)
+	if not rows:
+		frappe.throw(
+			_("Configure at least one enabled Academic Level for this Level-progression Programme before enrolling Students."),
+			frappe.ValidationError,
+		)
+	return rows[0]
+
+
 def progression_target(source_program: str, source_level: str | None = None) -> dict:
 	program = get_program_progression(source_program)
 	mode = program.get(PROGRAM_PROGRESSION_MODE_FIELD)
@@ -249,6 +264,8 @@ def progression_target(source_program: str, source_level: str | None = None) -> 
 		)
 		if cint(level.is_terminal):
 			return {"mode": mode, "terminal": True, "program": source_program, "progression_level": None}
+		if not level.next_level:
+			return {"mode": mode, "terminal": False, "program": None, "progression_level": None, "configuration_missing": True}
 		return {
 			"mode": mode,
 			"terminal": False,
@@ -265,6 +282,9 @@ def validate_progression_level_on_enrollment(doc) -> None:
 	mode = program.get(PROGRAM_PROGRESSION_MODE_FIELD)
 	level = doc.get(PROGRESSION_LEVEL_FIELD)
 	if mode == LEVEL_PROGRESSION:
+		if not level:
+			level = initial_progression_level(doc.program, program.get(INSTITUTION_FIELD)).name
+			doc.set(PROGRESSION_LEVEL_FIELD, level)
 		validate_level_for_program(level, program=doc.program, institution=program.get(INSTITUTION_FIELD), required=True)
 	elif level:
 		frappe.throw(_("Academic Level is only valid for a Level-progression Programme."), frappe.ValidationError)
