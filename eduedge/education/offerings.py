@@ -20,13 +20,7 @@ PURPOSE_FIELD = {
 
 
 def academic_period_dates(academic_year: str | None, academic_term: str | None = None) -> tuple[str | None, str | None]:
-	"""Resolve academic period bounds from native Education masters.
-
-	EduEdge Program Offering does not own `period_start_date` / `period_end_date`
-	columns. Academic Term dates are preferred when a Term exists; Academic Year is
-	the fallback. Keep this helper permission-neutral for server-side validation and
-	workbench option preparation.
-	"""
+	"""Resolve academic period bounds from native Education masters."""
 	if academic_term:
 		row = frappe.db.get_value(
 			"Academic Term",
@@ -48,12 +42,7 @@ def academic_period_dates(academic_year: str | None, academic_term: str | None =
 
 
 def resolve_program_offering_period_dates(offering) -> tuple[str | None, str | None]:
-	"""Return effective Offering period dates without querying nonexistent fields.
-
-	Explicit Program Offering `start_date` / `end_date` are authoritative where set.
-	Missing sides fall back to the selected Academic Term/Year. `offering` may be a
-	name, dict, frappe._dict, or Document.
-	"""
+	"""Return effective Offering dates, falling back to its calendar context."""
 	if isinstance(offering, str):
 		row = frappe.db.get_value(
 			"EduEdge Program Offering",
@@ -130,6 +119,7 @@ def get_matching_offerings(
 	academic_term: str | None,
 	purpose: Purpose,
 ) -> list[dict]:
+	"""Prefer session-wide Offerings and use term-bound records only as legacy fallback."""
 	purpose_field = PURPOSE_FIELD[purpose]
 	rows = frappe.get_all(
 		"EduEdge Program Offering",
@@ -152,12 +142,11 @@ def get_matching_offerings(
 		],
 		order_by="academic_term asc, modified desc",
 	)
+	sessional = [row for row in rows if not row.get("academic_term")]
+	if sessional:
+		return sessional
 	if academic_term:
-		return [
-			row
-			for row in rows
-			if not row.get("academic_term") or row.get("academic_term") == academic_term
-		]
+		return [row for row in rows if row.get("academic_term") == academic_term]
 	return rows
 
 
