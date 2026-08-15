@@ -14,6 +14,7 @@ from eduedge.education.academic_validation import (
 	before_validate_student_applicant_context,
 )
 from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.education.class_arm_identity import validate_student_group_class_arm
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import (
@@ -84,6 +85,7 @@ def before_validate_program_enrollment(doc, method=None) -> None:
 
 def before_validate_student_group(doc, method=None) -> None:
 	_before_validate_student_group(doc, method)
+	validate_student_group_class_arm(doc)
 
 
 def before_validate_course_schedule(doc, method=None) -> None:
