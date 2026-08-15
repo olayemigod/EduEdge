@@ -173,7 +173,7 @@
 						<div>
 							<p class="edge-eyebrow">Academic Session rollover</p>
 							<h2>Bulk Carry Class Arms Forward</h2>
-							<p>Preview the next Academic Session, select only the {{ classArmPlural.toLowerCase() }} you want, then prepare those selected records. Terms and Semesters do not require Class Arm rollover.</p>
+							<p>Prepare next-session class structure first. Select the {{ classArmPlural.toLowerCase() }} to create; Student Progression will later create destination Enrollments and allocate learners. Terms and Semesters do not require Class Arm rollover.</p>
 						</div>
 					</div>
 					<div class="rollover-controls">
@@ -198,8 +198,8 @@
 						<div><span>Ready</span><strong>{{ bulk.preview.summary.ready }}</strong></div>
 						<div><span>Already prepared</span><strong>{{ bulk.preview.summary.existing }}</strong></div>
 						<div><span>Blocked</span><strong>{{ bulk.preview.summary.blocked }}</strong></div>
-						<div><span>Students carrying</span><strong>{{ bulk.preview.summary.students_to_carry }}</strong></div>
-						<div><span>Excluded</span><strong>{{ bulk.preview.summary.students_excluded }}</strong></div>
+						<div><span>Source students</span><strong>{{ bulk.preview.summary.source_students || 0 }}</strong></div>
+						<div><span>Awaiting progression</span><strong>{{ bulk.preview.summary.students_pending_progression || 0 }}</strong></div>
 					</div>
 					<div v-if="bulk.preview?.rows?.length" class="rollover-list">
 						<article v-for="row in bulk.preview.rows" :key="row.class_arm_identity || row.source" class="rollover-row">
@@ -209,14 +209,18 @@
 							</label>
 							<div><strong>{{ row.display_name || row.class_arm_identity || 'Class Arm' }}</strong><small>{{ row.program || '' }}<template v-if="row.legacy_source"> · Legacy source consolidated</template></small></div>
 							<EdgeStatusBadge :label="rolloverStatusLabel(row.status)" :status="row.status" :tone="rolloverTone(row.status)" />
-							<span>{{ row.status === 'blocked' ? row.reason : `${row.eligible_count || 0} students · ${row.excluded_count || 0} excluded` }}</span>
+							<span>{{ row.status === 'blocked' ? row.reason : `${row.source_student_count || 0} source students · destination roster starts empty` }}</span>
 						</article>
 					</div>
 					<div class="downstream-note">
-						<strong>Assessment, Results and CBT alignment</strong>
-						<span>Carry-forward creates only the next-session Class Arm Student Group and its destination-session eligible roster. Existing Assessment Plans, Assessment Results, Result Publications, CBT Schedules, attempts and CBT Results remain historical and are never copied or retargeted. New term-specific assessment and CBT activity must use the newly prepared Student Group.</span>
+						<strong>Student Progression, Assessment, Results and CBT alignment</strong>
+						<span>Carry-forward creates only the next-session Class Arm structure. It does not copy Students. Student Progression prepares and submits the destination Program Enrollment, then allocates each learner to a prepared Class Arm. Existing Assessment Plans, Assessment Results, Result Publications, CBT Schedules, attempts and CBT Results remain historical and are never copied or retargeted.</span>
 					</div>
-					<div v-if="bulk.result" class="rollover-result"><strong>Next-session preparation completed</strong><span>{{ bulk.result.created_count }} created · {{ bulk.result.existing_count }} already existed · {{ bulk.result.blocked_count }} blocked</span></div>
+					<div v-if="bulk.result" class="rollover-result">
+						<strong>Next-session Class Arm structure prepared</strong>
+						<span>{{ bulk.result.created_count }} created · {{ bulk.result.existing_count }} already existed · {{ bulk.result.blocked_count }} blocked</span>
+						<button type="button" class="edge-button edge-button--primary" @click="openStudentProgression">Continue to Student Progression</button>
+					</div>
 				</section>
 			</template>
 		</EdgePageLayout>
@@ -388,7 +392,7 @@ export default {
 				if (planRow.status === "blocked") { frappe.msgprint({ title: __("Carry Forward Blocked"), message: __(planRow.reason || "This Class Arm cannot be carried forward."), indicator: "red" }); return; }
 				if (planRow.status === "existing") { frappe.msgprint({ title: __("Already Prepared"), message: __(`${row.display_name || this.classArmSingular} already exists in ${destinationAcademicYear}.`), indicator: "blue" }); return; }
 				frappe.confirm(
-					__(`Carry ${row.display_name || this.classArmSingular} forward to ${destinationAcademicYear} with ${planRow.eligible_count || 0} eligible students? Historical assessments, results and CBT records will remain unchanged.`),
+					__(`Prepare ${row.display_name || this.classArmSingular} structure for ${destinationAcademicYear}? ${planRow.source_student_count || 0} current source students will remain in the source Session until Student Progression creates and submits their destination Enrollments.`),
 					() => this.executeSingleCarry(row, destinationAcademicYear),
 				);
 			} catch (error) { frappe.msgprint({ title: __("Carry Forward Could Not Be Previewed"), message: __(error?.message || "The next-session preview failed."), indicator: "red" }); }
@@ -397,7 +401,7 @@ export default {
 			try {
 				const response = await frappe.call({ method: "eduedge.api.class_arm_session_rollover.execute_single_class_arm_session_rollover", type: "POST", args: { source: row.name, destination_academic_year: destinationAcademicYear } });
 				const result = response.message || {};
-				frappe.show_alert({ message: result.created_count ? __(`${row.display_name || this.classArmSingular} carried forward to ${destinationAcademicYear}`) : __(`${row.display_name || this.classArmSingular} was already prepared for ${destinationAcademicYear}`), indicator: "green" });
+				frappe.show_alert({ message: result.created_count ? __(`${row.display_name || this.classArmSingular} structure prepared for ${destinationAcademicYear}`) : __(`${row.display_name || this.classArmSingular} was already prepared for ${destinationAcademicYear}`), indicator: "green" });
 				await this.load(true);
 			} catch (error) { frappe.msgprint({ title: __("Carry Forward Failed"), message: __(error?.message || "The Class Arm could not be carried forward."), indicator: "red" }); }
 		},
@@ -416,14 +420,14 @@ export default {
 			if (!this.bulkReady) return;
 			this.bulk.previewing = true; this.bulk.error = ""; this.bulk.preview = null; this.bulk.result = null; this.bulk.selected_class_arm_identities = [];
 			try {
-				const response = await frappe.call({ method: "eduedge.api.class_arms.preview_class_arm_session_rollover", type: "POST", args: { branch: this.bulk.branch, source_academic_year: this.bulk.source_academic_year, destination_academic_year: this.bulk.destination_academic_year } });
+				const response = await frappe.call({ method: "eduedge.api.class_arm_session_rollover.preview_class_arm_session_rollover", type: "POST", args: { branch: this.bulk.branch, source_academic_year: this.bulk.source_academic_year, destination_academic_year: this.bulk.destination_academic_year } });
 				this.bulk.preview = response.message || null;
 			} catch (error) { this.bulk.error = error?.message || "Next-session Class Arm preparation could not be previewed."; }
 			finally { this.bulk.previewing = false; }
 		},
 		confirmExecuteSessionRollover() {
 			if (!this.selectedBulkCount) return;
-			frappe.confirm(__(`Prepare ${this.selectedBulkCount} selected ${this.classArmPlural} for ${this.bulk.destination_academic_year}? Source Session records and historical assessments/results/CBT records will remain unchanged.`), () => this.executeSessionRollover());
+			frappe.confirm(__(`Prepare ${this.selectedBulkCount} selected ${this.classArmPlural} as empty next-session structures for ${this.bulk.destination_academic_year}? Students remain in the source Session until Student Progression is approved.`), () => this.executeSessionRollover());
 		},
 		async executeSessionRollover() {
 			if (!this.selectedBulkCount) return;
@@ -439,6 +443,7 @@ export default {
 		rolloverStatusLabel(status) { return status === "ready" ? "Ready" : status === "existing" ? "Already prepared" : "Blocked"; },
 		rolloverTone(status) { return status === "ready" ? "success" : status === "existing" ? "neutral" : "danger"; },
 		openStudentEnrollments() { if (!this.draft.branch || !this.draft.offering) return; const params = new URLSearchParams({ branch: this.draft.branch, offering: this.draft.offering, mode: "create" }); window.location.href = `/app/eduedge-student-enrollments?${params.toString()}`; },
+		openStudentProgression() { const params = new URLSearchParams({ branch: this.bulk.branch || this.filters.branch, academic_year: this.bulk.source_academic_year || this.filters.academic_year }); window.location.href = `/app/eduedge-student-progression?${params.toString()}`; },
 		openInstructorAssignments() { if (!this.draft.name) return; const params = new URLSearchParams({ branch: this.draft.branch, offering: this.draft.offering, student_group: this.draft.name }); window.location.href = `/app/eduedge-instructor-assignments?${params.toString()}`; },
 		openInstructors() { window.location.href = "/app/eduedge-instructors"; },
 		openFullForm(name) { if (name) window.open(`/app/student-group/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer"); },
