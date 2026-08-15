@@ -37,10 +37,12 @@ class TestSessionalSchemeLessonAlignmentContract(unittest.TestCase):
         api = (APP / "api/scheme_of_work_workbench_sessional.py").read_text(encoding="utf-8")
         self.assertIn("get_enabled_institution_calendar", api)
         self.assertIn("PERIOD_DOCTYPE", api)
-        self.assertIn('"terms": terms', api.replace("payload[\"terms\"]", '"terms"'))
+        self.assertIn('payload["terms"] = terms', api)
         self.assertIn('payload.setdefault("filters", {})["academic_term"] = requested_term', api)
         self.assertIn('"academic_term": academic_term', api)
         self.assertIn('and requested_term', api)
+        self.assertIn("_historical_term_option", api)
+        self.assertIn('"historical_scheme": True', api)
 
     def test_scheme_ui_requires_term_and_uses_sessional_endpoints(self):
         component = (APP / "public/js/eduedge_scheme_of_work/EduEdgeSchemeOfWork.vue").read_text(encoding="utf-8")
