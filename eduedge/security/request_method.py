@@ -43,6 +43,15 @@ POST_ONLY_MUTATION_PREFIXES = (
 	"reenable_",
 )
 
+# Keep old browser/bookmarked API calls safe after the sessional Class Arm refactor.
+# These methods previously planned/copy-filtered rosters using destination enrollment.
+# New progression creates destination enrollments later, so every legacy call must use
+# the structural planner instead of reopening the retired ordering dependency.
+LEGACY_COMMAND_REDIRECTS = {
+	"eduedge.api.class_arms.preview_class_arm_session_rollover": "eduedge.api.class_arm_session_rollover.preview_class_arm_session_rollover",
+	"eduedge.api.class_arms.execute_class_arm_session_rollover": "eduedge.api.class_arm_session_rollover.execute_all_class_arm_session_rollover",
+}
+
 
 def _request_method() -> str:
 	request = getattr(frappe.local, "request", None)
@@ -59,6 +68,16 @@ def _request_command() -> str:
 	if marker in path:
 		return path.split(marker, 1)[1].strip("/")
 	return ""
+
+
+def _redirect_legacy_command(command: str) -> str:
+	replacement = LEGACY_COMMAND_REDIRECTS.get(command)
+	if not replacement:
+		return command
+	form_dict = getattr(frappe.local, "form_dict", None)
+	if form_dict is not None:
+		form_dict.cmd = replacement
+	return replacement
 
 
 def is_eduedge_mutation_command(command: str) -> bool:
@@ -88,7 +107,7 @@ def enforce_post_for_mutations() -> None:
 	method = _request_method()
 	if not method:
 		return
-	command = _request_command()
+	command = _redirect_legacy_command(_request_command())
 	if command.startswith("eduedge."):
 		enforce_feature_for_command(command)
 	if is_candidate_command(command):
@@ -98,6 +117,11 @@ def enforce_post_for_mutations() -> None:
 			_reject_non_post()
 		enforce_candidate_request(command, getattr(frappe.local, "form_dict", None) or {})
 		return
+	# Structural rollover preview is POST-only too because it is a governed setup
+	# planner that locks/selects protected academic context and can be invoked through
+	# a redirected legacy method name.
+	if command == "eduedge.api.class_arm_session_rollover.preview_class_arm_session_rollover" and method not in {"POST", "OPTIONS"}:
+		_reject_non_post()
 	if method in {"POST", "OPTIONS"} or not is_eduedge_mutation_command(command):
 		return
 	_reject_non_post()
