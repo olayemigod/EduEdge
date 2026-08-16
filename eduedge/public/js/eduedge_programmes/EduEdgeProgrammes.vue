@@ -223,12 +223,51 @@
 							<option v-for="department in draftDepartments" :key="department.name" :value="department.name">{{ departmentLabel(department) }}</option>
 						</select>
 					</label>
+
+					<section class="eduedge-programme-progression-editor">
+						<div class="eduedge-programme-progression-heading">
+							<div><p class="edge-eyebrow">Academic Progression</p><strong>Define what happens after this academic session</strong></div>
+							<small>{{ progressionHelp }}</small>
+						</div>
+						<div class="eduedge-programme-progression-grid">
+							<label>
+								<span>Progression Mode *</span>
+								<select v-model="draft.eduedge_progression_mode" class="form-control" @change="progressionModeChanged">
+									<option v-for="mode in progressionModes" :key="mode" :value="mode">{{ mode }}</option>
+								</select>
+							</label>
+							<label>
+								<span>Progression Sequence</span>
+								<input v-model.number="draft.eduedge_progression_sequence" class="form-control" type="number" min="1" step="1" />
+							</label>
+							<label v-if="showNextProgramme" class="eduedge-programme-progression-next">
+								<span>Next {{ editorProgrammeSingular }}</span>
+								<select v-model="draft.eduedge_next_program" class="form-control" :disabled="progressionLoading">
+									<option value="">{{ progressionLoading ? "Loading options..." : `Select next ${editorProgrammeSingular.toLowerCase()}` }}</option>
+									<option v-for="row in progressionOptions" :key="row.name" :value="row.name">{{ row.program_name || row.name }}</option>
+								</select>
+								<small v-if="!draft.eduedge_next_program">Can be configured later, but promotion cannot be finalized until the next Class is defined.</small>
+							</label>
+							<label class="eduedge-programme-check-option">
+								<input v-model="draft.eduedge_terminal_program" type="checkbox" :true-value="1" :false-value="0" @change="terminalProgressionChanged" />
+								<span>Terminal {{ editorProgrammeSingular }}</span>
+							</label>
+							<label class="eduedge-programme-check-option">
+								<input v-model="draft.eduedge_allow_repetition" type="checkbox" :true-value="1" :false-value="0" />
+								<span>Allow repetition</span>
+							</label>
+						</div>
+						<p v-if="isLevelProgression" class="eduedge-programme-governance-note">Tertiary and Training Programmes progress through Academic Levels. Configure the Level chain under Academic Foundation; do not create a new Programme for each level.</p>
+						<p v-else-if="isManualProgression" class="eduedge-programme-governance-note">Manual Progression requires an administrator to choose the destination during Student Progression. No automatic next-Class relationship is assumed.</p>
+					</section>
+
 					<p class="eduedge-programme-modal-example">{{ editorExample }}</p>
 					<p v-if="draft.name && draft.active_offering_count" class="eduedge-programme-governance-note">Institution and academic unit are locked because this Class has active Programme Offerings.</p>
 					<p v-if="saveError" class="eduedge-programme-error">{{ saveError }}</p>
 				</div>
 				<footer class="eduedge-programme-modal-footer">
 					<button v-if="draft.name" type="button" class="edge-button" @click="openFullForm(draft.name)">Open full form</button>
+					<button v-if="draft.name" type="button" class="edge-button" @click="openStudentProgression(draft.name)">Student Progression</button>
 					<span class="eduedge-programme-modal-spacer"></span>
 					<button type="button" class="edge-button" :disabled="saving" @click="closeProgrammeModal">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="!canSave || saving" @click="saveProgramme">{{ saving ? "Saving..." : `Save ${editorProgrammeSingular}` }}</button>
@@ -241,7 +280,13 @@
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
 
-const emptyDraft = () => ({ name: "", program_name: "", program_abbreviation: "", department: "", eduedge_institution: "", active_offering_count: 0 });
+const PROGRAM_PROMOTION = "Program Promotion";
+const LEVEL_PROGRESSION = "Level Progression";
+const MANUAL_PROGRESSION = "Manual Progression";
+const emptyDraft = () => ({
+	name: "", program_name: "", program_abbreviation: "", department: "", eduedge_institution: "", active_offering_count: 0,
+	eduedge_progression_mode: "", eduedge_progression_sequence: 10, eduedge_next_program: "", eduedge_terminal_program: 0, eduedge_allow_repetition: 1,
+});
 const emptyCurriculum = () => ({ programme: {}, context: {}, configured_courses: [], available_courses: [], active_offerings: [], permissions: { can_add_courses: false, can_remove_courses: false }, governance_note: "" });
 
 export default {
@@ -250,13 +295,14 @@ export default {
 		return {
 			loading: true, loadedOnce: false, error: "", saving: false, saveError: "",
 			programmeModalOpen: false, selectedProgramme: null,
+			progressionLoading: false, progressionOptions: [],
 			curriculumLoading: false, curriculumSaving: false, curriculumError: "", curriculumRequestId: 0,
 			curriculumSearch: "", curriculumView: "all", selectedCurriculumCourses: [], curriculum: emptyCurriculum(),
 			menuItems: EDUEDGE_MENU_ITEMS,
 			filters: { institution: "", department: "", search: "" },
 			draft: emptyDraft(),
 			data: {
-				active_context: {}, programmes: [], institutions: [], departments: [],
+				active_context: {}, programmes: [], institutions: [], departments: [], progression_modes: [PROGRAM_PROMOTION, LEVEL_PROGRESSION, MANUAL_PROGRESSION],
 				summary: { total_programmes: 0, visible_programmes: 0, course_rows: 0, active_offerings: 0, unclassified_visible: 0 },
 				paging: { start: 0, page_length: 25, has_more: false, next_start: 0 },
 				permissions: { can_create: false, can_write: false },
@@ -282,6 +328,16 @@ export default {
 		editorDepartmentSingular() { return this.term("department", false, "Academic Unit", this.draftContext); },
 		curriculumCourseSingular() { return this.term("course", false, "Subject / Course", this.curriculumContext); },
 		curriculumCoursePlural() { return this.term("course", true, "Subjects / Courses", this.curriculumContext); },
+		progressionModes() { return this.data.progression_modes?.length ? this.data.progression_modes : [PROGRAM_PROMOTION, LEVEL_PROGRESSION, MANUAL_PROGRESSION]; },
+		isProgramPromotion() { return this.draft.eduedge_progression_mode === PROGRAM_PROMOTION; },
+		isLevelProgression() { return this.draft.eduedge_progression_mode === LEVEL_PROGRESSION; },
+		isManualProgression() { return this.draft.eduedge_progression_mode === MANUAL_PROGRESSION; },
+		showNextProgramme() { return this.isProgramPromotion && !Number(this.draft.eduedge_terminal_program || 0); },
+		progressionHelp() {
+			if (this.isProgramPromotion) return "Primary/Secondary: move learners to the configured next Class after governed progression approval.";
+			if (this.isLevelProgression) return "Tertiary/Training: keep the Programme and move learners through configured Academic Levels.";
+			return "Use Manual Progression only where the Institution does not follow a fixed Class or Level sequence.";
+		},
 		editorExample() {
 			const type = this.draftContext?.institution_type;
 			if (type === "PRIMARY") return "Example: Primary Section → Primary 1.";
@@ -294,7 +350,7 @@ export default {
 		canWrite() { return Boolean(this.data.permissions.can_write); },
 		canSave() {
 			const permitted = this.draft.name ? this.canWrite : this.canCreate;
-			return Boolean(permitted && this.draft.program_name && this.draft.eduedge_institution && this.draft.department);
+			return Boolean(permitted && this.draft.program_name && this.draft.eduedge_institution && this.draft.department && this.draft.eduedge_progression_mode);
 		},
 		draftDepartments() { return this.data.departments.filter((row) => !row.eduedge_institution || row.eduedge_institution === this.draft.eduedge_institution); },
 		showConfiguredCourses() { return this.curriculumView === "all" || this.curriculumView === "configured"; },
@@ -318,6 +374,12 @@ export default {
 			if (!needle) return true;
 			return [row.name, row.course_name, row.department, row.default_grading_scale]
 				.some((value) => String(value || "").toLowerCase().includes(needle));
+		},
+		defaultProgressionMode() {
+			const type = String(this.draftContext?.institution_type || "").toUpperCase();
+			if (["PRIMARY", "SECONDARY"].includes(type)) return PROGRAM_PROMOTION;
+			if (["TERTIARY", "TRAINING_CENTRE"].includes(type)) return LEVEL_PROGRESSION;
+			return MANUAL_PROGRESSION;
 		},
 		handleKeydown(event) { if (event.key === "Escape" && this.programmeModalOpen) this.closeProgrammeModal(); },
 		async load(resetStart = false) {
@@ -347,18 +409,20 @@ export default {
 		},
 		newProgramme() { this.openProgrammeModal(); },
 		editProgramme(row) { this.openProgrammeModal(row); },
-		openProgrammeModal(row = null) {
+		async openProgrammeModal(row = null) {
 			if (row && !this.canWrite) return;
 			if (!row && !this.canCreate) return;
 			this.draft = row
 				? { ...emptyDraft(), ...row }
 				: { ...emptyDraft(), eduedge_institution: this.filters.institution || this.activeContext.institution || "" };
+			if (!this.draft.eduedge_progression_mode) this.draft.eduedge_progression_mode = this.defaultProgressionMode();
 			this.saveError = ""; this.programmeModalOpen = true;
+			await this.loadProgressionOptions();
 			this.$nextTick(() => this.$refs.programmeNameInput?.focus?.());
 		},
 		closeProgrammeModal(force = false) {
 			if (this.saving && !force) return;
-			this.programmeModalOpen = false; this.saveError = ""; this.draft = emptyDraft();
+			this.programmeModalOpen = false; this.saveError = ""; this.progressionOptions = []; this.draft = emptyDraft();
 		},
 		async selectProgramme(row) {
 			this.selectedProgramme = { ...row }; this.curriculumSearch = ""; this.curriculumView = "all";
@@ -368,7 +432,38 @@ export default {
 			await this.selectProgramme(row);
 			this.$nextTick(() => this.$refs.curriculumPanel?.scrollIntoView?.({ behavior: "smooth", block: "start" }));
 		},
-		draftInstitutionChanged() { if (!this.draftDepartments.some((row) => row.name === this.draft.department)) this.draft.department = ""; },
+		async draftInstitutionChanged() {
+			if (!this.draftDepartments.some((row) => row.name === this.draft.department)) this.draft.department = "";
+			this.draft.eduedge_next_program = "";
+			this.draft.eduedge_progression_mode = this.defaultProgressionMode();
+			this.draft.eduedge_terminal_program = 0;
+			await this.loadProgressionOptions();
+		},
+		progressionModeChanged() {
+			if (!this.isProgramPromotion) this.draft.eduedge_next_program = "";
+		},
+		terminalProgressionChanged() {
+			if (Number(this.draft.eduedge_terminal_program || 0)) this.draft.eduedge_next_program = "";
+		},
+		async loadProgressionOptions() {
+			this.progressionOptions = [];
+			if (!this.draft.eduedge_institution) return;
+			this.progressionLoading = true;
+			try {
+				const response = await frappe.call("eduedge.api.programmes.get_programme_progression_options", {
+					institution: this.draft.eduedge_institution,
+					programme: this.draft.name || undefined,
+				});
+				const payload = response.message || {};
+				this.progressionOptions = payload.programmes || [];
+				if (!this.draft.eduedge_progression_mode) this.draft.eduedge_progression_mode = payload.default_mode || this.defaultProgressionMode();
+				if (this.draft.eduedge_next_program && !this.progressionOptions.some((row) => row.name === this.draft.eduedge_next_program)) {
+					this.draft.eduedge_next_program = "";
+				}
+			} catch (error) {
+				this.saveError = error?.message || "Progression options could not be loaded.";
+			} finally { this.progressionLoading = false; }
+		},
 		async loadCurriculum(programme) {
 			const name = String(programme || "").trim();
 			if (!name) { this.curriculum = emptyCurriculum(); return; }
@@ -413,15 +508,25 @@ export default {
 					program_abbreviation: savedDraft.program_abbreviation || undefined,
 					institution: savedDraft.eduedge_institution,
 					department: savedDraft.department,
+					progression_mode: savedDraft.eduedge_progression_mode,
+					progression_sequence: savedDraft.eduedge_progression_sequence || 10,
+					next_program: savedDraft.eduedge_next_program || undefined,
+					terminal_program: savedDraft.eduedge_terminal_program ? 1 : 0,
+					allow_repetition: savedDraft.eduedge_allow_repetition ? 1 : 0,
 				});
 				frappe.show_alert({ message: __(`${this.editorProgrammeSingular} saved`), indicator: "green" });
 				this.programmeModalOpen = false;
 				await this.load(true);
 				const row = this.data.programmes.find((item) => item.name === response.message?.name);
-				this.draft = emptyDraft();
+				this.draft = emptyDraft(); this.progressionOptions = [];
 				if (row) await this.selectProgramme(row);
 			} catch (error) { this.saveError = error?.message || `${this.editorProgrammeSingular} could not be saved.`; }
 			finally { this.saving = false; }
+		},
+		openStudentProgression(name) {
+			if (!name) return;
+			const params = new URLSearchParams({ program: name });
+			window.location.href = `/app/eduedge-student-progression?${params.toString()}`;
 		},
 		openDeliveryCurriculum(offering) {
 			if (!offering?.name || !offering?.school_branch) return;
@@ -471,14 +576,23 @@ export default {
 .eduedge-programme-curriculum-option { display:flex; align-items:flex-start; gap:.6rem; padding:.6rem; border:1px solid var(--border-color); border-radius:8px; background:var(--card-bg); cursor:pointer; }
 .eduedge-programme-offering-links { display:flex; gap:.45rem; }
 .eduedge-programme-modal-backdrop { position:fixed; inset:0; z-index:1050; display:grid; place-items:center; padding:1rem; background:rgba(15,23,42,.45); }
-.eduedge-programme-modal { width:min(40rem,100%); max-height:calc(100vh - 2rem); overflow:auto; border:1px solid var(--border-color); border-radius:14px; background:var(--card-bg); box-shadow:0 24px 80px rgba(15,23,42,.24); }
+.eduedge-programme-modal { width:min(48rem,100%); max-height:calc(100vh - 2rem); overflow:auto; border:1px solid var(--border-color); border-radius:14px; background:var(--card-bg); box-shadow:0 24px 80px rgba(15,23,42,.24); }
 .eduedge-programme-modal-header,.eduedge-programme-modal-footer { padding:1rem; }
 .eduedge-programme-modal-header { border-bottom:1px solid var(--border-color); }
 .eduedge-programme-modal-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; padding:1rem; }
 .eduedge-programme-modal-example,.eduedge-programme-modal-body>.eduedge-programme-governance-note,.eduedge-programme-modal-body>.eduedge-programme-error { grid-column:1/-1; margin:0; }
 .eduedge-programme-modal-example { color:var(--text-muted); }
+.eduedge-programme-progression-editor { grid-column:1/-1; display:grid; gap:.75rem; padding:.85rem; border:1px solid var(--border-color); border-radius:10px; background:var(--control-bg); }
+.eduedge-programme-progression-heading { display:flex; justify-content:space-between; gap:1rem; align-items:start; }
+.eduedge-programme-progression-heading>div { display:grid; gap:.15rem; }
+.eduedge-programme-progression-heading small { max-width:24rem; color:var(--text-muted); text-align:right; }
+.eduedge-programme-progression-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; align-items:end; }
+.eduedge-programme-progression-next { grid-column:1/-1; }
+.eduedge-programme-progression-next small { color:var(--text-muted); font-weight:400; }
+.eduedge-programme-check-option { display:flex !important; grid-template-columns:auto 1fr; align-items:center; gap:.5rem !important; min-height:2.4rem; }
+.eduedge-programme-check-option input { margin:0; }
 .eduedge-programme-modal-footer { border-top:1px solid var(--border-color); }
 .eduedge-programme-modal-spacer { flex:1; }
 @media (max-width:1050px) { .eduedge-programme-layout { grid-template-columns:1fr; } .eduedge-programme-curriculum-manager { position:static; max-height:none; } .eduedge-programme-main { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media (max-width:650px) { .eduedge-programme-row,.eduedge-programme-main,.eduedge-programme-panel-heading,.eduedge-programme-section-heading,.eduedge-programme-paging,.eduedge-programme-course-row,.eduedge-programme-modal-header,.eduedge-programme-modal-footer { align-items:stretch; flex-direction:column; } .eduedge-programme-main,.eduedge-programme-modal-body,.eduedge-programme-curriculum-controls,.eduedge-programme-curriculum-stats { display:grid; grid-template-columns:1fr; } .eduedge-programme-course-meta { justify-items:start; text-align:left; } .eduedge-programme-modal-spacer { display:none; } }
+@media (max-width:650px) { .eduedge-programme-row,.eduedge-programme-main,.eduedge-programme-panel-heading,.eduedge-programme-section-heading,.eduedge-programme-paging,.eduedge-programme-course-row,.eduedge-programme-modal-header,.eduedge-programme-modal-footer,.eduedge-programme-progression-heading { align-items:stretch; flex-direction:column; } .eduedge-programme-main,.eduedge-programme-modal-body,.eduedge-programme-curriculum-controls,.eduedge-programme-curriculum-stats,.eduedge-programme-progression-grid { display:grid; grid-template-columns:1fr; } .eduedge-programme-course-meta { justify-items:start; text-align:left; } .eduedge-programme-modal-spacer { display:none; } .eduedge-programme-progression-heading small { max-width:none; text-align:left; } }
 </style>
