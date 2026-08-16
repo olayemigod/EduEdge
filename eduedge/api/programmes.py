@@ -8,6 +8,17 @@ from frappe.utils import cint
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.academic_hierarchy import _validate_department
+from eduedge.education.academic_progression import (
+	LEVEL_PROGRESSION,
+	MANUAL_PROGRESSION,
+	PROGRAM_ALLOW_REPETITION_FIELD,
+	PROGRAM_NEXT_FIELD,
+	PROGRAM_PROGRESSION_MODE_FIELD,
+	PROGRAM_PROMOTION,
+	PROGRAM_SEQUENCE_FIELD,
+	PROGRAM_TERMINAL_FIELD,
+	default_progression_mode,
+)
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.institution_context import get_effective_institution_context
 
@@ -16,6 +27,13 @@ MAX_PAGE_LENGTH = 50
 MAX_OPTION_ROWS = 500
 MAX_DEPARTMENT_OPTIONS = 100
 MAX_CURRICULUM_OPTIONS = 1000
+PROGRESSION_FIELDS = (
+	PROGRAM_PROGRESSION_MODE_FIELD,
+	PROGRAM_SEQUENCE_FIELD,
+	PROGRAM_NEXT_FIELD,
+	PROGRAM_TERMINAL_FIELD,
+	PROGRAM_ALLOW_REPETITION_FIELD,
+)
 
 
 def _require_login() -> None:
@@ -69,6 +87,9 @@ def get_programmes_page(
 	meta = frappe.get_meta("Program")
 	if meta.has_field("enabled"):
 		fields.append("enabled")
+	for fieldname in PROGRESSION_FIELDS:
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
 	rows = frappe.get_list(
 		"Program",
 		filters=filters,
@@ -89,6 +110,7 @@ def get_programmes_page(
 		"programmes": rows,
 		"institutions": institutions,
 		"departments": departments,
+		"progression_modes": [PROGRAM_PROMOTION, LEVEL_PROGRESSION, MANUAL_PROGRESSION],
 		"summary": {
 			"total_programmes": _count_programmes(filters, or_filters),
 			"visible_programmes": len(rows),
@@ -397,6 +419,38 @@ def search_departments(txt: str | None = None, institution: str | None = None) -
 	]
 
 
+@frappe.whitelist()
+def get_programme_progression_options(institution: str, programme: str | None = None) -> dict:
+	"""Return permission-aware same-Institution progression targets for the smart Class editor."""
+	_require_programme_read()
+	institution = str(institution or "").strip()
+	if not institution:
+		frappe.throw(_("Select an Institution before choosing a progression target."), frappe.ValidationError)
+	_assert_institution_access(institution)
+	filters: dict[str, Any] = {INSTITUTION_FIELD: institution}
+	if programme:
+		filters["name"] = ["!=", str(programme).strip()]
+	meta = frappe.get_meta("Program")
+	fields = ["name", "program_name", "program_abbreviation"]
+	for fieldname in (PROGRAM_PROGRESSION_MODE_FIELD, PROGRAM_TERMINAL_FIELD):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
+	rows = frappe.get_list(
+		"Program",
+		filters=filters,
+		fields=fields,
+		order_by="program_name asc, name asc",
+		page_length=MAX_OPTION_ROWS,
+	)
+	return {
+		"institution": institution,
+		"programme": str(programme or "").strip() or None,
+		"default_mode": default_progression_mode(institution),
+		"modes": [PROGRAM_PROMOTION, LEVEL_PROGRESSION, MANUAL_PROGRESSION],
+		"programmes": rows,
+	}
+
+
 @frappe.whitelist(methods=["POST"])
 def save_programme(
 	program_name: str,
@@ -404,6 +458,11 @@ def save_programme(
 	department: str,
 	programme: str | None = None,
 	program_abbreviation: str | None = None,
+	progression_mode: str | None = None,
+	progression_sequence: int | str | None = None,
+	next_program: str | None = None,
+	terminal_program: int | str = 0,
+	allow_repetition: int | str = 1,
 	**_legacy_values,
 ) -> dict:
 	_require_login()
@@ -421,10 +480,26 @@ def save_programme(
 	doc.program_abbreviation = str(program_abbreviation or "").strip() or None
 	doc.department = str(department or "").strip()
 	doc.set(INSTITUTION_FIELD, institution)
+	meta = frappe.get_meta("Program")
+	if meta.has_field(PROGRAM_PROGRESSION_MODE_FIELD):
+		doc.set(PROGRAM_PROGRESSION_MODE_FIELD, str(progression_mode or "").strip() or default_progression_mode(institution))
+	if meta.has_field(PROGRAM_SEQUENCE_FIELD):
+		doc.set(PROGRAM_SEQUENCE_FIELD, cint(progression_sequence) or 10)
+	if meta.has_field(PROGRAM_NEXT_FIELD):
+		doc.set(PROGRAM_NEXT_FIELD, str(next_program or "").strip() or None)
+	if meta.has_field(PROGRAM_TERMINAL_FIELD):
+		doc.set(PROGRAM_TERMINAL_FIELD, cint(terminal_program))
+	if meta.has_field(PROGRAM_ALLOW_REPETITION_FIELD):
+		doc.set(PROGRAM_ALLOW_REPETITION_FIELD, cint(allow_repetition))
 	doc.save()
 	return {
 		"name": doc.name,
 		"program_name": doc.program_name,
 		"institution": doc.get(INSTITUTION_FIELD),
 		"department": doc.department,
+		"progression_mode": doc.get(PROGRAM_PROGRESSION_MODE_FIELD),
+		"progression_sequence": doc.get(PROGRAM_SEQUENCE_FIELD),
+		"next_program": doc.get(PROGRAM_NEXT_FIELD),
+		"terminal_program": cint(doc.get(PROGRAM_TERMINAL_FIELD)),
+		"allow_repetition": cint(doc.get(PROGRAM_ALLOW_REPETITION_FIELD)),
 	}
