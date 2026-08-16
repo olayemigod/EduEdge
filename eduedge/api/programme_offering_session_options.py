@@ -9,17 +9,22 @@ CALENDAR_DOCTYPE = "EduEdge Institution Academic Calendar"
 
 
 def _all_academic_years(institution: str | None) -> list[dict]:
-	"""Return readable Academic Sessions even before Institution Calendar setup.
+	"""Return every readable Academic Session, independent of calendar readiness.
 
-	Programme Offering is sessional, so a newly created Academic Year must be
-	discoverable immediately. Calendar readiness is reported separately and is
-	still enforced by the existing save/controller validation before the Intake
-	becomes operational.
+	Academic Year is a global academic master. Once the user has DocType read
+	permission, Class Intake discovery must not apply Institution Calendar or
+	User-Permission value filtering that can make a valid future Session disappear.
+	Institution Calendar readiness is attached separately below and remains
+	validated before term-dependent operations run.
 	"""
 	if not frappe.has_permission("Academic Year", "read"):
 		return []
 
-	years = frappe.get_list(
+	# Use get_all only after the explicit DocType permission gate above. Academic
+	# Years are global structural masters and the same Sessions are already exposed
+	# by Student Progression. Per-value filtering here caused future Sessions to
+	# disappear from Class Intakes even though the user could operate on them.
+	years = frappe.get_all(
 		"Academic Year",
 		fields=["name", "year_start_date", "year_end_date"],
 		order_by="year_start_date desc, name desc",
@@ -68,7 +73,7 @@ def get_programme_offering_session_options(
 	academic_year: str | None = None,
 	use_active_branch: int | str | bool = 0,
 ) -> dict:
-	"""Programme Offering options with session discovery separated from calendar readiness."""
+	"""Programme Offering options with Session discovery separated from calendar readiness."""
 	result = base.get_programme_offering_options(
 		institution=institution,
 		branch=branch,
@@ -82,5 +87,7 @@ def get_programme_offering_session_options(
 
 	selected = str(academic_year or "").strip()
 	selected_option = next((row for row in options["academic_years"] if row.get("name") == selected), None)
-	result["selected_session_calendar_ready"] = bool(selected_option and selected_option.get("calendar_ready")) if selected else None
+	result["selected_session_calendar_ready"] = (
+		bool(selected_option and selected_option.get("calendar_ready")) if selected else None
+	)
 	return result
