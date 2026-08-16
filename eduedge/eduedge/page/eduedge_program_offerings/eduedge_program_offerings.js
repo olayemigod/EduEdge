@@ -6,266 +6,58 @@ frappe.pages["eduedge-program-offerings"].on_page_load = function (wrapper) {
 	});
 };
 
-function selected_offering_context(wrapper) {
-	const proxy = wrapper.vue_app?._instance?.proxy;
-	const draft = proxy?.draft || {};
-	const filters = proxy?.filters || {};
-	return {
-		branch: draft.school_branch || filters.branch || "",
-		offering: draft.name || "",
-		offering_title: draft.offering_title || draft.name || "",
-		institution_context: proxy?.draftContext || proxy?.activeContext || {},
-	};
-}
+const SESSION_OPTIONS_METHOD = "eduedge.api.programme_offering_session_options.get_programme_offering_session_options";
 
-function require_selected_offering(wrapper) {
-	const context = selected_offering_context(wrapper);
-	if (!context.offering) {
-		frappe.msgprint({
-			title: __("Select a Class / Programme Offering"),
-			message: __("Select an existing Class / Programme Offering card before reviewing or managing its curriculum."),
-			indicator: "orange",
-		});
-		return null;
-	}
-	if (!context.branch) {
-		frappe.msgprint({
-			title: __("Branch context required"),
-			message: __("The selected Class / Programme Offering does not have a usable Branch / Campus context."),
-			indicator: "red",
-		});
-		return null;
-	}
-	return context;
-}
-
-function curriculum_route(context) {
-	const params = new URLSearchParams();
-	params.set("branch", context.branch);
-	params.set("offering", context.offering);
-	return `/app/eduedge-curriculum?${params.toString()}`;
-}
-
-function open_offering_operation(wrapper, route, options = {}) {
-	const context = options.require_offering === false
-		? selected_offering_context(wrapper)
-		: require_selected_offering(wrapper);
-	if (!context) return;
-	const params = new URLSearchParams();
-	if (context.branch) params.set("branch", context.branch);
-	if (context.offering) params.set("offering", context.offering);
-	window.location.href = `${route}${params.toString() ? `?${params.toString()}` : ""}`;
-}
-
-function curriculum_terms(context) {
-	const term = frappe.eduedge?.term;
-	return {
-		singular: term?.("course", {
-			plural: false,
-			context: context.institution_context,
-			fallback: "Subject / Course",
-		}) || "Subject / Course",
-		plural: term?.("course", {
-			plural: true,
-			context: context.institution_context,
-			fallback: "Subjects / Courses",
-		}) || "Subjects / Courses",
-	};
-}
-
-function curriculum_review_html(courses, terms) {
-	if (!courses.length) {
-		return `
-			<div class="text-muted" style="padding:1rem 0;">
-				<strong>${__(`No configured ${terms.plural.toLowerCase()}`)}</strong>
-				<div>${__("Use Manage Curriculum to add Institution subjects to this Class / Programme.")}</div>
-			</div>
-		`;
-	}
-	const rows = courses.map((course) => `
-		<tr>
-			<td><strong>${frappe.utils.escape_html(course.course_name || course.name || "")}</strong></td>
-			<td>${frappe.utils.escape_html(course.department || __("Not assigned"))}</td>
-			<td>${frappe.utils.escape_html(course.default_grading_scale || __("No default"))}</td>
-		</tr>
-	`).join("");
-	return `
-		<div style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;margin-bottom:.75rem;">
-			<span class="text-muted">${courses.length} ${frappe.utils.escape_html(courses.length === 1 ? terms.singular : terms.plural)} configured for the selected Class / Programme.</span>
-		</div>
-		<div class="table-responsive">
-			<table class="table table-bordered table-hover">
-				<thead>
-					<tr>
-						<th>${frappe.utils.escape_html(terms.singular)}</th>
-						<th>${__("Department / School Section")}</th>
-						<th>${__("Default Grading Scale")}</th>
-					</tr>
-				</thead>
-				<tbody>${rows}</tbody>
-			</table>
-		</div>
-	`;
-}
-
-async function review_selected_curriculum(wrapper) {
-	const context = require_selected_offering(wrapper);
-	if (!context) return;
-	const terms = curriculum_terms(context);
-	try {
-		const response = await frappe.call({
-			method: "eduedge.api.curriculum_management.get_curriculum_page",
-			args: {
-				branch: context.branch,
-				program_offering: context.offering,
-				start: 0,
-				page_length: 100,
-			},
-			freeze: true,
-			freeze_message: __(`Loading ${terms.plural.toLowerCase()}...`),
-		});
-		const courses = response.message?.courses || [];
-		const dialog = new frappe.ui.Dialog({
-			title: __(`Class Curriculum — ${context.offering_title || context.offering}`),
-			size: "large",
-			fields: [{ fieldtype: "HTML", fieldname: "curriculum_review" }],
-			primary_action_label: __("Manage Curriculum"),
-			primary_action() {
-				dialog.hide();
-				window.location.href = curriculum_route(context);
-			},
-		});
-		dialog.fields_dict.curriculum_review.$wrapper.html(curriculum_review_html(courses, terms));
-		dialog.show();
-	} catch (error) {
-		frappe.msgprint({
-			title: __("Curriculum could not load"),
-			message: frappe.utils.escape_html(error?.message || String(error)),
-			indicator: "red",
-		});
-	}
-}
-
-function ensure_curriculum_bridge_styles() {
-	if (document.querySelector("style[data-eduedge-offering-curriculum-bridge]")) return;
-	const style = document.createElement("style");
-	style.setAttribute("data-eduedge-offering-curriculum-bridge", "1");
-	style.textContent = `
-		.eduedge-offering-curriculum-bridge{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:.85rem 1rem;margin-bottom:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}
-		.eduedge-offering-curriculum-bridge__copy{display:grid;gap:.2rem}.eduedge-offering-curriculum-bridge__copy span{color:var(--text-muted);font-size:.82rem}
-		.eduedge-offering-curriculum-bridge__actions{display:flex;gap:.5rem;flex-wrap:wrap}
-	`;
-	document.head.appendChild(style);
-}
-
-function add_visible_curriculum_bridge(wrapper, root) {
-	ensure_curriculum_bridge_styles();
-	const panel = $(
-		`<section class="eduedge-offering-curriculum-bridge">
-			<div class="eduedge-offering-curriculum-bridge__copy">
-				<strong>${__("Class Curriculum")}</strong>
-				<span>${__("Select an existing Class / Programme Offering, then review or manage its configured Subjects / Courses.")}</span>
-			</div>
-			<div class="eduedge-offering-curriculum-bridge__actions">
-				<button type="button" class="edge-button" data-action="review-curriculum">${__("Review Subjects / Courses")}</button>
-				<button type="button" class="edge-button edge-button--primary" data-action="manage-curriculum">${__("Manage Curriculum")}</button>
-			</div>
-		</section>`
-	);
-	panel.find('[data-action="review-curriculum"]').on("click", () => review_selected_curriculum(wrapper));
-	panel.find('[data-action="manage-curriculum"]').on("click", () => {
-		const context = require_selected_offering(wrapper);
-		if (context) window.location.href = curriculum_route(context);
-	});
-	panel.insertBefore(root);
-}
-
-function add_offering_operation_buttons(wrapper) {
-	const page = wrapper.page;
-	page.clear_inner_toolbar?.();
-	page.add_inner_button(
-		__("Review Curriculum"),
-		() => review_selected_curriculum(wrapper),
-		__("Class Operations")
-	);
-	page.add_inner_button(
-		__("Manage Curriculum"),
-		() => open_offering_operation(wrapper, "/app/eduedge-curriculum"),
-		__("Class Operations")
-	);
-	page.add_inner_button(
-		__("Assign Instructors"),
-		() => open_offering_operation(wrapper, "/app/eduedge-instructor-assignments"),
-		__("Class Operations")
+function calendar_setup_warning(proxy, result) {
+	const year = String(proxy?.draft?.academic_year || "").trim();
+	if (!year) return "";
+	const selected = (result?.options?.academic_years || []).find((row) => row.name === year);
+	if (!selected || selected.calendar_ready) return "";
+	return __(
+		`Academic Session ${year} exists, but its Institution Academic Calendar is not configured yet. ` +
+		"You can select the Session now; configure its Terms / Semesters under Academic Sessions & Terms before saving or using this Class Intake."
 	);
 }
 
-function merge_academic_year_options(target, years) {
-	if (!target) return;
-	const current = Array.isArray(target.academic_years) ? target.academic_years : [];
-	const byName = new Map(current.map((row) => [row.name, row]));
-	for (const year of years || []) {
-		if (!year?.name) continue;
-		if (!byName.has(year.name)) {
-			byName.set(year.name, {
-				name: year.name,
-				year_start_date: year.year_start_date,
-				year_end_date: year.year_end_date,
-				calendar: "",
-				calendar_ready: false,
-			});
-		}
-	}
-	target.academic_years = Array.from(byName.values()).sort((a, b) =>
-		String(b.year_start_date || b.name || "").localeCompare(String(a.year_start_date || a.name || ""))
-	);
-}
-
-async function expose_all_academic_sessions(wrapper) {
-	const proxy = wrapper.vue_app?._instance?.proxy;
+async function refresh_session_options(proxy) {
 	if (!proxy) return;
-	let years = [];
 	try {
-		years = await frappe.db.get_list("Academic Year", {
-			fields: ["name", "year_start_date", "year_end_date"],
-			order_by: "year_start_date desc, name desc",
-			limit: 500,
+		const response = await frappe.call(SESSION_OPTIONS_METHOD, {
+			institution: proxy.draft?.institution || undefined,
+			branch: proxy.draft?.school_branch || undefined,
+			academic_year: proxy.draft?.academic_year || undefined,
 		});
+		const result = response.message || {};
+		const options = result.options || {};
+
+		proxy.draftOptions = { ...(proxy.draftOptions || {}), ...options };
+		proxy.draftContext = result.active_context || proxy.activeContext || {};
+		proxy.data = {
+			...(proxy.data || {}),
+			options: {
+				...(proxy.data?.options || {}),
+				academic_years: options.academic_years || [],
+			},
+		};
+
+		const warning = calendar_setup_warning(proxy, result);
+		if (warning) {
+			proxy.saveError = warning;
+		} else if (String(proxy.saveError || "").startsWith("Academic Session ")) {
+			proxy.saveError = "";
+		}
 	} catch (error) {
-		console.warn("EduEdge could not extend Programme Offering Academic Session options", error);
-		return;
+		proxy.saveError = error?.message || __("Class Intake setup options could not be loaded.");
 	}
+}
 
-	merge_academic_year_options(proxy.data?.options, years);
-	merge_academic_year_options(proxy.draftOptions, years);
-
-	if (!proxy.__eduedgeAcademicSessionVisibilityPatched && typeof proxy.loadDraftOptions === "function") {
-		const originalLoadDraftOptions = proxy.loadDraftOptions.bind(proxy);
-		proxy.loadDraftOptions = async (...args) => {
-			const result = await originalLoadDraftOptions(...args);
-			merge_academic_year_options(proxy.draftOptions, years);
-			return result;
-		};
-		proxy.__eduedgeAcademicSessionVisibilityPatched = true;
-	}
-
-	if (!proxy.__eduedgeOfferingCalendarGuardPatched && typeof proxy.saveOffering === "function") {
-		const originalSaveOffering = proxy.saveOffering.bind(proxy);
-		proxy.saveOffering = async (...args) => {
-			if (proxy.draft?.academic_year && !proxy.draftCalendar?.name) {
-				frappe.msgprint({
-					title: __("Academic Calendar required"),
-					message: __(
-						"This Academic Session exists, but the selected Institution does not yet have an enabled Academic Calendar for it. Configure the Institution Academic Calendar under Academic Setup → Academic Foundation, then return here to create the Programme Offering."
-					),
-					indicator: "orange",
-				});
-				return;
-			}
-			return originalSaveOffering(...args);
-		};
-		proxy.__eduedgeOfferingCalendarGuardPatched = true;
-	}
+function install_session_option_loader(proxy) {
+	if (!proxy || proxy.__eduedge_session_option_loader_installed) return;
+	proxy.__eduedge_session_option_loader_installed = true;
+	proxy.loadDraftOptions = async function () {
+		await refresh_session_options(proxy);
+	};
+	refresh_session_options(proxy);
 }
 
 frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
@@ -273,25 +65,31 @@ frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
 
+	// Keep Class Intakes as one EdgeSuite setup workflow. Curriculum and
+	// Instructor Assignment are separate workflows and must not create a second
+	// toolbar/panel above the app shell.
+	page.clear_inner_toolbar?.();
+	page.clear_primary_action?.();
+
 	if (wrapper.vue_app) {
 		try {
 			wrapper.vue_app.unmount();
 		} catch (error) {
-			console.error("Failed to unmount EduEdge Programme Offerings", error);
+			console.error("Failed to unmount EduEdge Class Intakes", error);
 		}
 		wrapper.vue_app = null;
 	}
 
 	$(page.body).empty();
 	const $loading = $(
-		`<div class="p-6 text-center text-muted">${__("Loading Programme Offerings...")}</div>`
+		`<div class="p-6 text-center text-muted">${__("Loading Class Intakes...")}</div>`
 	).appendTo(page.body);
 
 	const fail = (message) => {
 		$loading.remove();
 		$(
 			`<div class="alert alert-danger p-6 text-center">
-				<strong>${__("Programme Offerings failed to load")}</strong>
+				<strong>${__("Class Intakes failed to load")}</strong>
 				<div>${frappe.utils.escape_html(message || "")}</div>
 			</div>`
 		).appendTo(page.body);
@@ -305,7 +103,7 @@ frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 				!window.EduEdgeProgrammeOfferings ||
 				typeof window.createEduEdgeProgrammeOfferingsApp !== "function"
 			) {
-				fail(__("The EduEdge Programme Offerings bundle is unavailable or incomplete."));
+				fail(__("The EduEdge Class Intakes bundle is unavailable or incomplete."));
 				return;
 			}
 			$loading.remove();
@@ -317,11 +115,9 @@ frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 					pageName: "eduedge-program-offerings",
 				});
 				wrapper.vue_app.mount(root[0]);
-				add_visible_curriculum_bridge(wrapper, root);
-				add_offering_operation_buttons(wrapper);
-				setTimeout(() => expose_all_academic_sessions(wrapper), 0);
+				install_session_option_loader(wrapper.vue_app?._instance?.proxy);
 			} catch (error) {
-				console.error("Failed to mount EduEdge Programme Offerings", error);
+				console.error("Failed to mount EduEdge Class Intakes", error);
 				fail(error.message || String(error));
 			}
 		});
