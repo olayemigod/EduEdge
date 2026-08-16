@@ -2,8 +2,19 @@ frappe.pages["eduedge-student-progression"].on_page_load = function (wrapper) {
 	wrapper.page = frappe.ui.make_app_page({ parent: wrapper, title: __("Student Progression"), single_column: true });
 };
 
+function ensure_student_progression_runtime_styles() {
+	const href = "/assets/eduedge/css/eduedge_student_progression_runtime_fix.css";
+	if (document.querySelector(`link[data-eduedge-student-progression-runtime][href="${href}"]`)) return;
+	const link = document.createElement("link");
+	link.rel = "stylesheet";
+	link.href = href;
+	link.setAttribute("data-eduedge-student-progression-runtime", "1");
+	document.head.appendChild(link);
+}
+
 frappe.pages["eduedge-student-progression"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
+	ensure_student_progression_runtime_styles();
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
 	if (wrapper.vue_app) {
