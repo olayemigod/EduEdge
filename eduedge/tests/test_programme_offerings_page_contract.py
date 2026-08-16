@@ -112,23 +112,23 @@ class TestProgrammeOfferingsPageContract(unittest.TestCase):
 		self.assertNotIn("registerEduEdgeResourcePage", loader)
 		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 
-	def test_offering_page_exposes_visible_curriculum_review_and_manage_workflow(self):
+	def test_offering_page_keeps_one_setup_surface_and_uses_dedicated_workflows(self):
 		loader = (APP / "eduedge" / "page" / "eduedge_program_offerings" / "eduedge_program_offerings.js").read_text(encoding="utf-8")
 		for token in (
-			"add_visible_curriculum_bridge",
-			"Class Curriculum",
-			"Review Subjects / Courses",
-			"Manage Curriculum",
-			"review_selected_curriculum",
-			"require_selected_offering",
-			"eduedge.api.curriculum_management.get_curriculum_page",
-			"program_offering: context.offering",
-			"curriculum_review_html",
-			"Default Grading Scale",
-			"/app/eduedge-curriculum",
+			"programme_offering_session_options.get_programme_offering_session_options",
+			"clear_inner_toolbar",
+			"clear_primary_action",
+			"install_session_option_loader",
+			"Academic Sessions & Terms",
 		):
 			self.assertIn(token, loader)
-		self.assertIn('message: __("Select an existing Class / Programme Offering card', loader)
+		for retired in (
+			"add_visible_curriculum_bridge",
+			"add_offering_operation_buttons",
+			"review_selected_curriculum",
+			'__("Class Operations")',
+		):
+			self.assertNotIn(retired, loader)
 		self.assertNotIn("ignore_permissions", loader)
 
 	def test_ci_checks_programme_offerings_entries(self):
