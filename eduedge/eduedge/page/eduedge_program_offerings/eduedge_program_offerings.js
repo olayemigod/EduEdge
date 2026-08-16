@@ -117,7 +117,7 @@ async function review_selected_curriculum(wrapper) {
 			method: "eduedge.api.curriculum_management.get_curriculum_page",
 			args: {
 				branch: context.branch,
-				offering: context.offering,
+				program_offering: context.offering,
 				start: 0,
 				page_length: 100,
 			},
