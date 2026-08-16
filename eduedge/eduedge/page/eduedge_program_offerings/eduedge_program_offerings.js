@@ -7,6 +7,8 @@ frappe.pages["eduedge-program-offerings"].on_page_load = function (wrapper) {
 };
 
 const SESSION_OPTIONS_METHOD = "eduedge.api.programme_offering_session_options.get_programme_offering_session_options";
+const SESSION_OPTION_SETTLE_INTERVAL_MS = 50;
+const SESSION_OPTION_SETTLE_ATTEMPTS = 80;
 
 function calendar_setup_warning(proxy, result) {
 	const year = String(proxy?.draft?.academic_year || "").trim();
@@ -20,7 +22,7 @@ function calendar_setup_warning(proxy, result) {
 }
 
 async function refresh_session_options(proxy) {
-	if (!proxy) return;
+	if (!proxy) return null;
 	try {
 		const response = await frappe.call(SESSION_OPTIONS_METHOD, {
 			institution: proxy.draft?.institution || undefined,
@@ -46,18 +48,53 @@ async function refresh_session_options(proxy) {
 		} else if (String(proxy.saveError || "").startsWith("Academic Session ")) {
 			proxy.saveError = "";
 		}
+		return result;
 	} catch (error) {
 		proxy.saveError = error?.message || __("Class Intake setup options could not be loaded.");
+		return null;
 	}
+}
+
+function wait_for_component_load(proxy) {
+	return new Promise((resolve) => {
+		let attempts = 0;
+		const check = () => {
+			attempts += 1;
+			if (!proxy?.loading || attempts >= SESSION_OPTION_SETTLE_ATTEMPTS) {
+				resolve();
+				return;
+			}
+			setTimeout(check, SESSION_OPTION_SETTLE_INTERVAL_MS);
+		};
+		check();
+	});
 }
 
 function install_session_option_loader(proxy) {
 	if (!proxy || proxy.__eduedge_session_option_loader_installed) return;
 	proxy.__eduedge_session_option_loader_installed = true;
+
+	// The Vue component starts its first page request during mount. That request
+	// can complete after this hook and overwrite draft/data options. Wait for the
+	// initial load to settle, then apply the canonical all-session source.
+	wait_for_component_load(proxy).then(() => refresh_session_options(proxy));
+
+	// All subsequent editor option refreshes use the all-session source directly.
 	proxy.loadDraftOptions = async function () {
-		await refresh_session_options(proxy);
+		return refresh_session_options(proxy);
 	};
-	refresh_session_options(proxy);
+
+	// Page/filter refreshes still need the canonical API for the offering list,
+	// but re-apply all Academic Sessions after that request finishes so the filter
+	// cannot regress to calendar-ready sessions only.
+	if (typeof proxy.load === "function") {
+		const originalLoad = proxy.load.bind(proxy);
+		proxy.load = async function (...args) {
+			const result = await originalLoad(...args);
+			await refresh_session_options(proxy);
+			return result;
+		};
+	}
 }
 
 frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
