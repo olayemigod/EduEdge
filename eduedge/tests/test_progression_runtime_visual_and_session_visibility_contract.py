@@ -18,6 +18,8 @@ class TestProgressionRuntimeVisualAndSessionVisibilityContract(unittest.TestCase
             "var(--text-color",
             "@media (max-width: 1320px)",
             "grid-template-columns: minmax(0, 1fr)",
+            "overflow-wrap: anywhere",
+            ".progression-row > .edge-button",
         ):
             self.assertIn(token, css)
         self.assertIn("eduedge_student_progression_runtime_fix.css", page)
@@ -25,19 +27,24 @@ class TestProgressionRuntimeVisualAndSessionVisibilityContract(unittest.TestCase
 
     def test_programme_offering_page_exposes_global_sessions_without_hiding_calendar_readiness(self):
         page = (APP / "eduedge/page/eduedge_program_offerings/eduedge_program_offerings.js").read_text(encoding="utf-8")
+        api = (APP / "api/programme_offering_session_options.py").read_text(encoding="utf-8")
         for token in (
-            "merge_academic_year_options",
-            'frappe.db.get_list("Academic Year"',
-            "proxy.data?.options",
+            "programme_offering_session_options.get_programme_offering_session_options",
+            "install_session_option_loader",
             "proxy.draftOptions",
-            "calendar_ready: false",
-            "Academic Calendar required",
-            "Academic Setup → Academic Foundation",
             "proxy.loadDraftOptions = async",
-            "proxy.saveOffering = async",
+            "Academic Sessions & Terms",
         ):
             self.assertIn(token, page)
-        self.assertIn("program_offering: context.offering", page)
+        for token in (
+            'frappe.get_list(\n\t\t"Academic Year"',
+            '"calendar_ready": bool(calendar.get("name"))',
+            "selected_session_calendar_ready",
+            "Programme Offering is sessional",
+        ):
+            self.assertIn(token, api)
+        self.assertNotIn("merge_academic_year_options", page)
+        self.assertNotIn('frappe.db.get_list("Academic Year"', page)
 
 
 if __name__ == "__main__":
