@@ -259,15 +259,13 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             class_arms,
         )
         self.assertIn("/app/eduedge-instructor-assignments", class_arms)
-        for token in (
-            "Manage Curriculum",
-            "selected_offering_context",
-            'params.set("branch", context.branch)',
-            'params.set("offering", context.offering)',
-            'open_offering_operation(wrapper, "/app/eduedge-curriculum")',
-            'open_offering_operation(wrapper, "/app/eduedge-instructor-assignments")',
-        ):
-            self.assertIn(token, offerings)
+        # Class Intake is now a setup-only surface. Instructor/curriculum links
+        # preserve exact context from their dedicated workflows rather than a
+        # competing Desk toolbar on the Intake page.
+        self.assertIn("clear_inner_toolbar", offerings)
+        self.assertIn("programme_offering_session_options.get_programme_offering_session_options", offerings)
+        self.assertNotIn("open_offering_operation", offerings)
+        self.assertNotIn('__("Class Operations")', offerings)
 
 
 if __name__ == "__main__":
