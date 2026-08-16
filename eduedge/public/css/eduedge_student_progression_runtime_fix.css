@@ -1,0 +1,66 @@
+.eduedge-student-progression-root,
+.eduedge-student-progression-root .progression-panel {
+	color: var(--text-color, var(--fg-color, inherit));
+}
+
+.eduedge-student-progression-root .progression-layout,
+.eduedge-student-progression-root .progression-panel,
+.eduedge-student-progression-root .progression-heading,
+.eduedge-student-progression-root .progression-actions,
+.eduedge-student-progression-root .progression-list,
+.eduedge-student-progression-root .progression-row {
+	min-width: 0;
+}
+
+.eduedge-student-progression-root .progression-heading {
+	align-items: flex-start;
+}
+
+.eduedge-student-progression-root .progression-heading > div:first-child {
+	min-width: 8rem;
+	flex: 1 1 auto;
+}
+
+.eduedge-student-progression-root .progression-actions {
+	flex: 0 1 auto;
+	max-width: 100%;
+	justify-content: flex-end;
+}
+
+.eduedge-student-progression-root .progression-actions .edge-button {
+	white-space: normal;
+}
+
+.eduedge-student-progression-root .progression-panel h2,
+.eduedge-student-progression-root .progression-panel h3,
+.eduedge-student-progression-root .progression-panel strong,
+.eduedge-student-progression-root .planner-grid label > span,
+.eduedge-student-progression-root .progression-actions > span,
+.eduedge-student-progression-root .progression-paging > span {
+	color: var(--text-color, var(--fg-color, inherit));
+}
+
+.eduedge-student-progression-root .progression-student small,
+.eduedge-student-progression-root .progression-decision small,
+.eduedge-student-progression-root .planner-grid small,
+.eduedge-student-progression-root .result-card p {
+	color: var(--text-muted);
+}
+
+.eduedge-student-progression-root .progression-row,
+.eduedge-student-progression-root .progression-evidence span,
+.eduedge-student-progression-root .destination-card,
+.eduedge-student-progression-root .preview-card,
+.eduedge-student-progression-root .result-card {
+	color: var(--text-color, var(--fg-color, inherit));
+}
+
+@media (max-width: 1320px) {
+	.eduedge-student-progression-root .progression-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.eduedge-student-progression-root .progression-actions {
+		justify-content: flex-start;
+	}
+}
