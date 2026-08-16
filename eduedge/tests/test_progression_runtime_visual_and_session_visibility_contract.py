@@ -37,10 +37,11 @@ class TestProgressionRuntimeVisualAndSessionVisibilityContract(unittest.TestCase
         ):
             self.assertIn(token, page)
         for token in (
-            'frappe.get_list(\n\t\t"Academic Year"',
+            'frappe.has_permission("Academic Year", "read")',
+            'frappe.get_all(\n\t\t"Academic Year"',
             '"calendar_ready": bool(calendar.get("name"))',
             "selected_session_calendar_ready",
-            "Programme Offering is sessional",
+            "Academic Year is a global academic master",
         ):
             self.assertIn(token, api)
         self.assertNotIn("merge_academic_year_options", page)
