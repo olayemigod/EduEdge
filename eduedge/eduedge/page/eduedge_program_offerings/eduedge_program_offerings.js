@@ -117,7 +117,7 @@ async function review_selected_curriculum(wrapper) {
 			method: "eduedge.api.curriculum_management.get_curriculum_page",
 			args: {
 				branch: context.branch,
-				program_offering: context.offering,
+				offering: context.offering,
 				start: 0,
 				page_length: 100,
 			},
@@ -200,6 +200,74 @@ function add_offering_operation_buttons(wrapper) {
 	);
 }
 
+function merge_academic_year_options(target, years) {
+	if (!target) return;
+	const current = Array.isArray(target.academic_years) ? target.academic_years : [];
+	const byName = new Map(current.map((row) => [row.name, row]));
+	for (const year of years || []) {
+		if (!year?.name) continue;
+		if (!byName.has(year.name)) {
+			byName.set(year.name, {
+				name: year.name,
+				year_start_date: year.year_start_date,
+				year_end_date: year.year_end_date,
+				calendar: "",
+				calendar_ready: false,
+			});
+		}
+	}
+	target.academic_years = Array.from(byName.values()).sort((a, b) =>
+		String(b.year_start_date || b.name || "").localeCompare(String(a.year_start_date || a.name || ""))
+	);
+}
+
+async function expose_all_academic_sessions(wrapper) {
+	const proxy = wrapper.vue_app?._instance?.proxy;
+	if (!proxy) return;
+	let years = [];
+	try {
+		years = await frappe.db.get_list("Academic Year", {
+			fields: ["name", "year_start_date", "year_end_date"],
+			order_by: "year_start_date desc, name desc",
+			limit: 500,
+		});
+	} catch (error) {
+		console.warn("EduEdge could not extend Programme Offering Academic Session options", error);
+		return;
+	}
+
+	merge_academic_year_options(proxy.data?.options, years);
+	merge_academic_year_options(proxy.draftOptions, years);
+
+	if (!proxy.__eduedgeAcademicSessionVisibilityPatched && typeof proxy.loadDraftOptions === "function") {
+		const originalLoadDraftOptions = proxy.loadDraftOptions.bind(proxy);
+		proxy.loadDraftOptions = async (...args) => {
+			const result = await originalLoadDraftOptions(...args);
+			merge_academic_year_options(proxy.draftOptions, years);
+			return result;
+		};
+		proxy.__eduedgeAcademicSessionVisibilityPatched = true;
+	}
+
+	if (!proxy.__eduedgeOfferingCalendarGuardPatched && typeof proxy.saveOffering === "function") {
+		const originalSaveOffering = proxy.saveOffering.bind(proxy);
+		proxy.saveOffering = async (...args) => {
+			if (proxy.draft?.academic_year && !proxy.draftCalendar?.name) {
+				frappe.msgprint({
+					title: __("Academic Calendar required"),
+					message: __(
+						"This Academic Session exists, but the selected Institution does not yet have an enabled Academic Calendar for it. Configure the Institution Academic Calendar under Academic Setup → Academic Foundation, then return here to create the Programme Offering."
+					),
+					indicator: "orange",
+				});
+				return;
+			}
+			return originalSaveOffering(...args);
+		};
+		proxy.__eduedgeOfferingCalendarGuardPatched = true;
+	}
+}
+
 frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
@@ -251,6 +319,7 @@ frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 				wrapper.vue_app.mount(root[0]);
 				add_visible_curriculum_bridge(wrapper, root);
 				add_offering_operation_buttons(wrapper);
+				setTimeout(() => expose_all_academic_sessions(wrapper), 0);
 			} catch (error) {
 				console.error("Failed to mount EduEdge Programme Offerings", error);
 				fail(error.message || String(error));
