@@ -62,6 +62,18 @@ class TestClassArmSessionRolloverContract(unittest.TestCase):
         self.assertIn('"eligible_students": []', plan_block)
         self.assertIn('"students_to_carry": 0', plan_block)
 
+    def test_class_arm_rollover_uses_authoritative_academic_session_discovery(self):
+        api = (APP / "api/class_arms.py").read_text(encoding="utf-8")
+        options_block = api.split("def _academic_year_options", 1)[1].split("@frappe.whitelist()", 1)[0]
+        permission_block = api.split("def _assert_year_read", 1)[1].split('@frappe.whitelist(methods=["POST"])', 1)[0]
+        self.assertIn("Academic Year is a global academic master", options_block)
+        self.assertIn('frappe.has_permission("Academic Year", "read")', options_block)
+        self.assertIn("frappe.get_all(", options_block)
+        self.assertNotIn("frappe.get_list(", options_block)
+        self.assertIn('frappe.has_permission("Academic Year", "read")', permission_block)
+        self.assertIn('frappe.db.exists("Academic Year", name)', permission_block)
+        self.assertNotIn('frappe.get_doc("Academic Year", name).check_permission("read")', permission_block)
+
     def test_downstream_history_is_explicitly_not_copied(self):
         api = (APP / "api/class_arm_session_rollover.py").read_text(encoding="utf-8")
         ui = (APP / "public/js/eduedge_class_arms/EduEdgeClassArms.vue").read_text(encoding="utf-8")
