@@ -96,8 +96,12 @@ def _allowed_branch(branch: str | None) -> dict:
 
 
 def _academic_years() -> list[dict]:
+	# Academic Year is a global academic master. Keep progression session discovery
+	# aligned with Class Intake instead of applying value-level User Permission filters.
+	if not frappe.has_permission("Academic Year", "read"):
+		return []
 	fields = ["name", "year_start_date", "year_end_date"]
-	return frappe.get_list("Academic Year", fields=fields, order_by="year_start_date asc", page_length=200)
+	return frappe.get_all("Academic Year", fields=fields, order_by="year_start_date asc", page_length=200)
 
 
 def _is_later_year(target_year: str | None, source_year: str | None) -> bool:
