@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.utils import cint
+from frappe.utils.nestedset import get_root_of
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 
@@ -53,31 +54,70 @@ def is_managed_institution_root(doc) -> bool:
 	)
 
 
+def _native_department_root() -> str | None:
+	"""Return ERPNext's native Department tree root.
+
+	ERPNext v16 creates one global ``All Departments`` root without a Company and
+	places Company Departments below it. Older/custom sites can still contain a
+	Company-specific top-level group, so callers retain a compatibility path before
+	falling back to this native global root.
+	"""
+	if not frappe.db.exists("DocType", "Department"):
+		return None
+	try:
+		root = get_root_of("Department")
+	except Exception:
+		root = None
+	if root:
+		return str(root)
+	return frappe.db.get_value(
+		"Department",
+		{"parent_department": ["is", "not set"]},
+		"name",
+		order_by="lft asc, creation asc",
+	)
+
+
 def get_company_department_roots(company: str) -> list[str]:
+	"""Return the native root(s) beneath which this Company's academic tree may sit.
+
+	Historically EduEdge assumed ERPNext created a top-level Department per Company.
+	ERPNext v16 instead uses a global ``All Departments`` root and Company-specific
+	children. Preserve any older Company-specific group root when present; otherwise
+	use the native global Department root.
+	"""
 	if not company:
 		return []
 	fields = ["name", "lft"]
 	if frappe.get_meta("Department").has_field(INSTITUTION_ROOT_FLAG):
 		fields.append(INSTITUTION_ROOT_FLAG)
-	rows = frappe.get_all(
+	legacy_rows = frappe.get_all(
 		"Department",
-		filters={"company": company, "parent_department": ["is", "not set"]},
+		filters={
+			"company": company,
+			"is_group": 1,
+			"parent_department": ["is", "not set"],
+		},
 		fields=fields,
 		order_by="lft asc, creation asc",
 		limit_page_length=0,
 	)
-	return [
+	legacy_roots = [
 		row.name
-		for row in rows
+		for row in legacy_rows
 		if not cint(row.get(INSTITUTION_ROOT_FLAG))
 	]
+	if legacy_roots:
+		return legacy_roots
+	native_root = _native_department_root()
+	return [native_root] if native_root else []
 
 
 def get_company_department_root(company: str) -> str:
 	roots = get_company_department_roots(company)
 	if not roots:
 		frappe.throw(
-			_("Create the ERPNext root Department for Company {0} before configuring the Institution academic hierarchy.").format(company),
+			_("Create the ERPNext Department tree before configuring the Institution academic hierarchy."),
 			frappe.ValidationError,
 		)
 	return roots[0]
@@ -110,6 +150,7 @@ def ensure_institution_department_root(
 		return existing
 
 	company_root = get_company_department_root(institution_row.company)
+	root_company = frappe.db.get_value("Department", company_root, "company")
 	department_name = _available_root_name(
 		institution_row.institution_name or institution,
 		institution_row.institution_code or institution,
@@ -118,13 +159,22 @@ def ensure_institution_department_root(
 	doc = frappe.new_doc("Department")
 	doc.department_name = department_name
 	doc.company = institution_row.company
-	doc.parent_department = company_root
+	# ERPNext v16's native root has no Company. Leaving the parent blank on initial
+	# insert lets Department.validate_parent_department() attach this Company-owned
+	# group to the native global root without triggering its same-Company parent gate.
+	# Older sites with a genuine Company-owned top-level group keep that root directly.
+	doc.parent_department = company_root if root_company == institution_row.company else None
 	doc.is_group = 1
 	doc.set(INSTITUTION_FIELD, None)
 	doc.set(INSTITUTION_ROOT_FLAG, 1)
 	doc.set(INSTITUTION_ROOT_OWNER, institution)
 	doc.flags.eduedge_managed_institution_root = True
 	doc.insert(ignore_permissions=ignore_permissions)
+	if doc.parent_department != company_root:
+		frappe.throw(
+			_("ERPNext did not attach the Institution academic root beneath the expected Department root."),
+			frappe.ValidationError,
+		)
 	return doc.name
 
 
@@ -186,11 +236,9 @@ def normalise_institution_department_roots(*, ignore_permissions: bool = True) -
 			if cint(row.get(INSTITUTION_ROOT_FLAG)):
 				continue
 
-			# A Company root is a technical ERPNext container shared by every
-			# Institution in the Company. Earlier foundation data could leave an
-			# Institution value on that root. Clear the stale ownership without
-			# invoking nested-set movement; never place the Company root beneath one
-			# of its own descendants.
+			# The native ERPNext root is a technical container shared by every Company
+			# and Institution. Earlier foundation data could leave an Institution value
+			# on a root. Clear stale ownership without nested-set movement.
 			if row.name in company_roots:
 				frappe.db.set_value(
 					"Department",
