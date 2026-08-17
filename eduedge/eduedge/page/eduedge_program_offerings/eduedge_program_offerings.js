@@ -8,18 +8,98 @@ frappe.pages["eduedge-program-offerings"].on_page_load = function (wrapper) {
 
 const SESSION_OPTIONS_METHOD = "eduedge.api.programme_offering_session_options.get_programme_offering_session_options";
 const SESSION_PAGE_METHOD = "eduedge.api.programme_offering_session_options.get_programme_offerings_page_with_sessions";
+const CALENDAR_SETUP_ASSET = "/assets/eduedge/js/academic_foundation_calendar_dialog.js";
 const SESSION_OPTION_SETTLE_INTERVAL_MS = 50;
 const SESSION_OPTION_SETTLE_ATTEMPTS = 80;
+
+function selected_session_option(proxy, result = null) {
+	const year = String(proxy?.draft?.academic_year || "").trim();
+	if (!year) return null;
+	const options = result?.options?.academic_years || proxy?.draftOptions?.academic_years || [];
+	return options.find((row) => row.name === year) || null;
+}
 
 function calendar_setup_warning(proxy, result) {
 	const year = String(proxy?.draft?.academic_year || "").trim();
 	if (!year) return "";
-	const selected = (result?.options?.academic_years || []).find((row) => row.name === year);
+	const selected = selected_session_option(proxy, result);
 	if (!selected || selected.calendar_ready) return "";
 	return __(
 		`Academic Session ${year} exists, but its Institution Academic Calendar is not configured yet. ` +
-		"You can select the Session now; configure its Terms / Semesters under Academic Sessions & Terms before saving or using this Class Intake."
+		"Configure the Session's Terms / Semesters and Institution Academic Calendar before saving or using this Class Intake."
 	);
+}
+
+function require_asset(asset) {
+	return new Promise((resolve, reject) => {
+		try {
+			frappe.require(asset, resolve);
+		} catch (error) {
+			reject(error);
+		}
+	});
+}
+
+async function open_missing_calendar_setup(proxy) {
+	const institution = String(proxy?.draft?.institution || "").trim();
+	const year = String(proxy?.draft?.academic_year || "").trim();
+	if (!institution || !year) {
+		frappe.show_alert({ message: __("Select an Institution and Academic Session first."), indicator: "orange" });
+		return null;
+	}
+
+	try {
+		await require_asset(CALENDAR_SETUP_ASSET);
+		if (typeof window.EduEdgeAcademicCalendarDialog?.open !== "function") {
+			throw new Error(__("Institution Academic Calendar setup is unavailable."));
+		}
+		const dialog = await window.EduEdgeAcademicCalendarDialog.open({
+			institution,
+			title: __(`Configure ${year} Institution Academic Calendar`),
+			academicYearLabel: __("Academic Session"),
+			academicTermLabel: __("Terms / Semesters"),
+			onCreated: async () => {
+				proxy.__eduedge_calendar_prompt_year = "";
+				await refresh_session_options(proxy);
+			},
+		});
+		if (dialog && year) {
+			await dialog.set_value("academic_year", year);
+			dialog.fields_dict?.academic_year?.$input?.trigger("change");
+		}
+		return dialog;
+	} catch (error) {
+		frappe.msgprint({
+			title: __("Institution Academic Calendar"),
+			message: error?.message || __("Calendar setup could not be opened."),
+			indicator: "red",
+		});
+		return null;
+	}
+}
+
+function prompt_missing_calendar(proxy, result) {
+	const year = String(proxy?.draft?.academic_year || "").trim();
+	const selected = selected_session_option(proxy, result);
+	if (!year || !selected || selected.calendar_ready) {
+		if (proxy) proxy.__eduedge_calendar_prompt_year = "";
+		return;
+	}
+	if (proxy.__eduedge_calendar_prompt_year === year) return;
+	proxy.__eduedge_calendar_prompt_year = year;
+
+	frappe.msgprint({
+		title: __("Institution Academic Calendar Required"),
+		indicator: "orange",
+		message: __(
+			`Academic Session ${year} is selectable, but this Institution has no Academic Calendar for it yet. ` +
+			"Create the Session's Terms / Semesters and Institution Academic Calendar before saving the Class Intake."
+		),
+		primary_action: {
+			label: __("Configure Institution Calendar"),
+			action: () => open_missing_calendar_setup(proxy),
+		},
+	});
 }
 
 async function refresh_session_options(proxy) {
@@ -46,8 +126,12 @@ async function refresh_session_options(proxy) {
 		const warning = calendar_setup_warning(proxy, result);
 		if (warning) {
 			proxy.saveError = warning;
-		} else if (String(proxy.saveError || "").startsWith("Academic Session ")) {
-			proxy.saveError = "";
+			prompt_missing_calendar(proxy, result);
+		} else {
+			proxy.__eduedge_calendar_prompt_year = "";
+			if (String(proxy.saveError || "").startsWith("Academic Session ")) {
+				proxy.saveError = "";
+			}
 		}
 		return result;
 	} catch (error) {
@@ -150,6 +234,21 @@ function install_session_option_loader(proxy) {
 	proxy.filterYearChanged = async function () {
 		return load_session_filtered_page(proxy, true, false);
 	};
+
+	// Calendar readiness is a governed prerequisite. Do not send an avoidable
+	// failing save request when the selected Session is discoverable but not yet
+	// operational for this Institution; guide the user into the existing setup.
+	if (typeof proxy.saveOffering === "function") {
+		const originalSaveOffering = proxy.saveOffering.bind(proxy);
+		proxy.saveOffering = async function () {
+			const selected = selected_session_option(proxy);
+			if (proxy.draft?.academic_year && selected && !selected.calendar_ready) {
+				prompt_missing_calendar(proxy, { options: { academic_years: proxy.draftOptions?.academic_years || [] } });
+				return null;
+			}
+			return originalSaveOffering();
+		};
+	}
 }
 
 frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
