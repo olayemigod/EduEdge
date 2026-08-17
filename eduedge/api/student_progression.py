@@ -753,6 +753,34 @@ def _existing_final_log(source_name: str, target_name: str | None, new_status: s
 	return frappe.db.get_value("EduEdge Enrollment Status Log", filters, "name")
 
 
+def _existing_finalized_retry(source_name: str, outcome: str) -> dict | None:
+	"""Return the latest final decision only when this request is an exact retry.
+
+	Lifecycle statuses can legitimately recur later (for example Suspend -> Reactivate
+	-> Suspend). Checking only the latest log avoids treating an old matching status as
+	idempotency evidence for a new transition.
+	"""
+	status = FINAL_STATUS.get(outcome)
+	if not status:
+		return None
+	rows = frappe.get_all(
+		"EduEdge Enrollment Status Log",
+		filters={"program_enrollment": source_name},
+		fields=["name", "new_status", "target_program_enrollment", "target_student_group", "effective_date", "creation"],
+		order_by="effective_date desc, creation desc",
+		page_length=1,
+	)
+	if not rows or rows[0].new_status != status:
+		return None
+	row = rows[0]
+	result = {"name": row.name, "new_status": row.new_status, "existing": True}
+	if row.target_program_enrollment:
+		result["target_program_enrollment"] = row.target_program_enrollment
+	if row.target_student_group:
+		result["target_student_group"] = row.target_student_group
+	return result
+
+
 def _finalize_target_outcome(source_name: str, outcome: str, reason: str, effective_date: str | None) -> dict:
 	source = _source_enrollment(source_name)
 	prepared = _existing_prepared_target(source.name, outcome)
@@ -822,7 +850,12 @@ def finalize_progression_batch(payload: str | dict) -> dict:
 	blocked = []
 	for source in sources:
 		try:
-			_validate_outcome(_source_enrollment(source), outcome)
+			source_doc = _source_enrollment(source)
+			existing_retry = _existing_finalized_retry(source_doc.name, outcome)
+			if existing_retry:
+				results.append(existing_retry)
+				continue
+			_validate_outcome(source_doc, outcome)
 			if outcome in TARGET_OUTCOMES:
 				results.append(_finalize_target_outcome(source, outcome, reason, effective_date))
 			else:
