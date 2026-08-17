@@ -47,6 +47,17 @@ class TestProgressionRuntimeVisualAndSessionVisibilityContract(unittest.TestCase
         self.assertNotIn("merge_academic_year_options", page)
         self.assertNotIn('frappe.db.get_list("Academic Year"', page)
 
+    def test_student_progression_uses_the_same_authoritative_academic_session_discovery(self):
+        api = (APP / "api/student_progression.py").read_text(encoding="utf-8")
+        for token in (
+            'frappe.has_permission("Academic Year", "read")',
+            'frappe.get_all("Academic Year", fields=fields',
+            "Academic Year is a global academic master",
+            "aligned with Class Intake",
+        ):
+            self.assertIn(token, api)
+        self.assertNotIn('frappe.get_list("Academic Year", fields=fields', api)
+
 
 if __name__ == "__main__":
     unittest.main()
