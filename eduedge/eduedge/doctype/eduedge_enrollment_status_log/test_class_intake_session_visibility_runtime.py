@@ -8,35 +8,41 @@ from eduedge.api.programme_offering_session_options import (
 	get_programme_offering_session_options,
 	get_programme_offerings_page_with_sessions,
 )
+from eduedge.education.academic_fields import INSTITUTION_FIELD
 
 
 class TestClassIntakeSessionVisibilityRuntime(FrappeTestCase):
-	"""Calendar readiness must never hide a readable future Academic Session."""
+	"""Academic Session discovery and filtering must remain authoritative."""
 
 	def setUp(self) -> None:
 		before_tests()
 		frappe.set_user("Administrator")
 		self.suffix = frappe.generate_hash(length=8).upper()
 
+	def _insert(self, doctype: str, **values):
+		return frappe.get_doc({"doctype": doctype, **values}).insert(ignore_permissions=True)
+
+	def _make_year(self, label: str, start: str, end: str):
+		return self._insert(
+			"Academic Year",
+			academic_year_name=f"QA {label} {self.suffix}",
+			year_start_date=start,
+			year_end_date=end,
+		)
+
+	def _make_institution(self, label: str):
+		return self._insert(
+			"EduEdge Institution",
+			institution_name=f"QA {label} School {self.suffix}",
+			institution_code=f"QA{label[:4].upper()}{self.suffix}",
+			company="_Test Company",
+			institution_type="PRIMARY",
+			enabled=1,
+		)
+
 	def test_calendarless_future_session_is_visible_in_page_and_editor_options(self):
-		year = frappe.get_doc(
-			{
-				"doctype": "Academic Year",
-				"academic_year_name": f"QA FUTURE {self.suffix}",
-				"year_start_date": "2098-09-01",
-				"year_end_date": "2099-08-31",
-			}
-		).insert(ignore_permissions=True)
-		institution = frappe.get_doc(
-			{
-				"doctype": "EduEdge Institution",
-				"institution_name": f"QA Session Visibility School {self.suffix}",
-				"institution_code": f"QASVIS{self.suffix}",
-				"company": "_Test Company",
-				"institution_type": "PRIMARY",
-				"enabled": 1,
-			}
-		).insert(ignore_permissions=True)
+		year = self._make_year("FUTURE", "2098-09-01", "2099-08-31")
+		institution = self._make_institution("Session Visibility")
 
 		self.assertFalse(
 			frappe.db.exists(
@@ -54,3 +60,91 @@ class TestClassIntakeSessionVisibilityRuntime(FrappeTestCase):
 		editor_years = {row["name"]: row for row in editor["options"]["academic_years"]}
 		self.assertIn(year.name, editor_years)
 		self.assertFalse(editor_years[year.name]["calendar_ready"])
+
+	def test_selected_session_filters_the_class_intake_catalogue(self):
+		source_year = self._make_year("FILTER SOURCE", "2095-09-01", "2096-08-31")
+		destination_year = self._make_year("FILTER DEST", "2096-09-01", "2097-08-31")
+		institution = self._make_institution("Session Filter")
+		branch = self._insert(
+			"EduEdge School Branch",
+			branch_name=f"QA Filter Campus {self.suffix}",
+			branch_code=f"QAFILT{self.suffix}",
+			company="_Test Company",
+			institution=institution.name,
+			enabled=1,
+		)
+		for year, start, end in (
+			(source_year, "2095-09-01", "2096-08-31"),
+			(destination_year, "2096-09-01", "2097-08-31"),
+		):
+			self._insert(
+				"EduEdge Institution Academic Calendar",
+				institution=institution.name,
+				academic_year=year.name,
+				enabled=1,
+				start_date=start,
+				end_date=end,
+			)
+
+		department = self._insert(
+			"Department",
+			department_name=f"QA Filter Section {self.suffix}",
+			company="_Test Company",
+			is_group=0,
+			**{INSTITUTION_FIELD: institution.name},
+		)
+		program = self._insert(
+			"Program",
+			program_name=f"QA Filter Class {self.suffix}",
+			department=department.name,
+			**{INSTITUTION_FIELD: institution.name},
+		)
+		source_offering = self._insert(
+			"EduEdge Program Offering",
+			school_branch=branch.name,
+			program=program.name,
+			academic_year=source_year.name,
+			offering_title=f"QA Source Intake {self.suffix}",
+			offering_code=f"QA-SRC-{self.suffix}",
+			study_mode="Full-Time",
+			delivery_mode="Onsite",
+			is_active=1,
+			admission_enabled=1,
+			enrollment_enabled=1,
+		)
+		destination_offering = self._insert(
+			"EduEdge Program Offering",
+			school_branch=branch.name,
+			program=program.name,
+			academic_year=destination_year.name,
+			offering_title=f"QA Destination Intake {self.suffix}",
+			offering_code=f"QA-DST-{self.suffix}",
+			study_mode="Full-Time",
+			delivery_mode="Onsite",
+			is_active=1,
+			admission_enabled=1,
+			enrollment_enabled=1,
+		)
+
+		source_page = get_programme_offerings_page_with_sessions(
+			institution=institution.name,
+			branch=branch.name,
+			academic_year=source_year.name,
+		)
+		self.assertEqual(source_page["filters"]["academic_year"], source_year.name)
+		self.assertEqual({row["name"] for row in source_page["offerings"]}, {source_offering.name})
+		self.assertTrue(all(row["academic_year"] == source_year.name for row in source_page["offerings"]))
+
+		destination_page = get_programme_offerings_page_with_sessions(
+			institution=institution.name,
+			branch=branch.name,
+			academic_year=destination_year.name,
+		)
+		self.assertEqual(destination_page["filters"]["academic_year"], destination_year.name)
+		self.assertEqual(
+			{row["name"] for row in destination_page["offerings"]},
+			{destination_offering.name},
+		)
+		self.assertTrue(
+			all(row["academic_year"] == destination_year.name for row in destination_page["offerings"])
+		)
