@@ -64,6 +64,7 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
     def test_finalization_retry_uses_latest_decision_before_transition_validation(self):
         source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
         retry = source.split("def _existing_finalized_retry", 1)[1].split("def _finalize_target_outcome", 1)[0]
+        direct = source.split("def _finalize_direct_outcome", 1)[1].split("@frappe.whitelist", 1)[0]
         finalize = source.split("def finalize_progression_batch", 1)[1]
         self.assertIn('order_by="effective_date desc, creation desc"', retry)
         self.assertIn("if not rows or rows[0].new_status != status", retry)
@@ -74,6 +75,12 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
             finalize.index("existing_retry = _existing_finalized_retry"),
             finalize.index("_validate_outcome(source_doc, outcome)"),
         )
+        self.assertIn("existing_retry = _existing_finalized_retry(source.name, outcome)", direct)
+        self.assertLess(
+            direct.index("existing_retry = _existing_finalized_retry"),
+            direct.index("_validate_outcome(source, outcome)"),
+        )
+        self.assertNotIn("_existing_final_log(", direct)
 
     def test_source_history_is_not_mutated_or_resubmitted(self):
         source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
