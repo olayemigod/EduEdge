@@ -568,7 +568,7 @@ def _plan_row(source_name: str, outcome: str, destination_year: str | None, targ
 	source = _source_enrollment(source_name)
 	_validate_outcome(source, outcome)
 	evidence = _evidence_map(source.get(BRANCH_FIELD), source.academic_year, [source.student]).get(source.student) or {}
-	recommendation = _recommendation(dict(source), _status_map([source.name]).get(source.name, "Active"), evidence)
+	recommendation = _recommendation(source.as_dict(), _status_map([source.name]).get(source.name, "Active"), evidence)
 	plan = {
 		"source_enrollment": source.name,
 		"student": source.student,
@@ -817,7 +817,7 @@ def _finalize_direct_outcome(source_name: str, outcome: str, reason: str, effect
 	_validate_outcome(source, outcome)
 	status = FINAL_STATUS[outcome]
 	evidence = _evidence_map(source.get(BRANCH_FIELD), source.academic_year, [source.student]).get(source.student) or {}
-	recommendation = _recommendation(dict(source), _status_map([source.name]).get(source.name, "Active"), evidence)
+	recommendation = _recommendation(source.as_dict(), _status_map([source.name]).get(source.name, "Active"), evidence)
 	if outcome == "Graduate":
 		target = progression_target(source.program, source.get(PROGRESSION_LEVEL_FIELD) if source.meta.has_field(PROGRESSION_LEVEL_FIELD) else None)
 		if not target.get("terminal"):
