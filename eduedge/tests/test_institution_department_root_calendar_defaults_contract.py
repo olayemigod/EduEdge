@@ -31,6 +31,19 @@ class TestInstitutionDepartmentRootCalendarDefaultsContract(unittest.TestCase):
 		self.assertIn("ensure_institution_department_root_fields()", migration)
 		self.assertIn("normalise_institution_department_roots(ignore_permissions=True)", migration)
 
+	def test_generic_erpnext_department_bootstrap_remains_available_but_programme_use_is_strict(self):
+		hierarchy = (APP / "education" / "academic_hierarchy.py").read_text()
+		department = hierarchy.split("def before_validate_department", 1)[1].split("def _validate_managed_institution_root", 1)[0]
+		programme_guard = hierarchy.split("def _validate_department", 1)[1]
+		self.assertIn("Department is a native ERPNext company master too", department)
+		self.assertIn("if not institution:", department)
+		self.assertIn("return", department.split("if not institution:", 1)[1].split("institution_row =", 1)[0])
+		self.assertNotIn("Institution is required for an academic Department / School Section", department)
+		self.assertIn(
+			"Assign the Department / School Section to an Institution before using it on a Programme.",
+			programme_guard,
+		)
+
 	def test_department_root_normalisation_is_cycle_safe(self):
 		helper = (APP / "education" / "institution_department_root.py").read_text()
 		for expected in (
