@@ -43,6 +43,15 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
         self.assertIn('"academic_term": ["is", "not set"]', source)
         self.assertIn("destination Program Enrollments", source)
 
+    def test_progression_uses_frappe_document_mapping_api(self):
+        source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
+        plan = source.split("def _plan_row", 1)[1].split("def _batch_payload", 1)[0]
+        direct = source.split("def _finalize_direct_outcome", 1)[1].split("@frappe.whitelist", 1)[0]
+        self.assertIn("_recommendation(source.as_dict()", plan)
+        self.assertIn("_recommendation(source.as_dict()", direct)
+        self.assertNotIn("_recommendation(dict(source)", plan)
+        self.assertNotIn("_recommendation(dict(source)", direct)
+
     def test_native_enrollment_controller_keeps_required_course_authority(self):
         branching = (APP / "education/branching.py").read_text(encoding="utf-8")
         self.assertIn("def _prepare_native_required_courses_for_progression", branching)
