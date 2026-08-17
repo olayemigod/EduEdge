@@ -368,11 +368,14 @@ def get_class_arm_options(branch: str | None = None, offering: str | None = None
 
 
 def _academic_year_options() -> list[dict]:
+	# Academic Year is a global academic master. Keep Class Arm setup/rollover
+	# aligned with Class Intake and Student Progression instead of applying
+	# value-level User Permission filters to session discovery.
 	if not frappe.has_permission("Academic Year", "read"):
 		return []
 	return [
 		dict(row)
-		for row in frappe.get_list(
+		for row in frappe.get_all(
 			"Academic Year",
 			fields=["name", "year_start_date", "year_end_date"],
 			order_by="year_start_date desc, name desc",
@@ -764,9 +767,12 @@ def _session_rollover_plan(branch: str, source_academic_year: str, destination_a
 
 
 def _assert_year_read(name: str) -> None:
+	# Academic Year is a global academic master. Check DocType read capability, but
+	# do not let value-level User Permissions hide a valid source/destination Session.
+	if not frappe.has_permission("Academic Year", "read"):
+		frappe.throw(_("You are not permitted to view Academic Sessions."), frappe.PermissionError)
 	if not frappe.db.exists("Academic Year", name):
 		frappe.throw(_("Academic Session {0} does not exist.").format(name), frappe.DoesNotExistError)
-	frappe.get_doc("Academic Year", name).check_permission("read")
 
 
 @frappe.whitelist(methods=["POST"])
