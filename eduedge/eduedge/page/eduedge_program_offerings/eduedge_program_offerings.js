@@ -26,7 +26,7 @@ function calendar_setup_warning(proxy, result) {
 	if (!selected || selected.calendar_ready) return "";
 	return __(
 		`Academic Session ${year} exists, but its Institution Academic Calendar is not configured yet. ` +
-		"Configure the Session's Terms / Semesters and Institution Academic Calendar before saving or using this Class Intake."
+		"Configure the Session's Terms / Semesters under Academic Sessions & Terms and create its Institution Academic Calendar before saving or using this Class Intake."
 	);
 }
 
@@ -93,7 +93,7 @@ function prompt_missing_calendar(proxy, result) {
 		indicator: "orange",
 		message: __(
 			`Academic Session ${year} is selectable, but this Institution has no Academic Calendar for it yet. ` +
-			"Create the Session's Terms / Semesters and Institution Academic Calendar before saving the Class Intake."
+			"Create the Session's Terms / Semesters under Academic Sessions & Terms and then create the Institution Academic Calendar before saving the Class Intake."
 		),
 		primary_action: {
 			label: __("Configure Institution Calendar"),
