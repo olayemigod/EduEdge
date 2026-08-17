@@ -811,11 +811,11 @@ def _finalize_target_outcome(source_name: str, outcome: str, reason: str, effect
 
 def _finalize_direct_outcome(source_name: str, outcome: str, reason: str, effective_date: str | None) -> dict:
 	source = _source_enrollment(source_name)
+	existing_retry = _existing_finalized_retry(source.name, outcome)
+	if existing_retry:
+		return existing_retry
 	_validate_outcome(source, outcome)
 	status = FINAL_STATUS[outcome]
-	existing_log = _existing_final_log(source.name, None, status)
-	if existing_log:
-		return {"name": existing_log, "new_status": status, "existing": True}
 	evidence = _evidence_map(source.get(BRANCH_FIELD), source.academic_year, [source.student]).get(source.student) or {}
 	recommendation = _recommendation(dict(source), _status_map([source.name]).get(source.name, "Active"), evidence)
 	if outcome == "Graduate":
