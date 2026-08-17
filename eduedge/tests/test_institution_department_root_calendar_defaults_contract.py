@@ -44,6 +44,28 @@ class TestInstitutionDepartmentRootCalendarDefaultsContract(unittest.TestCase):
 			programme_guard,
 		)
 
+	def test_institution_root_matches_erpnext_v16_global_department_root_model(self):
+		helper = (APP / "education" / "institution_department_root.py").read_text()
+		hierarchy = (APP / "education" / "academic_hierarchy.py").read_text()
+		for expected in (
+			"from frappe.utils.nestedset import get_root_of",
+			'def _native_department_root() -> str | None:',
+			'root = get_root_of("Department")',
+			'"company": company,',
+			'"is_group": 1,',
+			'"parent_department": ["is", "not set"],',
+			"native_root = _native_department_root()",
+			"return [native_root] if native_root else []",
+			"root_company = frappe.db.get_value(\"Department\", company_root, \"company\")",
+			"doc.parent_department = company_root if root_company == institution_row.company else None",
+		):
+			self.assertIn(expected, helper)
+		self.assertIn("ERPNext v16 creates one global ``All Departments`` root without a Company", helper)
+		managed = hierarchy.split("def _validate_managed_institution_root", 1)[1].split("def before_validate_program", 1)[0]
+		self.assertIn("if doc.is_new() and not doc.parent_department:", managed)
+		self.assertIn("return", managed.split("if doc.is_new() and not doc.parent_department:", 1)[1])
+		self.assertIn("native ERPNext Department root", managed)
+
 	def test_department_root_normalisation_is_cycle_safe(self):
 		helper = (APP / "education" / "institution_department_root.py").read_text()
 		for expected in (
