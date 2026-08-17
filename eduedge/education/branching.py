@@ -20,7 +20,10 @@ from eduedge.education.academic_progression import (
 )
 from eduedge.education.class_arm_identity import validate_student_group_class_arm
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.education.enrollment_progression_fields import PROGRESSION_SOURCE_FIELD
+from eduedge.education.enrollment_progression_fields import (
+	PROGRESSION_OUTCOME_FIELD,
+	PROGRESSION_SOURCE_FIELD,
+)
 from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import (
 	get_context_branch,
@@ -85,9 +88,41 @@ def before_validate_program_enrollment(doc, method=None) -> None:
 	before_validate_program_enrollment_context(doc)
 	_validate_branch(doc)
 	_validate_student_enrollment_institution(doc, student_branch)
+	_validate_progression_transfer_session(doc)
 	validate_program_enrollment(doc)
 	validate_progression_level_on_enrollment(doc)
 	_prepare_native_required_courses_for_progression(doc)
+
+
+def _validate_progression_transfer_session(doc) -> None:
+	"""Keep Student Progression transfers compatible with native Enrollment truth.
+
+	Frappe Education permits only one active Program Enrollment per Student,
+	Programme and Academic Session. A mid-session Branch move therefore cannot be
+	modelled safely as a second progression Enrollment. The EdgeSuite progression UI
+	already offers later Sessions only; this backend guard protects crafted/direct API
+	calls before native duplicate-enrollment validation emits a generic error.
+	"""
+	if not doc.is_new() or not doc.meta.has_field(PROGRESSION_SOURCE_FIELD):
+		return
+	if doc.get(PROGRESSION_OUTCOME_FIELD) != "Transfer" or not doc.get(PROGRESSION_SOURCE_FIELD):
+		return
+	source = frappe.db.get_value(
+		"Program Enrollment",
+		doc.get(PROGRESSION_SOURCE_FIELD),
+		["academic_year", BRANCH_FIELD, "docstatus"],
+		as_dict=True,
+	)
+	if not source or int(source.docstatus or 0) != 1:
+		return
+	if source.academic_year == doc.academic_year:
+		frappe.throw(
+			_(
+				"Mid-session Branch transfer cannot create a second Program Enrollment in the same Academic Session. "
+				"Handle the Branch move outside Student Progression; Progression transfer requires a later Academic Session."
+			),
+			frappe.ValidationError,
+		)
 
 
 def _prepare_native_required_courses_for_progression(doc) -> None:
