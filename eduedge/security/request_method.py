@@ -43,13 +43,16 @@ POST_ONLY_MUTATION_PREFIXES = (
 	"reenable_",
 )
 
-# Keep old browser/bookmarked API calls safe after the sessional Class Arm refactor.
-# These methods previously planned/copy-filtered rosters using destination enrollment.
-# New progression creates destination enrollments later, so every legacy call must use
-# the structural planner instead of reopening the retired ordering dependency.
+# Keep old browser/bookmarked API calls safe after governed refactors. The Class
+# Arm redirects protect structural rollover ordering. The Class Intake redirects
+# keep older/built browser bundles on the authoritative all-session catalogue so
+# future Academic Sessions cannot disappear because calendar readiness or
+# value-level User Permissions were applied to global Academic Year masters.
 LEGACY_COMMAND_REDIRECTS = {
 	"eduedge.api.class_arms.preview_class_arm_session_rollover": "eduedge.api.class_arm_session_rollover.preview_class_arm_session_rollover",
 	"eduedge.api.class_arms.execute_class_arm_session_rollover": "eduedge.api.class_arm_session_rollover.execute_all_class_arm_session_rollover",
+	"eduedge.api.programme_offerings.get_programme_offerings_page": "eduedge.api.programme_offering_session_options.get_programme_offerings_page_with_sessions",
+	"eduedge.api.programme_offerings_safe.get_programme_offering_options": "eduedge.api.programme_offering_session_options.get_programme_offering_session_options",
 }
 
 
