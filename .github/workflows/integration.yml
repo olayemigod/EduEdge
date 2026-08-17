@@ -173,7 +173,7 @@ jobs:
           bench --site eduedge-ci.localhost run-tests \
             --app eduedge \
             --module eduedge.eduedge.doctype.eduedge_enrollment_status_log.test_class_intake_progression \
-            --verbose 2>&1 | tee /tmp/eduedge-class-progression-db.log
+            2>&1 | tee /tmp/eduedge-class-progression-db.log
         env:
           CI: "Yes"
 
@@ -182,7 +182,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          bench --site eduedge-ci.localhost run-tests --app eduedge --verbose 2>&1 | tee /tmp/eduedge-full-db.log
+          bench --site eduedge-ci.localhost run-tests --app eduedge 2>&1 | tee /tmp/eduedge-full-db.log
         env:
           CI: "Yes"
 
