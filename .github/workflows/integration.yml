@@ -165,9 +165,34 @@ jobs:
           bench --site eduedge-ci.localhost migrate
           bench --site eduedge-ci.localhost migrate
 
-      - name: Run EduEdge database-backed tests
+      - name: Run Class Intake and Progression database flow
         working-directory: frappe-bench
+        shell: bash
         run: |
-          bench --site eduedge-ci.localhost run-tests --app eduedge
+          set -o pipefail
+          bench --site eduedge-ci.localhost run-tests \
+            --app eduedge \
+            --module eduedge.eduedge.doctype.eduedge_enrollment_status_log.test_class_intake_progression \
+            --verbose 2>&1 | tee /tmp/eduedge-class-progression-db.log
         env:
           CI: "Yes"
+
+      - name: Run full EduEdge database-backed tests
+        working-directory: frappe-bench
+        shell: bash
+        run: |
+          set -o pipefail
+          bench --site eduedge-ci.localhost run-tests --app eduedge --verbose 2>&1 | tee /tmp/eduedge-full-db.log
+        env:
+          CI: "Yes"
+
+      - name: Upload integration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eduedge-integration-diagnostics-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            /tmp/eduedge-class-progression-db.log
+            /tmp/eduedge-full-db.log
+            frappe-bench/logs/*.log
