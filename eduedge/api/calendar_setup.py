@@ -217,4 +217,5 @@ def create_calendar_from_foundation(
 				"sequence": row.sequence,
 			}
 			for row in doc.periods or []
+		],
 	}
