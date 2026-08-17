@@ -29,11 +29,17 @@ def _get_institution(institution: str):
 
 
 def _academic_year_rows() -> list[dict]:
+	"""Return global Academic Sessions after an explicit DocType read gate.
+
+	Academic Year is a structural master shared across Institutions. Applying
+	value-level User Permission filtering here can make a future Session visible in
+	Class Intake but disappear again from the calendar setup dialog.
+	"""
 	if not frappe.has_permission("Academic Year", "read"):
 		frappe.throw(_("You are not permitted to view Academic Years."), frappe.PermissionError)
 	return [
 		dict(row)
-		for row in frappe.get_list(
+		for row in frappe.get_all(
 			"Academic Year",
 			fields=["name", "year_start_date", "year_end_date"],
 			order_by="year_start_date desc, name desc",
@@ -142,7 +148,8 @@ def create_calendar_from_foundation(
 	if not academic_year:
 		frappe.throw(_("Select an Academic Year."), frappe.ValidationError)
 	year_doc = frappe.get_doc("Academic Year", academic_year)
-	year_doc.check_permission("read")
+	if not frappe.has_permission("Academic Year", "read"):
+		frappe.throw(_("You are not permitted to view Academic Years."), frappe.PermissionError)
 	if not year_doc.year_start_date or not year_doc.year_end_date:
 		frappe.throw(
 			_("The selected Academic Year must have Start Date and End Date before it can be used."),
@@ -210,5 +217,4 @@ def create_calendar_from_foundation(
 				"sequence": row.sequence,
 			}
 			for row in doc.periods or []
-		],
 	}
