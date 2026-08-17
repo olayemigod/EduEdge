@@ -1,0 +1,173 @@
+name: EduEdge Integration
+
+on:
+  push:
+    branches:
+      - main
+      - "agent/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: eduedge-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Frappe v16 academic integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Check out EduEdge
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          check-latest: true
+
+      - name: Verify EdgeSuite UI access token
+        shell: bash
+        env:
+          EDGESUITE_UI_TOKEN: ${{ secrets.EDGESUITE_UI_TOKEN }}
+        run: |
+          if [ -z "$EDGESUITE_UI_TOKEN" ]; then
+            echo "EDGESUITE_UI_TOKEN is required so EduEdge CI can install the private EdgeSuite UI dependency."
+            exit 1
+          fi
+
+      - name: Install bench prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmariadb-dev pkg-config redis-tools
+          python -m pip install --upgrade frappe-bench
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Create clean Frappe v16 bench
+        run: |
+          bench init \
+            --frappe-branch version-16 \
+            --python "$(command -v python)" \
+            --skip-assets \
+            --skip-redis-config-generation \
+            frappe-bench
+
+          cd frappe-bench
+          bench set-config -g db_host 127.0.0.1
+          bench set-config -g redis_cache redis://127.0.0.1:6379
+          bench set-config -g redis_queue redis://127.0.0.1:6379
+          bench set-config -g redis_socketio redis://127.0.0.1:6379
+
+      - name: Check out EdgeSuite UI release candidate
+        uses: actions/checkout@v6
+        with:
+          repository: olayemigod/processedge-edge-suite-ui
+          ref: agent/edgeui-theme-foundation
+          token: ${{ secrets.EDGESUITE_UI_TOKEN }}
+          path: edgesuite-ui-source
+
+      - name: Fetch ERPNext, Education, EdgeSuite UI, and EduEdge
+        working-directory: frappe-bench
+        run: |
+          bench get-app \
+            --branch version-16 \
+            --skip-assets \
+            https://github.com/frappe/erpnext.git
+
+          bench get-app \
+            --branch version-16 \
+            --skip-assets \
+            https://github.com/frappe/education.git
+
+          bench get-app \
+            --skip-assets \
+            "$GITHUB_WORKSPACE/edgesuite-ui-source"
+
+          bench get-app \
+            --skip-assets \
+            "$GITHUB_WORKSPACE"
+
+      - name: Create clean EduEdge integration site
+        working-directory: frappe-bench
+        run: |
+          bench new-site eduedge-ci.localhost \
+            --db-host 127.0.0.1 \
+            --mariadb-root-password root \
+            --admin-password admin \
+            --no-mariadb-socket
+
+          bench --site eduedge-ci.localhost install-app erpnext
+          bench --site eduedge-ci.localhost install-app education
+          bench --site eduedge-ci.localhost install-app edgesuite_ui
+          bench --site eduedge-ci.localhost install-app eduedge
+          bench --site eduedge-ci.localhost set-config allow_tests true
+
+      - name: Verify installed application set
+        working-directory: frappe-bench
+        run: |
+          bench --site eduedge-ci.localhost list-apps | tee /tmp/installed-apps.txt
+
+          grep -Eq '^frappe[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^erpnext[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^education[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^edgesuite_ui[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^eduedge[[:space:]]' /tmp/installed-apps.txt
+
+          if grep -Eq '^coreedge[[:space:]]' /tmp/installed-apps.txt; then
+            echo "CoreEdge must remain a remote platform dependency and must not be installed on the EduEdge product site."
+            exit 1
+          fi
+
+      - name: Build product assets
+        working-directory: frappe-bench
+        run: |
+          bench build --app edgesuite_ui
+          bench build --app education
+          bench build --app eduedge
+
+      - name: Migrate twice for idempotency
+        working-directory: frappe-bench
+        run: |
+          bench --site eduedge-ci.localhost migrate
+          bench --site eduedge-ci.localhost migrate
+
+      - name: Run EduEdge database-backed tests
+        working-directory: frappe-bench
+        run: |
+          bench --site eduedge-ci.localhost run-tests --app eduedge
+        env:
+          CI: "Yes"
