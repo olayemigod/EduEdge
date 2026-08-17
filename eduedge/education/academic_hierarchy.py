@@ -95,11 +95,17 @@ def _validate_managed_institution_root(doc) -> None:
 	doc.is_group = 1
 	doc.set(INSTITUTION_FIELD, None)
 	company_roots = set(get_company_department_roots(institution_row.company))
-	if not doc.parent_department:
-		doc.parent_department = next(iter(company_roots), None)
+	if not company_roots:
+		frappe.throw(_("ERPNext Department root is not available."), frappe.ValidationError)
+	# On a standard ERPNext v16 site the native root has no Company. Leave the
+	# parent blank during initial insert so Department.validate_parent_department()
+	# performs ERPNext's own attachment to that root. Older sites with an existing
+	# Company-owned top-level group may supply that parent directly.
+	if doc.is_new() and not doc.parent_department:
+		return
 	if doc.parent_department not in company_roots:
 		frappe.throw(
-			_("Institution academic root must remain beneath the ERPNext Company root Department."),
+			_("Institution academic root must remain beneath the native ERPNext Department root."),
 			frappe.ValidationError,
 		)
 
