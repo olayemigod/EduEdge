@@ -61,6 +61,20 @@ class TestStudentProgressionGovernanceContract(unittest.TestCase):
         self.assertIn("Enrollment Status Logs are append-only and cannot be deleted", log)
         self.assertIn("Target Program Enrollment must be submitted before finalising progression", log)
 
+    def test_finalization_retry_uses_latest_decision_before_transition_validation(self):
+        source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
+        retry = source.split("def _existing_finalized_retry", 1)[1].split("def _finalize_target_outcome", 1)[0]
+        finalize = source.split("def finalize_progression_batch", 1)[1]
+        self.assertIn('order_by="effective_date desc, creation desc"', retry)
+        self.assertIn("if not rows or rows[0].new_status != status", retry)
+        self.assertIn('"existing": True', retry)
+        self.assertIn("existing_retry = _existing_finalized_retry(source_doc.name, outcome)", finalize)
+        self.assertIn("if existing_retry:", finalize)
+        self.assertLess(
+            finalize.index("existing_retry = _existing_finalized_retry"),
+            finalize.index("_validate_outcome(source_doc, outcome)"),
+        )
+
     def test_source_history_is_not_mutated_or_resubmitted(self):
         source = (APP / "api/student_progression.py").read_text(encoding="utf-8")
         self.assertIn("Progression requires a submitted source Program Enrollment", source)
