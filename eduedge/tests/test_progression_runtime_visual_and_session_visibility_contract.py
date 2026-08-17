@@ -33,7 +33,7 @@ class TestProgressionRuntimeVisualAndSessionVisibilityContract(unittest.TestCase
             "install_session_option_loader",
             "proxy.draftOptions",
             "proxy.loadDraftOptions = async",
-            "Academic Sessions & Terms",
+            "Academic Session",
         ):
             self.assertIn(token, page)
         for token in (
@@ -60,6 +60,22 @@ class TestProgressionRuntimeVisualAndSessionVisibilityContract(unittest.TestCase
         ):
             self.assertIn(token, page)
         self.assertIn("Class Intake returned records outside Academic Session", page)
+
+    def test_class_intake_guides_missing_institution_calendar_without_relaxing_save_rule(self):
+        page = (APP / "eduedge/page/eduedge_program_offerings/eduedge_program_offerings.js").read_text(encoding="utf-8")
+        calendar_api = (APP / "api/calendar_setup.py").read_text(encoding="utf-8")
+        for token in (
+            "CALENDAR_SETUP_ASSET",
+            "Institution Academic Calendar Required",
+            "Configure Institution Calendar",
+            "open_missing_calendar_setup",
+            "selected.calendar_ready",
+            "originalSaveOffering",
+        ):
+            self.assertIn(token, page)
+        self.assertIn('frappe.get_all(\n\t\t\t"Academic Year"', calendar_api)
+        self.assertIn("Academic Year is a structural master shared across Institutions", calendar_api)
+        self.assertNotIn('year_doc.check_permission("read")', calendar_api)
 
     def test_student_progression_uses_the_same_authoritative_academic_session_discovery(self):
         api = (APP / "api/student_progression.py").read_text(encoding="utf-8")
