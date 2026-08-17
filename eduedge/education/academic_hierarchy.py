@@ -26,8 +26,10 @@ def before_validate_department(doc, method=None) -> None:
 
 	institution = doc.get(INSTITUTION_FIELD)
 	if not institution:
-		if doc.is_new():
-			frappe.throw(_("Institution is required for an academic Department / School Section."), frappe.ValidationError)
+		# Department is a native ERPNext company master too. Company/setup bootstrap
+		# must be able to create its technical root and ordinary non-academic tree
+		# before an EduEdge Institution exists. Academic correctness stays strict at
+		# the point of use: an EduEdge Programme cannot use an ownerless Department.
 		return
 	institution_row = frappe.db.get_value(
 		"EduEdge Institution", institution, ["company", "enabled"], as_dict=True
