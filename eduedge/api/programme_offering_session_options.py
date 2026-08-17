@@ -66,6 +66,26 @@ def _all_academic_years(institution: str | None) -> list[dict]:
 	return result
 
 
+def _apply_all_sessions(result: dict, institution: str | None, academic_year: str | None) -> dict:
+	"""Apply the canonical Academic Session catalogue to a Class Intake payload."""
+	resolved_institution = (
+		result.get("institution")
+		or (result.get("filters") or {}).get("institution")
+		or (result.get("active_context") or {}).get("institution")
+		or institution
+	)
+	options = dict(result.get("options") or {})
+	options["academic_years"] = _all_academic_years(resolved_institution)
+	result["options"] = options
+
+	selected = str(academic_year or (result.get("filters") or {}).get("academic_year") or "").strip()
+	selected_option = next((row for row in options["academic_years"] if row.get("name") == selected), None)
+	result["selected_session_calendar_ready"] = (
+		bool(selected_option and selected_option.get("calendar_ready")) if selected else None
+	)
+	return result
+
+
 @frappe.whitelist()
 def get_programme_offering_session_options(
 	institution: str | None = None,
@@ -80,14 +100,21 @@ def get_programme_offering_session_options(
 		academic_year=academic_year,
 		use_active_branch=use_active_branch,
 	)
-	resolved_institution = result.get("institution") or institution
-	options = dict(result.get("options") or {})
-	options["academic_years"] = _all_academic_years(resolved_institution)
-	result["options"] = options
+	return _apply_all_sessions(result, institution, academic_year)
 
-	selected = str(academic_year or "").strip()
-	selected_option = next((row for row in options["academic_years"] if row.get("name") == selected), None)
-	result["selected_session_calendar_ready"] = (
-		bool(selected_option and selected_option.get("calendar_ready")) if selected else None
+
+@frappe.whitelist()
+def get_programme_offerings_page_with_sessions(**kwargs) -> dict:
+	"""Class Intake page payload with the same authoritative Session catalogue.
+
+	The EdgeSuite page historically called a page endpoint whose option builder was
+	calendar/value-permission filtered. Route that request through the current safe
+	page implementation, then replace only Academic Session discovery. Offering,
+	Institution, Branch, Programme and permission scoping remain unchanged.
+	"""
+	result = base.get_programme_offerings_page(**kwargs)
+	return _apply_all_sessions(
+		result,
+		str(kwargs.get("institution") or "").strip() or None,
+		str(kwargs.get("academic_year") or "").strip() or None,
 	)
-	return result
