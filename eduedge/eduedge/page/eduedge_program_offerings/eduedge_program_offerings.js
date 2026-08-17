@@ -7,6 +7,7 @@ frappe.pages["eduedge-program-offerings"].on_page_load = function (wrapper) {
 };
 
 const SESSION_OPTIONS_METHOD = "eduedge.api.programme_offering_session_options.get_programme_offering_session_options";
+const SESSION_PAGE_METHOD = "eduedge.api.programme_offering_session_options.get_programme_offerings_page_with_sessions";
 const SESSION_OPTION_SETTLE_INTERVAL_MS = 50;
 const SESSION_OPTION_SETTLE_ATTEMPTS = 80;
 
@@ -55,6 +56,59 @@ async function refresh_session_options(proxy) {
 	}
 }
 
+async function load_session_filtered_page(proxy, resetStart = false, useActiveBranch = false) {
+	if (!proxy) return null;
+	const requestedFilters = { ...(proxy.filters || {}) };
+	const selectedYear = String(requestedFilters.academic_year || "").trim();
+	if (resetStart && proxy.data?.paging) proxy.data.paging.start = 0;
+	const start = Number(proxy.data?.paging?.start || 0);
+	const pageLength = Number(proxy.data?.paging?.page_length || 25);
+
+	proxy.loading = true;
+	proxy.error = "";
+	try {
+		const response = await frappe.call(SESSION_PAGE_METHOD, {
+			...requestedFilters,
+			use_active_branch: useActiveBranch ? 1 : 0,
+			start,
+			page_length: pageLength,
+		});
+		const result = response.message || {};
+		const returnedYear = String(result?.filters?.academic_year || "").trim();
+		if (selectedYear && returnedYear !== selectedYear) {
+			throw new Error(__(`Academic Session filter ${selectedYear} was not preserved by the Class Intake service.`));
+		}
+		if (
+			selectedYear &&
+			(result.offerings || []).some((row) => String(row.academic_year || "").trim() !== selectedYear)
+		) {
+			throw new Error(__(`Class Intake returned records outside Academic Session ${selectedYear}.`));
+		}
+
+		proxy.data = result;
+		proxy.filters = { ...requestedFilters, ...(result.filters || {}) };
+		proxy.loadedOnce = true;
+		if (!proxy.draft?.institution) {
+			proxy.draft.institution = proxy.filters.institution || proxy.activeContext?.institution || "";
+		}
+		if (!proxy.draft?.school_branch) {
+			proxy.draft.school_branch = proxy.filters.branch || proxy.activeContext?.branch || "";
+		}
+		if (!proxy.draftOptions?.institutions?.length) {
+			proxy.draftOptions = { ...(proxy.draftOptions || {}), ...(result.options || {}) };
+		}
+		if (!Object.keys(proxy.draftContext || {}).length) {
+			proxy.draftContext = proxy.activeContext || {};
+		}
+		return result;
+	} catch (error) {
+		proxy.error = error?.message || __("Class Intakes could not be filtered.");
+		return null;
+	} finally {
+		proxy.loading = false;
+	}
+}
+
 function wait_for_component_load(proxy) {
 	return new Promise((resolve) => {
 		let attempts = 0;
@@ -84,17 +138,18 @@ function install_session_option_loader(proxy) {
 		return refresh_session_options(proxy);
 	};
 
-	// Page/filter refreshes still need the canonical API for the offering list,
-	// but re-apply all Academic Sessions after that request finishes so the filter
-	// cannot regress to calendar-ready sessions only.
-	if (typeof proxy.load === "function") {
-		const originalLoad = proxy.load.bind(proxy);
-		proxy.load = async function (...args) {
-			const result = await originalLoad(...args);
-			await refresh_session_options(proxy);
-			return result;
-		};
-	}
+	// Make the page catalogue itself authoritative too. The selected Academic
+	// Session is sent directly to the canonical session-aware endpoint and the
+	// response is rejected if it contains records from another Session.
+	proxy.load = async function (resetStart = false, useActiveBranch = false) {
+		return load_session_filtered_page(proxy, resetStart, useActiveBranch);
+	};
+	proxy.applyFilters = async function () {
+		return load_session_filtered_page(proxy, true, false);
+	};
+	proxy.filterYearChanged = async function () {
+		return load_session_filtered_page(proxy, true, false);
+	};
 }
 
 frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
