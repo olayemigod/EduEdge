@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from eduedge.api.fuzzy_search import CANDIDATE_LIMIT, rank_link_rows
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.offerings import PURPOSE_FIELD, assert_branch_access, parse_query_filters
 
@@ -33,14 +34,20 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 		return []
 	assert_branch_access(branch)
 	purpose_field = PURPOSE_FIELD[purpose]
-	params = {"branch": branch, "txt": f"%{txt or ''}%", "start": int(start), "page_len": int(page_len)}
-	conditions = ["offering.school_branch = %(branch)s", "offering.is_active = 1", f"offering.`{purpose_field}` = 1"]
+	params = {"branch": branch, "candidate_limit": CANDIDATE_LIMIT}
+	conditions = [
+		"offering.school_branch = %(branch)s",
+		"offering.is_active = 1",
+		f"offering.`{purpose_field}` = 1",
+	]
 	for fieldname in ("program", "department", "academic_year"):
 		if filters.get(fieldname):
 			conditions.append(f"offering.`{fieldname}` = %({fieldname})s")
 			params[fieldname] = filters[fieldname]
 	if filters.get("academic_term"):
-		conditions.append("(coalesce(offering.academic_term, '') = '' or offering.academic_term = %(academic_term)s)")
+		conditions.append(
+			"(coalesce(offering.academic_term, '') = '' or offering.academic_term = %(academic_term)s)"
+		)
 		params["academic_term"] = filters["academic_term"]
 	rows = frappe.db.sql(
 		f"""
@@ -49,26 +56,50 @@ def program_offering_query(doctype, txt, searchfield, start, page_len, filters):
 			offering.study_mode, offering.delivery_mode
 		from `tabEduEdge Program Offering` offering
 		where {' and '.join(conditions)}
-			and (
-				offering.name like %(txt)s
-				or coalesce(offering.offering_title, '') like %(txt)s
-				or coalesce(offering.offering_code, '') like %(txt)s
-				or coalesce(offering.department, '') like %(txt)s
-			)
 		order by offering.offering_title asc, offering.modified desc
-		limit %(start)s, %(page_len)s
+		limit %(candidate_limit)s
 		""",
 		params,
 		as_dict=True,
 	)
+	candidates = [
+		{
+			"value": row.name,
+			"label": row.offering_title or row.name,
+			"description": " · ".join(
+				value
+				for value in (
+					row.offering_code,
+					row.department,
+					row.program,
+					row.academic_year,
+					row.academic_term,
+					row.study_mode,
+					row.delivery_mode,
+				)
+				if value
+			),
+			"code": row.offering_code or "",
+			"raw": row,
+		}
+		for row in rows
+	]
+	ranked = rank_link_rows(
+		candidates,
+		str(txt or ""),
+		exact_fields=("value", "code"),
+		search_fields=("label", "description"),
+		start=int(start),
+		page_length=int(page_len),
+	)
 	return [
 		[
-			row.name,
-			row.offering_title or row.name,
-			row.offering_code,
-			" · ".join(value for value in (row.department, row.program, row.academic_year, row.academic_term, row.study_mode, row.delivery_mode) if value),
+			row["value"],
+			row["label"],
+			row.get("code") or "",
+			row.get("description") or "",
 		]
-		for row in rows
+		for row in ranked
 	]
 
 
@@ -96,13 +127,32 @@ def institution_scoped_query(doctype, txt, searchfield, start, page_len, filters
 	rows = frappe.get_list(
 		doctype,
 		filters=query_filters,
-		or_filters={field: ["like", f"%{txt}%"] for field in fields},
 		fields=fields,
+		page_length=CANDIDATE_LIMIT,
+		order_by=(
+			"lft asc"
+			if doctype == "Department"
+			else ("sequence asc, modified desc" if meta.has_field("sequence") else "modified desc")
+		),
+	)
+	candidates = []
+	for row in rows:
+		label = next((row.get(field) for field in fields[1:] if row.get(field)), row.name)
+		description = " · ".join(
+			str(row.get(field) or "")
+			for field in fields[1:]
+			if row.get(field) and row.get(field) != label
+		)
+		candidates.append(
+			{"value": row.name, "label": label, "description": description, "raw": row}
+		)
+	ranked = rank_link_rows(
+		candidates,
+		str(txt or ""),
 		start=int(start),
 		page_length=int(page_len),
-		order_by="lft asc" if doctype == "Department" else ("sequence asc, modified desc" if meta.has_field("sequence") else "modified desc"),
 	)
-	return [[row.name, next((row.get(field) for field in fields[1:] if row.get(field)), row.name)] for row in rows]
+	return [[row["value"], row["label"]] for row in ranked]
 
 
 @frappe.whitelist()
