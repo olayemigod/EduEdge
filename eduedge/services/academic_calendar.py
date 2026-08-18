@@ -86,12 +86,14 @@ def _configured_session_terms(academic_year: str) -> tuple[frappe._dict, list[fr
 
 
 def ensure_institution_calendar(institution: str, academic_year: str) -> dict:
-	"""Create or reconcile the internal Institution calendar for a configured Session.
+	"""Reuse or create the internal Institution calendar for a configured Session.
 
 	Academic Year and Academic Term remain Frappe Education's shared masters. The
 	Institution calendar is EduEdge's institution-specific operational mapping and
 	should not require a second manual setup step for ordinary Class Intake work.
-	Existing period-level governance such as result publication dates is preserved.
+	An existing enabled calendar remains authoritative and is never rewritten as a
+	side effect of saving a Class Intake; only a genuinely missing calendar is
+	prepared from the configured Session and dated Terms.
 	"""
 	institution = str(institution or "").strip()
 	academic_year = str(academic_year or "").strip()
@@ -102,13 +104,10 @@ def ensure_institution_calendar(institution: str, academic_year: str) -> dict:
 	if not institution_doc.enabled:
 		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
 
-	year, terms = _configured_session_terms(academic_year)
 	existing = frappe.db.exists(
 		CALENDAR_DOCTYPE,
 		{"institution": institution, "academic_year": academic_year},
 	)
-	created = False
-	changed = False
 	if existing:
 		doc = frappe.get_doc(CALENDAR_DOCTYPE, existing)
 		if not doc.enabled:
@@ -118,64 +117,42 @@ def ensure_institution_calendar(institution: str, academic_year: str) -> dict:
 				),
 				frappe.ValidationError,
 			)
-		if getdate(doc.start_date) != getdate(year.year_start_date):
-			doc.start_date = year.year_start_date
-			changed = True
-		if getdate(doc.end_date) != getdate(year.year_end_date):
-			doc.end_date = year.year_end_date
-			changed = True
-		existing_periods = {row.academic_term: row for row in doc.periods or [] if row.academic_term}
-		for index, term in enumerate(terms, start=1):
-			period = existing_periods.get(term.name)
-			if not period:
-				doc.append(
-					"periods",
-					{
-						"academic_term": term.name,
-						"start_date": term.term_start_date,
-						"end_date": term.term_end_date,
-						"sequence": index * 10,
-					},
-				)
-				changed = True
-				continue
-			if getdate(period.start_date) != getdate(term.term_start_date):
-				period.start_date = term.term_start_date
-				changed = True
-			if getdate(period.end_date) != getdate(term.term_end_date):
-				period.end_date = term.term_end_date
-				changed = True
-			if period.sequence != index * 10:
-				period.sequence = index * 10
-				changed = True
-		if changed:
-			doc.check_permission("write")
-			doc.save()
-	else:
-		if not frappe.has_permission(CALENDAR_DOCTYPE, "create"):
-			frappe.throw(
-				_("You are not permitted to prepare the Institution Academic Calendar required for this Class Intake."),
-				frappe.PermissionError,
-			)
-		doc = frappe.new_doc(CALENDAR_DOCTYPE)
-		doc.institution = institution
-		doc.academic_year = academic_year
-		doc.start_date = year.year_start_date
-		doc.end_date = year.year_end_date
-		doc.enabled = 1
-		for index, term in enumerate(terms, start=1):
-			doc.append(
-				"periods",
-				{
-					"academic_term": term.name,
-					"start_date": term.term_start_date,
-					"end_date": term.term_end_date,
-					"sequence": index * 10,
-				},
-			)
-		doc.insert()
-		created = True
-		changed = True
+		return {
+			"name": doc.name,
+			"institution": doc.institution,
+			"academic_year": doc.academic_year,
+			"start_date": doc.start_date,
+			"end_date": doc.end_date,
+			"enabled": int(doc.enabled or 0),
+			"is_current": int(doc.is_current or 0),
+			"period_count": len(doc.periods or []),
+			"created": False,
+			"changed": False,
+		}
+
+	year, terms = _configured_session_terms(academic_year)
+	if not frappe.has_permission(CALENDAR_DOCTYPE, "create"):
+		frappe.throw(
+			_("You are not permitted to prepare the Institution Academic Calendar required for this Class Intake."),
+			frappe.PermissionError,
+		)
+	doc = frappe.new_doc(CALENDAR_DOCTYPE)
+	doc.institution = institution
+	doc.academic_year = academic_year
+	doc.start_date = year.year_start_date
+	doc.end_date = year.year_end_date
+	doc.enabled = 1
+	for index, term in enumerate(terms, start=1):
+		doc.append(
+			"periods",
+			{
+				"academic_term": term.name,
+				"start_date": term.term_start_date,
+				"end_date": term.term_end_date,
+				"sequence": index * 10,
+			},
+		)
+	doc.insert()
 
 	return {
 		"name": doc.name,
@@ -186,8 +163,8 @@ def ensure_institution_calendar(institution: str, academic_year: str) -> dict:
 		"enabled": int(doc.enabled or 0),
 		"is_current": int(doc.is_current or 0),
 		"period_count": len(doc.periods or []),
-		"created": created,
-		"changed": changed,
+		"created": True,
+		"changed": True,
 	}
 
 
