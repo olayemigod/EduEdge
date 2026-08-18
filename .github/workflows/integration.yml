@@ -165,6 +165,11 @@ jobs:
           bench --site eduedge-ci.localhost migrate
           bench --site eduedge-ci.localhost migrate
 
+      - name: Prepare ERPNext clean-site test roots
+        working-directory: frappe-bench
+        run: |
+          bench --site eduedge-ci.localhost execute eduedge.tests.integration_bootstrap.ensure_erpnext_test_roots
+
       - name: Run Class Intake and Progression database flow
         working-directory: frappe-bench
         shell: bash
