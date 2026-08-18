@@ -72,9 +72,17 @@ def _target_offerings(branch_names: list[str], academic_year: str) -> list[dict]
                 "academic_term": ["is", "not set"],
             },
             fields=[
-                "name", "school_branch", "program", "academic_year", "offering_title",
-                "study_mode", "delivery_mode", "capacity", "is_active",
-                "admission_enabled", "enrollment_enabled",
+                "name",
+                "school_branch",
+                "program",
+                "academic_year",
+                "offering_title",
+                "study_mode",
+                "delivery_mode",
+                "capacity",
+                "is_active",
+                "admission_enabled",
+                "enrollment_enabled",
             ],
             page_length=MAX_MATRIX_ROWS,
         )
@@ -92,8 +100,15 @@ def _source_offerings(branch_names: list[str], academic_year: str | None) -> dic
             "academic_term": ["is", "not set"],
         },
         fields=[
-            "name", "school_branch", "program", "study_mode", "delivery_mode",
-            "capacity", "is_active", "admission_enabled", "enrollment_enabled",
+            "name",
+            "school_branch",
+            "program",
+            "study_mode",
+            "delivery_mode",
+            "capacity",
+            "is_active",
+            "admission_enabled",
+            "enrollment_enabled",
         ],
         order_by="modified desc",
         page_length=MAX_MATRIX_ROWS,
@@ -112,21 +127,39 @@ def _class_and_intake_payload(doc, branches: list[dict]) -> tuple[list[dict], li
             _("Guided Class Intake preparation is limited to {0} Branch × Class rows at a time.").format(MAX_MATRIX_ROWS),
             frappe.ValidationError,
         )
-    offerings = _target_offerings(branch_names, doc.academic_year)
+
+    target_offerings = _target_offerings(branch_names, doc.academic_year)
     existing_by_key: dict[tuple[str, str], list[dict]] = defaultdict(list)
-    for row in offerings:
+    for row in target_offerings:
         existing_by_key[(row["school_branch"], row["program"])].append(row)
     source_by_key = _source_offerings(branch_names, doc.source_academic_year)
 
+    allowed_programs = {row["name"] for row in programs}
+    allowed_branches = set(branch_names)
+    intended_keys = {
+        key
+        for key in set(source_by_key) | set(existing_by_key)
+        if key[0] in allowed_branches and key[1] in allowed_programs
+    }
+
     intake_rows: list[dict] = []
+    per_program_expected: dict[str, int] = defaultdict(int)
     per_program_existing: dict[str, int] = defaultdict(int)
+    per_program_candidates: dict[str, int] = defaultdict(int)
+
     for branch in branches:
         for program in programs:
             key = (branch["name"], program["name"])
             existing = existing_by_key.get(key) or []
             source = source_by_key.get(key) or {}
+            intended = key in intended_keys
+            if intended:
+                per_program_expected[program["name"]] += 1
+            else:
+                per_program_candidates[program["name"]] += 1
             if existing:
                 per_program_existing[program["name"]] += 1
+            status = "existing" if existing else "missing" if intended else "available"
             intake_rows.append(
                 {
                     "key": f"{branch['name']}::{program['name']}",
@@ -135,7 +168,8 @@ def _class_and_intake_payload(doc, branches: list[dict]) -> tuple[list[dict], li
                     "program": program["name"],
                     "program_name": program.get("program_name") or program["name"],
                     "department": program.get("department") or "",
-                    "status": "existing" if existing else "missing",
+                    "intended": intended,
+                    "status": status,
                     "existing_offering": existing[0]["name"] if existing else "",
                     "existing_count": len(existing),
                     "source_offering": source.get("name") or "",
@@ -145,27 +179,34 @@ def _class_and_intake_payload(doc, branches: list[dict]) -> tuple[list[dict], li
                 }
             )
 
-    expected_per_class = len(branches)
     class_rows = []
     for program in programs:
+        expected_count = per_program_expected.get(program["name"], 0)
         existing_count = per_program_existing.get(program["name"], 0)
+        candidate_count = per_program_candidates.get(program["name"], 0)
         class_rows.append(
             {
                 **program,
-                "intended": True,
-                "expected_intakes": expected_per_class,
+                "program": program["name"],
+                "intended": expected_count > 0,
+                "expected_intakes": expected_count,
                 "existing_intakes": existing_count,
-                "missing_intakes": max(expected_per_class - existing_count, 0),
-                "ready": bool(expected_per_class and existing_count >= expected_per_class),
+                "missing_intakes": max(expected_count - existing_count, 0),
+                "candidate_intakes": candidate_count,
+                "ready": bool(expected_count and existing_count >= expected_count),
             }
         )
 
+    expected_intakes = sum(1 for row in intake_rows if row["intended"])
     summary = {
         "classes": len(class_rows),
+        "intended_classes": sum(1 for row in class_rows if row["intended"]),
+        "available_classes": sum(1 for row in class_rows if not row["intended"]),
         "branches": len(branches),
-        "expected_intakes": len(intake_rows),
+        "expected_intakes": expected_intakes,
         "existing_intakes": sum(1 for row in intake_rows if row["status"] == "existing"),
         "missing_intakes": sum(1 for row in intake_rows if row["status"] == "missing"),
+        "available_intake_candidates": sum(1 for row in intake_rows if row["status"] == "available"),
     }
     return class_rows, intake_rows, summary
 
@@ -173,17 +214,26 @@ def _class_and_intake_payload(doc, branches: list[dict]) -> tuple[list[dict], li
 def _arm_payload(doc, branches: list[dict]) -> tuple[list[dict], dict]:
     if not doc.source_academic_year:
         return [], {
-            "source_session": "", "destination_session": doc.academic_year,
-            "total": 0, "ready": 0, "existing": 0, "blocked": 0,
-            "source_students": 0, "students_to_carry": 0,
+            "source_session": "",
+            "destination_session": doc.academic_year,
+            "total": 0,
+            "ready": 0,
+            "existing": 0,
+            "blocked": 0,
+            "source_students": 0,
+            "students_to_carry": 0,
         }
 
     rows: list[dict] = []
     summary = {
         "source_session": doc.source_academic_year,
         "destination_session": doc.academic_year,
-        "total": 0, "ready": 0, "existing": 0, "blocked": 0,
-        "source_students": 0, "students_to_carry": 0,
+        "total": 0,
+        "ready": 0,
+        "existing": 0,
+        "blocked": 0,
+        "source_students": 0,
+        "students_to_carry": 0,
     }
     for branch in branches:
         plan = preview_class_arm_session_rollover(
@@ -224,15 +274,22 @@ def _context_for_doc(doc) -> dict:
         "class_arms": arm_rows,
         "summary": {
             **intake_summary,
-            "class_structure_ready": bool(classes),
-            "intakes_ready": bool(intake_rows and not intake_summary["missing_intakes"]),
+            "class_structure_ready": bool(intake_summary["intended_classes"]),
+            "intakes_ready": bool(
+                intake_summary["expected_intakes"]
+                and not intake_summary["missing_intakes"]
+            ),
             "arms_total": arm_summary["total"],
             "arms_ready_to_create": arm_summary["ready"],
             "arms_existing": arm_summary["existing"],
             "arms_blocked": arm_summary["blocked"],
             "source_students": arm_summary["source_students"],
             "students_to_carry": arm_summary["students_to_carry"],
-            "arms_structure_ready": bool(arm_summary["total"] and not arm_summary["ready"] and not arm_summary["blocked"]),
+            "arms_structure_ready": bool(
+                arm_summary["total"]
+                and not arm_summary["ready"]
+                and not arm_summary["blocked"]
+            ),
         },
         "arm_summary": arm_summary,
         "permissions": {
@@ -260,7 +317,10 @@ def create_selected_class_intakes(launch: str, selections: Any) -> dict:
     allowed_branches = {row["name"] for row in branches}
     programs = {row["name"]: row for row in _program_rows(doc.institution)}
     year = frappe.db.get_value(
-        "Academic Year", doc.academic_year, ["year_start_date", "year_end_date"], as_dict=True
+        "Academic Year",
+        doc.academic_year,
+        ["year_start_date", "year_end_date"],
+        as_dict=True,
     ) or {}
     source_by_key = _source_offerings(list(allowed_branches), doc.source_academic_year)
 
