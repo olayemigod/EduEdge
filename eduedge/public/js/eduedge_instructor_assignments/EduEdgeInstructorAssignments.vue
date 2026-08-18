@@ -38,15 +38,15 @@
 						</div>
 					</div>
 
-					<label class="instructor-field">
-						<span>Instructor *</span>
-						<select v-model="instructor" class="form-control" @change="instructorChanged">
-							<option value="">Select Instructor</option>
-							<option v-for="row in data.instructors" :key="row.name" :value="row.name">
-								{{ row.instructor_name || row.name }}{{ row.home_institution_name ? ` · ${row.home_institution_name}` : '' }}{{ row.department ? ` · ${row.department}` : '' }}
-							</option>
-						</select>
-					</label>
+					<InstructorAssignmentSearchFields
+						:instructor="instructor"
+						:show-instructor="true"
+						:branch-only-scope="branchOnlyScope"
+						:class-arm-scope="classArmScope"
+						@update:instructor="instructor = $event"
+						@instructor-select="instructorSelected"
+						@instructor-clear="instructorCleared"
+					/>
 
 					<EdgeActionBar :label="workingScopeLabel" />
 					<EdgeActionBar label="Each row owns one Branch and one Class. Multiple Subjects or Class Arms selected inside that row apply only to that row. Classes in another Branch must be added as another row." />
@@ -88,31 +88,20 @@
 								</select>
 							</label>
 
-							<label v-if="row.assignment_scope !== branchOnlyScope" class="wide">
-								<span>Class / Programme Offering *</span>
-								<select v-model="row.program_offering" class="form-control" :disabled="!row.branch" @change="offeringChanged(row)">
-									<option value="">Select Class / Programme Offering</option>
-									<option v-for="offering in offeringsFor(row)" :key="offering.name" :value="offering.name">
-										{{ offering.offering_title || offering.name }} · {{ offering.academic_year }}{{ offering.academic_term ? ` · ${offering.academic_term}` : '' }}
-									</option>
-								</select>
-							</label>
-
-							<label v-if="row.assignment_scope === classArmScope" class="wide">
-								<span>Class Arms *</span>
-								<select v-model="row.student_groups" multiple class="form-control multi-select" :disabled="!row.program_offering" @change="invalidatePreview">
-									<option v-for="group in groupsFor(row)" :key="group.name" :value="group.name">{{ group.eduedge_display_name || group.student_group_name || group.name }}</option>
-								</select>
-								<small>Select one or several Class Arms that should receive the same responsibility.</small>
-							</label>
-
-							<label v-if="requiresSubjects(row)" class="wide">
-								<span>{{ courseLabel(row, true) }} *</span>
-								<select v-model="row.courses" multiple class="form-control multi-select" :disabled="!row.program_offering" @change="invalidatePreview">
-									<option v-for="course in coursesFor(row)" :key="course.name" :value="course.name">{{ course.course_name || course.name }}</option>
-								</select>
-								<small>These {{ courseLabel(row, true).toLowerCase() }} apply only to this row's selected Class{{ row.assignment_scope === classArmScope ? ' Arm(s)' : '' }}.</small>
-							</label>
+							<InstructorAssignmentSearchFields
+								:row="row"
+								:branch-only-scope="branchOnlyScope"
+								:class-arm-scope="classArmScope"
+								:requires-subjects="requiresSubjects(row)"
+								:subject-label="courseLabel(row, true)"
+								@update:offering="row.program_offering = $event"
+								@offering-select="offeringSelected(row, $event)"
+								@offering-clear="offeringCleared(row)"
+								@update:class-arms="row.student_groups = $event"
+								@class-arms-change="invalidatePreview"
+								@update:courses="row.courses = $event"
+								@courses-change="invalidatePreview"
+							/>
 
 							<div v-if="isClassResponsibility(row)" class="row-note wide">
 								<strong>Class responsibility</strong>
@@ -244,12 +233,12 @@
 
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
+import InstructorAssignmentSearchFields from "./InstructorAssignmentSearchFields.vue";
 
 const BRANCH_ONLY_SCOPE = "Branch Access Only";
 const CLASS_SCOPE = "Class / Programme Offering";
 const CLASS_ARM_SCOPE = "Class Arm";
 const SUBJECT_INSTRUCTOR = "Subject Instructor";
-// Compatibility labels retained for older static contracts while the live flow is row-based.
 const ASSIGNMENT_FLOW_LABELS = Object.freeze(["Institutions and Branches / Campuses", "Classes / Programme Offerings", "Preview Assignment Batch"]);
 void ASSIGNMENT_FLOW_LABELS;
 let rowSequence = 0;
@@ -276,13 +265,14 @@ function newRow(preset = {}) {
 }
 
 const blankData = () => ({
-	allowed_branches: [], selected_branches: [], instructors: [], selected_instructor: null,
-	offerings: [], groups: [], courses: [], course_map: {}, assignments: [], branch_assignments: [],
-	assignment_types: [], assignment_scopes: [], subject_required_types: [], class_responsibility_types: [], permissions: {},
+	allowed_branches: [], selected_branches: [], selected_instructor: null,
+	assignments: [], branch_assignments: [], assignment_types: [], assignment_scopes: [],
+	subject_required_types: [], class_responsibility_types: [], permissions: {},
 });
 
 export default {
 	name: "EduEdgeInstructorAssignments",
+	components: { InstructorAssignmentSearchFields },
 	data() {
 		return {
 			menuItems: EDUEDGE_MENU_ITEMS,
@@ -298,6 +288,8 @@ export default {
 			rows: [newRow()],
 			preview: null,
 			routePresetApplied: false,
+			offeringLabels: {},
+			courseLabels: {},
 		};
 	},
 	computed: {
@@ -355,10 +347,9 @@ export default {
 			this.loading = true;
 			this.error = "";
 			try {
-				const response = await frappe.call("eduedge.api.instructor_assignments.get_instructor_assignments_page", {
+				const response = await frappe.call("eduedge.api.instructor_assignment_runtime.get_instructor_assignments_page", {
 					instructor: this.instructor || undefined,
 					branches: this.selectedBranches,
-					offerings: this.rows.map((row) => row.program_offering).filter(Boolean),
 				});
 				this.data = response.message || blankData();
 				if (this.data.assignments?.length) {
@@ -383,7 +374,16 @@ export default {
 			}
 		},
 		invalidatePreview() { this.preview = null; this.saveError = ""; },
-		async instructorChanged() { this.invalidatePreview(); await this.load(); },
+		async instructorSelected(option) {
+			this.instructor = option?.value || "";
+			this.invalidatePreview();
+			await this.load();
+		},
+		async instructorCleared() {
+			this.instructor = "";
+			this.invalidatePreview();
+			await this.load();
+		},
 		addAcademicRow() {
 			this.rows.push(newRow({ branch: this.selectedBranches[0] || this.data.selected_branches?.[0] || "" }));
 			this.invalidatePreview();
@@ -428,41 +428,41 @@ export default {
 			row.courses = [];
 			this.invalidatePreview();
 		},
-		offeringChanged(row) {
+		offeringSelected(row, option) {
+			row.program_offering = option?.value || "";
 			row.student_groups = [];
 			row.courses = [];
-			const offering = this.offeringRecord(row.program_offering);
-			if (offering) {
-				row.branch = offering.school_branch;
-				if (!row.valid_from && offering.period_start_date) row.valid_from = offering.period_start_date;
-				if (!row.valid_to && offering.period_end_date) row.valid_to = offering.period_end_date;
-			}
+			if (option?.value) this.offeringLabels[option.value] = option.label || option.value;
+			if (option?.school_branch) row.branch = option.school_branch;
+			if (!row.valid_from && option?.period_start_date) row.valid_from = option.period_start_date;
+			if (!row.valid_to && option?.period_end_date) row.valid_to = option.period_end_date;
+			this.invalidatePreview();
+		},
+		offeringCleared(row) {
+			row.program_offering = "";
+			row.student_groups = [];
+			row.courses = [];
 			this.invalidatePreview();
 		},
 		applyRoutePreset(preset = {}) {
 			if (this.routePresetApplied || !this.loaded || !this.canManage) return;
 			this.routePresetApplied = true;
 			if (!preset.branch && !preset.program_offering && !preset.student_group && !preset.course) return;
-			const row = newRow({
+			this.rows = [newRow({
 				branch: preset.branch,
 				program_offering: preset.program_offering,
 				assignment_scope: preset.student_group ? CLASS_ARM_SCOPE : CLASS_SCOPE,
 				student_groups: preset.student_group ? [preset.student_group] : [],
 				courses: preset.course ? [preset.course] : [],
-			});
-			this.rows = [row];
-			this.offeringChanged(row);
-			if (preset.student_group) row.student_groups = [preset.student_group];
-			if (preset.course) row.courses = [preset.course];
+			})];
 			this.invalidatePreview();
 		},
 		branchRecord(name) { return this.data.allowed_branches.find((row) => row.name === name); },
-		offeringRecord(name) { return this.data.offerings.find((row) => row.name === name); },
 		branchLabel(name) { return this.branchRecord(name)?.branch_name || name || "Branch"; },
 		institutionForBranch(name) { const row = this.branchRecord(name); return row?.institution_name || row?.institution || "Institution"; },
 		institutionForRow(row) { return this.institutionForBranch(row.branch); },
-		offeringLabel(name) { return this.offeringRecord(name)?.offering_title || name || "Class"; },
-		courseName(name) { return this.data.courses.find((row) => row.name === name)?.course_name || name || ""; },
+		offeringLabel(name) { return this.offeringLabels[name] || name || "Class"; },
+		courseName(name) { return this.courseLabels[name] || name || ""; },
 		branchPeriodStatus(item) {
 			if (!Number(item.enabled)) return { label: "Disabled", status: "disabled", tone: "danger" };
 			const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
@@ -481,21 +481,6 @@ export default {
 			return { label: "Status unavailable", status: "unavailable", tone: "neutral" };
 		},
 		canEndAssignment(item) { return Boolean(this.canManage && item.can_end); },
-		offeringsFor(row) { return (this.data.offerings || []).filter((offering) => offering.school_branch === row.branch); },
-		groupsFor(row) {
-			const offering = this.offeringRecord(row.program_offering);
-			if (!offering) return [];
-			return (this.data.groups || []).filter((group) => {
-				if (group.eduedge_program_offering) return group.eduedge_program_offering === offering.name;
-				return group.eduedge_school_branch === offering.school_branch && group.program === offering.program && group.academic_year === offering.academic_year && (!group.academic_term || group.academic_term === offering.academic_term);
-			});
-		},
-		coursesFor(row) {
-			const offering = this.offeringRecord(row.program_offering);
-			if (!offering) return [];
-			const names = new Set(this.data.course_map?.[offering.program] || []);
-			return (this.data.courses || []).filter((course) => names.has(course.name) && (!course.eduedge_institution || course.eduedge_institution === offering.institution));
-		},
 		requiresSubjects(row) { return (this.data.subject_required_types || []).includes(row.assignment_type); },
 		isClassResponsibility(row) { return (this.data.class_responsibility_types || []).includes(row.assignment_type); },
 		courseLabel(row, plural = false) {
@@ -612,5 +597,5 @@ export default {
 </script>
 
 <style scoped>
-.assignment-panel,.assignment-row{display:grid;gap:1rem;align-content:start;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.rows-stack{display:grid;gap:1rem;margin:1rem 0}.assignment-row{border-left:4px solid var(--primary)}.assignment-heading,.assignment-actions,.row-summary{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.assignment-heading h2,.assignment-heading h3{margin:.2rem 0 0}.instructor-field{display:grid;gap:.35rem;font-weight:600;max-width:52rem}.row-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.row-grid label{display:grid;gap:.35rem;font-weight:600}.row-grid .wide{grid-column:1/-1}.multi-select{min-height:8rem}.row-note{display:grid;gap:.25rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.row-note span,.row-summary{color:var(--text-muted)}.row-summary{justify-content:flex-start;font-size:.8rem}.row-summary span{padding:.25rem .5rem;border-radius:999px;background:var(--control-bg)}.preview{display:grid;gap:.75rem;margin-top:1rem}.preview-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:.65rem}.preview-metrics>div{display:grid;gap:.2rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.preview-metrics span{color:var(--text-muted);font-size:.75rem}.preview-metrics strong{font-size:1.3rem}.preview-list,.register-list,.branch-eligibility-list,.branch-period-list{display:grid;gap:.6rem}.preview-list{padding:.75rem;border:1px solid var(--border-color);border-radius:8px}.preview-list.danger{border-color:var(--red-400)}.preview-list span{display:block}.register-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1rem}.register-list article{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.register-list article>span{display:grid;gap:.15rem}.register-list small{color:var(--text-muted)}.branch-eligibility-group{display:grid;gap:.65rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.branch-eligibility-heading{display:flex;align-items:center;justify-content:space-between;gap:.75rem}.branch-eligibility-heading>span,.branch-period-row>span{display:grid;gap:.15rem}.branch-eligibility-heading small,.branch-period-row small{color:var(--text-muted)}.branch-period-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg)}.assignment-error{color:var(--red-600,#b42318)}@media(max-width:900px){.row-grid,.register-layout{grid-template-columns:1fr}.row-grid .wide{grid-column:auto}}@media(max-width:600px){.assignment-heading,.register-list article,.branch-eligibility-heading,.branch-period-row{align-items:stretch;flex-direction:column}}
+.assignment-panel,.assignment-row{display:grid;gap:1rem;align-content:start;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.rows-stack{display:grid;gap:1rem;margin:1rem 0}.assignment-row{border-left:4px solid var(--primary)}.assignment-heading,.assignment-actions,.row-summary{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.assignment-heading h2,.assignment-heading h3{margin:.2rem 0 0}.row-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.row-grid label{display:grid;gap:.35rem;font-weight:600}.row-grid .wide{grid-column:1/-1}.row-note{display:grid;gap:.25rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.row-note span,.row-summary{color:var(--text-muted)}.row-summary{justify-content:flex-start;font-size:.8rem}.row-summary span{padding:.25rem .5rem;border-radius:999px;background:var(--control-bg)}.preview{display:grid;gap:.75rem;margin-top:1rem}.preview-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:.65rem}.preview-metrics>div{display:grid;gap:.2rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.preview-metrics span{color:var(--text-muted);font-size:.75rem}.preview-metrics strong{font-size:1.3rem}.preview-list,.register-list,.branch-eligibility-list,.branch-period-list{display:grid;gap:.6rem}.preview-list{padding:.75rem;border:1px solid var(--border-color);border-radius:8px}.preview-list.danger{border-color:var(--red-400)}.preview-list span{display:block}.register-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1rem}.register-list article{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.register-list article>span{display:grid;gap:.15rem}.register-list small{color:var(--text-muted)}.branch-eligibility-group{display:grid;gap:.65rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.branch-eligibility-heading{display:flex;align-items:center;justify-content:space-between;gap:.75rem}.branch-eligibility-heading>span,.branch-period-row>span{display:grid;gap:.15rem}.branch-eligibility-heading small,.branch-period-row small{color:var(--text-muted)}.branch-period-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg)}.assignment-error{color:var(--red-600,#b42318)}@media(max-width:900px){.row-grid,.register-layout{grid-template-columns:1fr}.row-grid .wide{grid-column:auto}}@media(max-width:600px){.assignment-heading,.register-list article,.branch-eligibility-heading,.branch-period-row{align-items:stretch;flex-direction:column}}
 </style>
