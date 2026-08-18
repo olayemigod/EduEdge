@@ -73,7 +73,7 @@
 
 			<div v-if="launch" class="session-launch-step-grid">
 				<article
-					v-for="step in overviewSteps"
+					v-for="step in foundationOverviewSteps"
 					:key="step.key"
 					:class="['session-launch-step', { 'is-current': step.key === launch.current_step_key, 'is-ready': step.ready, 'is-planned': !step.implemented }]"
 				>
@@ -91,9 +91,7 @@
 							{{ step.ready ? "Foundation Ready" : "Prepare Session Foundation" }}
 						</button>
 						<button v-if="step.key === 'session_terms'" type="button" class="edge-button" :disabled="saving" @click="newTerm">Add Term</button>
-						<button v-if="step.implemented && step.key !== 'session_terms'" type="button" class="edge-button" @click="openStep(step)">Review {{ step.label }} in new tab</button>
 						<button v-if="step.implemented" type="button" class="edge-button" :disabled="saving" @click="saveCurrentStep(step.key)">Save here</button>
-						<span v-else class="session-launch-planned-label">Planned next slice</span>
 					</div>
 				</article>
 			</div>
@@ -118,6 +116,29 @@
 				@save-step="saveCurrentStep"
 				@learners-updated="handleLearnersUpdated"
 			/>
+
+			<div v-if="launch && futureOverviewSteps.length" class="session-launch-step-grid session-launch-step-grid--future">
+				<article
+					v-for="step in futureOverviewSteps"
+					:key="step.key"
+					:class="['session-launch-step', { 'is-current': step.key === launch.current_step_key, 'is-ready': step.ready, 'is-planned': !step.implemented }]"
+				>
+					<div class="session-launch-step-heading">
+						<span class="session-launch-step-number">{{ stepNumber(step) }}</span>
+						<div><strong>{{ step.label }}</strong><small>{{ step.status }}</small></div>
+					</div>
+					<p>{{ step.description }}</p>
+					<p v-if="step.message" class="session-launch-step-message">{{ step.message }}</p>
+					<div v-if="metricEntries(step).length" class="session-launch-metrics">
+						<span v-for="metric in metricEntries(step)" :key="metric.key"><small>{{ metric.label }}</small><strong>{{ metric.value }}</strong></span>
+					</div>
+					<div class="session-launch-step-actions">
+						<button v-if="step.implemented" type="button" class="edge-button" @click="openStep(step)">Review {{ step.label }} in new tab</button>
+						<button v-if="step.implemented" type="button" class="edge-button" :disabled="saving" @click="saveCurrentStep(step.key)">Save here</button>
+						<span v-else class="session-launch-planned-label">Planned next slice</span>
+					</div>
+				</article>
+			</div>
 
 			<div v-if="launch" class="session-launch-resume-note">
 				<strong>Resume behaviour</strong>
@@ -167,7 +188,8 @@ export default {
 			const targetStart = new Date(target.year_start_date);
 			return this.sessions.filter((row) => row.name !== this.targetAcademicYear && row.year_start_date && new Date(row.year_start_date) < targetStart);
 		},
-		overviewSteps() { return (this.readiness.steps || []).filter((step) => !EMBEDDED_WORKFLOW_STEPS.has(step.key)); },
+		foundationOverviewSteps() { return (this.readiness.steps || []).filter((step) => step.key === "session_terms"); },
+		futureOverviewSteps() { return (this.readiness.steps || []).filter((step) => step.key !== "session_terms" && !EMBEDDED_WORKFLOW_STEPS.has(step.key)); },
 		foundationReadyCount() {
 			const sessionReady = Boolean((this.readiness.steps || []).find((step) => step.key === "session_terms")?.ready);
 			return [
@@ -347,7 +369,7 @@ export default {
 .session-launch-status-block{display:grid;gap:.25rem;min-width:14rem;text-align:right}.session-launch-status{justify-self:end;padding:.2rem .55rem;border-radius:999px;background:var(--control-bg);border:1px solid var(--border-color);font-size:.78rem}.session-launch-status-block small{color:var(--text-muted)}
 .session-launch-context-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.session-launch-context-grid label,.session-launch-context-card{display:grid;gap:.35rem}.session-launch-context-grid label>span,.session-launch-context-card>span{font-weight:600}.session-launch-context-grid small,.session-launch-context-card small{color:var(--text-muted)}.session-launch-context-card{padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}
 .session-launch-actions,.session-launch-step-actions{display:flex;flex-wrap:wrap;gap:.5rem}.session-launch-progress{display:grid;gap:.45rem}.session-launch-progress-track{height:.55rem;overflow:hidden;border-radius:999px;background:var(--control-bg);border:1px solid var(--border-color)}.session-launch-progress-value{height:100%;background:var(--primary)}.session-launch-progress-meta{display:flex;justify-content:space-between;gap:1rem;color:var(--text-muted);font-size:.8rem}.session-launch-warning{color:var(--orange-600,#b54708)}
-.session-launch-step-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem}.session-launch-step{display:grid;gap:.65rem;padding:.95rem;border:1px solid var(--border-color);border-radius:10px;background:var(--control-bg)}.session-launch-step.is-current{box-shadow:inset 3px 0 0 var(--primary)}.session-launch-step.is-ready{border-style:solid}.session-launch-step.is-planned{opacity:.72}.session-launch-step-heading{display:flex;gap:.65rem;align-items:center}.session-launch-step-heading>div{display:grid;gap:.1rem}.session-launch-step-heading small{color:var(--text-muted)}.session-launch-step-number{display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:999px;border:1px solid var(--border-color);font-weight:700}.session-launch-step p{margin:0;color:var(--text-muted)}.session-launch-step-message{font-size:.82rem}.session-launch-metrics{display:flex;flex-wrap:wrap;gap:.5rem}.session-launch-metrics>span{display:grid;gap:.1rem;min-width:8rem;padding:.45rem .55rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg)}.session-launch-metrics small{color:var(--text-muted)}.session-launch-planned-label{align-self:center;color:var(--text-muted);font-size:.8rem}
+.session-launch-step-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem}.session-launch-step-grid--future{margin-top:1rem}.session-launch-step{display:grid;gap:.65rem;padding:.95rem;border:1px solid var(--border-color);border-radius:10px;background:var(--control-bg)}.session-launch-step.is-current{box-shadow:inset 3px 0 0 var(--primary)}.session-launch-step.is-ready{border-style:solid}.session-launch-step.is-planned{opacity:.72}.session-launch-step-heading{display:flex;gap:.65rem;align-items:center}.session-launch-step-heading>div{display:grid;gap:.1rem}.session-launch-step-heading small{color:var(--text-muted)}.session-launch-step-number{display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:999px;border:1px solid var(--border-color);font-weight:700}.session-launch-step p{margin:0;color:var(--text-muted)}.session-launch-step-message{font-size:.82rem}.session-launch-metrics{display:flex;flex-wrap:wrap;gap:.5rem}.session-launch-metrics>span{display:grid;gap:.1rem;min-width:8rem;padding:.45rem .55rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg)}.session-launch-metrics small{color:var(--text-muted)}.session-launch-planned-label{align-self:center;color:var(--text-muted);font-size:.8rem}
 .session-launch-resume-note{display:grid;gap:.25rem;padding:.8rem;border:1px dashed var(--border-color);border-radius:8px}.session-launch-resume-note span,.session-launch-resume-note small{color:var(--text-muted)}.session-launch-message{padding:.75rem;border-radius:8px;background:var(--control-bg)}.session-launch-message--error{color:var(--red-600,#b42318)}
 :global(.session-launch-dialog .modal-content){border-radius:12px}:global(.session-launch-dialog-guidance){padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg);color:var(--text-muted)}
 @media(max-width:1000px){.session-launch-context-grid{grid-template-columns:1fr}.session-launch-header,.session-launch-progress-meta{align-items:stretch;flex-direction:column}.session-launch-status-block{text-align:left}.session-launch-status{justify-self:start}}
