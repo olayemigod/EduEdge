@@ -190,6 +190,9 @@ function install_session_option_loader(proxy) {
 		return load_session_filtered_page(proxy, true, false);
 	};
 
+	// A configured Session may legitimately be missing its internal Institution
+	// calendar mapping. The backend now prepares that mapping atomically during
+	// Class Intake save, so the browser must not block the save beforehand.
 	if (typeof proxy.saveOffering === "function") {
 		const originalSaveOffering = proxy.saveOffering.bind(proxy);
 		proxy.saveOffering = async function () {
