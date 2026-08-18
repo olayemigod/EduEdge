@@ -15,6 +15,17 @@ from eduedge.services.branch_context import (
 	get_current_school_branch,
 )
 
+CROSS_BRANCH_ENROLLMENT_ROLES = {
+	"System Manager",
+	"EduEdge Administrator",
+	"School Administrator",
+	"Academic Administrator",
+	"Education Manager",
+	"Academics User",
+	"Registrar",
+	"Admission Officer",
+}
+
 
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
@@ -26,7 +37,10 @@ def _require_login() -> None:
 def school_branch_query(doctype, txt, searchfield, start, page_len, filters):
 	_require_login()
 	filters = parse_query_filters(filters)
-	rows = get_allowed_school_branches(company=filters.get("company"))
+	rows = get_allowed_school_branches(
+		company=filters.get("company"),
+		institution=filters.get("institution"),
+	)
 	needle = (txt or "").strip().lower()
 	if needle:
 		rows = [
@@ -35,12 +49,25 @@ def school_branch_query(doctype, txt, searchfield, start, page_len, filters):
 			if needle
 			in " ".join(
 				str(row.get(key) or "")
-				for key in ("name", "branch_name", "branch_code", "company")
+				for key in (
+					"name",
+					"branch_name",
+					"branch_code",
+					"company",
+					"institution",
+					"institution_name",
+				)
 			).lower()
 		]
 	rows = rows[int(start) : int(start) + int(page_len)]
 	return [
-		[row["name"], row.get("branch_name"), row.get("branch_code"), row.get("company")]
+		[
+			row["name"],
+			row.get("branch_name"),
+			row.get("branch_code"),
+			row.get("institution_name") or row.get("institution"),
+			row.get("company"),
+		]
 		for row in rows
 	]
 
@@ -164,6 +191,40 @@ def student_query(doctype, txt, searchfield, start, page_len, filters):
 	if not branch:
 		current = get_current_school_branch()
 		branch = current.get("name") if current else None
+
+	allow_cross_branch = str(filters.get("allow_cross_branch") or "").lower() in {"1", "true", "yes", "on"}
+	if allow_cross_branch:
+		roles = set(frappe.get_roles(frappe.session.user))
+		if not roles.intersection(CROSS_BRANCH_ENROLLMENT_ROLES):
+			frappe.throw(_("You are not permitted to enroll students across Branches."), frappe.PermissionError)
+		if not branch:
+			return []
+		institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
+		if not institution:
+			return []
+		return frappe.db.sql(
+			f"""
+			select student.name, student.student_name, student.student_email_id, student.`{BRANCH_FIELD}`
+			from `tabStudent` student
+			inner join `tabEduEdge School Branch` home_branch
+				on home_branch.name = student.`{BRANCH_FIELD}`
+			where student.enabled = 1
+				and home_branch.institution = %(institution)s
+				and (
+					student.name like %(txt)s
+					or student.student_name like %(txt)s
+					or coalesce(student.student_email_id, '') like %(txt)s
+				)
+			order by student.student_name asc
+			limit %(start)s, %(page_len)s
+			""",
+			{
+				"institution": institution,
+				"txt": f"%{txt or ''}%",
+				"start": int(start),
+				"page_len": int(page_len),
+			},
+		)
 
 	student_filters: dict = {"enabled": 1}
 	if branch:

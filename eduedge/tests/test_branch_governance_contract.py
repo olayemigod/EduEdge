@@ -34,7 +34,7 @@ class TestBranchGovernanceContract(unittest.TestCase):
 		roles = {row["role"] for row in payload["permissions"]}
 		self.assertEqual(roles, {"System Manager", "EduEdge Administrator"})
 
-	def test_enforcement_is_settings_gated_for_safe_rollout(self):
+	def test_enforcement_defaults_fail_closed_for_new_sites(self):
 		settings = json.loads(
 			(
 				APP
@@ -45,8 +45,8 @@ class TestBranchGovernanceContract(unittest.TestCase):
 			).read_text()
 		)
 		fields = {field["fieldname"]: field for field in settings["fields"]}
-		self.assertEqual(fields["enable_user_branch_access_enforcement"]["default"], "0")
-		self.assertIn("allow_hq_all_branch_view", fields)
+		self.assertEqual(fields["enable_user_branch_access_enforcement"]["default"], "1")
+		self.assertEqual(fields["allow_hq_all_branch_view"]["default"], "0")
 
 	def test_active_context_supports_company_scoped_all_branches(self):
 		text = (APP / "services" / "branch_context.py").read_text()

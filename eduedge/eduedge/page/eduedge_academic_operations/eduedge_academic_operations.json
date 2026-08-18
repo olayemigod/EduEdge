@@ -11,16 +11,7 @@
  "name": "eduedge-academic-operations",
  "owner": "Administrator",
  "page_name": "eduedge-academic-operations",
- "roles": [
-  {"role": "System Manager"},
-  {"role": "EduEdge Administrator"},
-  {"role": "School Administrator"},
-  {"role": "Academic Administrator"},
-  {"role": "Education Manager"},
-  {"role": "Academics User"},
-  {"role": "Instructor"},
-  {"role": "Teacher"}
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,

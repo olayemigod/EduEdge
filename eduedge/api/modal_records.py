@@ -7,7 +7,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
-from eduedge.services.branch_context import get_allowed_school_branches
+from eduedge.services.branch_context import (
+	get_allowed_institutions,
+	get_allowed_school_branches,
+)
 
 MAX_OPTIONS = 30
 
@@ -36,6 +39,7 @@ BRANCH_ROLES = [
 	"Admissions Officer",
 	"Other",
 ]
+ACCESS_SCOPES = ["Company", "Institution", "Branch"]
 
 RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 	"school_branch": {
@@ -43,13 +47,14 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 		"title": _("School Branch / Campus"),
 		"create_title": _("Add School Branch / Campus"),
 		"edit_title": _("Update School Branch / Campus"),
-		"subtitle": _("Capture the branch identity and contact details. Accounting defaults remain available in the full form."),
+		"subtitle": _("Capture the Institution, branch identity, and contact details. Accounting defaults remain available in the full form."),
 		"full_form_route": "/app/eduedge-school-branch",
 		"fields": [
 			{"fieldname": "branch_name", "type": "Data", "label": _("Branch Name"), "required": True},
 			{"fieldname": "branch_code", "type": "Data", "label": _("Branch Code"), "required": True, "description": _("Short unique code, for example MAIN or LEKKI.")},
 			{"fieldname": "branch_type", "type": "Select", "label": _("Branch Type"), "options": BRANCH_TYPES, "default": "Campus"},
-			{"fieldname": "company", "type": "Link", "label": _("School / Company"), "options_doctype": "Company", "required": True},
+			{"fieldname": "company", "type": "Link", "label": _("School / Company"), "options_doctype": "Company", "required": True, "clear_fields": ["institution"]},
+			{"fieldname": "institution", "type": "Link", "label": _("Institution"), "options_doctype": "EduEdge Institution", "required": True},
 			{"fieldname": "is_main_branch", "type": "Check", "label": _("Main Branch / Campus"), "default": 0},
 			{"fieldname": "is_default", "type": "Check", "label": _("Default Operational Branch"), "default": 0},
 			{"fieldname": "enabled", "type": "Check", "label": _("Enabled"), "default": 1},
@@ -82,19 +87,20 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 	},
 	"user_branch_access": {
 		"doctype": "EduEdge User Branch Access",
-		"title": _("User Branch Access"),
-		"create_title": _("Add User Branch Access"),
-		"edit_title": _("Update User Branch Access"),
-		"subtitle": _("Assign a system user to one campus or grant company-scoped HQ access."),
+		"title": _("User Access Assignment"),
+		"create_title": _("Add User Access Assignment"),
+		"edit_title": _("Update User Access Assignment"),
+		"subtitle": _("Grant Company, Institution, or Branch access without widening the user's role permissions."),
 		"full_form_route": "/app/eduedge-user-branch-access",
 		"fields": [
 			{"fieldname": "user", "type": "Link", "label": _("User"), "options_doctype": "User", "required": True},
-			{"fieldname": "branch_role", "type": "Select", "label": _("Role in Branch"), "options": BRANCH_ROLES, "required": True},
-			{"fieldname": "hq_all_branch_access", "type": "Check", "label": _("HQ / All-Branch Access"), "default": 0, "clear_fields": ["school_branch", "is_default_branch"]},
-			{"fieldname": "company", "type": "Link", "label": _("Company"), "options_doctype": "Company", "required": True, "clear_fields": ["school_branch"]},
-			{"fieldname": "school_branch", "type": "Link", "label": _("School Branch / Campus"), "options_doctype": "EduEdge School Branch", "required_when": {"field": "hq_all_branch_access", "equals": 0}, "visible_when": {"field": "hq_all_branch_access", "equals": 0}},
-			{"fieldname": "is_default_branch", "type": "Check", "label": _("Default Branch"), "default": 0, "visible_when": {"field": "hq_all_branch_access", "equals": 0}},
-			{"fieldname": "can_switch_branch", "type": "Check", "label": _("Can Switch Branch"), "default": 1},
+			{"fieldname": "branch_role", "type": "Select", "label": _("Role in Access Scope"), "options": BRANCH_ROLES, "required": True},
+			{"fieldname": "access_scope", "type": "Select", "label": _("Access Level"), "options": ACCESS_SCOPES, "default": "Branch", "clear_fields": ["institution", "school_branch", "is_default_branch"]},
+			{"fieldname": "company", "type": "Link", "label": _("Company"), "options_doctype": "Company", "required": True, "clear_fields": ["institution", "school_branch"]},
+			{"fieldname": "institution", "type": "Link", "label": _("Institution"), "options_doctype": "EduEdge Institution", "required_when": {"field": "access_scope", "in": ["Institution", "Branch"]}, "visible_when": {"field": "access_scope", "in": ["Institution", "Branch"]}, "clear_fields": ["school_branch"]},
+			{"fieldname": "school_branch", "type": "Link", "label": _("School Branch / Campus"), "options_doctype": "EduEdge School Branch", "required_when": {"field": "access_scope", "equals": "Branch"}, "visible_when": {"field": "access_scope", "equals": "Branch"}},
+			{"fieldname": "is_default_branch", "type": "Check", "label": _("Default Branch"), "default": 0, "visible_when": {"field": "access_scope", "equals": "Branch"}},
+			{"fieldname": "can_switch_branch", "type": "Check", "label": _("Can Switch Branch"), "default": 1, "visible_when": {"field": "access_scope", "equals": "Branch"}},
 			{"fieldname": "enabled", "type": "Check", "label": _("Enabled"), "default": 1},
 			{"fieldname": "valid_from", "type": "Date", "label": _("Valid From")},
 			{"fieldname": "valid_to", "type": "Date", "label": _("Valid To")},
@@ -161,7 +167,7 @@ def _record_values(doc, config: dict) -> dict:
 
 
 def _record_label(doc, config: dict) -> str:
-	for fieldname in ("branch_name", "program", "user_full_name", "user", "instructor_name", "instructor", "name"):
+	for fieldname in ("branch_name", "institution_name", "program", "user_full_name", "user", "instructor_name", "instructor", "name"):
 		value = doc.get(fieldname)
 		if value:
 			return str(value)
@@ -235,14 +241,49 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 	fieldname = field["fieldname"]
 	query = str(txt or "").strip()
 	company = values.get("company") or context.get("company")
+	institution = values.get("institution") or context.get("institution")
 
 	if fieldname == "school_branch":
-		rows = get_allowed_school_branches(company=company)
+		rows = get_allowed_school_branches(company=company, institution=institution)
 		if query:
 			needle = query.lower()
-			rows = [row for row in rows if needle in str(row.get("name") or "").lower() or needle in str(row.get("branch_name") or "").lower()]
+			rows = [
+				row
+				for row in rows
+				if needle in str(row.get("name") or "").lower()
+				or needle in str(row.get("branch_name") or "").lower()
+				or needle in str(row.get("institution_name") or "").lower()
+			]
 		return [
-			{"value": row.get("name"), "label": row.get("branch_name") or row.get("name"), "description": row.get("company") or ""}
+			{
+				"value": row.get("name"),
+				"label": row.get("branch_name") or row.get("name"),
+				"description": " · ".join(
+					value
+					for value in (row.get("institution_name"), row.get("company"))
+					if value
+				),
+			}
+			for row in rows[:MAX_OPTIONS]
+		]
+
+	if fieldname == "institution":
+		rows = get_allowed_institutions(company=company)
+		if query:
+			needle = query.lower()
+			rows = [
+				row
+				for row in rows
+				if needle in str(row.get("name") or "").lower()
+				or needle in str(row.get("institution_name") or "").lower()
+				or needle in str(row.get("institution_code") or "").lower()
+			]
+		return [
+			{
+				"value": row.get("name"),
+				"label": row.get("institution_name") or row.get("name"),
+				"description": row.get("institution_type") or row.get("company") or "",
+			}
 			for row in rows[:MAX_OPTIONS]
 		]
 
