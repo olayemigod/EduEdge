@@ -11,6 +11,14 @@ from eduedge.api.session_launch import (
 	start_or_resume_session_launch,
 )
 
+# Frappe v16 recursively creates test records for Link dependencies of a DocType.
+# This test creates its Institution, Academic Sessions and users/context explicitly;
+# recursively following Institution -> Company pulls unrelated ERPNext/Education
+# masters (for example Grading Scale) through production institution-governance
+# hooks before this test can run. Keep the test dependency graph bounded instead of
+# weakening production validation or adding CI-only business masters.
+IGNORE_TEST_RECORD_DEPENDENCIES = ["EduEdge Institution", "Academic Year", "User"]
+
 
 class TestEduEdgeAcademicSessionLaunch(FrappeTestCase):
 	def setUp(self) -> None:
