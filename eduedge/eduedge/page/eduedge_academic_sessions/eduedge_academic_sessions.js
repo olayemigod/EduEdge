@@ -46,41 +46,46 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 		).appendTo(page.body);
 	};
 
+	const mountManual = () => {
+		if (wrapper.current_visit_id !== visitId) return;
+		if (!window.EduEdgeAcademicSessions || typeof window.createEduEdgeAcademicSessionsApp !== "function") {
+			fail(__("Academic Sessions and Terms failed to load"), __("The EduEdge Academic Sessions bundle is unavailable or incomplete."));
+			return;
+		}
+		$loading.remove();
+		const root = $('<div class="eduedge-academic-sessions-root" data-edge-product="eduedge"></div>').appendTo(page.body);
+		try {
+			wrapper.vue_app = window.createEduEdgeAcademicSessionsApp({ pageName: "eduedge-academic-sessions" });
+			wrapper.vue_app.mount(root[0]);
+		} catch (error) {
+			console.error("Failed to mount EduEdge Academic Sessions", error);
+			fail(__("Academic Sessions and Terms failed to load"), error.message || String(error));
+		}
+	};
+
+	const mountLaunch = () => {
+		if (wrapper.current_visit_id !== visitId) return;
+		if (!window.EduEdgeSessionLaunch || typeof window.createEduEdgeSessionLaunchApp !== "function") {
+			fail(__("Academic Session Launch failed to load"), __("The EduEdge Session Launch bundle is unavailable or incomplete."));
+			return;
+		}
+		$loading.remove();
+		const root = $('<div class="eduedge-session-launch-root" data-edge-product="eduedge"></div>').appendTo(page.body);
+		try {
+			wrapper.vue_app = window.createEduEdgeSessionLaunchApp({ pageName: "eduedge-academic-sessions" });
+			wrapper.vue_app.mount(root[0]);
+		} catch (error) {
+			console.error("Failed to mount EduEdge Session Launch", error);
+			fail(__("Academic Session Launch failed to load"), error.message || String(error));
+		}
+	};
+
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		const bundle = manualMode ? "eduedge_academic_sessions.bundle.js" : "eduedge_session_launch.bundle.js";
-		frappe.require(bundle, () => {
-			if (wrapper.current_visit_id !== visitId) return;
-			$loading.remove();
-
-			if (manualMode) {
-				if (!window.EduEdgeAcademicSessions || typeof window.createEduEdgeAcademicSessionsApp !== "function") {
-					fail(__("Academic Sessions and Terms failed to load"), __("The EduEdge Academic Sessions bundle is unavailable or incomplete."));
-					return;
-				}
-				const root = $('<div class="eduedge-academic-sessions-root" data-edge-product="eduedge"></div>').appendTo(page.body);
-				try {
-					wrapper.vue_app = window.createEduEdgeAcademicSessionsApp({ pageName: "eduedge-academic-sessions" });
-					wrapper.vue_app.mount(root[0]);
-				} catch (error) {
-					console.error("Failed to mount EduEdge Academic Sessions", error);
-					fail(__("Academic Sessions and Terms failed to load"), error.message || String(error));
-				}
-				return;
-			}
-
-			if (!window.EduEdgeSessionLaunch || typeof window.createEduEdgeSessionLaunchApp !== "function") {
-				fail(__("Academic Session Launch failed to load"), __("The EduEdge Session Launch bundle is unavailable or incomplete."));
-				return;
-			}
-			const root = $('<div class="eduedge-session-launch-root" data-edge-product="eduedge"></div>').appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeSessionLaunchApp({ pageName: "eduedge-academic-sessions" });
-				wrapper.vue_app.mount(root[0]);
-			} catch (error) {
-				console.error("Failed to mount EduEdge Session Launch", error);
-				fail(__("Academic Session Launch failed to load"), error.message || String(error));
-			}
-		});
+		if (manualMode) {
+			frappe.require("eduedge_academic_sessions.bundle.js", mountManual);
+			return;
+		}
+		frappe.require("eduedge_session_launch.bundle.js", mountLaunch);
 	});
 };
