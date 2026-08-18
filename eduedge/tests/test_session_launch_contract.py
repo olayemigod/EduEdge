@@ -187,6 +187,21 @@ class TestSessionLaunchContract(unittest.TestCase):
         self.assertIn("EduEdgeSessionLearnersPanel", launch)
         self.assertNotIn("<EdgeAppShell", component)
 
+    def test_session_launch_renders_implemented_steps_in_academic_sequence(self):
+        launch = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
+        for token in (
+            "foundationOverviewSteps",
+            "EduEdgeSessionStructurePanel",
+            "EduEdgeSessionLearnersPanel",
+            "futureOverviewSteps",
+            'step.key === "session_terms"',
+            'step.key !== "session_terms" && !EMBEDDED_WORKFLOW_STEPS.has(step.key)',
+        ):
+            self.assertIn(token, launch)
+        self.assertLess(launch.index("foundationOverviewSteps"), launch.index("<EduEdgeSessionStructurePanel"))
+        self.assertLess(launch.index("<EduEdgeSessionStructurePanel"), launch.index("<EduEdgeSessionLearnersPanel"))
+        self.assertLess(launch.index("<EduEdgeSessionLearnersPanel"), launch.index("futureOverviewSteps"))
+
 
 if __name__ == "__main__":
     unittest.main()
