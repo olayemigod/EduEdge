@@ -162,10 +162,20 @@ class TestClassIntakeSessionVisibilityRuntime(FrappeTestCase):
 			institution=institution.name,
 			enabled=1,
 		)
-		for year, start, end in (
-			(source_year, "2095-09-01", "2096-08-31"),
-			(destination_year, "2096-09-01", "2097-08-31"),
+		for index, (year, start, end) in enumerate(
+			(
+				(source_year, "2095-09-01", "2096-08-31"),
+				(destination_year, "2096-09-01", "2097-08-31"),
+			),
+			start=1,
 		):
+			term = self._insert(
+				"Academic Term",
+				academic_year=year.name,
+				term_name=f"QA Filter Term {index} {self.suffix}",
+				term_start_date=start,
+				term_end_date=end,
+			)
 			self._insert(
 				"EduEdge Institution Academic Calendar",
 				institution=institution.name,
@@ -173,6 +183,14 @@ class TestClassIntakeSessionVisibilityRuntime(FrappeTestCase):
 				enabled=1,
 				start_date=start,
 				end_date=end,
+				periods=[
+					{
+						"academic_term": term.name,
+						"start_date": start,
+						"end_date": end,
+						"sequence": 10,
+					}
+				],
 			)
 
 		department = self._insert(
