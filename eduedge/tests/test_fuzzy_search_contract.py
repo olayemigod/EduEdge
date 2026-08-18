@@ -35,3 +35,21 @@ def test_teaching_instructor_query_keeps_assignment_governance():
 	assert "instructor.status = 'Active'" in source
 	assert "rank_link_rows(" in source
 	assert "candidate_limit" in source
+
+
+def test_class_arm_fuzzy_provider_preserves_branch_scope_and_ranked_paging():
+	source = _read("api/class_arm_fuzzy.py")
+	assert "core._require_read()" in source
+	assert "core._resolve_branch(branch)" in source
+	assert "filters = {BRANCH_FIELD: branch}" in source
+	assert "page_length=CANDIDATE_LIMIT" in source
+	assert "rank_link_candidates(" in source
+	assert "ranked[start : start + page_length]" in source
+	assert "core._attach_group_summary(result_rows)" in source
+
+
+def test_class_arm_page_uses_fuzzy_provider_for_search_and_browsing():
+	source = _read("eduedge/page/eduedge_class_arms/eduedge_class_arms.js")
+	assert "configure_class_arm_fuzzy_search" in source
+	assert "eduedge.api.class_arm_fuzzy.get_class_arms_page" in source
+	assert "configure_class_arm_fuzzy_search();" in source
