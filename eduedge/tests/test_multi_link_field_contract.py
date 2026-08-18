@@ -22,3 +22,9 @@ def test_multi_link_field_preserves_multi_value_semantics():
 	assert "const next = [...(this.modelValue || []), value]" in source
 	assert "filter((item) => item !== value)" in source
 	assert 'this.$emit("update:modelValue", next)' in source
+
+
+def test_multi_link_field_is_registered_for_eduedge_apps():
+	source = _read("public/js/eduedge_ui/app_factory.js")
+	assert 'import EduEdgeMultiLinkField from "./components/EduEdgeMultiLinkField.vue"' in source
+	assert 'app.component("EduEdgeMultiLinkField", EduEdgeMultiLinkField)' in source
