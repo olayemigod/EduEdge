@@ -50,7 +50,7 @@ class TestSessionLaunchContract(unittest.TestCase):
         self.assertIn("_resolve_institution", api)
         self.assertIn("require_eduedge_access", api)
 
-    def test_academic_sessions_route_defaults_to_launch_and_preserves_manual_mode(self):
+    def test_academic_sessions_route_uses_same_page_tabs_for_guided_and_manual_modes(self):
         page = (APP / "eduedge/page/eduedge_academic_sessions/eduedge_academic_sessions.js").read_text(encoding="utf-8")
         bundle = (APP / "public/js/eduedge_session_launch.bundle.js").read_text(encoding="utf-8")
         root = (APP / "public/js/eduedge_session_launch/EduEdgeSessionLaunch.vue").read_text(encoding="utf-8")
@@ -61,7 +61,11 @@ class TestSessionLaunchContract(unittest.TestCase):
             '"eduedge_academic_sessions.bundle.js"',
             "createEduEdgeSessionLaunchApp",
             "createEduEdgeAcademicSessionsApp",
-            "/app/eduedge-academic-sessions",
+            "Guided Session Launch",
+            "Manual Session & Term Management",
+            "switchMode",
+            "history.replaceState",
+            "eduedge:academic-session-tab",
         ):
             self.assertIn(token, page)
         self.assertIn("createEduEdgeSessionLaunchApp", bundle)
@@ -70,18 +74,30 @@ class TestSessionLaunchContract(unittest.TestCase):
         self.assertNotIn("<EdgeAppShell", panel)
         for token in (
             "Academic Session Launch",
+            "New Academic Session",
+            "Add Term to Selected Session",
             "Save & Continue Later",
             "Resume Session Launch",
             "Prepare Session Foundation",
             "Leaving this page does not reset the launch",
-            "/app/eduedge-academic-sessions?mode=manual",
+            'detail: { mode: "manual" }',
         ):
             self.assertIn(token, panel)
+        self.assertNotIn('window.location.href = "/app/eduedge-academic-sessions?mode=manual"', panel)
 
-    def test_guided_navigation_only_leaves_after_progress_save_succeeds(self):
+    def test_launch_steps_are_full_width_and_reviews_open_in_new_tab_with_destination_context(self):
+        component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns:minmax(0,1fr)", component)
+        self.assertIn('window.open("about:blank", "_blank")', component)
+        self.assertIn('params.set("academic_year", this.targetAcademicYear)', component)
+        self.assertIn('params.set("destination_academic_year", this.targetAcademicYear)', component)
+        self.assertIn('params.set("source_academic_year", this.sourceAcademicYear)', component)
+
+    def test_guided_navigation_only_opens_review_after_progress_save_succeeds(self):
         component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
         self.assertIn("const saved = await this.saveCurrentStep(step.key)", component)
-        self.assertIn("if (!saved) return", component)
+        self.assertIn("if (!saved) {", component)
+        self.assertIn("reviewTab?.close()", component)
         self.assertNotIn(".finally(() =>", component)
 
 
