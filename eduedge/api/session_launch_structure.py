@@ -11,7 +11,7 @@ from eduedge.api.class_arm_session_rollover import (
     execute_selected_class_arm_session_rollover,
     preview_class_arm_session_rollover,
 )
-from eduedge.api.programme_offerings_safe import save_programme_offering
+from eduedge.api.programme_offerings import save_programme_offering
 from eduedge.api.session_launch import _allowed_branches, _get_launch_by_name, _require_manager
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 
@@ -72,17 +72,9 @@ def _target_offerings(branch_names: list[str], academic_year: str) -> list[dict]
                 "academic_term": ["is", "not set"],
             },
             fields=[
-                "name",
-                "school_branch",
-                "program",
-                "academic_year",
-                "offering_title",
-                "study_mode",
-                "delivery_mode",
-                "capacity",
-                "is_active",
-                "admission_enabled",
-                "enrollment_enabled",
+                "name", "school_branch", "program", "academic_year", "offering_title",
+                "study_mode", "delivery_mode", "capacity", "is_active",
+                "admission_enabled", "enrollment_enabled",
             ],
             page_length=MAX_MATRIX_ROWS,
         )
@@ -100,15 +92,8 @@ def _source_offerings(branch_names: list[str], academic_year: str | None) -> dic
             "academic_term": ["is", "not set"],
         },
         fields=[
-            "name",
-            "school_branch",
-            "program",
-            "study_mode",
-            "delivery_mode",
-            "capacity",
-            "is_active",
-            "admission_enabled",
-            "enrollment_enabled",
+            "name", "school_branch", "program", "study_mode", "delivery_mode",
+            "capacity", "is_active", "admission_enabled", "enrollment_enabled",
         ],
         order_by="modified desc",
         page_length=MAX_MATRIX_ROWS,
@@ -160,8 +145,8 @@ def _class_and_intake_payload(doc, branches: list[dict]) -> tuple[list[dict], li
                 }
             )
 
-    class_rows = []
     expected_per_class = len(branches)
+    class_rows = []
     for program in programs:
         existing_count = per_program_existing.get(program["name"], 0)
         class_rows.append(
@@ -188,26 +173,17 @@ def _class_and_intake_payload(doc, branches: list[dict]) -> tuple[list[dict], li
 def _arm_payload(doc, branches: list[dict]) -> tuple[list[dict], dict]:
     if not doc.source_academic_year:
         return [], {
-            "source_session": "",
-            "destination_session": doc.academic_year,
-            "total": 0,
-            "ready": 0,
-            "existing": 0,
-            "blocked": 0,
-            "source_students": 0,
-            "students_to_carry": 0,
+            "source_session": "", "destination_session": doc.academic_year,
+            "total": 0, "ready": 0, "existing": 0, "blocked": 0,
+            "source_students": 0, "students_to_carry": 0,
         }
 
     rows: list[dict] = []
     summary = {
         "source_session": doc.source_academic_year,
         "destination_session": doc.academic_year,
-        "total": 0,
-        "ready": 0,
-        "existing": 0,
-        "blocked": 0,
-        "source_students": 0,
-        "students_to_carry": 0,
+        "total": 0, "ready": 0, "existing": 0, "blocked": 0,
+        "source_students": 0, "students_to_carry": 0,
     }
     for branch in branches:
         plan = preview_class_arm_session_rollover(
@@ -319,7 +295,6 @@ def create_selected_class_intakes(launch: str, selections: Any) -> dict:
         source = source_by_key.get(key) or {}
         result = save_programme_offering(
             school_branch=branch,
-            institution=doc.institution,
             program=program,
             academic_year=doc.academic_year,
             study_mode=source.get("study_mode") or "Full-Time",
