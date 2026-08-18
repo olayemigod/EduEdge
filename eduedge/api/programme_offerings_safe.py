@@ -9,7 +9,10 @@ from frappe.utils import cint, getdate, nowdate
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.offerings import assert_branch_access
 from eduedge.platform.access import require_eduedge_access
-from eduedge.services.academic_calendar import assert_institution_calendar_context
+from eduedge.services.academic_calendar import (
+	assert_institution_calendar_context,
+	ensure_institution_calendar,
+)
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 from eduedge.services.enrollment_lifecycle import get_capacity_consuming_enrollment_counts
 from eduedge.services.institution_context import get_effective_institution_context
@@ -543,6 +546,11 @@ def save_programme_offering(
 	_assert_link_read_permission("Academic Year", academic_year, _("Academic Session"))
 	_assert_link_read_permission("Academic Term", academic_term, _("Term / Semester"))
 	_assert_link_read_permission("Student Batch Name", student_batch, _("Student Batch / Cohort"))
+
+	# Academic Sessions and Terms are the user-facing setup. The Institution
+	# calendar is an internal, institution-scoped operational mapping; prepare it
+	# deterministically here instead of requiring a second manual setup step.
+	ensure_institution_calendar(resolved_institution, academic_year)
 	assert_institution_calendar_context(
 		branch=resolved_branch,
 		academic_year=academic_year,
