@@ -76,15 +76,11 @@ async function refresh_session_options(proxy) {
 
 		const warning = calendar_setup_warning(proxy, result);
 		if (warning) {
-			if (String(proxy.saveError || "").startsWith("Academic Session ")) {
-				proxy.saveError = "";
-			}
+			if (String(proxy.saveError || "").startsWith("Academic Session ")) proxy.saveError = "";
 			prompt_missing_calendar(proxy, result);
 		} else {
 			proxy.__eduedge_calendar_prompt_year = "";
-			if (String(proxy.saveError || "").startsWith("Academic Session ")) {
-				proxy.saveError = "";
-			}
+			if (String(proxy.saveError || "").startsWith("Academic Session ")) proxy.saveError = "";
 		}
 		return result;
 	} catch (error) {
@@ -115,28 +111,17 @@ async function load_session_filtered_page(proxy, resetStart = false, useActiveBr
 		if (selectedYear && returnedYear !== selectedYear) {
 			throw new Error(__(`Academic Session filter ${selectedYear} was not preserved by the Class Intake service.`));
 		}
-		if (
-			selectedYear &&
-			(result.offerings || []).some((row) => String(row.academic_year || "").trim() !== selectedYear)
-		) {
+		if (selectedYear && (result.offerings || []).some((row) => String(row.academic_year || "").trim() !== selectedYear)) {
 			throw new Error(__(`Class Intake returned records outside Academic Session ${selectedYear}.`));
 		}
 
 		proxy.data = result;
 		proxy.filters = { ...requestedFilters, ...(result.filters || {}) };
 		proxy.loadedOnce = true;
-		if (!proxy.draft?.institution) {
-			proxy.draft.institution = proxy.filters.institution || proxy.activeContext?.institution || "";
-		}
-		if (!proxy.draft?.school_branch) {
-			proxy.draft.school_branch = proxy.filters.branch || proxy.activeContext?.branch || "";
-		}
-		if (!proxy.draftOptions?.institutions?.length) {
-			proxy.draftOptions = { ...(proxy.draftOptions || {}), ...(result.options || {}) };
-		}
-		if (!Object.keys(proxy.draftContext || {}).length) {
-			proxy.draftContext = proxy.activeContext || {};
-		}
+		if (!proxy.draft?.institution) proxy.draft.institution = proxy.filters.institution || proxy.activeContext?.institution || "";
+		if (!proxy.draft?.school_branch) proxy.draft.school_branch = proxy.filters.branch || proxy.activeContext?.branch || "";
+		if (!proxy.draftOptions?.institutions?.length) proxy.draftOptions = { ...(proxy.draftOptions || {}), ...(result.options || {}) };
+		if (!Object.keys(proxy.draftContext || {}).length) proxy.draftContext = proxy.activeContext || {};
 		return result;
 	} catch (error) {
 		proxy.error = error?.message || __("Class Intakes could not be filtered.");
@@ -161,23 +146,40 @@ function wait_for_component_load(proxy) {
 	});
 }
 
+function apply_launch_query_filters(proxy) {
+	if (!proxy) return false;
+	const params = new URLSearchParams(window.location.search || "");
+	const academicYear = String(params.get("destination_academic_year") || params.get("academic_year") || "").trim();
+	const institution = String(params.get("institution") || "").trim();
+	const branch = String(params.get("branch") || "").trim();
+	if (!academicYear && !institution && !branch) return false;
+	proxy.filters = {
+		...(proxy.filters || {}),
+		academic_year: academicYear || proxy.filters?.academic_year || "",
+		institution: institution || proxy.filters?.institution || "",
+		branch: branch || proxy.filters?.branch || "",
+	};
+	if (proxy.draft) {
+		if (institution) proxy.draft.institution = institution;
+		if (branch) proxy.draft.school_branch = branch;
+		if (academicYear) proxy.draft.academic_year = academicYear;
+	}
+	return true;
+}
+
 function install_session_option_loader(proxy) {
 	if (!proxy || proxy.__eduedge_session_option_loader_installed) return;
 	proxy.__eduedge_session_option_loader_installed = true;
 
-	// The Vue component starts its first page request during mount. That request
-	// can complete after this hook and overwrite draft/data options. Wait for the
-	// initial load to settle, then apply the canonical all-session source.
-	wait_for_component_load(proxy).then(() => refresh_session_options(proxy));
+	const hasLaunchFilters = apply_launch_query_filters(proxy);
+	wait_for_component_load(proxy).then(async () => {
+		if (hasLaunchFilters) await load_session_filtered_page(proxy, true, false);
+		await refresh_session_options(proxy);
+	});
 
-	// All subsequent editor option refreshes use the all-session source directly.
 	proxy.loadDraftOptions = async function () {
 		return refresh_session_options(proxy);
 	};
-
-	// Make the page catalogue itself authoritative too. The selected Academic
-	// Session is sent directly to the canonical session-aware endpoint and the
-	// response is rejected if it contains records from another Session.
 	proxy.load = async function (resetStart = false, useActiveBranch = false) {
 		return load_session_filtered_page(proxy, resetStart, useActiveBranch);
 	};
@@ -188,9 +190,6 @@ function install_session_option_loader(proxy) {
 		return load_session_filtered_page(proxy, true, false);
 	};
 
-	// A configured Session may legitimately be missing its internal Institution
-	// calendar mapping. The backend now prepares that mapping atomically during
-	// Class Intake save, so the browser must not block the save beforehand.
 	if (typeof proxy.saveOffering === "function") {
 		const originalSaveOffering = proxy.saveOffering.bind(proxy);
 		proxy.saveOffering = async function () {
@@ -208,56 +207,34 @@ frappe.pages["eduedge-program-offerings"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
-
-	// Keep Class Intakes as one EdgeSuite setup workflow. Curriculum and
-	// Instructor Assignment are separate workflows and must not create a second
-	// toolbar/panel above the app shell.
 	page.clear_inner_toolbar?.();
 	page.clear_primary_action?.();
 
 	if (wrapper.vue_app) {
-		try {
-			wrapper.vue_app.unmount();
-		} catch (error) {
-			console.error("Failed to unmount EduEdge Class Intakes", error);
-		}
+		try { wrapper.vue_app.unmount(); }
+		catch (error) { console.error("Failed to unmount EduEdge Class Intakes", error); }
 		wrapper.vue_app = null;
 	}
 
 	$(page.body).empty();
-	const $loading = $(
-		`<div class="p-6 text-center text-muted">${__("Loading Class Intakes...")}</div>`
-	).appendTo(page.body);
-
+	const $loading = $(`<div class="p-6 text-center text-muted">${__("Loading Class Intakes...")}</div>`).appendTo(page.body);
 	const fail = (message) => {
 		$loading.remove();
-		$(
-			`<div class="alert alert-danger p-6 text-center">
-				<strong>${__("Class Intakes failed to load")}</strong>
-				<div>${frappe.utils.escape_html(message || "")}</div>
-			</div>`
-		).appendTo(page.body);
+		$(`<div class="alert alert-danger p-6 text-center"><strong>${__("Class Intakes failed to load")}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`).appendTo(page.body);
 	};
 
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		frappe.require("eduedge_programme_offerings.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (
-				!window.EduEdgeProgrammeOfferings ||
-				typeof window.createEduEdgeProgrammeOfferingsApp !== "function"
-			) {
+			if (!window.EduEdgeProgrammeOfferings || typeof window.createEduEdgeProgrammeOfferingsApp !== "function") {
 				fail(__("The EduEdge Class Intakes bundle is unavailable or incomplete."));
 				return;
 			}
 			$loading.remove();
-			const root = $(
-				'<div class="eduedge-programme-offerings-root" data-edge-product="eduedge"></div>'
-			).appendTo(page.body);
+			const root = $('<div class="eduedge-programme-offerings-root" data-edge-product="eduedge"></div>').appendTo(page.body);
 			try {
-				wrapper.vue_app = window.createEduEdgeProgrammeOfferingsApp({
-					pageName: "eduedge-program-offerings",
-				});
+				wrapper.vue_app = window.createEduEdgeProgrammeOfferingsApp({ pageName: "eduedge-program-offerings" });
 				wrapper.vue_app.mount(root[0]);
 				install_session_option_loader(wrapper.vue_app?._instance?.proxy);
 			} catch (error) {
