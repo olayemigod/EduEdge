@@ -50,29 +50,33 @@ class TestSessionLaunchContract(unittest.TestCase):
         self.assertIn("_resolve_institution", api)
         self.assertIn("require_eduedge_access", api)
 
-    def test_academic_sessions_mounts_session_launch_as_additive_guided_layer(self):
+    def test_academic_sessions_route_defaults_to_launch_and_preserves_manual_mode(self):
         page = (APP / "eduedge/page/eduedge_academic_sessions/eduedge_academic_sessions.js").read_text(encoding="utf-8")
         bundle = (APP / "public/js/eduedge_session_launch.bundle.js").read_text(encoding="utf-8")
-        component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
+        root = (APP / "public/js/eduedge_session_launch/EduEdgeSessionLaunch.vue").read_text(encoding="utf-8")
+        panel = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
         for token in (
-            "eduedge_session_launch.bundle.js",
+            'params.get("mode") === "manual"',
+            '"eduedge_session_launch.bundle.js"',
+            '"eduedge_academic_sessions.bundle.js"',
             "createEduEdgeSessionLaunchApp",
-            "eduedge-session-launch-root",
-            "Manual Academic Session management remains available below",
+            "createEduEdgeAcademicSessionsApp",
+            "/app/eduedge-academic-sessions",
         ):
             self.assertIn(token, page)
         self.assertIn("createEduEdgeSessionLaunchApp", bundle)
-        self.assertIn("eduedge_ui/components/EduEdgeSessionLaunchPanel.vue", bundle)
+        self.assertIn("<EdgeAppShell", root)
+        self.assertIn("EduEdgeSessionLaunchPanel", root)
+        self.assertNotIn("<EdgeAppShell", panel)
         for token in (
             "Academic Session Launch",
             "Save & Continue Later",
             "Resume Session Launch",
             "Prepare Session Foundation",
             "Leaving this page does not reset the launch",
-            "current_step_key",
+            "/app/eduedge-academic-sessions?mode=manual",
         ):
-            self.assertIn(token, component)
-        self.assertNotIn("<EdgeAppShell", component)
+            self.assertIn(token, panel)
 
     def test_guided_navigation_only_leaves_after_progress_save_succeeds(self):
         component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
