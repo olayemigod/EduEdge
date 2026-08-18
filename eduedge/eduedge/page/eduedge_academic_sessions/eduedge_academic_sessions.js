@@ -24,6 +24,10 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 	};
 
 	unmountCurrent();
+	if (wrapper._session_tab_listener) {
+		window.removeEventListener("eduedge:academic-session-tab", wrapper._session_tab_listener);
+		wrapper._session_tab_listener = null;
+	}
 	if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
 	$(page.body).empty();
 
@@ -134,10 +138,11 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 	});
 
 	wrapper.switch_session_mode = switchMode;
-	window.addEventListener("eduedge:academic-session-tab", wrapper._session_tab_listener = (event) => {
+	wrapper._session_tab_listener = (event) => {
 		if (wrapper.current_visit_id !== visitId) return;
 		switchMode(event?.detail?.mode || "guided");
-	});
+	};
+	window.addEventListener("eduedge:academic-session-tab", wrapper._session_tab_listener);
 
 	syncTabs();
 	mountMode();
