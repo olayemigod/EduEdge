@@ -4,7 +4,7 @@ import frappe
 from frappe.utils import cint
 
 from eduedge.api import class_arms as core
-from eduedge.api.fuzzy_search import CANDIDATE_LIMIT, rank_link_candidates
+from eduedge.api.fuzzy_search import get_bounded_candidates, rank_link_candidates
 from eduedge.education.class_arm_identity import CLASS_ARM_DOCTYPE, DISPLAY_NAME_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 
@@ -41,12 +41,26 @@ def get_class_arms_page(
 	if str(academic_year or "").strip():
 		filters["academic_year"] = str(academic_year).strip()
 
-	rows = frappe.get_list(
+	fields = core._student_group_fields()
+	search_fields = tuple(
+		fieldname
+		for fieldname in (
+			DISPLAY_NAME_FIELD,
+			"student_group_name",
+			"program",
+			"course",
+			"academic_year",
+			"academic_term",
+		)
+		if fieldname in fields
+	)
+	rows = get_bounded_candidates(
 		"Student Group",
 		filters=filters,
-		fields=core._student_group_fields(),
+		fields=fields,
+		query=search,
+		search_fields=search_fields,
 		order_by="disabled asc, academic_year desc, student_group_name asc, modified desc",
-		page_length=CANDIDATE_LIMIT,
 	)
 	candidates = []
 	for source in rows:
