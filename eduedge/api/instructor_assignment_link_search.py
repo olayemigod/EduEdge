@@ -21,6 +21,33 @@ def _allowed_branch_map() -> dict[str, dict]:
 	return {row["name"]: row for row in core._allowed_branches()}
 
 
+def _validated_offering(branch: str, program_offering: str):
+	allowed = _allowed_branch_map()
+	if branch not in allowed:
+		frappe.throw("The selected Branch is not available to your user.", frappe.PermissionError)
+	core.assert_branch_access(branch)
+	offering = frappe.db.get_value(
+		"EduEdge Program Offering",
+		program_offering,
+		[
+			"name",
+			"school_branch",
+			"program",
+			"academic_year",
+			"academic_term",
+			"institution",
+			"is_active",
+		],
+		as_dict=True,
+	)
+	if not offering or not cint(offering.is_active) or offering.school_branch != branch:
+		frappe.throw(
+			"Select an active Class / Programme Offering for this Branch.",
+			frappe.ValidationError,
+		)
+	return offering
+
+
 @frappe.whitelist()
 def search_instructors(query: str = "", page_length: int | str = 20) -> list[dict]:
 	core._require_read()
@@ -89,8 +116,14 @@ def search_assignment_offerings(
 		"EduEdge Program Offering",
 		filters={"school_branch": branch, "is_active": 1},
 		fields=[
-			"name", "offering_title", "offering_code", "program", "academic_year",
-			"academic_term", "institution", "school_branch",
+			"name",
+			"offering_title",
+			"offering_code",
+			"program",
+			"academic_year",
+			"academic_term",
+			"institution",
+			"school_branch",
 		],
 		order_by="academic_year desc, offering_title asc",
 		page_length=CANDIDATE_LIMIT,
@@ -98,12 +131,18 @@ def search_assignment_offerings(
 	candidates = []
 	for source in rows:
 		row = dict(source)
+		row["period_start_date"], row["period_end_date"] = assignments._period_dates(
+			row.get("academic_year"), row.get("academic_term")
+		)
 		row["value"] = row.get("name")
 		row["label"] = row.get("offering_title") or row.get("name")
 		row["description"] = " · ".join(
 			str(value)
 			for value in (
-				row.get("offering_code"), row.get("program"), row.get("academic_year"), row.get("academic_term")
+				row.get("offering_code"),
+				row.get("program"),
+				row.get("academic_year"),
+				row.get("academic_term"),
 			)
 			if value
 		)
@@ -125,18 +164,7 @@ def search_assignment_class_arms(
 	page_length: int | str = 20,
 ) -> list[dict]:
 	core._require_read()
-	allowed = _allowed_branch_map()
-	if branch not in allowed:
-		frappe.throw("The selected Branch is not available to your user.", frappe.PermissionError)
-	core.assert_branch_access(branch)
-	offering = frappe.db.get_value(
-		"EduEdge Program Offering",
-		program_offering,
-		["name", "school_branch", "program", "academic_year", "academic_term", "is_active"],
-		as_dict=True,
-	)
-	if not offering or not cint(offering.is_active) or offering.school_branch != branch:
-		frappe.throw("Select an active Class / Programme Offering for this Branch.", frappe.ValidationError)
+	offering = _validated_offering(branch, program_offering)
 	filters: dict = {BRANCH_FIELD: branch, "disabled": 0}
 	meta = frappe.get_meta("Student Group")
 	if meta.has_field(OFFERING_FIELD):
@@ -166,6 +194,54 @@ def search_assignment_class_arms(
 		row["description"] = " · ".join(
 			str(value)
 			for value in (row.get("program"), row.get("academic_year"), row.get("academic_term"))
+			if value
+		)
+		candidates.append(row)
+	return rank_link_rows(
+		candidates,
+		str(query or "").strip(),
+		exact_fields=("value",),
+		search_fields=("label", "description"),
+		page_length=_limit(page_length),
+	)
+
+
+@frappe.whitelist()
+def search_assignment_courses(
+	branch: str,
+	program_offering: str,
+	query: str = "",
+	page_length: int | str = 20,
+) -> list[dict]:
+	core._require_read()
+	offering = _validated_offering(branch, program_offering)
+	meta = frappe.get_meta("Course")
+	fields = ["name", "course_name"]
+	filters: dict = {}
+	if meta.has_field(INSTITUTION_FIELD):
+		fields.append(INSTITUTION_FIELD)
+		if offering.institution:
+			filters[INSTITUTION_FIELD] = ["in", [offering.institution, ""]]
+	rows = frappe.get_list(
+		"Course",
+		filters=filters,
+		fields=fields,
+		order_by="course_name asc",
+		page_length=CANDIDATE_LIMIT,
+	)
+	configured = core._course_membership({offering.program}).get(offering.program, set())
+	candidates = []
+	for source in rows:
+		row = dict(source)
+		row["value"] = row.get("name")
+		row["label"] = row.get("course_name") or row.get("name")
+		row["in_program"] = row.get("name") in configured
+		row["description"] = " · ".join(
+			value
+			for value in (
+				"In Class curriculum" if row["in_program"] else "Available Institution course",
+				row.get(INSTITUTION_FIELD) or "",
+			)
 			if value
 		)
 		candidates.append(row)
