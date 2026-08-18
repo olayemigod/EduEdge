@@ -83,6 +83,7 @@ class TestSessionLaunchContract(unittest.TestCase):
             "Leaving this page does not reset the launch",
             'detail: { mode: "manual" }',
             "EduEdgeSessionStructurePanel",
+            "EduEdgeSessionLearnersPanel",
         ):
             self.assertIn(token, panel)
         self.assertNotIn('window.location.href = "/app/eduedge-academic-sessions?mode=manual"', panel)
@@ -143,6 +144,47 @@ class TestSessionLaunchContract(unittest.TestCase):
             "destination_academic_year",
         ):
             self.assertIn(token, component)
+        self.assertNotIn("<EdgeAppShell", component)
+
+    def test_guided_learner_flow_reuses_progression_admission_and_enrollment_services(self):
+        api = (APP / "api/session_launch_learners.py").read_text(encoding="utf-8")
+        component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLearnersPanel.vue").read_text(encoding="utf-8")
+        launch = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
+        for token in (
+            "def get_session_learner_context",
+            "def get_guided_progression_options",
+            "def prepare_guided_progression",
+            "def finalize_guided_progression",
+            "def create_guided_admission_cycle",
+            "def create_guided_enrollment_draft",
+            "get_student_progression_page(",
+            "get_progression_destination_options(",
+            "prepare_progression_batch(",
+            "finalize_progression_batch(",
+            "save_admission(",
+            "save_student_enrollment(",
+            "submit=0",
+            "Returning Students must use Student Progression",
+        ):
+            self.assertIn(token, api)
+        self.assertNotIn("submit=1", api)
+        for token in (
+            "Student Progression",
+            "Admissions & Enrollment",
+            "Prepare Draft",
+            "Open Draft",
+            "Finalize",
+            "Create Admission Cycle",
+            "New Enrollment Draft",
+            "Returning Students must use Student Progression",
+            "Review Applicants in new tab",
+            "Review Enrollments in new tab",
+            "destination_academic_year",
+            "color:var(--text-color)",
+        ):
+            self.assertIn(token, component)
+        self.assertIn('"student_progression", "admissions_enrollment"', launch)
+        self.assertIn("EduEdgeSessionLearnersPanel", launch)
         self.assertNotIn("<EdgeAppShell", component)
 
 
