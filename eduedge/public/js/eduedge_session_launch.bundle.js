@@ -1,13 +1,13 @@
-import EduEdgeSessionLaunchPanel from "./eduedge_ui/components/EduEdgeSessionLaunchPanel.vue";
+import EduEdgeSessionLaunch from "./eduedge_session_launch/EduEdgeSessionLaunch.vue";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
 export function createEduEdgeSessionLaunchApp(rootProps = null) {
-	return createEduEdgeApp(EduEdgeSessionLaunchPanel, rootProps);
+	return createEduEdgeApp(EduEdgeSessionLaunch, rootProps);
 }
 
 if (typeof window !== "undefined") {
-	window.EduEdgeSessionLaunch = EduEdgeSessionLaunchPanel;
+	window.EduEdgeSessionLaunch = EduEdgeSessionLaunch;
 	window.createEduEdgeSessionLaunchApp = createEduEdgeSessionLaunchApp;
 }
 
-export default EduEdgeSessionLaunchPanel;
+export default EduEdgeSessionLaunch;
