@@ -80,8 +80,15 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 				self.assertRegex(source, r"window\.createEduEdge[A-Za-z]+App")
 
 	def test_root_product_pages_use_edge_app_shell(self):
-		vue_root = APP / "public" / "js"
-		for path in vue_root.glob("eduedge_*/*.vue"):
+		bundle_root = APP / "public" / "js"
+		for bundle in bundle_root.glob("eduedge_*.bundle.js"):
+			if bundle.name in GLOBAL_DESK_BUNDLES:
+				continue
+			bundle_source = bundle.read_text()
+			match = re.search(r'import\s+\w+\s+from\s+"(\./[^\"]+\.vue)"', bundle_source)
+			if not match:
+				continue
+			path = bundle_root / match.group(1).removeprefix("./")
 			with self.subTest(path=path):
 				source = path.read_text()
 				self.assertIn("<EdgeAppShell", source)
