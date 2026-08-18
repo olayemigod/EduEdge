@@ -10,7 +10,7 @@
 			</div>
 			<div v-if="launch" class="session-launch-status-block">
 				<span class="session-launch-status">{{ launch.status }}</span>
-				<strong>{{ readiness.summary.foundation_progress_percent || 0 }}% foundation ready</strong>
+				<strong>{{ foundationProgressPercent }}% foundation ready</strong>
 				<small>Saved step: {{ launch.current_step_label }}</small>
 			</div>
 		</div>
@@ -61,10 +61,10 @@
 
 			<div v-if="launch" class="session-launch-progress">
 				<div class="session-launch-progress-track">
-					<div class="session-launch-progress-value" :style="{ width: `${readiness.summary.foundation_progress_percent || 0}%` }"></div>
+					<div class="session-launch-progress-value" :style="{ width: `${foundationProgressPercent}%` }"></div>
 				</div>
 				<div class="session-launch-progress-meta">
-					<span>{{ readiness.summary.implemented_ready || 0 }} of {{ readiness.summary.implemented_steps || 0 }} foundation checks ready</span>
+					<span>{{ foundationReadyCount }} of 4 foundation stages ready</span>
 					<span v-if="!readiness.summary.branch_scope_complete" class="session-launch-warning">
 						Your current Branch scope covers {{ readiness.summary.accessible_branch_count || 0 }} of {{ readiness.summary.institution_branch_count || 0 }} enabled Branches.
 					</span>
@@ -73,12 +73,12 @@
 
 			<div v-if="launch" class="session-launch-step-grid">
 				<article
-					v-for="(step, index) in readiness.steps"
+					v-for="step in overviewSteps"
 					:key="step.key"
 					:class="['session-launch-step', { 'is-current': step.key === launch.current_step_key, 'is-ready': step.ready, 'is-planned': !step.implemented }]"
 				>
 					<div class="session-launch-step-heading">
-						<span class="session-launch-step-number">{{ index + 1 }}</span>
+						<span class="session-launch-step-number">{{ stepNumber(step) }}</span>
 						<div><strong>{{ step.label }}</strong><small>{{ step.status }}</small></div>
 					</div>
 					<p>{{ step.description }}</p>
@@ -105,7 +105,7 @@
 				:source-academic-year="sourceAcademicYear"
 				:institution="institution"
 				:branch="context.branch || ''"
-				@structure-updated="refreshReadiness"
+				@structure-updated="handleStructureUpdated"
 			/>
 
 			<div v-if="launch" class="session-launch-resume-note">
@@ -126,6 +126,7 @@ const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
 const PREPARE_METHOD = "eduedge.api.session_launch.prepare_session_foundation";
 const SAVE_SESSION_METHOD = "eduedge.api.academic_sessions.save_academic_session";
 const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
+const EMBEDDED_STRUCTURE_STEPS = new Set(["class_structure", "class_intakes", "class_arms"]);
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
@@ -142,6 +143,7 @@ export default {
 			sourceAcademicYear: "",
 			launch: null,
 			readiness: { steps: [], summary: {} },
+			structureSummary: {},
 		};
 	},
 	computed: {
@@ -152,6 +154,17 @@ export default {
 			const targetStart = new Date(target.year_start_date);
 			return this.sessions.filter((row) => row.name !== this.targetAcademicYear && row.year_start_date && new Date(row.year_start_date) < targetStart);
 		},
+		overviewSteps() { return (this.readiness.steps || []).filter((step) => !EMBEDDED_STRUCTURE_STEPS.has(step.key)); },
+		foundationReadyCount() {
+			const sessionReady = Boolean((this.readiness.steps || []).find((step) => step.key === "session_terms")?.ready);
+			return [
+				sessionReady,
+				Boolean(this.structureSummary.class_structure_ready),
+				Boolean(this.structureSummary.intakes_ready),
+				Boolean(this.structureSummary.arms_structure_ready),
+			].filter(Boolean).length;
+		},
+		foundationProgressPercent() { return Math.round((this.foundationReadyCount / 4) * 100); },
 	},
 	mounted() { this.load(); },
 	methods: {
@@ -173,9 +186,11 @@ export default {
 			this.launch = payload.launch || null;
 			this.readiness = payload.readiness || { steps: [], summary: {} };
 			this.sourceAcademicYear = this.launch?.source_academic_year || payload.suggested_source_academic_year || "";
+			if (!this.launch) this.structureSummary = {};
 		},
 		async targetChanged() {
 			this.launch = null;
+			this.structureSummary = {};
 			this.readiness = { steps: [], summary: {} };
 			if (!this.targetAcademicYear) return;
 			await this.load(this.targetAcademicYear);
@@ -222,17 +237,7 @@ export default {
 				this.error = error?.message || "Session foundation could not be prepared.";
 			} finally { this.saving = false; }
 		},
-		async refreshReadiness() {
-			if (!this.targetAcademicYear || this.loading) return;
-			try {
-				const response = await frappe.call(GET_METHOD, { academic_year: this.targetAcademicYear });
-				const payload = response.message || {};
-				this.readiness = payload.readiness || this.readiness;
-				if (payload.launch) this.launch = payload.launch;
-			} catch (_error) {
-				// The structure panel already exposes its own actionable error. Do not replace it with a secondary refresh failure.
-			}
-		},
+		handleStructureUpdated(summary) { this.structureSummary = summary || {}; },
 		async openStep(step) {
 			if (!step?.route) return;
 			const reviewTab = window.open("about:blank", "_blank");
@@ -309,6 +314,7 @@ export default {
 			dialog.$wrapper?.addClass("session-launch-dialog");
 			dialog.show();
 		},
+		stepNumber(step) { return Math.max((this.readiness.steps || []).findIndex((row) => row.key === step.key) + 1, 1); },
 		metricEntries(step) {
 			const labels = { terms: "Terms", terms_missing_dates: "Terms missing dates", calendar: "Institution Calendar", classes: "Classes", class_intakes: "Class Intakes", class_arms: "Class Arms", submitted: "Submitted Enrollments", draft: "Draft Enrollments", source_session: "Source Session" };
 			return Object.entries(step?.metrics || {}).filter(([, value]) => value !== "" && value !== null && value !== undefined).map(([key, value]) => ({ key, label: labels[key] || key.replaceAll("_", " "), value }));
