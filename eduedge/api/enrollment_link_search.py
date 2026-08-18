@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
-from eduedge.api.fuzzy_search import CANDIDATE_LIMIT, rank_link_rows
+from eduedge.api.fuzzy_search import get_bounded_candidates, rank_link_rows
 from eduedge.api import student_enrollments as enrollment
 from eduedge.education.custom_fields import BRANCH_FIELD
 
@@ -29,7 +29,7 @@ def search_eligible_students(
 	if not branches:
 		return []
 
-	rows = frappe.get_list(
+	rows = get_bounded_candidates(
 		"Student",
 		filters={BRANCH_FIELD: ["in", branches], "enabled": 1},
 		fields=[
@@ -39,8 +39,9 @@ def search_eligible_students(
 			"student_email_id",
 			"student_mobile_number",
 		],
+		query=query,
+		search_fields=("student_name", "student_email_id", "student_mobile_number"),
 		order_by="student_name asc",
-		page_length=CANDIDATE_LIMIT,
 	)
 	candidates = []
 	for source in rows:
@@ -94,7 +95,7 @@ def search_enrollment_offerings(
 			frappe.PermissionError,
 		)
 
-	rows = frappe.get_list(
+	rows = get_bounded_candidates(
 		"EduEdge Program Offering",
 		filters={
 			"school_branch": resolved,
@@ -112,8 +113,16 @@ def search_enrollment_offerings(
 			"academic_term",
 			"student_batch",
 		],
+		query=query,
+		search_fields=(
+			"offering_title",
+			"offering_code",
+			"program",
+			"department",
+			"academic_year",
+			"academic_term",
+		),
 		order_by="academic_year desc, offering_title asc",
-		page_length=CANDIDATE_LIMIT,
 	)
 	candidates = []
 	for source in rows:
