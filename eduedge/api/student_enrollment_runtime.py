@@ -4,7 +4,6 @@ import frappe
 from frappe.utils import cint
 
 from eduedge.api import student_enrollments as core
-from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.enrollment_lifecycle import count_capacity_consuming_enrollments
 
