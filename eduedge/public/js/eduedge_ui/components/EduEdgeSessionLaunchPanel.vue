@@ -67,7 +67,7 @@
 				<button v-if="launch" type="button" class="edge-button" :disabled="saving" @click="saveForLater">
 					Save & Continue Later
 				</button>
-				<button type="button" class="edge-button" @click="scrollToManualSetup">Manual Session & Term Management</button>
+				<button type="button" class="edge-button" @click="openManualSetup">Manual Session & Term Management</button>
 			</div>
 
 			<div v-if="launch" class="session-launch-progress">
@@ -293,9 +293,8 @@ export default {
 		formatDateTime(value) {
 			return value ? frappe.datetime.str_to_user(value) : "";
 		},
-		scrollToManualSetup() {
-			const root = document.querySelector(".eduedge-academic-sessions-root");
-			root?.scrollIntoView({ behavior: "smooth", block: "start" });
+		openManualSetup() {
+			window.location.href = "/app/eduedge-academic-sessions?mode=manual";
 		},
 	},
 };
