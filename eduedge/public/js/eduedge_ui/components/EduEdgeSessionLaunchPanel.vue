@@ -27,6 +27,7 @@
 							{{ row.academic_year_name || row.name }} · {{ row.status }}
 						</option>
 					</select>
+					<small>Create a new Session here if the next Session does not yet exist.</small>
 				</label>
 				<label>
 					<span>Source Academic Session</span>
@@ -46,6 +47,12 @@
 			</div>
 
 			<div class="session-launch-actions">
+				<button type="button" class="edge-button" :disabled="saving" @click="newSession">
+					New Academic Session
+				</button>
+				<button type="button" class="edge-button" :disabled="!targetAcademicYear || saving" @click="newTerm">
+					Add Term to Selected Session
+				</button>
 				<button
 					v-if="!launch"
 					type="button"
@@ -67,7 +74,7 @@
 				<button v-if="launch" type="button" class="edge-button" :disabled="saving" @click="saveForLater">
 					Save & Continue Later
 				</button>
-				<button type="button" class="edge-button" @click="openManualSetup">Manual Session & Term Management</button>
+				<button type="button" class="edge-button" @click="openManualSetup">Manual Management</button>
 			</div>
 
 			<div v-if="launch" class="session-launch-progress">
@@ -113,8 +120,11 @@
 						>
 							{{ step.ready ? "Foundation Ready" : "Prepare Session Foundation" }}
 						</button>
+						<button v-if="step.key === 'session_terms'" type="button" class="edge-button" :disabled="saving" @click="newTerm">
+							Add Term
+						</button>
 						<button v-if="step.implemented && step.key !== 'session_terms'" type="button" class="edge-button" @click="openStep(step)">
-							Review {{ step.label }}
+							Review {{ step.label }} in new tab
 						</button>
 						<button v-if="step.implemented" type="button" class="edge-button" :disabled="saving" @click="saveCurrentStep(step.key)">
 							Save here
@@ -140,6 +150,8 @@ const GET_METHOD = "eduedge.api.session_launch.get_session_launch_context";
 const START_METHOD = "eduedge.api.session_launch.start_or_resume_session_launch";
 const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
 const PREPARE_METHOD = "eduedge.api.session_launch.prepare_session_foundation";
+const SAVE_SESSION_METHOD = "eduedge.api.academic_sessions.save_academic_session";
+const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
@@ -267,12 +279,89 @@ export default {
 		},
 		async openStep(step) {
 			if (!step?.route) return;
+			const reviewTab = window.open("about:blank", "_blank");
+			if (reviewTab) reviewTab.opener = null;
 			const saved = await this.saveCurrentStep(step.key);
-			if (!saved) return;
+			if (!saved) {
+				reviewTab?.close();
+				return;
+			}
 			const params = new URLSearchParams();
-			if (this.targetAcademicYear) params.set("academic_year", this.targetAcademicYear);
+			if (this.targetAcademicYear) {
+				params.set("academic_year", this.targetAcademicYear);
+				params.set("destination_academic_year", this.targetAcademicYear);
+			}
 			if (this.sourceAcademicYear) params.set("source_academic_year", this.sourceAcademicYear);
-			window.location.href = `${step.route}${params.toString() ? `?${params}` : ""}`;
+			if (this.institution) params.set("institution", this.institution);
+			if (this.context.branch) params.set("branch", this.context.branch);
+			const url = `${step.route}${params.toString() ? `?${params}` : ""}`;
+			if (reviewTab) reviewTab.location.href = url;
+			else window.open(url, "_blank", "noopener,noreferrer");
+		},
+		newSession() {
+			const dialog = new frappe.ui.Dialog({
+				title: __("New Academic Session"),
+				fields: [
+					{ fieldname: "guidance", fieldtype: "HTML", options: `<div class="session-launch-dialog-guidance">${frappe.utils.escape_html(__("Create the Session here, then add its Terms before preparing the Institution Calendar."))}</div>` },
+					{ fieldname: "academic_year_name", fieldtype: "Data", label: __("Academic Session"), reqd: 1 },
+					{ fieldtype: "Section Break", label: __("Session Dates") },
+					{ fieldname: "start_date", fieldtype: "Date", label: __("Start Date"), reqd: 1 },
+					{ fieldtype: "Column Break" },
+					{ fieldname: "end_date", fieldtype: "Date", label: __("End Date"), reqd: 1 },
+				],
+				primary_action_label: __("Create Academic Session"),
+				primary_action: async (values) => {
+					dialog.disable_primary_action();
+					try {
+						const response = await frappe.call({ method: SAVE_SESSION_METHOD, type: "POST", args: values });
+						const name = response.message?.name || values.academic_year_name;
+						dialog.hide();
+						frappe.show_alert({ message: __("Academic Session created"), indicator: "green" });
+						await this.load(name);
+						this.newTerm();
+					} catch (error) {
+						frappe.msgprint({ title: __("Academic Session could not be created"), message: error?.message || __("Review the Session details and try again."), indicator: "red" });
+					} finally {
+						dialog.enable_primary_action();
+					}
+				},
+			});
+			dialog.$wrapper?.addClass("session-launch-dialog");
+			dialog.show();
+		},
+		newTerm() {
+			if (!this.targetAcademicYear) {
+				frappe.msgprint({ title: __("Select an Academic Session"), message: __("Select or create the target Academic Session before adding a Term."), indicator: "orange" });
+				return;
+			}
+			const dialog = new frappe.ui.Dialog({
+				title: __("New Academic Term"),
+				fields: [
+					{ fieldname: "guidance", fieldtype: "HTML", options: `<div class="session-launch-dialog-guidance">${frappe.utils.escape_html(__("Term dates must stay inside the selected Session and must not overlap another Term."))}</div>` },
+					{ fieldname: "academic_year", fieldtype: "Link", label: __("Academic Session"), options: "Academic Year", reqd: 1, read_only: true, default: this.targetAcademicYear },
+					{ fieldname: "term_name", fieldtype: "Data", label: __("Term"), reqd: 1 },
+					{ fieldtype: "Section Break", label: __("Term Dates") },
+					{ fieldname: "start_date", fieldtype: "Date", label: __("Start Date"), reqd: 1 },
+					{ fieldtype: "Column Break" },
+					{ fieldname: "end_date", fieldtype: "Date", label: __("End Date"), reqd: 1 },
+				],
+				primary_action_label: __("Add Term"),
+				primary_action: async (values) => {
+					dialog.disable_primary_action();
+					try {
+						await frappe.call({ method: SAVE_TERM_METHOD, type: "POST", args: values });
+						dialog.hide();
+						frappe.show_alert({ message: __("Academic Term created"), indicator: "green" });
+						await this.load(this.targetAcademicYear);
+					} catch (error) {
+						frappe.msgprint({ title: __("Academic Term could not be created"), message: error?.message || __("Review the Term details and try again."), indicator: "red" });
+					} finally {
+						dialog.enable_primary_action();
+					}
+				},
+			});
+			dialog.$wrapper?.addClass("session-launch-dialog");
+			dialog.show();
 		},
 		metricEntries(step) {
 			const labels = {
@@ -294,7 +383,7 @@ export default {
 			return value ? frappe.datetime.str_to_user(value) : "";
 		},
 		openManualSetup() {
-			window.location.href = "/app/eduedge-academic-sessions?mode=manual";
+			window.dispatchEvent(new CustomEvent("eduedge:academic-session-tab", { detail: { mode: "manual" } }));
 		},
 	},
 };
@@ -306,7 +395,8 @@ export default {
 .session-launch-status-block{display:grid;gap:.25rem;min-width:14rem;text-align:right}.session-launch-status{justify-self:end;padding:.2rem .55rem;border-radius:999px;background:var(--control-bg);border:1px solid var(--border-color);font-size:.78rem}.session-launch-status-block small{color:var(--text-muted)}
 .session-launch-context-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.session-launch-context-grid label,.session-launch-context-card{display:grid;gap:.35rem}.session-launch-context-grid label>span,.session-launch-context-card>span{font-weight:600}.session-launch-context-grid small,.session-launch-context-card small{color:var(--text-muted)}.session-launch-context-card{padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}
 .session-launch-actions,.session-launch-step-actions{display:flex;flex-wrap:wrap;gap:.5rem}.session-launch-progress{display:grid;gap:.45rem}.session-launch-progress-track{height:.55rem;overflow:hidden;border-radius:999px;background:var(--control-bg);border:1px solid var(--border-color)}.session-launch-progress-value{height:100%;background:var(--primary)}.session-launch-progress-meta{display:flex;justify-content:space-between;gap:1rem;color:var(--text-muted);font-size:.8rem}.session-launch-warning{color:var(--orange-600,#b54708)}
-.session-launch-step-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.session-launch-step{display:grid;gap:.65rem;padding:.85rem;border:1px solid var(--border-color);border-radius:10px;background:var(--control-bg)}.session-launch-step.is-current{box-shadow:inset 3px 0 0 var(--primary)}.session-launch-step.is-ready{border-style:solid}.session-launch-step.is-planned{opacity:.72}.session-launch-step-heading{display:flex;gap:.65rem;align-items:center}.session-launch-step-heading>div{display:grid;gap:.1rem}.session-launch-step-heading small{color:var(--text-muted)}.session-launch-step-number{display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:999px;border:1px solid var(--border-color);font-weight:700}.session-launch-step p{margin:0;color:var(--text-muted)}.session-launch-step-message{font-size:.82rem}.session-launch-metrics{display:flex;flex-wrap:wrap;gap:.5rem}.session-launch-metrics>span{display:grid;gap:.1rem;min-width:7rem;padding:.45rem .55rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg)}.session-launch-metrics small{color:var(--text-muted)}.session-launch-planned-label{align-self:center;color:var(--text-muted);font-size:.8rem}
+.session-launch-step-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem}.session-launch-step{display:grid;gap:.65rem;padding:.95rem;border:1px solid var(--border-color);border-radius:10px;background:var(--control-bg)}.session-launch-step.is-current{box-shadow:inset 3px 0 0 var(--primary)}.session-launch-step.is-ready{border-style:solid}.session-launch-step.is-planned{opacity:.72}.session-launch-step-heading{display:flex;gap:.65rem;align-items:center}.session-launch-step-heading>div{display:grid;gap:.1rem}.session-launch-step-heading small{color:var(--text-muted)}.session-launch-step-number{display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:999px;border:1px solid var(--border-color);font-weight:700}.session-launch-step p{margin:0;color:var(--text-muted)}.session-launch-step-message{font-size:.82rem}.session-launch-metrics{display:flex;flex-wrap:wrap;gap:.5rem}.session-launch-metrics>span{display:grid;gap:.1rem;min-width:8rem;padding:.45rem .55rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg)}.session-launch-metrics small{color:var(--text-muted)}.session-launch-planned-label{align-self:center;color:var(--text-muted);font-size:.8rem}
 .session-launch-resume-note{display:grid;gap:.25rem;padding:.8rem;border:1px dashed var(--border-color);border-radius:8px}.session-launch-resume-note span,.session-launch-resume-note small{color:var(--text-muted)}.session-launch-message{padding:.75rem;border-radius:8px;background:var(--control-bg)}.session-launch-message--error{color:var(--red-600,#b42318)}
-@media(max-width:1000px){.session-launch-context-grid,.session-launch-step-grid{grid-template-columns:1fr}.session-launch-header,.session-launch-progress-meta{align-items:stretch;flex-direction:column}.session-launch-status-block{text-align:left}.session-launch-status{justify-self:start}}
+:global(.session-launch-dialog .modal-content){border-radius:12px}:global(.session-launch-dialog-guidance){padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg);color:var(--text-muted)}
+@media(max-width:1000px){.session-launch-context-grid{grid-template-columns:1fr}.session-launch-header,.session-launch-progress-meta{align-items:stretch;flex-direction:column}.session-launch-status-block{text-align:left}.session-launch-status{justify-self:start}}
 </style>
