@@ -309,7 +309,7 @@ export default {
 					{ fieldname: "guidance", fieldtype: "HTML", options: `<div class="session-learners-dialog-note">${__("Use this for new/admitted Students. Returning Students with a submitted source-session Enrollment must use Student Progression.")}</div>` },
 					{ fieldname: "branch", fieldtype: "Select", label: __("Branch / Campus"), options: branchOptions, reqd: 1, default: defaultBranch, onchange: () => refreshOfferings() },
 					{ fieldname: "student", fieldtype: "Link", label: __("Student"), options: "Student", reqd: 1 },
-					{ fieldname: "offering", fieldtype: "Select", label: __("Class Intake"), options: [""], reqd: 1 },
+					{ fieldname: "offering", fieldtype: "Select", label: __("Class Intake"), options: [{ value: "", label: __("Select Class Intake") }], reqd: 1 },
 				],
 				primary_action_label: __("Create Enrollment Draft"),
 				primary_action: async (values) => {
@@ -325,10 +325,16 @@ export default {
 			});
 			const refreshOfferings = () => {
 				const branch = dialog.get_value("branch");
-				const options = (this.data.target_offerings || []).filter((item) => item.school_branch === branch && Number(item.enrollment_enabled) === 1).map((item) => item.name);
-				dialog.set_df_property("offering", "options", ["", ...options]);
-				if (options.length === 1) dialog.set_value("offering", options[0]);
+				const options = (this.data.target_offerings || [])
+					.filter((item) => item.school_branch === branch && Number(item.enrollment_enabled) === 1)
+					.map((item) => ({
+						value: item.name,
+						label: item.offering_title || item.program || item.name,
+					}));
+				dialog.set_df_property("offering", "options", [{ value: "", label: __("Select Class Intake") }, ...options]);
+				if (options.length === 1) dialog.set_value("offering", options[0].value);
 			};
+			dialog.$wrapper?.addClass("session-learners-dialog");
 			dialog.show();
 			const studentField = dialog.fields_dict.student;
 			const getQuery = () => ({ query: STUDENT_QUERY, filters: { launch: this.launchName, branch: dialog.get_value("branch") || "" } });
@@ -359,5 +365,13 @@ export default {
 .session-learners-table-wrap{overflow:auto;border:1px solid var(--border-color);border-radius:8px}.session-learners-table{width:100%;border-collapse:collapse;min-width:900px;color:var(--text-color)}.session-learners-table th,.session-learners-table td{padding:.6rem .7rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}.session-learners-table th{font-size:.78rem;color:var(--text-muted);background:var(--control-bg)}.session-learners-table tr:last-child td{border-bottom:0}.session-learners-badge{display:inline-flex;padding:.2rem .45rem;border:1px solid currentColor;border-radius:999px;font-size:.75rem}.is-ready{color:var(--green-600,#16803c)}.is-warning{color:var(--orange-600,#b54708)}.is-error{color:var(--red-600,#b42318)}.is-neutral{color:var(--text-muted)}
 .session-learners-metrics{display:flex;flex-wrap:wrap;gap:.5rem}.session-learners-metrics>span{display:grid;gap:.1rem;min-width:8rem;padding:.45rem .55rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.session-learners-metrics small{color:var(--text-muted)}.session-learners-rule{margin:0;color:var(--text-muted);font-size:.82rem}.session-learners-empty,.session-learners-message{padding:.75rem;border-radius:8px;background:var(--control-bg);color:var(--text-muted)}.session-learners-message--error{color:var(--red-600,#b42318)}
 :global(.session-learners-dialog-note){padding:.65rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg);color:var(--text-muted)}:global(.session-learners-dialog-note.is-error){color:var(--red-600,#b42318)}:global(.session-learners-programs){display:grid;gap:.45rem;padding:.65rem;border:1px solid var(--border-color);border-radius:8px}:global(.session-learners-program-check){display:flex;align-items:center;gap:.45rem;margin:0}
+:global(.session-learners-dialog .modal-content){background:var(--card-bg);color:var(--text-color)}
+:global(.session-learners-dialog .modal-header),:global(.session-learners-dialog .modal-body),:global(.session-learners-dialog .modal-footer){background:var(--card-bg);color:var(--text-color)}
+:global(.session-learners-dialog .btn-modal-close){display:inline-flex;align-items:center;justify-content:center;min-width:2rem;min-height:2rem;opacity:1!important;color:var(--text-color)!important;--icon-stroke:var(--text-color);--icon-fill:var(--text-color)}
+:global(.session-learners-dialog .btn-modal-close .icon){opacity:1!important;stroke:var(--text-color)!important;fill:var(--text-color)!important}
+:global(.session-learners-dialog .awesomplete>ul),:global(.session-learners-dialog .awesomplete>[role="listbox"]){background:var(--card-bg)!important;border-color:var(--border-color)!important;color:var(--text-color)!important}
+:global(.session-learners-dialog .awesomplete>ul>li),:global(.session-learners-dialog .awesomplete>[role="listbox"]>li){background:var(--card-bg)!important;color:var(--text-color)!important}
+:global(.session-learners-dialog .awesomplete>ul>li *),:global(.session-learners-dialog .awesomplete>[role="listbox"]>li *){color:inherit!important}
+:global(.session-learners-dialog .awesomplete>ul>li:hover),:global(.session-learners-dialog .awesomplete>ul>li[aria-selected="true"]),:global(.session-learners-dialog .awesomplete>[role="listbox"]>li:hover),:global(.session-learners-dialog .awesomplete>[role="listbox"]>li[aria-selected="true"]){background:var(--control-bg)!important;color:var(--text-color)!important}
 @media(max-width:800px){.session-learners-header,.session-learners-card-header,.session-learners-toolbar,.session-learners-subheading,.session-learners-row{align-items:stretch;flex-direction:column}.session-learners-summary{text-align:left}}
 </style>
