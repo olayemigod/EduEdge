@@ -13,7 +13,15 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 	const params = new URLSearchParams(window.location.search || "");
 	let activeMode = params.get("mode") === "manual" ? "manual" : "guided";
 
+	const $tabs = $(
+		`<div class="eduedge-session-mode-tabs" role="tablist" aria-label="Academic Session workspace mode">
+			<button type="button" class="eduedge-session-mode-tab" data-mode="guided" role="tab">${__("Guided Session Launch")}</button>
+			<button type="button" class="eduedge-session-mode-tab" data-mode="manual" role="tab">${__("Manual Session & Term Management")}</button>
+		</div>`
+	);
+
 	const unmountCurrent = () => {
+		$tabs.detach();
 		if (!wrapper.vue_app) return;
 		try {
 			wrapper.vue_app.unmount();
@@ -31,35 +39,22 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 	if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
 	$(page.body).empty();
 
-	const $tabs = $(
-		`<div class="eduedge-session-mode-tabs" role="tablist" aria-label="Academic Session workspace mode">
-			<button type="button" class="eduedge-session-mode-tab" data-mode="guided" role="tab">${__("Guided Session Launch")}</button>
-			<button type="button" class="eduedge-session-mode-tab" data-mode="manual" role="tab">${__("Manual Session & Term Management")}</button>
-		</div>`
-	).appendTo(page.body);
 	const $host = $('<div class="eduedge-session-mode-host"></div>').appendTo(page.body);
 
 	if (!document.getElementById("eduedge-session-mode-style")) {
 		$(
 			`<style id="eduedge-session-mode-style">
-				.eduedge-session-mode-tabs{display:flex;gap:.35rem;margin:.25rem 0 .85rem;padding:.3rem;border:1px solid var(--border-color);border-radius:10px;background:var(--control-bg);width:max-content;max-width:100%}
+				.eduedge-session-mode-tabs{display:flex;gap:.35rem;margin:0 0 .85rem;padding:.3rem;border:1px solid var(--border-color);border-radius:10px;background:var(--control-bg);width:max-content;max-width:100%}
 				.eduedge-session-mode-tab{border:0;background:transparent;padding:.5rem .8rem;border-radius:7px;font-weight:600;color:var(--text-muted);white-space:nowrap}
 				.eduedge-session-mode-tab.is-active{background:var(--card-bg);color:var(--text-color);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 				.eduedge-session-mode-host{min-width:0}
+				.eduedge-session-mode-host .session-launch-shell,.eduedge-session-mode-host .session-structure-shell{color:var(--text-color)}
+				.eduedge-session-mode-host h1,.eduedge-session-mode-host h2,.eduedge-session-mode-host h3,.eduedge-session-mode-host h4{color:var(--text-color)!important}
+				.eduedge-session-mode-host .session-launch-step-heading strong,.eduedge-session-mode-host .session-structure-card-header strong,.eduedge-session-mode-host .session-structure-toolbar strong,.eduedge-session-mode-host .session-structure-row strong{color:inherit}
 				@media(max-width:700px){.eduedge-session-mode-tabs{width:100%;overflow-x:auto}.eduedge-session-mode-tab{flex:1}}
 			</style>`
 		).appendTo(document.head);
 	}
-
-	const fail = (title, message) => {
-		$host.empty();
-		$(
-			`<div class="alert alert-danger p-6 text-center">
-				<strong>${frappe.utils.escape_html(title || "")}</strong>
-				<div>${frappe.utils.escape_html(message || "")}</div>
-			</div>`
-		).appendTo($host);
-	};
 
 	const syncTabs = () => {
 		$tabs.find(".eduedge-session-mode-tab").each(function () {
@@ -67,6 +62,37 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 			$(this).toggleClass("is-active", selected).attr("aria-selected", selected ? "true" : "false");
 		});
 		page.set_title(activeMode === "manual" ? __("Academic Sessions and Terms") : __("Academic Session Launch"));
+	};
+
+	const placeTabs = ($root) => {
+		const $layout = $root.find(".edge-page-layout").first();
+		if (!$layout.length) {
+			$tabs.prependTo($host);
+			return;
+		}
+		const $header = $layout.children(".edge-page-layout__header").first();
+		if ($header.length) {
+			$tabs.insertAfter($header);
+			return;
+		}
+		const $content = $layout.children(".edge-page-layout__content").first();
+		if ($content.length) {
+			$tabs.prependTo($content);
+			return;
+		}
+		$tabs.prependTo($layout);
+	};
+
+	const fail = (title, message) => {
+		$host.empty();
+		$tabs.prependTo($host);
+		syncTabs();
+		$(
+			`<div class="alert alert-danger p-6 text-center">
+				<strong>${frappe.utils.escape_html(title || "")}</strong>
+				<div>${frappe.utils.escape_html(message || "")}</div>
+			</div>`
+		).appendTo($host);
 	};
 
 	const updateUrl = () => {
@@ -95,6 +121,7 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 			try {
 				wrapper.vue_app = window.createEduEdgeAcademicSessionsApp({ pageName: "eduedge-academic-sessions" });
 				wrapper.vue_app.mount(root[0]);
+				placeTabs(root);
 			} catch (error) {
 				console.error("Failed to mount EduEdge Academic Sessions", error);
 				fail(__("Academic Sessions and Terms failed to load"), error.message || String(error));
@@ -112,6 +139,7 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 			try {
 				wrapper.vue_app = window.createEduEdgeSessionLaunchApp({ pageName: "eduedge-academic-sessions" });
 				wrapper.vue_app.mount(root[0]);
+				placeTabs(root);
 			} catch (error) {
 				console.error("Failed to mount EduEdge Session Launch", error);
 				fail(__("Academic Session Launch failed to load"), error.message || String(error));
