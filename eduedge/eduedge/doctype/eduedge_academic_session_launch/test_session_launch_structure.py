@@ -46,7 +46,7 @@ class TestSessionLaunchStructure(FrappeTestCase):
         )
         return year
 
-    def test_guided_structure_lists_classes_creates_only_selected_intakes_and_rolls_empty_arms(self):
+    def test_guided_structure_lists_classes_creates_selected_intakes_and_rolls_empty_arms(self):
         source_year = self._make_year("SOURCE", "2090-09-01", "2091-08-31")
         target_year = self._make_year("TARGET", "2091-09-01", "2092-08-31")
         institution = self._insert(
@@ -61,6 +61,14 @@ class TestSessionLaunchStructure(FrappeTestCase):
             "EduEdge School Branch",
             branch_name=f"QA Launch Campus {self.suffix}",
             branch_code=f"QALB{self.suffix}",
+            company=self.company,
+            institution=institution.name,
+            enabled=1,
+        )
+        optional_branch = self._insert(
+            "EduEdge School Branch",
+            branch_name=f"QA Optional Campus {self.suffix}",
+            branch_code=f"QALO{self.suffix}",
             company=self.company,
             institution=institution.name,
             enabled=1,
@@ -122,10 +130,15 @@ class TestSessionLaunchStructure(FrappeTestCase):
 
         context = get_session_structure_context(launch_name)
         self.assertEqual(context["summary"]["classes"], 2)
+        self.assertEqual(context["summary"]["intended_classes"], 2)
         self.assertEqual(context["summary"]["expected_intakes"], 2)
         self.assertEqual(context["summary"]["existing_intakes"], 1)
         self.assertEqual(context["summary"]["missing_intakes"], 1)
+        self.assertEqual(context["summary"]["available_intake_candidates"], 2)
         self.assertEqual({row["program"] for row in context["classes"]}, {class_one.name, class_two.name})
+        optional_rows = [row for row in context["class_intakes"] if row["branch"] == optional_branch.name]
+        self.assertEqual(len(optional_rows), 2)
+        self.assertTrue(all(row["status"] == "available" and not row["intended"] for row in optional_rows))
 
         missing = next(row for row in context["class_intakes"] if row["status"] == "missing")
         created = create_selected_class_intakes(
@@ -134,6 +147,7 @@ class TestSessionLaunchStructure(FrappeTestCase):
         )
         self.assertEqual(created["created_count"], 1)
         self.assertEqual(created["context"]["summary"]["missing_intakes"], 0)
+        self.assertEqual(created["context"]["summary"]["expected_intakes"], 2)
 
         retry = create_selected_class_intakes(
             launch=launch_name,
@@ -142,7 +156,16 @@ class TestSessionLaunchStructure(FrappeTestCase):
         self.assertEqual(retry["created_count"], 0)
         self.assertEqual(retry["existing_count"], 1)
 
-        refreshed = retry["context"]
+        optional = next(row for row in retry["context"]["class_intakes"] if row["status"] == "available")
+        optional_created = create_selected_class_intakes(
+            launch=launch_name,
+            selections=[{"branch": optional["branch"], "program": optional["program"]}],
+        )
+        self.assertEqual(optional_created["created_count"], 1)
+        self.assertEqual(optional_created["context"]["summary"]["expected_intakes"], 3)
+        self.assertEqual(optional_created["context"]["summary"]["existing_intakes"], 3)
+
+        refreshed = optional_created["context"]
         ready_arm = next(
             row
             for row in refreshed["class_arms"]
