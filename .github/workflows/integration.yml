@@ -100,7 +100,7 @@ jobs:
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
-      - name: Fetch ERPNext, Education, EdgeSuite UI, and EduEdge
+      - name: Fetch ERPNext, Education, Payments test dependency, EdgeSuite UI, and EduEdge
         working-directory: frappe-bench
         run: |
           bench get-app \
@@ -112,6 +112,15 @@ jobs:
             --branch version-16 \
             --skip-assets \
             https://github.com/frappe/education.git
+
+          # Current ERPNext v16 still exposes Link metadata to the Payment Gateway
+          # DocType while that DocType lives in the separate Payments app. Frappe's
+          # recursive test-record preloader resolves that Link even when EduEdge does
+          # not use Payments, so install it only on this CI test site.
+          bench get-app \
+            --branch version-16 \
+            --skip-assets \
+            https://github.com/frappe/payments.git
 
           bench get-app \
             --skip-assets \
@@ -132,6 +141,9 @@ jobs:
 
           bench --site eduedge-ci.localhost install-app erpnext
           bench --site eduedge-ci.localhost install-app education
+          # CI-only dependency for ERPNext/Frappe test metadata traversal; this is
+          # intentionally not an EduEdge runtime dependency.
+          bench --site eduedge-ci.localhost install-app payments
           bench --site eduedge-ci.localhost install-app edgesuite_ui
           bench --site eduedge-ci.localhost install-app eduedge
           bench --site eduedge-ci.localhost set-config allow_tests true
@@ -144,6 +156,7 @@ jobs:
           grep -Eq '^frappe[[:space:]]' /tmp/installed-apps.txt
           grep -Eq '^erpnext[[:space:]]' /tmp/installed-apps.txt
           grep -Eq '^education[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^payments[[:space:]]' /tmp/installed-apps.txt
           grep -Eq '^edgesuite_ui[[:space:]]' /tmp/installed-apps.txt
           grep -Eq '^eduedge[[:space:]]' /tmp/installed-apps.txt
 
