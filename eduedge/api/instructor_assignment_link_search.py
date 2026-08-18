@@ -5,7 +5,7 @@ from frappe.utils import cint
 
 from eduedge.api import instructor_assignments as assignments
 from eduedge.api import teacher_assignments as core
-from eduedge.api.fuzzy_search import CANDIDATE_LIMIT, rank_link_rows
+from eduedge.api.fuzzy_search import get_bounded_candidates, rank_link_rows
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.teaching_assignments import current_user_instructors
@@ -57,22 +57,25 @@ def search_instructors(query: str = "", page_length: int | str = 20) -> list[dic
 		filters["name"] = ["in", own] if own else ["in", ["__none__"]]
 	meta = frappe.get_meta("Instructor")
 	fields = ["name", "instructor_name", "department", "employee"]
+	search_fields = ["instructor_name", "department", "employee"]
 	for fieldname in (INSTITUTION_FIELD, "eduedge_email", "eduedge_mobile"):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
-	rows = frappe.get_list(
+			search_fields.append(fieldname)
+	rows = get_bounded_candidates(
 		"Instructor",
 		filters=filters,
 		fields=fields,
+		query=query,
+		search_fields=tuple(search_fields),
 		order_by="instructor_name asc",
-		page_length=CANDIDATE_LIMIT,
 	)
 	institutions = {
 		row.name: row.institution_name
 		for row in frappe.get_list(
 			"EduEdge Institution",
 			fields=["name", "institution_name"],
-			page_length=CANDIDATE_LIMIT,
+			page_length=100,
 		)
 	}
 	candidates = []
@@ -112,7 +115,7 @@ def search_assignment_offerings(
 	if branch not in allowed:
 		frappe.throw("The selected Branch is not available to your user.", frappe.PermissionError)
 	core.assert_branch_access(branch)
-	rows = frappe.get_list(
+	rows = get_bounded_candidates(
 		"EduEdge Program Offering",
 		filters={"school_branch": branch, "is_active": 1},
 		fields=[
@@ -125,8 +128,9 @@ def search_assignment_offerings(
 			"institution",
 			"school_branch",
 		],
+		query=query,
+		search_fields=("offering_title", "offering_code", "program", "academic_year", "academic_term"),
 		order_by="academic_year desc, offering_title asc",
-		page_length=CANDIDATE_LIMIT,
 	)
 	candidates = []
 	for source in rows:
@@ -170,15 +174,18 @@ def search_assignment_class_arms(
 	if meta.has_field(OFFERING_FIELD):
 		filters[OFFERING_FIELD] = program_offering
 	fields = ["name", "student_group_name", "program", "academic_year", "academic_term", BRANCH_FIELD]
+	search_fields = ["student_group_name", "program", "academic_year", "academic_term"]
 	for fieldname in ("eduedge_display_name", OFFERING_FIELD):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
-	rows = frappe.get_list(
+			search_fields.append(fieldname)
+	rows = get_bounded_candidates(
 		"Student Group",
 		filters=filters,
 		fields=fields,
+		query=query,
+		search_fields=tuple(search_fields),
 		order_by="student_group_name asc",
-		page_length=CANDIDATE_LIMIT,
 	)
 	candidates = []
 	for source in rows:
@@ -218,16 +225,19 @@ def search_assignment_courses(
 	meta = frappe.get_meta("Course")
 	fields = ["name", "course_name"]
 	filters: dict = {}
+	search_fields = ["course_name"]
 	if meta.has_field(INSTITUTION_FIELD):
 		fields.append(INSTITUTION_FIELD)
+		search_fields.append(INSTITUTION_FIELD)
 		if offering.institution:
 			filters[INSTITUTION_FIELD] = ["in", [offering.institution, ""]]
-	rows = frappe.get_list(
+	rows = get_bounded_candidates(
 		"Course",
 		filters=filters,
 		fields=fields,
+		query=query,
+		search_fields=tuple(search_fields),
 		order_by="course_name asc",
-		page_length=CANDIDATE_LIMIT,
 	)
 	configured = core._course_membership({offering.program}).get(offering.program, set())
 	candidates = []
