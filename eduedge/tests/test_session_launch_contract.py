@@ -164,7 +164,7 @@ class TestSessionLaunchContract(unittest.TestCase):
             "save_admission(",
             "save_student_enrollment(",
             "submit=0",
-            "Returning Students must use Student Progression",
+            "Use Student Progression instead",
         ):
             self.assertIn(token, api)
         self.assertNotIn("submit=1", api)
