@@ -7,6 +7,7 @@ from frappe.utils import getdate, nowdate
 
 CALENDAR_DOCTYPE = "EduEdge Institution Academic Calendar"
 PERIOD_DOCTYPE = "EduEdge Academic Calendar Period"
+MAX_TERMS = 1000
 
 
 def get_branch_institution(branch: str | None) -> str | None:
@@ -38,6 +39,156 @@ def get_enabled_institution_calendar(
 		limit=1,
 	)
 	return rows[0] if rows else None
+
+
+def _configured_session_terms(academic_year: str) -> tuple[frappe._dict, list[frappe._dict]]:
+	if not academic_year or not frappe.db.exists("Academic Year", academic_year):
+		frappe.throw(_("Select a valid Academic Session."), frappe.ValidationError)
+	if not frappe.has_permission("Academic Year", "read"):
+		frappe.throw(_("You are not permitted to view Academic Sessions."), frappe.PermissionError)
+	if not frappe.has_permission("Academic Term", "read"):
+		frappe.throw(_("You are not permitted to view Academic Terms."), frappe.PermissionError)
+
+	year = frappe.db.get_value(
+		"Academic Year",
+		academic_year,
+		["year_start_date", "year_end_date"],
+		as_dict=True,
+	)
+	if not year or not year.year_start_date or not year.year_end_date:
+		frappe.throw(
+			_("Academic Session {0} must have Start Date and End Date before it can be used.").format(academic_year),
+			frappe.ValidationError,
+		)
+	terms = frappe.get_all(
+		"Academic Term",
+		filters={"academic_year": academic_year},
+		fields=["name", "term_start_date", "term_end_date"],
+		order_by="term_start_date asc, name asc",
+		limit_page_length=MAX_TERMS,
+	)
+	if not terms:
+		frappe.throw(
+			_("Create at least one dated Academic Term for Academic Session {0} before creating a Class Intake.").format(
+				academic_year
+			),
+			frappe.ValidationError,
+		)
+	missing_dates = [row.name for row in terms if not row.term_start_date or not row.term_end_date]
+	if missing_dates:
+		frappe.throw(
+			_("Complete Start Date and End Date for these Academic Terms before using the Session: {0}").format(
+				", ".join(missing_dates)
+			),
+			frappe.ValidationError,
+		)
+	return year, terms
+
+
+def ensure_institution_calendar(institution: str, academic_year: str) -> dict:
+	"""Create or reconcile the internal Institution calendar for a configured Session.
+
+	Academic Year and Academic Term remain Frappe Education's shared masters. The
+	Institution calendar is EduEdge's institution-specific operational mapping and
+	should not require a second manual setup step for ordinary Class Intake work.
+	Existing period-level governance such as result publication dates is preserved.
+	"""
+	institution = str(institution or "").strip()
+	academic_year = str(academic_year or "").strip()
+	if not institution or not frappe.db.exists("EduEdge Institution", institution):
+		frappe.throw(_("Select a valid Institution."), frappe.ValidationError)
+	institution_doc = frappe.get_doc("EduEdge Institution", institution)
+	institution_doc.check_permission("read")
+	if not institution_doc.enabled:
+		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+
+	year, terms = _configured_session_terms(academic_year)
+	existing = frappe.db.exists(
+		CALENDAR_DOCTYPE,
+		{"institution": institution, "academic_year": academic_year},
+	)
+	created = False
+	changed = False
+	if existing:
+		doc = frappe.get_doc(CALENDAR_DOCTYPE, existing)
+		if not doc.enabled:
+			frappe.throw(
+				_("The Institution Academic Calendar for {0} exists but is disabled. Enable it before using the Session.").format(
+					academic_year
+				),
+				frappe.ValidationError,
+			)
+		if getdate(doc.start_date) != getdate(year.year_start_date):
+			doc.start_date = year.year_start_date
+			changed = True
+		if getdate(doc.end_date) != getdate(year.year_end_date):
+			doc.end_date = year.year_end_date
+			changed = True
+		existing_periods = {row.academic_term: row for row in doc.periods or [] if row.academic_term}
+		for index, term in enumerate(terms, start=1):
+			period = existing_periods.get(term.name)
+			if not period:
+				doc.append(
+					"periods",
+					{
+						"academic_term": term.name,
+						"start_date": term.term_start_date,
+						"end_date": term.term_end_date,
+						"sequence": index * 10,
+					},
+				)
+				changed = True
+				continue
+			if getdate(period.start_date) != getdate(term.term_start_date):
+				period.start_date = term.term_start_date
+				changed = True
+			if getdate(period.end_date) != getdate(term.term_end_date):
+				period.end_date = term.term_end_date
+				changed = True
+			if period.sequence != index * 10:
+				period.sequence = index * 10
+				changed = True
+		if changed:
+			doc.check_permission("write")
+			doc.save()
+	else:
+		if not frappe.has_permission(CALENDAR_DOCTYPE, "create"):
+			frappe.throw(
+				_("You are not permitted to prepare the Institution Academic Calendar required for this Class Intake."),
+				frappe.PermissionError,
+			)
+		doc = frappe.new_doc(CALENDAR_DOCTYPE)
+		doc.institution = institution
+		doc.academic_year = academic_year
+		doc.start_date = year.year_start_date
+		doc.end_date = year.year_end_date
+		doc.enabled = 1
+		for index, term in enumerate(terms, start=1):
+			doc.append(
+				"periods",
+				{
+					"academic_term": term.name,
+					"start_date": term.term_start_date,
+					"end_date": term.term_end_date,
+					"sequence": index * 10,
+				},
+			)
+		doc.insert()
+		created = True
+		changed = True
+
+	return {
+		"name": doc.name,
+		"institution": doc.institution,
+		"academic_year": doc.academic_year,
+		"start_date": doc.start_date,
+		"end_date": doc.end_date,
+		"enabled": int(doc.enabled or 0),
+		"is_current": int(doc.is_current or 0),
+		"period_count": len(doc.periods or []),
+		"created": created,
+		"changed": changed,
+	}
 
 
 def get_calendar_period(
@@ -90,7 +241,6 @@ def resolve_academic_defaults(branch: str, reference_date: str | None = None) ->
 			"calendar_gap": bool(calendar and not period),
 		}
 
-	# Compatibility only for installations that have no Institution context yet.
 	academic_year = frappe.db.get_single_value("Education Settings", "current_academic_year")
 	academic_term = frappe.db.get_single_value("Education Settings", "current_academic_term")
 	return {
