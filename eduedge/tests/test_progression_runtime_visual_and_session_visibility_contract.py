@@ -77,7 +77,8 @@ class TestProgressionRuntimeVisualAndSessionVisibilityContract(unittest.TestCase
         for token in (
             "def ensure_institution_calendar",
             "should not require a second manual setup step",
-            "result publication dates is preserved",
+            "existing enabled calendar remains authoritative",
+            "never rewritten as a",
             "Create at least one dated Academic Term",
         ):
             self.assertIn(token, calendar_service)
