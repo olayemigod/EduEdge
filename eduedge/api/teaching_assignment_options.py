@@ -8,6 +8,7 @@ from eduedge.api.academic_operations import (
 	_require_academic_operator,
 	instructor_query as legacy_branch_instructor_query,
 )
+from eduedge.api.fuzzy_search import CANDIDATE_LIMIT, rank_link_rows
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignments import _group_offering
@@ -55,8 +56,7 @@ def course_schedule_instructor_query(doctype, txt, searchfield, start, page_len,
 	program_offering = group.get(OFFERING_FIELD) or _group_offering(student_group)
 	if not program_offering:
 		return []
-	pattern = f"%{txt or ''}%"
-	return frappe.db.sql(
+	rows = frappe.db.sql(
 		"""
 		select distinct instructor.name, instructor.instructor_name, instructor.department
 		from `tabEduEdge Instructor Assignment` assignment
@@ -76,13 +76,8 @@ def course_schedule_instructor_query(doctype, txt, searchfield, start, page_len,
 					and assignment.student_group = %(student_group)s
 				)
 			)
-			and (
-				instructor.name like %(txt)s
-				or instructor.instructor_name like %(txt)s
-				or coalesce(instructor.department, '') like %(txt)s
-			)
 		order by instructor.instructor_name asc
-		limit %(start)s, %(page_len)s
+		limit %(candidate_limit)s
 		""",
 		{
 			"branch": branch,
@@ -93,8 +88,22 @@ def course_schedule_instructor_query(doctype, txt, searchfield, start, page_len,
 			"class_scope": CLASS_SCOPE,
 			"arm_scope": CLASS_ARM_SCOPE,
 			"student_group": student_group,
-			"txt": pattern,
-			"start": int(start),
-			"page_len": min(max(int(page_len), 1), 50),
+			"candidate_limit": CANDIDATE_LIMIT,
 		},
+		as_dict=True,
 	)
+	candidates = [
+		{
+			"value": row.name,
+			"label": row.instructor_name or row.name,
+			"description": row.department or "",
+		}
+		for row in rows
+	]
+	ranked = rank_link_rows(
+		candidates,
+		str(txt or ""),
+		start=int(start),
+		page_length=int(page_len),
+	)
+	return [[row["value"], row["label"], row.get("description") or ""] for row in ranked]
