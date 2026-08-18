@@ -53,7 +53,7 @@ class TestSessionLaunchContract(unittest.TestCase):
     def test_academic_sessions_mounts_session_launch_as_additive_guided_layer(self):
         page = (APP / "eduedge/page/eduedge_academic_sessions/eduedge_academic_sessions.js").read_text(encoding="utf-8")
         bundle = (APP / "public/js/eduedge_session_launch.bundle.js").read_text(encoding="utf-8")
-        component = (APP / "public/js/eduedge_session_launch/EduEdgeSessionLaunch.vue").read_text(encoding="utf-8")
+        component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
         for token in (
             "eduedge_session_launch.bundle.js",
             "createEduEdgeSessionLaunchApp",
@@ -62,6 +62,7 @@ class TestSessionLaunchContract(unittest.TestCase):
         ):
             self.assertIn(token, page)
         self.assertIn("createEduEdgeSessionLaunchApp", bundle)
+        self.assertIn("eduedge_ui/components/EduEdgeSessionLaunchPanel.vue", bundle)
         for token in (
             "Academic Session Launch",
             "Save & Continue Later",
@@ -71,6 +72,13 @@ class TestSessionLaunchContract(unittest.TestCase):
             "current_step_key",
         ):
             self.assertIn(token, component)
+        self.assertNotIn("<EdgeAppShell", component)
+
+    def test_guided_navigation_only_leaves_after_progress_save_succeeds(self):
+        component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
+        self.assertIn("const saved = await this.saveCurrentStep(step.key)", component)
+        self.assertIn("if (!saved) return", component)
+        self.assertNotIn(".finally(() =>", component)
 
 
 if __name__ == "__main__":
