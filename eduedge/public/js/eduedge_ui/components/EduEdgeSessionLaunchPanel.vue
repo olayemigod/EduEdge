@@ -47,33 +47,15 @@
 			</div>
 
 			<div class="session-launch-actions">
-				<button type="button" class="edge-button" :disabled="saving" @click="newSession">
-					New Academic Session
-				</button>
-				<button type="button" class="edge-button" :disabled="!targetAcademicYear || saving" @click="newTerm">
-					Add Term to Selected Session
-				</button>
-				<button
-					v-if="!launch"
-					type="button"
-					class="edge-button edge-button--primary"
-					:disabled="!targetAcademicYear || saving"
-					@click="startOrResume"
-				>
+				<button type="button" class="edge-button" :disabled="saving" @click="newSession">New Academic Session</button>
+				<button type="button" class="edge-button" :disabled="!targetAcademicYear || saving" @click="newTerm">Add Term to Selected Session</button>
+				<button v-if="!launch" type="button" class="edge-button edge-button--primary" :disabled="!targetAcademicYear || saving" @click="startOrResume">
 					{{ saving ? "Starting..." : "Start Session Launch" }}
 				</button>
-				<button
-					v-else
-					type="button"
-					class="edge-button edge-button--primary"
-					:disabled="saving"
-					@click="startOrResume"
-				>
+				<button v-else type="button" class="edge-button edge-button--primary" :disabled="saving" @click="startOrResume">
 					{{ saving ? "Resuming..." : "Resume Session Launch" }}
 				</button>
-				<button v-if="launch" type="button" class="edge-button" :disabled="saving" @click="saveForLater">
-					Save & Continue Later
-				</button>
+				<button v-if="launch" type="button" class="edge-button" :disabled="saving" @click="saveForLater">Save & Continue Later</button>
 				<button type="button" class="edge-button" @click="openManualSetup">Manual Management</button>
 			</div>
 
@@ -97,48 +79,38 @@
 				>
 					<div class="session-launch-step-heading">
 						<span class="session-launch-step-number">{{ index + 1 }}</span>
-						<div>
-							<strong>{{ step.label }}</strong>
-							<small>{{ step.status }}</small>
-						</div>
+						<div><strong>{{ step.label }}</strong><small>{{ step.status }}</small></div>
 					</div>
 					<p>{{ step.description }}</p>
 					<p v-if="step.message" class="session-launch-step-message">{{ step.message }}</p>
 					<div v-if="metricEntries(step).length" class="session-launch-metrics">
-						<span v-for="metric in metricEntries(step)" :key="metric.key">
-							<small>{{ metric.label }}</small>
-							<strong>{{ metric.value }}</strong>
-						</span>
+						<span v-for="metric in metricEntries(step)" :key="metric.key"><small>{{ metric.label }}</small><strong>{{ metric.value }}</strong></span>
 					</div>
 					<div class="session-launch-step-actions">
-						<button
-							v-if="step.key === 'session_terms' && step.implemented"
-							type="button"
-							class="edge-button edge-button--primary"
-							:disabled="saving || step.ready"
-							@click="prepareFoundation"
-						>
+						<button v-if="step.key === 'session_terms' && step.implemented" type="button" class="edge-button edge-button--primary" :disabled="saving || step.ready" @click="prepareFoundation">
 							{{ step.ready ? "Foundation Ready" : "Prepare Session Foundation" }}
 						</button>
-						<button v-if="step.key === 'session_terms'" type="button" class="edge-button" :disabled="saving" @click="newTerm">
-							Add Term
-						</button>
-						<button v-if="step.implemented && step.key !== 'session_terms'" type="button" class="edge-button" @click="openStep(step)">
-							Review {{ step.label }} in new tab
-						</button>
-						<button v-if="step.implemented" type="button" class="edge-button" :disabled="saving" @click="saveCurrentStep(step.key)">
-							Save here
-						</button>
+						<button v-if="step.key === 'session_terms'" type="button" class="edge-button" :disabled="saving" @click="newTerm">Add Term</button>
+						<button v-if="step.implemented && step.key !== 'session_terms'" type="button" class="edge-button" @click="openStep(step)">Review {{ step.label }} in new tab</button>
+						<button v-if="step.implemented" type="button" class="edge-button" :disabled="saving" @click="saveCurrentStep(step.key)">Save here</button>
 						<span v-else class="session-launch-planned-label">Planned next slice</span>
 					</div>
 				</article>
 			</div>
 
+			<EduEdgeSessionStructurePanel
+				v-if="launch?.name"
+				:launch-name="launch.name"
+				:academic-year="targetAcademicYear"
+				:source-academic-year="sourceAcademicYear"
+				:institution="institution"
+				:branch="context.branch || ''"
+				@structure-updated="refreshReadiness"
+			/>
+
 			<div v-if="launch" class="session-launch-resume-note">
 				<strong>Resume behaviour</strong>
-				<span>
-					Leaving this page does not reset the launch. EduEdge stores the current step, source Session, status and resume audit; readiness is recalculated from the real academic records when you return.
-				</span>
+				<span>Leaving this page does not reset the launch. EduEdge stores the current step, source Session, status and resume audit; readiness is recalculated from the real academic records when you return.</span>
 				<small v-if="launch.last_resumed_by">Last resumed by {{ launch.last_resumed_by }} · {{ formatDateTime(launch.last_resumed_on) }}</small>
 			</div>
 		</template>
@@ -146,6 +118,8 @@
 </template>
 
 <script>
+import EduEdgeSessionStructurePanel from "./EduEdgeSessionStructurePanel.vue";
+
 const GET_METHOD = "eduedge.api.session_launch.get_session_launch_context";
 const START_METHOD = "eduedge.api.session_launch.start_or_resume_session_launch";
 const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
@@ -155,6 +129,7 @@ const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
+	components: { EduEdgeSessionStructurePanel },
 	data() {
 		return {
 			loading: true,
@@ -170,9 +145,7 @@ export default {
 		};
 	},
 	computed: {
-		institutionName() {
-			return this.context.institution_name || this.institution || "Institution";
-		},
+		institutionName() { return this.context.institution_name || this.institution || "Institution"; },
 		sourceSessions() {
 			const target = this.sessions.find((row) => row.name === this.targetAcademicYear);
 			if (!target?.year_start_date) return [];
@@ -180,9 +153,7 @@ export default {
 			return this.sessions.filter((row) => row.name !== this.targetAcademicYear && row.year_start_date && new Date(row.year_start_date) < targetStart);
 		},
 	},
-	mounted() {
-		this.load();
-	},
+	mounted() { this.load(); },
 	methods: {
 		async load(academicYear = "") {
 			this.loading = true;
@@ -192,9 +163,7 @@ export default {
 				this.applyPayload(response.message || {});
 			} catch (error) {
 				this.error = error?.message || "Academic Session Launch could not be loaded.";
-			} finally {
-				this.loading = false;
-			}
+			} finally { this.loading = false; }
 		},
 		applyPayload(payload) {
 			this.context = payload.active_context || {};
@@ -217,37 +186,19 @@ export default {
 			this.saving = true;
 			this.error = "";
 			try {
-				const response = await frappe.call({
-					method: START_METHOD,
-					type: "POST",
-					args: {
-						academic_year: this.targetAcademicYear,
-						institution: this.institution || undefined,
-						source_academic_year: this.sourceAcademicYear || undefined,
-					},
-				});
+				const response = await frappe.call({ method: START_METHOD, type: "POST", args: { academic_year: this.targetAcademicYear, institution: this.institution || undefined, source_academic_year: this.sourceAcademicYear || undefined } });
 				this.applyPayload(response.message || {});
 				frappe.show_alert({ message: __(hadLaunch ? "Session Launch ready to continue" : "Session Launch started"), indicator: "green" });
 			} catch (error) {
 				this.error = error?.message || "Session Launch could not be started or resumed.";
-			} finally {
-				this.saving = false;
-			}
+			} finally { this.saving = false; }
 		},
 		async saveCurrentStep(stepKey) {
 			if (!this.launch?.name) return false;
 			this.saving = true;
 			this.error = "";
 			try {
-				const response = await frappe.call({
-					method: SAVE_METHOD,
-					type: "POST",
-					args: {
-						launch: this.launch.name,
-						current_step: stepKey,
-						source_academic_year: this.sourceAcademicYear || undefined,
-					},
-				});
+				const response = await frappe.call({ method: SAVE_METHOD, type: "POST", args: { launch: this.launch.name, current_step: stepKey, source_academic_year: this.sourceAcademicYear || undefined } });
 				this.launch = response.message?.launch || this.launch;
 				this.readiness = response.message?.readiness || this.readiness;
 				frappe.show_alert({ message: __("Session Launch progress saved"), indicator: "green" });
@@ -255,13 +206,9 @@ export default {
 			} catch (error) {
 				this.error = error?.message || "Session Launch progress could not be saved.";
 				return false;
-			} finally {
-				this.saving = false;
-			}
+			} finally { this.saving = false; }
 		},
-		saveForLater() {
-			return this.saveCurrentStep(this.launch?.current_step_key || "session_terms");
-		},
+		saveForLater() { return this.saveCurrentStep(this.launch?.current_step_key || "session_terms"); },
 		async prepareFoundation() {
 			if (!this.launch?.name) return;
 			this.saving = true;
@@ -273,8 +220,17 @@ export default {
 				frappe.show_alert({ message: __("Session foundation prepared"), indicator: "green" });
 			} catch (error) {
 				this.error = error?.message || "Session foundation could not be prepared.";
-			} finally {
-				this.saving = false;
+			} finally { this.saving = false; }
+		},
+		async refreshReadiness() {
+			if (!this.targetAcademicYear || this.loading) return;
+			try {
+				const response = await frappe.call(GET_METHOD, { academic_year: this.targetAcademicYear });
+				const payload = response.message || {};
+				this.readiness = payload.readiness || this.readiness;
+				if (payload.launch) this.launch = payload.launch;
+			} catch (_error) {
+				// The structure panel already exposes its own actionable error. Do not replace it with a secondary refresh failure.
 			}
 		},
 		async openStep(step) {
@@ -282,15 +238,9 @@ export default {
 			const reviewTab = window.open("about:blank", "_blank");
 			if (reviewTab) reviewTab.opener = null;
 			const saved = await this.saveCurrentStep(step.key);
-			if (!saved) {
-				reviewTab?.close();
-				return;
-			}
+			if (!saved) { reviewTab?.close(); return; }
 			const params = new URLSearchParams();
-			if (this.targetAcademicYear) {
-				params.set("academic_year", this.targetAcademicYear);
-				params.set("destination_academic_year", this.targetAcademicYear);
-			}
+			if (this.targetAcademicYear) { params.set("academic_year", this.targetAcademicYear); params.set("destination_academic_year", this.targetAcademicYear); }
 			if (this.sourceAcademicYear) params.set("source_academic_year", this.sourceAcademicYear);
 			if (this.institution) params.set("institution", this.institution);
 			if (this.context.branch) params.set("branch", this.context.branch);
@@ -321,9 +271,7 @@ export default {
 						this.newTerm();
 					} catch (error) {
 						frappe.msgprint({ title: __("Academic Session could not be created"), message: error?.message || __("Review the Session details and try again."), indicator: "red" });
-					} finally {
-						dialog.enable_primary_action();
-					}
+					} finally { dialog.enable_primary_action(); }
 				},
 			});
 			dialog.$wrapper?.addClass("session-launch-dialog");
@@ -355,36 +303,18 @@ export default {
 						await this.load(this.targetAcademicYear);
 					} catch (error) {
 						frappe.msgprint({ title: __("Academic Term could not be created"), message: error?.message || __("Review the Term details and try again."), indicator: "red" });
-					} finally {
-						dialog.enable_primary_action();
-					}
+					} finally { dialog.enable_primary_action(); }
 				},
 			});
 			dialog.$wrapper?.addClass("session-launch-dialog");
 			dialog.show();
 		},
 		metricEntries(step) {
-			const labels = {
-				terms: "Terms",
-				terms_missing_dates: "Terms missing dates",
-				calendar: "Institution Calendar",
-				classes: "Classes",
-				class_intakes: "Class Intakes",
-				class_arms: "Class Arms",
-				submitted: "Submitted Enrollments",
-				draft: "Draft Enrollments",
-				source_session: "Source Session",
-			};
-			return Object.entries(step?.metrics || {})
-				.filter(([, value]) => value !== "" && value !== null && value !== undefined)
-				.map(([key, value]) => ({ key, label: labels[key] || key.replaceAll("_", " "), value }));
+			const labels = { terms: "Terms", terms_missing_dates: "Terms missing dates", calendar: "Institution Calendar", classes: "Classes", class_intakes: "Class Intakes", class_arms: "Class Arms", submitted: "Submitted Enrollments", draft: "Draft Enrollments", source_session: "Source Session" };
+			return Object.entries(step?.metrics || {}).filter(([, value]) => value !== "" && value !== null && value !== undefined).map(([key, value]) => ({ key, label: labels[key] || key.replaceAll("_", " "), value }));
 		},
-		formatDateTime(value) {
-			return value ? frappe.datetime.str_to_user(value) : "";
-		},
-		openManualSetup() {
-			window.dispatchEvent(new CustomEvent("eduedge:academic-session-tab", { detail: { mode: "manual" } }));
-		},
+		formatDateTime(value) { return value ? frappe.datetime.str_to_user(value) : ""; },
+		openManualSetup() { window.dispatchEvent(new CustomEvent("eduedge:academic-session-tab", { detail: { mode: "manual" } })); },
 	},
 };
 </script>
