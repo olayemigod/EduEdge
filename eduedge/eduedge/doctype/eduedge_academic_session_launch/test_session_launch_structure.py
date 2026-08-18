@@ -5,7 +5,7 @@ from education.education.test_utils import before_tests
 from frappe.tests.utils import FrappeTestCase
 
 from eduedge.api.class_arms import save_class_arm
-from eduedge.api.programme_offerings_safe import save_programme_offering
+from eduedge.api.programme_offerings import save_programme_offering
 from eduedge.api.session_launch import start_or_resume_session_launch
 from eduedge.api.session_launch_structure import (
     carry_forward_selected_class_arms,
@@ -90,19 +90,16 @@ class TestSessionLaunchStructure(FrappeTestCase):
 
         source_one = save_programme_offering(
             school_branch=branch.name,
-            institution=institution.name,
             program=class_one.name,
             academic_year=source_year.name,
         )
         save_programme_offering(
             school_branch=branch.name,
-            institution=institution.name,
             program=class_two.name,
             academic_year=source_year.name,
         )
         target_one = save_programme_offering(
             school_branch=branch.name,
-            institution=institution.name,
             program=class_one.name,
             academic_year=target_year.name,
         )
