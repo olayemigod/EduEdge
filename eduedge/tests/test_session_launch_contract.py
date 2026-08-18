@@ -87,6 +87,22 @@ class TestSessionLaunchContract(unittest.TestCase):
             self.assertIn(token, panel)
         self.assertNotIn('window.location.href = "/app/eduedge-academic-sessions?mode=manual"', panel)
 
+    def test_session_tabs_live_inside_edgesuite_layout_and_custom_headings_follow_theme(self):
+        page = (APP / "eduedge/page/eduedge_academic_sessions/eduedge_academic_sessions.js").read_text(encoding="utf-8")
+        for token in (
+            "const placeTabs = ($root) =>",
+            'find(".edge-page-layout")',
+            'children(".edge-page-layout__header")',
+            'children(".edge-page-layout__content")',
+            "$tabs.insertAfter($header)",
+            "$tabs.prependTo($content)",
+            "$tabs.detach()",
+            ".session-launch-shell,.eduedge-session-mode-host .session-structure-shell{color:var(--text-color)}",
+            ".eduedge-session-mode-host h1,.eduedge-session-mode-host h2,.eduedge-session-mode-host h3,.eduedge-session-mode-host h4{color:var(--text-color)!important}",
+        ):
+            self.assertIn(token, page)
+        self.assertNotIn('class="eduedge-session-mode-tabs" role="tablist" aria-label="Academic Session workspace mode">\n\t\t\t<button', page.split("const $host", 1)[1] if "const $host" in page else "")
+
     def test_launch_steps_are_full_width_and_reviews_open_in_new_tab_with_destination_context(self):
         component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
         self.assertIn("grid-template-columns:minmax(0,1fr)", component)
