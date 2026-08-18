@@ -66,6 +66,7 @@ class TestSessionLaunchContract(unittest.TestCase):
             "switchMode",
             "history.replaceState",
             "eduedge:academic-session-tab",
+            "removeEventListener",
         ):
             self.assertIn(token, page)
         self.assertIn("createEduEdgeSessionLaunchApp", bundle)
@@ -81,6 +82,7 @@ class TestSessionLaunchContract(unittest.TestCase):
             "Prepare Session Foundation",
             "Leaving this page does not reset the launch",
             'detail: { mode: "manual" }',
+            "EduEdgeSessionStructurePanel",
         ):
             self.assertIn(token, panel)
         self.assertNotIn('window.location.href = "/app/eduedge-academic-sessions?mode=manual"', panel)
@@ -99,6 +101,33 @@ class TestSessionLaunchContract(unittest.TestCase):
         self.assertIn("if (!saved) {", component)
         self.assertIn("reviewTab?.close()", component)
         self.assertNotIn(".finally(() =>", component)
+
+    def test_session_structure_flow_lists_real_rows_and_reuses_validated_creation_services(self):
+        api = (APP / "api/session_launch_structure.py").read_text(encoding="utf-8")
+        component = (APP / "public/js/eduedge_ui/components/EduEdgeSessionStructurePanel.vue").read_text(encoding="utf-8")
+        for token in (
+            "def get_session_structure_context",
+            "def create_selected_class_intakes",
+            "def carry_forward_selected_class_arms",
+            "save_programme_offering(",
+            "preview_class_arm_session_rollover(",
+            "execute_selected_class_arm_session_rollover(",
+            '"students_to_carry"',
+            '"missing_intakes"',
+            '"arms_ready_to_create"',
+        ):
+            self.assertIn(token, api)
+        for token in (
+            "Class Structure",
+            "intended Classes",
+            "Create Selected",
+            "Carry Forward Selected",
+            "Students to carry automatically",
+            "Review Classes in new tab",
+            "destination_academic_year",
+        ):
+            self.assertIn(token, component)
+        self.assertNotIn("<EdgeAppShell", component)
 
 
 if __name__ == "__main__":
