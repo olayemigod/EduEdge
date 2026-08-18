@@ -1,7 +1,7 @@
 frappe.pages["eduedge-academic-sessions"].on_page_load = function (wrapper) {
 	wrapper.page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: __("Academic Sessions and Terms"),
+		title: __("Academic Session Launch"),
 		single_column: true,
 	});
 };
@@ -10,15 +10,8 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 	const page = wrapper.page;
 	wrapper.current_visit_id = (wrapper.current_visit_id || 0) + 1;
 	const visitId = wrapper.current_visit_id;
-
-	if (wrapper.session_launch_app) {
-		try {
-			wrapper.session_launch_app.unmount();
-		} catch (error) {
-			console.error("Failed to unmount EduEdge Session Launch", error);
-		}
-		wrapper.session_launch_app = null;
-	}
+	const params = new URLSearchParams(window.location.search || "");
+	const manualMode = params.get("mode") === "manual";
 
 	if (wrapper.vue_app) {
 		try {
@@ -29,16 +22,25 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 		wrapper.vue_app = null;
 	}
 
-	$(page.body).empty();
-	const $loading = $(
-		`<div class="p-6 text-center text-muted">${__("Loading Academic Sessions and Terms...")}</div>`
-	).appendTo(page.body);
+	if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
+	if (manualMode) {
+		page.set_title(__("Academic Sessions and Terms"));
+		page.add_inner_button(__("Session Launch"), () => {
+			window.location.href = "/app/eduedge-academic-sessions";
+		});
+	} else {
+		page.set_title(__("Academic Session Launch"));
+	}
 
-	const fail = (message) => {
+	$(page.body).empty();
+	const loadingLabel = manualMode ? __("Loading Academic Sessions and Terms...") : __("Loading Academic Session Launch...");
+	const $loading = $(`<div class="p-6 text-center text-muted">${loadingLabel}</div>`).appendTo(page.body);
+
+	const fail = (title, message) => {
 		$loading.remove();
 		$(
 			`<div class="alert alert-danger p-6 text-center">
-				<strong>${__("Academic Sessions and Terms failed to load")}</strong>
+				<strong>${frappe.utils.escape_html(title || "")}</strong>
 				<div>${frappe.utils.escape_html(message || "")}</div>
 			</div>`
 		).appendTo(page.body);
@@ -46,48 +48,39 @@ frappe.pages["eduedge-academic-sessions"].on_page_show = function (wrapper) {
 
 	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
-		frappe.require("eduedge_academic_sessions.bundle.js", () => {
+		const bundle = manualMode ? "eduedge_academic_sessions.bundle.js" : "eduedge_session_launch.bundle.js";
+		frappe.require(bundle, () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			if (!window.EduEdgeAcademicSessions || typeof window.createEduEdgeAcademicSessionsApp !== "function") {
-				fail(__("The EduEdge Academic Sessions bundle is unavailable or incomplete."));
-				return;
-			}
 			$loading.remove();
-			const launchRoot = $('<div class="eduedge-session-launch-root" data-edge-product="eduedge"></div>').appendTo(page.body);
-			const root = $('<div class="eduedge-academic-sessions-root" data-edge-product="eduedge"></div>').appendTo(page.body);
-			try {
-				wrapper.vue_app = window.createEduEdgeAcademicSessionsApp({
-					pageName: "eduedge-academic-sessions",
-				});
-				wrapper.vue_app.mount(root[0]);
-			} catch (error) {
-				console.error("Failed to mount EduEdge Academic Sessions", error);
-				fail(error.message || String(error));
+
+			if (manualMode) {
+				if (!window.EduEdgeAcademicSessions || typeof window.createEduEdgeAcademicSessionsApp !== "function") {
+					fail(__("Academic Sessions and Terms failed to load"), __("The EduEdge Academic Sessions bundle is unavailable or incomplete."));
+					return;
+				}
+				const root = $('<div class="eduedge-academic-sessions-root" data-edge-product="eduedge"></div>').appendTo(page.body);
+				try {
+					wrapper.vue_app = window.createEduEdgeAcademicSessionsApp({ pageName: "eduedge-academic-sessions" });
+					wrapper.vue_app.mount(root[0]);
+				} catch (error) {
+					console.error("Failed to mount EduEdge Academic Sessions", error);
+					fail(__("Academic Sessions and Terms failed to load"), error.message || String(error));
+				}
 				return;
 			}
 
-			// Session Launch is additive: if its new bundle fails, manual Session/Term
-			// management remains available below instead of taking down the page.
-			frappe.require("eduedge_session_launch.bundle.js", () => {
-				if (wrapper.current_visit_id !== visitId) return;
-				if (!window.EduEdgeSessionLaunch || typeof window.createEduEdgeSessionLaunchApp !== "function") {
-					launchRoot.html(
-						`<div class="alert alert-warning">${__("Guided Session Launch is unavailable. Manual Academic Session management remains available below.")}</div>`
-					);
-					return;
-				}
-				try {
-					wrapper.session_launch_app = window.createEduEdgeSessionLaunchApp({
-						pageName: "eduedge-academic-sessions",
-					});
-					wrapper.session_launch_app.mount(launchRoot[0]);
-				} catch (error) {
-					console.error("Failed to mount EduEdge Session Launch", error);
-					launchRoot.html(
-						`<div class="alert alert-warning">${frappe.utils.escape_html(error.message || String(error))}</div>`
-					);
-				}
-			});
+			if (!window.EduEdgeSessionLaunch || typeof window.createEduEdgeSessionLaunchApp !== "function") {
+				fail(__("Academic Session Launch failed to load"), __("The EduEdge Session Launch bundle is unavailable or incomplete."));
+				return;
+			}
+			const root = $('<div class="eduedge-session-launch-root" data-edge-product="eduedge"></div>').appendTo(page.body);
+			try {
+				wrapper.vue_app = window.createEduEdgeSessionLaunchApp({ pageName: "eduedge-academic-sessions" });
+				wrapper.vue_app.mount(root[0]);
+			} catch (error) {
+				console.error("Failed to mount EduEdge Session Launch", error);
+				fail(__("Academic Session Launch failed to load"), error.message || String(error));
+			}
 		});
 	});
 };
