@@ -181,6 +181,10 @@ class TestSessionLaunchContract(unittest.TestCase):
             "Review Enrollments in new tab",
             "destination_academic_year",
             "color:var(--text-color)",
+            "label: item.offering_title || item.program || item.name",
+            'dialog.$wrapper?.addClass("session-learners-dialog")',
+            ".session-learners-dialog .awesomplete>ul",
+            ".session-learners-dialog .btn-modal-close",
         ):
             self.assertIn(token, component)
         self.assertIn('"student_progression", "admissions_enrollment"', launch)
