@@ -8,11 +8,12 @@ from eduedge.api.programme_offering_session_options import (
 	get_programme_offering_session_options,
 	get_programme_offerings_page_with_sessions,
 )
+from eduedge.api.programme_offerings_safe import save_programme_offering
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 
 
 class TestClassIntakeSessionVisibilityRuntime(FrappeTestCase):
-	"""Academic Session discovery and filtering must remain authoritative."""
+	"""Academic Session discovery, filtering and Class Intake readiness must remain authoritative."""
 
 	def setUp(self) -> None:
 		before_tests()
@@ -60,6 +61,94 @@ class TestClassIntakeSessionVisibilityRuntime(FrappeTestCase):
 		editor_years = {row["name"]: row for row in editor["options"]["academic_years"]}
 		self.assertIn(year.name, editor_years)
 		self.assertFalse(editor_years[year.name]["calendar_ready"])
+
+	def test_class_intake_save_prepares_calendar_from_configured_session_terms(self):
+		year = self._make_year("AUTO CALENDAR", "2092-09-01", "2093-08-31")
+		institution = self._make_institution("Auto Calendar")
+		branch = self._insert(
+			"EduEdge School Branch",
+			branch_name=f"QA Auto Calendar Campus {self.suffix}",
+			branch_code=f"QAAUTO{self.suffix}",
+			company="_Test Company",
+			institution=institution.name,
+			enabled=1,
+		)
+		terms = []
+		for label, start, end in (
+			("First", "2092-09-01", "2092-12-15"),
+			("Second", "2093-01-10", "2093-04-15"),
+			("Third", "2093-05-01", "2093-08-15"),
+		):
+			terms.append(
+				self._insert(
+					"Academic Term",
+					academic_year=year.name,
+					term_name=f"QA {label} Term {self.suffix}",
+					term_start_date=start,
+					term_end_date=end,
+				)
+			)
+		department = self._insert(
+			"Department",
+			department_name=f"QA Auto Calendar Section {self.suffix}",
+			company="_Test Company",
+			is_group=0,
+			**{INSTITUTION_FIELD: institution.name},
+		)
+		program = self._insert(
+			"Program",
+			program_name=f"QA Auto Calendar Class {self.suffix}",
+			department=department.name,
+			**{INSTITUTION_FIELD: institution.name},
+		)
+		self.assertFalse(
+			frappe.db.exists(
+				"EduEdge Institution Academic Calendar",
+				{"institution": institution.name, "academic_year": year.name},
+			)
+		)
+
+		result = save_programme_offering(
+			school_branch=branch.name,
+			institution=institution.name,
+			program=program.name,
+			academic_year=year.name,
+			offering_title=f"QA Auto Calendar Intake {self.suffix}",
+			offering_code=f"QA-AUTO-{self.suffix}",
+		)
+
+		calendar = frappe.db.get_value(
+			"EduEdge Institution Academic Calendar",
+			{"institution": institution.name, "academic_year": year.name, "enabled": 1},
+			"name",
+		)
+		self.assertTrue(calendar)
+		periods = frappe.get_all(
+			"EduEdge Academic Calendar Period",
+			filters={"parent": calendar, "parenttype": "EduEdge Institution Academic Calendar"},
+			pluck="academic_term",
+			order_by="sequence asc",
+		)
+		self.assertEqual(periods, [term.name for term in terms])
+		self.assertTrue(frappe.db.exists("EduEdge Program Offering", result["name"]))
+
+		# Retrying the same readiness step must reuse the one Institution calendar.
+		save_programme_offering(
+			school_branch=branch.name,
+			institution=institution.name,
+			program=program.name,
+			academic_year=year.name,
+			offering=result["name"],
+			offering_title=f"QA Auto Calendar Intake {self.suffix}",
+			offering_code=f"QA-AUTO-{self.suffix}",
+		)
+		self.assertEqual(
+			frappe.db.count(
+				"EduEdge Institution Academic Calendar",
+				{"institution": institution.name, "academic_year": year.name},
+			),
+			1,
+		)
 
 	def test_selected_session_filters_the_class_intake_catalogue(self):
 		source_year = self._make_year("FILTER SOURCE", "2095-09-01", "2096-08-31")
