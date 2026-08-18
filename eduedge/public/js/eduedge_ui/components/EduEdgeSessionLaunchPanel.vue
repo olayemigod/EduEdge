@@ -108,6 +108,17 @@
 				@structure-updated="handleStructureUpdated"
 			/>
 
+			<EduEdgeSessionLearnersPanel
+				v-if="launch?.name"
+				:launch-name="launch.name"
+				:academic-year="targetAcademicYear"
+				:source-academic-year="sourceAcademicYear"
+				:institution="institution"
+				:branch="context.branch || ''"
+				@save-step="saveCurrentStep"
+				@learners-updated="handleLearnersUpdated"
+			/>
+
 			<div v-if="launch" class="session-launch-resume-note">
 				<strong>Resume behaviour</strong>
 				<span>Leaving this page does not reset the launch. EduEdge stores the current step, source Session, status and resume audit; readiness is recalculated from the real academic records when you return.</span>
@@ -119,6 +130,7 @@
 
 <script>
 import EduEdgeSessionStructurePanel from "./EduEdgeSessionStructurePanel.vue";
+import EduEdgeSessionLearnersPanel from "./EduEdgeSessionLearnersPanel.vue";
 
 const GET_METHOD = "eduedge.api.session_launch.get_session_launch_context";
 const START_METHOD = "eduedge.api.session_launch.start_or_resume_session_launch";
@@ -126,11 +138,11 @@ const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
 const PREPARE_METHOD = "eduedge.api.session_launch.prepare_session_foundation";
 const SAVE_SESSION_METHOD = "eduedge.api.academic_sessions.save_academic_session";
 const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
-const EMBEDDED_STRUCTURE_STEPS = new Set(["class_structure", "class_intakes", "class_arms"]);
+const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment"]);
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
-	components: { EduEdgeSessionStructurePanel },
+	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel },
 	data() {
 		return {
 			loading: true,
@@ -144,6 +156,7 @@ export default {
 			launch: null,
 			readiness: { steps: [], summary: {} },
 			structureSummary: {},
+			learnersSummary: {},
 		};
 	},
 	computed: {
@@ -154,7 +167,7 @@ export default {
 			const targetStart = new Date(target.year_start_date);
 			return this.sessions.filter((row) => row.name !== this.targetAcademicYear && row.year_start_date && new Date(row.year_start_date) < targetStart);
 		},
-		overviewSteps() { return (this.readiness.steps || []).filter((step) => !EMBEDDED_STRUCTURE_STEPS.has(step.key)); },
+		overviewSteps() { return (this.readiness.steps || []).filter((step) => !EMBEDDED_WORKFLOW_STEPS.has(step.key)); },
 		foundationReadyCount() {
 			const sessionReady = Boolean((this.readiness.steps || []).find((step) => step.key === "session_terms")?.ready);
 			return [
@@ -186,11 +199,12 @@ export default {
 			this.launch = payload.launch || null;
 			this.readiness = payload.readiness || { steps: [], summary: {} };
 			this.sourceAcademicYear = this.launch?.source_academic_year || payload.suggested_source_academic_year || "";
-			if (!this.launch) this.structureSummary = {};
+			if (!this.launch) { this.structureSummary = {}; this.learnersSummary = {}; }
 		},
 		async targetChanged() {
 			this.launch = null;
 			this.structureSummary = {};
+			this.learnersSummary = {};
 			this.readiness = { steps: [], summary: {} };
 			if (!this.targetAcademicYear) return;
 			await this.load(this.targetAcademicYear);
@@ -238,6 +252,7 @@ export default {
 			} finally { this.saving = false; }
 		},
 		handleStructureUpdated(summary) { this.structureSummary = summary || {}; },
+		handleLearnersUpdated(summary) { this.learnersSummary = summary || {}; },
 		async openStep(step) {
 			if (!step?.route) return;
 			const reviewTab = window.open("about:blank", "_blank");
@@ -326,7 +341,8 @@ export default {
 </script>
 
 <style scoped>
-.session-launch-shell{display:grid;gap:1rem;margin-bottom:1rem;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}
+.session-launch-shell{display:grid;gap:1rem;margin-bottom:1rem;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg);color:var(--text-color)}
+.session-launch-shell h1,.session-launch-shell h2,.session-launch-shell h3,.session-launch-shell h4,.session-launch-shell strong{color:var(--text-color)}
 .session-launch-header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.session-launch-header h2{margin:.1rem 0 .35rem}.session-launch-subtitle{max-width:58rem;margin:0;color:var(--text-muted)}
 .session-launch-status-block{display:grid;gap:.25rem;min-width:14rem;text-align:right}.session-launch-status{justify-self:end;padding:.2rem .55rem;border-radius:999px;background:var(--control-bg);border:1px solid var(--border-color);font-size:.78rem}.session-launch-status-block small{color:var(--text-muted)}
 .session-launch-context-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.session-launch-context-grid label,.session-launch-context-card{display:grid;gap:.35rem}.session-launch-context-grid label>span,.session-launch-context-card>span{font-weight:600}.session-launch-context-grid small,.session-launch-context-card small{color:var(--text-muted)}.session-launch-context-card{padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}
