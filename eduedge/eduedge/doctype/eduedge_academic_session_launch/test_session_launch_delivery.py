@@ -37,13 +37,19 @@ class TestSessionLaunchDelivery(FrappeTestCase):
             year_start_date="2093-09-01",
             year_end_date="2094-08-31",
         )
-        self._insert(
-            "Academic Term",
-            academic_year=year.name,
-            term_name=f"QA Delivery Term {self.suffix}",
-            term_start_date="2093-09-01",
-            term_end_date="2093-12-20",
-        )
+        term_rows = [
+            (f"QA Delivery First Term {self.suffix}", "2093-09-01", "2093-12-20"),
+            (f"QA Delivery Second Term {self.suffix}", "2094-01-08", "2094-04-05"),
+            (f"QA Delivery Third Term {self.suffix}", "2094-04-22", "2094-07-26"),
+        ]
+        for term_name, start_date, end_date in term_rows:
+            self._insert(
+                "Academic Term",
+                academic_year=year.name,
+                term_name=term_name,
+                term_start_date=start_date,
+                term_end_date=end_date,
+            )
         institution = self._insert(
             "EduEdge Institution",
             institution_name=f"QA Delivery School {self.suffix}",
@@ -107,6 +113,7 @@ class TestSessionLaunchDelivery(FrappeTestCase):
         self.assertEqual(initial["summary"]["class_intakes"], 1)
         self.assertEqual(initial["summary"]["classes_without_subjects"], 1)
         self.assertEqual(initial["summary"]["expected_teaching_contexts"], 0)
+        self.assertEqual(len(initial["academic_terms"]), 3)
         self.assertTrue(initial["summary"]["class_responsibility_required"])
         responsibility = initial["branches"][0]["class_responsibilities"][0]
         self.assertEqual(responsibility["student_group"], arm["name"])
@@ -125,6 +132,11 @@ class TestSessionLaunchDelivery(FrappeTestCase):
 
         teaching = after_subject["branches"][0]["teaching_contexts"][0]
         self.assertFalse(teaching["assigned"])
+        self.assertEqual(len(teaching["scheme_terms"]), 3)
+        self.assertEqual(teaching["scheme_status"], "0/3 Terms approved")
+        self.assertFalse(teaching["scheme_ready"])
+        self.assertTrue(all(row["status"] == "Missing" for row in teaching["scheme_terms"]))
+
         assigned = assign_guided_subject_instructor(
             launch=launch_name,
             instructor=instructor.name,
