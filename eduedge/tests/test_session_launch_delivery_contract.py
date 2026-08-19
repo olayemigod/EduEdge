@@ -21,14 +21,34 @@ class TestSessionLaunchDeliveryContract(unittest.TestCase):
             "readiness._select_scheme_for_context",
             '"schedule_ready"',
             '"scheme_status"',
+            '"scheme_terms"',
             '"class_responsibility_required"',
             '"academic_delivery_ready"',
             "MAX_TEACHING_CONTEXTS",
             "MAX_SCHEDULE_ROWS",
+            "MAX_SCHEME_ROWS",
         ):
             self.assertIn(token, api)
         self.assertNotIn("ignore_permissions=True", api)
         self.assertNotIn("frappe.db.set_value", api)
+
+    def test_delivery_api_requires_scheme_readiness_for_each_configured_term(self):
+        api = (APP / "api/session_launch_delivery.py").read_text(encoding="utf-8")
+        panel = (APP / "public/js/eduedge_ui/components/EduEdgeSessionDeliveryPanel.vue").read_text(encoding="utf-8")
+        for token in (
+            "def _academic_terms",
+            "get_enabled_institution_calendar",
+            "PERIOD_DOCTYPE",
+            "def _term_scheme_state",
+            'row.get("academic_term") == academic_term',
+            'approved_terms == len(scheme_terms)',
+            'f"{approved_terms}/{len(scheme_terms)} Terms approved"',
+            '"scheme_ready": scheme_ready',
+            'sum(1 for row in teaching if row["scheme_ready"])',
+        ):
+            self.assertIn(token, api)
+        self.assertIn("Scheme-ready contexts", panel)
+        self.assertIn("statusClass(row.scheme_ready)", panel)
 
     def test_delivery_api_keeps_primary_secondary_class_teacher_governance_separate_from_subject_teaching(self):
         api = (APP / "api/session_launch_delivery.py").read_text(encoding="utf-8")
