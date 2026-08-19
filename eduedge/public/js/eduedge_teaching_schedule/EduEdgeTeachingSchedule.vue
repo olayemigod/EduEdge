@@ -129,6 +129,7 @@ export default {
 	},
 	mounted() {
 		const params = new URLSearchParams(window.location.search || "");
+		if (params.get("branch")) this.filters.branch = params.get("branch");
 		if (params.get("date")) this.filters.reference_date = params.get("date");
 		if (["day", "week", "upcoming", "rooms"].includes(params.get("view"))) this.filters.view = params.get("view");
 		this.load();
