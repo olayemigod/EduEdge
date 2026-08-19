@@ -17,9 +17,11 @@ from eduedge.api.programme_curriculum_governance import add_programme_courses
 from eduedge.api.session_launch import _allowed_branches, _get_launch_by_name, _require_manager
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE
+from eduedge.services.academic_calendar import CALENDAR_DOCTYPE, PERIOD_DOCTYPE, get_enabled_institution_calendar
 
 MAX_TEACHING_CONTEXTS = 3000
 MAX_SCHEDULE_ROWS = 5000
+MAX_SCHEME_ROWS = 5000
 CLASS_RESPONSIBILITY_TYPES = ("Class Teacher", "Form Teacher")
 CLASS_RESPONSIBILITY_INSTITUTION_TYPES = {"PRIMARY", "SECONDARY"}
 
@@ -43,7 +45,7 @@ def _institution_type(institution: str) -> str:
 def _subject_assignment_type(institution_type: str) -> str:
 	if institution_type in {"TERTIARY", "UNIVERSITY", "COLLEGE", "POLYTECHNIC"}:
 		return "Lecturer"
-	if institution_type in {"TRAINING", "VOCATIONAL", "PROFESSIONAL"}:
+	if institution_type in {"TRAINING", "TRAINING_CENTRE", "VOCATIONAL", "PROFESSIONAL"}:
 		return "Tutor"
 	return "Subject Instructor"
 
@@ -58,6 +60,29 @@ def _session_dates(academic_year: str) -> tuple[str, str]:
 	if not row.get("year_start_date") or not row.get("year_end_date"):
 		frappe.throw(_("The target Academic Session must have start and end dates."), frappe.ValidationError)
 	return str(getdate(row.year_start_date)), str(getdate(row.year_end_date))
+
+
+def _academic_terms(institution: str, academic_year: str) -> list[dict]:
+	calendar = get_enabled_institution_calendar(institution, academic_year=academic_year)
+	if not calendar:
+		return []
+	rows = frappe.get_all(
+		PERIOD_DOCTYPE,
+		filters={"parent": calendar.name, "parenttype": CALENDAR_DOCTYPE},
+		fields=["academic_term", "start_date", "end_date", "sequence"],
+		order_by="sequence asc, start_date asc",
+		limit_page_length=100,
+	)
+	return [
+		{
+			"academic_term": row.academic_term,
+			"start_date": row.start_date,
+			"end_date": row.end_date,
+			"sequence": cint(row.sequence),
+		}
+		for row in rows
+		if row.academic_term
+	]
 
 
 def _branch_assignment_rows(branch: str, offering_names: set[str]) -> list[dict]:
@@ -86,6 +111,29 @@ def _branch_assignment_rows(branch: str, offering_names: set[str]) -> list[dict]
 		page_length=MAX_TEACHING_CONTEXTS,
 	)
 	return [dict(row) for row in rows]
+
+
+def _scheme_rows(branch: str, offering_names: set[str]) -> tuple[list[dict], bool]:
+	if not offering_names or not frappe.db.exists("DocType", "EduEdge Scheme of Work"):
+		return [], False
+	rows = frappe.get_list(
+		"EduEdge Scheme of Work",
+		filters={"school_branch": branch, "program_offering": ["in", sorted(offering_names)]},
+		fields=[
+			"name",
+			"scheme_title",
+			"status",
+			"version_no",
+			"program_offering",
+			"student_group",
+			"course",
+			"academic_year",
+			"academic_term",
+		],
+		order_by="program_offering asc, academic_term asc, course asc, student_group asc, version_no desc",
+		page_length=MAX_SCHEME_ROWS,
+	)
+	return [dict(row) for row in rows], len(rows) >= MAX_SCHEME_ROWS
 
 
 def _schedule_rows(branch: str, groups: list[dict], academic_year: str) -> tuple[list[dict], bool]:
@@ -138,11 +186,22 @@ def _curriculum_rows(offerings: list[dict], program_courses: dict[str, list[str]
 	return result
 
 
+def _term_scheme_state(schemes: list[dict], context: dict, academic_term: str) -> dict:
+	term_rows = [row for row in schemes if row.get("academic_term") == academic_term]
+	scheme = readiness._select_scheme_for_context(term_rows, context)
+	return {
+		"academic_term": academic_term,
+		"status": (scheme or {}).get("status") or "Missing",
+		"scheme": (scheme or {}).get("name") or "",
+	}
+
+
 def _teaching_context_rows(
 	contexts: list[dict],
 	assignments: list[dict],
 	schemes: list[dict],
 	schedule_rows: list[dict],
+	terms: list[dict],
 ) -> list[dict]:
 	assignment_index: dict[tuple[str, str], list[dict]] = defaultdict(list)
 	for row in assignments:
@@ -154,6 +213,7 @@ def _teaching_context_rows(
 		if row.get("student_group") and row.get("course"):
 			schedule_index[(row.get("student_group"), row.get("course"))].append(row)
 
+	term_names = [row["academic_term"] for row in terms if row.get("academic_term")]
 	result = []
 	for context in contexts:
 		matched = [
@@ -161,11 +221,15 @@ def _teaching_context_rows(
 			for row in assignment_index.get((context["program_offering"], context["course"]), [])
 			if readiness._assignment_matches_context(row, context)
 		]
-		scheme = readiness._select_scheme_for_context(schemes, context)
-		if not scheme:
-			scheme_status = "Missing"
+		scheme_terms = [_term_scheme_state(schemes, context, term) for term in term_names]
+		approved_terms = sum(1 for row in scheme_terms if row["status"] == "Approved")
+		scheme_ready = bool(scheme_terms) and approved_terms == len(scheme_terms)
+		if not scheme_terms:
+			scheme_status = "No Terms configured"
+		elif len(scheme_terms) == 1:
+			scheme_status = scheme_terms[0]["status"]
 		else:
-			scheme_status = scheme.get("status") or "Missing"
+			scheme_status = f"{approved_terms}/{len(scheme_terms)} Terms approved"
 		scheduled = schedule_index.get((context.get("student_group"), context["course"]), []) if context.get("student_group") else []
 		result.append(
 			{
@@ -189,8 +253,9 @@ def _teaching_context_rows(
 				],
 				"schedule_ready": bool(scheduled),
 				"schedule_count": len(scheduled),
+				"scheme_ready": scheme_ready,
 				"scheme_status": scheme_status,
-				"scheme": (scheme or {}).get("name") or "",
+				"scheme_terms": scheme_terms,
 			}
 		)
 	return result
@@ -233,7 +298,7 @@ def _responsibility_rows(groups: list[dict], assignments: list[dict], offerings:
 	return result
 
 
-def _branch_context(branch_row: dict, doc, institution_type: str) -> dict:
+def _branch_context(branch_row: dict, doc, institution_type: str, terms: list[dict]) -> dict:
 	branch = branch_row["name"]
 	offerings = readiness._offering_rows(branch, academic_year=doc.academic_year, include_historical=False)
 	groups = readiness._group_rows(branch, offerings, include_historical=False)
@@ -247,13 +312,13 @@ def _branch_context(branch_row: dict, doc, institution_type: str) -> dict:
 		)
 	offering_names = {row["name"] for row in offerings}
 	assignments = _branch_assignment_rows(branch, offering_names)
-	schemes = readiness._scheme_rows(branch, offering_names)
+	schemes, scheme_truncated = _scheme_rows(branch, offering_names)
 	schedules, schedule_truncated = _schedule_rows(branch, groups, doc.academic_year)
 	program_courses = readiness._program_courses({row.get("program") for row in offerings if row.get("program")})
 	course_names = {course for values in program_courses.values() for course in values}
 	course_labels = readiness._course_labels(course_names)
 	curriculum = _curriculum_rows(offerings, program_courses, course_labels)
-	teaching = _teaching_context_rows(contexts, assignments, schemes, schedules)
+	teaching = _teaching_context_rows(contexts, assignments, schemes, schedules, terms)
 	offering_map = {row["name"]: row for row in offerings}
 	responsibilities = _responsibility_rows(groups, assignments, offering_map)
 	responsibility_required = institution_type in CLASS_RESPONSIBILITY_INSTITUTION_TYPES
@@ -265,6 +330,7 @@ def _branch_context(branch_row: dict, doc, institution_type: str) -> dict:
 		"class_responsibilities": responsibilities,
 		"schedule_rows": schedules,
 		"schedule_truncated": schedule_truncated,
+		"scheme_truncated": scheme_truncated,
 		"summary": {
 			"class_intakes": len(offerings),
 			"class_arms": len(groups),
@@ -275,8 +341,8 @@ def _branch_context(branch_row: dict, doc, institution_type: str) -> dict:
 			"unassigned_teaching_contexts": sum(1 for row in teaching if not row["assigned"]),
 			"scheduled_teaching_contexts": sum(1 for row in teaching if row["schedule_ready"]),
 			"unscheduled_teaching_contexts": sum(1 for row in teaching if row.get("student_group") and not row["schedule_ready"]),
-			"approved_scheme_contexts": sum(1 for row in teaching if row["scheme_status"] == "Approved"),
-			"scheme_attention_contexts": sum(1 for row in teaching if row["scheme_status"] != "Approved"),
+			"approved_scheme_contexts": sum(1 for row in teaching if row["scheme_ready"]),
+			"scheme_attention_contexts": sum(1 for row in teaching if not row["scheme_ready"]),
 			"class_responsibility_required": responsibility_required,
 			"class_responsibility_total": len(responsibilities),
 			"class_responsibility_assigned": sum(1 for row in responsibilities if row["assigned"]),
@@ -315,13 +381,17 @@ def _aggregate(branches: list[dict], institution_type: str) -> dict:
 		summary["class_responsibility_total"]
 		and not summary["class_responsibility_missing"]
 	)
+	truncated_schedule = any(branch.get("schedule_truncated") for branch in branches)
+	truncated_scheme = any(branch.get("scheme_truncated") for branch in branches)
 	schedule_ready = bool(
 		summary["expected_teaching_contexts"]
 		and not summary["unscheduled_teaching_contexts"]
+		and not truncated_schedule
 	)
 	scheme_ready = bool(
 		summary["expected_teaching_contexts"]
 		and not summary["scheme_attention_contexts"]
+		and not truncated_scheme
 	)
 	return {
 		**summary,
@@ -331,6 +401,8 @@ def _aggregate(branches: list[dict], institution_type: str) -> dict:
 		"class_responsibility_ready": responsibility_ready,
 		"schedule_ready": schedule_ready,
 		"scheme_ready": scheme_ready,
+		"schedule_truncated": truncated_schedule,
+		"scheme_truncated": truncated_scheme,
 		"academic_delivery_ready": all(
 			(subjects_ready, assignments_ready, responsibility_ready, schedule_ready, scheme_ready)
 		),
@@ -340,12 +412,14 @@ def _aggregate(branches: list[dict], institution_type: str) -> dict:
 def _context(doc) -> dict:
 	branches, total = _allowed_branches(doc.institution)
 	institution_type = _institution_type(doc.institution)
-	branch_rows = [_branch_context(row, doc, institution_type) for row in branches]
+	terms = _academic_terms(doc.institution, doc.academic_year)
+	branch_rows = [_branch_context(row, doc, institution_type, terms) for row in branches]
 	return {
 		"launch": doc.name,
 		"institution": doc.institution,
 		"institution_type": institution_type,
 		"academic_year": doc.academic_year,
+		"academic_terms": terms,
 		"branches": branch_rows,
 		"summary": _aggregate(branch_rows, institution_type),
 		"permissions": {
