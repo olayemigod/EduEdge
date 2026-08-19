@@ -17,7 +17,7 @@
 				<span><small>Teaching contexts</small><strong>{{ summary.expected_teaching_contexts || 0 }}</strong></span>
 				<span><small>Instructor assigned</small><strong>{{ summary.assigned_teaching_contexts || 0 }}/{{ summary.expected_teaching_contexts || 0 }}</strong></span>
 				<span><small>Scheduled</small><strong>{{ summary.scheduled_teaching_contexts || 0 }}/{{ summary.expected_teaching_contexts || 0 }}</strong></span>
-				<span><small>Approved Schemes</small><strong>{{ summary.approved_scheme_contexts || 0 }}/{{ summary.expected_teaching_contexts || 0 }}</strong></span>
+				<span><small>Scheme-ready contexts</small><strong>{{ summary.approved_scheme_contexts || 0 }}/{{ summary.expected_teaching_contexts || 0 }}</strong></span>
 			</div>
 
 			<div class="session-delivery-readiness">
@@ -114,7 +114,7 @@
 							<tr v-for="row in teachingRows" :key="`delivery-${row.context_key}`">
 								<td>{{ row.branch_name }}</td><td>{{ row.offering_label }}</td><td>{{ row.student_group_label }}</td><td><strong>{{ row.course_label }}</strong></td>
 								<td><span :class="statusClass(row.schedule_ready)">{{ row.schedule_ready ? `${row.schedule_count} scheduled` : row.student_group ? "Not scheduled" : "Class-wide context" }}</span></td>
-								<td><span :class="statusClass(row.scheme_status === 'Approved')">{{ row.scheme_status }}</span></td>
+								<td><span :class="statusClass(row.scheme_ready)">{{ row.scheme_status }}</span></td>
 							</tr>
 						</tbody>
 					</table>
