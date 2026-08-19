@@ -28,6 +28,13 @@ class TestSessionLaunchSubjectQuickCreateContract(unittest.TestCase):
         ):
             self.assertIn(token, panel)
 
+        quick_create = panel.split("quickCreateSubject(row, parentDialog, subjectField) {", 1)[1].split("assignTeaching()", 1)[0]
+        self.assertLess(
+            quick_create.index("dialog.hide()"),
+            quick_create.index('await parentDialog.set_value("subject", course.name)'),
+        )
+        self.assertIn("if (dialog.is_visible) dialog.enable_primary_action()", quick_create)
+
         self.assertIn("def save_course(payload", curriculum)
         self.assertIn("doc.set(INSTITUTION_FIELD, institution)", curriculum)
         self.assertNotIn('frappe.set_route("Form", "Course"', panel)
