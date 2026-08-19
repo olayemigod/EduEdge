@@ -117,6 +117,16 @@
 				@learners-updated="handleLearnersUpdated"
 			/>
 
+			<EduEdgeSessionDeliveryPanel
+				v-if="launch?.name"
+				:launch-name="launch.name"
+				:academic-year="targetAcademicYear"
+				:institution="institution"
+				:branch="context.branch || ''"
+				@save-step="saveCurrentStep"
+				@delivery-updated="handleDeliveryUpdated"
+			/>
+
 			<div v-if="launch && futureOverviewSteps.length" class="session-launch-step-grid session-launch-step-grid--future">
 				<article
 					v-for="step in futureOverviewSteps"
@@ -152,6 +162,7 @@
 <script>
 import EduEdgeSessionStructurePanel from "./EduEdgeSessionStructurePanel.vue";
 import EduEdgeSessionLearnersPanel from "./EduEdgeSessionLearnersPanel.vue";
+import EduEdgeSessionDeliveryPanel from "./EduEdgeSessionDeliveryPanel.vue";
 
 const GET_METHOD = "eduedge.api.session_launch.get_session_launch_context";
 const START_METHOD = "eduedge.api.session_launch.start_or_resume_session_launch";
@@ -159,11 +170,11 @@ const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
 const PREPARE_METHOD = "eduedge.api.session_launch.prepare_session_foundation";
 const SAVE_SESSION_METHOD = "eduedge.api.academic_sessions.save_academic_session";
 const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
-const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment"]);
+const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment", "academic_delivery"]);
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
-	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel },
+	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel, EduEdgeSessionDeliveryPanel },
 	data() {
 		return {
 			loading: true,
@@ -178,6 +189,7 @@ export default {
 			readiness: { steps: [], summary: {} },
 			structureSummary: {},
 			learnersSummary: {},
+			deliverySummary: {},
 		};
 	},
 	computed: {
@@ -221,12 +233,13 @@ export default {
 			this.launch = payload.launch || null;
 			this.readiness = payload.readiness || { steps: [], summary: {} };
 			this.sourceAcademicYear = this.launch?.source_academic_year || payload.suggested_source_academic_year || "";
-			if (!this.launch) { this.structureSummary = {}; this.learnersSummary = {}; }
+			if (!this.launch) { this.structureSummary = {}; this.learnersSummary = {}; this.deliverySummary = {}; }
 		},
 		async targetChanged() {
 			this.launch = null;
 			this.structureSummary = {};
 			this.learnersSummary = {};
+			this.deliverySummary = {};
 			this.readiness = { steps: [], summary: {} };
 			if (!this.targetAcademicYear) return;
 			await this.load(this.targetAcademicYear);
@@ -275,6 +288,7 @@ export default {
 		},
 		handleStructureUpdated(summary) { this.structureSummary = summary || {}; },
 		handleLearnersUpdated(summary) { this.learnersSummary = summary || {}; },
+		handleDeliveryUpdated(summary) { this.deliverySummary = summary || {}; },
 		async openStep(step) {
 			if (!step?.route) return;
 			const reviewTab = window.open("about:blank", "_blank");
