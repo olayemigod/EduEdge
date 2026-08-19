@@ -97,6 +97,21 @@ class TestSessionLaunchDeliveryContract(unittest.TestCase):
         self.assertNotIn('frappe.get_doc({"doctype": "Course Schedule"', api)
         self.assertIn("Historical schedules, lesson delivery and results are never copied forward", panel)
 
+    def test_teaching_schedule_review_opens_target_branch_and_academic_period(self):
+        panel = (APP / "public/js/eduedge_ui/components/EduEdgeSessionDeliveryPanel.vue").read_text(encoding="utf-8")
+        schedule = (APP / "public/js/eduedge_teaching_schedule/EduEdgeTeachingSchedule.vue").read_text(encoding="utf-8")
+        for token in (
+            'openReview("/app/eduedge-teaching-schedule"',
+            "branch: this.reviewBranch",
+            "date: this.teachingReviewDate",
+            'view: "week"',
+            "period_start_date",
+        ):
+            self.assertIn(token, panel)
+        self.assertIn('if (params.get("branch")) this.filters.branch = params.get("branch")', schedule)
+        self.assertIn('if (params.get("date")) this.filters.reference_date = params.get("date")', schedule)
+        self.assertIn('branch: this.filters.branch || undefined', schedule)
+
 
 if __name__ == "__main__":
     unittest.main()
