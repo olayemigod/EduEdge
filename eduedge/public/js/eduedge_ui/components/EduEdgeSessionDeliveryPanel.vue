@@ -102,7 +102,7 @@
 				<div class="session-delivery-card-heading">
 					<div><h3>Teaching Schedule & Scheme Readiness</h3><small>Session Launch audits real Course Schedule and Scheme of Work records. Historical schedules, lesson delivery and results are never copied forward.</small></div>
 					<div class="session-delivery-actions">
-						<button type="button" class="edge-button" @click="openReview('/app/eduedge-academic-operations')">Review Teaching Schedule in new tab</button>
+						<button type="button" class="edge-button" @click="openTeachingSchedule">Review Teaching Schedule in new tab</button>
 						<button type="button" class="edge-button" @click="openReview('/app/eduedge-schemes-of-work')">Review Schemes in new tab</button>
 					</div>
 				</div>
@@ -170,6 +170,12 @@ export default {
 		},
 		responsibilityRows() {
 			return (this.payload.branches || []).flatMap((branch) => (branch.class_responsibilities || []).map((row) => ({ ...row, branch_name: branch.branch_name })));
+		},
+		teachingReviewDate() {
+			return this.teachingRows.find((row) => row.period_start_date)?.period_start_date || "";
+		},
+		reviewBranch() {
+			return this.branch || this.payload.branches?.[0]?.branch || "";
 		},
 	},
 	watch: {
@@ -271,11 +277,19 @@ export default {
 			field.get_query = getQuery; field.df.get_query = getQuery;
 			dialog.show();
 		},
-		openReview(route) {
+		openTeachingSchedule() {
+			this.openReview("/app/eduedge-teaching-schedule", {
+				branch: this.reviewBranch,
+				date: this.teachingReviewDate,
+				view: "week",
+			});
+		},
+		openReview(route, extra = {}) {
 			const params = new URLSearchParams();
 			if (this.academicYear) params.set("academic_year", this.academicYear);
 			if (this.institution) params.set("institution", this.institution);
 			if (this.branch) params.set("branch", this.branch);
+			for (const [key, value] of Object.entries(extra || {})) if (value) params.set(key, value);
 			window.open(`${route}${params.toString() ? `?${params}` : ""}`, "_blank", "noopener,noreferrer");
 		},
 	},
