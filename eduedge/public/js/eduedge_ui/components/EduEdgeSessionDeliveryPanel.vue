@@ -97,7 +97,6 @@
 					</table>
 				</div>
 			</article>
-
 			<article class="session-delivery-card">
 				<div class="session-delivery-card-heading">
 					<div><h3>Teaching Schedule & Scheme Readiness</h3><small>Session Launch audits real Course Schedule and Scheme of Work records. Historical schedules, lesson delivery and results are never copied forward.</small></div>
@@ -267,15 +266,15 @@ export default {
 							subjectField.$input._created_new_doc = true;
 							subjectField.$input.cache = {};
 						}
-						await parentDialog.set_value("subject", course.name);
 						dialog.hide();
+						await parentDialog.set_value("subject", course.name);
 						frappe.show_alert({ message: __("Subject created and selected"), indicator: "green" });
 					} catch (error) {
 						this.error = error?.message || "Subject master could not be created.";
 						frappe.msgprint({ title: __("Subject could not be created"), message: this.error, indicator: "red" });
 					} finally {
 						this.working = false;
-						dialog.enable_primary_action();
+						if (dialog.is_visible) dialog.enable_primary_action();
 					}
 				},
 			});
