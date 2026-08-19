@@ -23,8 +23,8 @@ class TestSessionLaunchFocusContract(unittest.TestCase):
             'toggleShowAllSteps()',
             '"Show all steps"',
             '"Focus current step"',
-            '"Previous"',
-            '"Next"',
+            '>Previous</button>',
+            '>Next</button>',
         ):
             self.assertIn(token, component)
 
