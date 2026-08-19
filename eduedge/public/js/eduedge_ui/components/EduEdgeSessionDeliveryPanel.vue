@@ -30,7 +30,7 @@
 
 			<article class="session-delivery-card">
 				<div class="session-delivery-card-heading">
-					<div><h3>Subjects & Class Curriculum</h3><small>Classes are persistent masters. Session Launch verifies the Subjects attached to each destination Class Intake and lets you add an existing Institution Subject without leaving the flow.</small></div>
+					<div><h3>Subjects & Class Curriculum</h3><small>Classes are persistent masters. Session Launch verifies the Subjects attached to each destination Class Intake and lets you add or quick-create an Institution Subject without leaving the flow.</small></div>
 					<div class="session-delivery-actions"><button type="button" class="edge-button" @click="openReview('/app/eduedge-programs')">Review Classes in new tab</button></div>
 				</div>
 				<div v-if="!curriculumRows.length" class="session-delivery-empty">No active destination Class Intakes are available yet.</div>
@@ -134,6 +134,7 @@
 <script>
 const GET_METHOD = "eduedge.api.session_launch_delivery.get_session_delivery_context";
 const ADD_SUBJECT_METHOD = "eduedge.api.session_launch_delivery.add_guided_class_subject";
+const SAVE_COURSE_METHOD = "eduedge.api.curriculum_management.save_course";
 const ASSIGN_SUBJECT_METHOD = "eduedge.api.session_launch_delivery.assign_guided_subject_instructor";
 const ASSIGN_CLASS_METHOD = "eduedge.api.session_launch_delivery.assign_guided_class_teacher";
 const INSTRUCTOR_QUERY = "eduedge.api.session_launch_delivery.guided_instructor_query";
@@ -225,6 +226,59 @@ export default {
 			const field = dialog.fields_dict.subject;
 			const getQuery = () => ({ query: COURSE_QUERY, filters: { launch: this.launchName, program_offering: row.program_offering } });
 			field.get_query = getQuery; field.df.get_query = getQuery;
+			field.new_doc = () => {
+				this.quickCreateSubject(row, dialog, field);
+				return false;
+			};
+			dialog.show();
+		},
+		quickCreateSubject(row, parentDialog, subjectField) {
+			const typedName = String(subjectField?.get_label_value?.() || "").trim();
+			const dialog = new frappe.ui.Dialog({
+				title: __("New Institution Subject"),
+				fields: [
+					{
+						fieldname: "guidance",
+						fieldtype: "HTML",
+						options: `<div class="session-delivery-dialog-guidance">${frappe.utils.escape_html(__("Create the Subject master here. It belongs to the Institution and can be reused by Classes in future Sessions."))}</div>`,
+					},
+					{ fieldname: "course_name", fieldtype: "Data", label: __("Subject Name"), reqd: 1, default: typedName },
+					{ fieldname: "description", fieldtype: "Small Text", label: __("Description") },
+				],
+				primary_action_label: __("Create & Select Subject"),
+				primary_action: async (values) => {
+					dialog.disable_primary_action(); this.working = true; this.error = "";
+					try {
+						const response = await frappe.call({
+							method: SAVE_COURSE_METHOD,
+							type: "POST",
+							args: {
+								payload: JSON.stringify({
+									branch: row.branch,
+									program_offering: row.program_offering,
+									course_name: values.course_name,
+									description: values.description || "",
+								}),
+							},
+						});
+						const course = response.message || {};
+						if (!course.name) throw new Error(__("The new Subject was created without a selectable record name."));
+						if (subjectField?.$input) {
+							subjectField.$input._created_new_doc = true;
+							subjectField.$input.cache = {};
+						}
+						await parentDialog.set_value("subject", course.name);
+						dialog.hide();
+						frappe.show_alert({ message: __("Subject created and selected"), indicator: "green" });
+					} catch (error) {
+						this.error = error?.message || "Subject master could not be created.";
+						frappe.msgprint({ title: __("Subject could not be created"), message: this.error, indicator: "red" });
+					} finally {
+						this.working = false;
+						dialog.enable_primary_action();
+					}
+				},
+			});
 			dialog.show();
 		},
 		assignTeaching() {
@@ -305,5 +359,6 @@ export default {
 .session-delivery-card{display:grid;gap:.8rem;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.session-delivery-card-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}.session-delivery-card-heading h3{margin:0}.session-delivery-card-heading small{display:block;max-width:65rem;color:var(--text-muted)}.session-delivery-actions{display:flex;gap:.5rem;flex-wrap:wrap}
 .session-delivery-table-wrap{overflow:auto;border:1px solid var(--border-color);border-radius:8px}.session-delivery-table{width:100%;min-width:900px;border-collapse:collapse;color:var(--text-color)}.session-delivery-table--teaching{min-width:1050px}.session-delivery-table th,.session-delivery-table td{padding:.6rem .7rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}.session-delivery-table th{font-size:.78rem;color:var(--text-muted);background:var(--control-bg)}.session-delivery-table tr:last-child td{border-bottom:0}.session-delivery-table small{display:block;color:var(--text-muted)}
 .session-delivery-subjects{display:flex;flex-wrap:wrap;gap:.3rem}.session-delivery-subjects span{padding:.15rem .35rem;border:1px solid var(--border-color);border-radius:999px;font-size:.75rem}.session-delivery-subjects em,.session-delivery-muted{color:var(--text-muted);font-style:normal}.session-delivery-empty,.session-delivery-message{padding:.75rem;border-radius:8px;background:var(--control-bg);color:var(--text-muted)}.session-delivery-message--error{color:var(--red-600,#b42318)}.session-delivery-rule{margin:0;color:var(--text-muted);font-size:.82rem}.session-delivery-footer{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}.session-delivery-ready-text{color:var(--green-600,#16803c)!important}
+:global(.session-delivery-dialog-guidance){padding:.7rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg);color:var(--text-muted)}
 @media(max-width:800px){.session-delivery-header,.session-delivery-card-heading{align-items:stretch;flex-direction:column}}
 </style>
