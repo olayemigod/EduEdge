@@ -6,6 +6,7 @@
 				:model-value="instructor"
 				placeholder="Search Instructor"
 				:searcher="searchInstructors"
+				:open-on-focus="true"
 				@update:modelValue="$emit('update:instructor', $event)"
 				@select="$emit('instructor-select', $event)"
 				@clear="$emit('instructor-clear')"
