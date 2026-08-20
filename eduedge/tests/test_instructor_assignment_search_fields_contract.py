@@ -20,6 +20,15 @@ def test_assignment_search_fields_reuse_edgesuite_primitives():
 	assert "search_assignment_courses" in source
 
 
+def test_assignment_instructor_search_loads_bounded_choices_on_focus():
+	source = _read(
+		"public/js/eduedge_instructor_assignments/InstructorAssignmentSearchFields.vue"
+	)
+	assert ':open-on-focus="true"' in source
+	assert 'page_length: 20' in source
+	assert 'placeholder="Search Instructor"' in source
+
+
 def test_assignment_search_fields_preserve_contextual_scoping():
 	source = _read(
 		"public/js/eduedge_instructor_assignments/InstructorAssignmentSearchFields.vue"
