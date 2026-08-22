@@ -4,7 +4,7 @@
 		title="New Teaching Schedule"
 		:subtitle="`Create one governed Course Schedule for ${branchName || 'the selected Branch'}.`"
 		size="lg"
-		:busy="saving"
+		:busy="saving || savingRoom"
 		@close="close"
 	>
 		<div class="teaching-schedule-form">
@@ -15,7 +15,7 @@
 
 			<label>
 				<span>Schedule Date *</span>
-				<input v-model="draft.reference_date" type="date" class="form-control" :disabled="saving" @change="dateChanged" />
+				<input v-model="draft.reference_date" type="date" class="form-control" :disabled="saving || savingRoom" @change="dateChanged" />
 			</label>
 
 			<label class="wide">
@@ -26,7 +26,7 @@
 					placeholder="Search Class / Programme Offering"
 					:searcher="searchOfferings"
 					:open-on-focus="true"
-					:disabled="saving || !branch || !draft.reference_date"
+					:disabled="saving || savingRoom || !branch || !draft.reference_date"
 					@update:model-value="updateOffering"
 					@select="selectOffering"
 					@clear="clearOffering"
@@ -42,7 +42,7 @@
 					placeholder="Search Class Arm"
 					:searcher="searchClassArms"
 					:open-on-focus="true"
-					:disabled="saving || !draft.program_offering"
+					:disabled="saving || savingRoom || !draft.program_offering"
 					@update:model-value="updateStudentGroup"
 					@select="selectStudentGroup"
 					@clear="clearStudentGroup"
@@ -57,7 +57,7 @@
 					placeholder="Search Subject"
 					:searcher="searchCourses"
 					:open-on-focus="true"
-					:disabled="saving || !draft.program_offering || !draft.student_group"
+					:disabled="saving || savingRoom || !draft.program_offering || !draft.student_group"
 					@update:model-value="updateCourse"
 					@select="selectCourse"
 					@clear="clearCourse"
@@ -73,7 +73,7 @@
 					placeholder="Search assigned Instructor"
 					:searcher="searchInstructors"
 					:open-on-focus="true"
-					:disabled="saving || !draft.student_group || !draft.course || !draft.reference_date"
+					:disabled="saving || savingRoom || !draft.student_group || !draft.course || !draft.reference_date"
 					@update:model-value="updateInstructor"
 					@select="selectInstructor"
 					@clear="clearInstructor"
@@ -81,7 +81,7 @@
 				<small>Only an Instructor with a valid teaching responsibility for this Class Arm, Subject and date can be selected.</small>
 			</label>
 
-			<label class="wide">
+			<div class="wide teaching-schedule-field">
 				<span>Room *</span>
 				<EdgeLinkField
 					:model-value="draft.room"
@@ -89,22 +89,66 @@
 					placeholder="Search Room"
 					:searcher="searchRooms"
 					:open-on-focus="true"
-					:disabled="saving || !branch"
+					:disabled="saving || savingRoom || !branch"
 					@update:model-value="updateRoom"
 					@select="selectRoom"
 					@clear="clearRoom"
 				/>
-				<small>Rooms are restricted to the selected Branch / Campus.</small>
-			</label>
+				<div class="room-field-help">
+					<small>Rooms are restricted to the selected Branch / Campus.</small>
+					<button
+						type="button"
+						class="edge-button edge-button--sm"
+						:disabled="saving || savingRoom || !branch"
+						@click="roomQuickCreateOpen = !roomQuickCreateOpen"
+					>
+						{{ roomQuickCreateOpen ? 'Cancel New Room' : 'Create New Room' }}
+					</button>
+				</div>
+			</div>
+
+			<div v-if="roomQuickCreateOpen" class="wide room-quick-create">
+				<div class="room-quick-create__heading">
+					<div>
+						<strong>New Room for {{ branchName || branch }}</strong>
+						<small>The Branch / Campus is inherited automatically.</small>
+					</div>
+				</div>
+				<div class="room-quick-create__grid">
+					<label>
+						<span>Room Name *</span>
+						<input v-model="roomDraft.room_name" type="text" class="form-control" :disabled="savingRoom" placeholder="e.g. JSS Block Room 2" />
+					</label>
+					<label>
+						<span>Room Number</span>
+						<input v-model="roomDraft.room_number" type="text" class="form-control" :disabled="savingRoom" placeholder="Optional" />
+					</label>
+					<label>
+						<span>Seating Capacity</span>
+						<input v-model="roomDraft.seating_capacity" type="number" min="0" class="form-control" :disabled="savingRoom" placeholder="Optional" />
+					</label>
+				</div>
+				<div class="room-quick-create__actions">
+					<button type="button" class="edge-button" :disabled="savingRoom" @click="cancelRoomQuickCreate">Cancel</button>
+					<button
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="savingRoom || !roomDraft.room_name.trim()"
+						@click="createRoom"
+					>
+						{{ savingRoom ? 'Creating Room...' : 'Create & Select Room' }}
+					</button>
+				</div>
+			</div>
 
 			<label>
 				<span>From Time *</span>
-				<input v-model="draft.from_time" type="time" class="form-control" :disabled="saving" />
+				<input v-model="draft.from_time" type="time" class="form-control" :disabled="saving || savingRoom" />
 			</label>
 
 			<label>
 				<span>To Time *</span>
-				<input v-model="draft.to_time" type="time" class="form-control" :disabled="saving" />
+				<input v-model="draft.to_time" type="time" class="form-control" :disabled="saving || savingRoom" />
 			</label>
 		</div>
 
@@ -115,8 +159,8 @@
 		<p v-if="error" class="schedule-create-error" role="alert">{{ error }}</p>
 
 		<template #footer>
-			<button type="button" class="edge-button" :disabled="saving" @click="close">Cancel</button>
-			<button type="button" class="edge-button edge-button--primary" :disabled="saving || !canSave" @click="save">
+			<button type="button" class="edge-button" :disabled="saving || savingRoom" @click="close">Cancel</button>
+			<button type="button" class="edge-button edge-button--primary" :disabled="saving || savingRoom || !canSave" @click="save">
 				{{ saving ? 'Saving Schedule...' : 'Create Schedule' }}
 			</button>
 		</template>
@@ -133,6 +177,10 @@ function emptyLabels() {
 	return { program_offering: "", student_group: "", course: "", instructor: "", room: "" };
 }
 
+function emptyRoomDraft() {
+	return { room_name: "", room_number: "", seating_capacity: "" };
+}
+
 export default {
 	name: "TeachingScheduleCreateDialog",
 	props: {
@@ -145,8 +193,11 @@ export default {
 	data() {
 		return {
 			saving: false,
+			savingRoom: false,
+			roomQuickCreateOpen: false,
 			error: "",
 			draft: this.emptyDraft(),
+			roomDraft: emptyRoomDraft(),
 			labels: emptyLabels(),
 		};
 	},
@@ -191,11 +242,14 @@ export default {
 		reset() {
 			this.error = "";
 			this.saving = false;
+			this.savingRoom = false;
+			this.roomQuickCreateOpen = false;
 			this.draft = this.emptyDraft();
+			this.roomDraft = emptyRoomDraft();
 			this.labels = emptyLabels();
 		},
 		close() {
-			if (!this.saving) this.$emit("close");
+			if (!this.saving && !this.savingRoom) this.$emit("close");
 		},
 		dateChanged() {
 			this.error = "";
@@ -261,6 +315,36 @@ export default {
 			this.draft.room = "";
 			this.labels.room = "";
 		},
+		cancelRoomQuickCreate() {
+			if (this.savingRoom) return;
+			this.roomQuickCreateOpen = false;
+			this.roomDraft = emptyRoomDraft();
+		},
+		async createRoom() {
+			if (this.savingRoom || !this.branch || !this.roomDraft.room_name.trim()) return;
+			this.savingRoom = true;
+			this.error = "";
+			try {
+				const room = await call("eduedge.api.teaching_schedule_rooms.create_teaching_schedule_room", {
+					branch: this.branch,
+					room_name: this.roomDraft.room_name,
+					room_number: this.roomDraft.room_number,
+					seating_capacity: this.roomDraft.seating_capacity,
+				});
+				this.draft.room = room?.value || room?.name || "";
+				this.labels.room = room?.label || room?.room_name || this.draft.room;
+				this.roomQuickCreateOpen = false;
+				this.roomDraft = emptyRoomDraft();
+				frappe.show_alert?.({
+					message: room?.created === false ? __("Existing Branch Room selected") : __("Room created and selected"),
+					indicator: "green",
+				});
+			} catch (error) {
+				this.error = error?.message || __("The Room could not be created.");
+			} finally {
+				this.savingRoom = false;
+			}
+		},
 		searchOfferings(query) {
 			if (!this.branch || !this.draft.reference_date) return [];
 			return call("eduedge.api.teaching_schedule.search_teaching_schedule_offerings", {
@@ -311,7 +395,7 @@ export default {
 			});
 		},
 		async save() {
-			if (!this.canSave || this.saving) return;
+			if (!this.canSave || this.saving || this.savingRoom) return;
 			this.saving = true;
 			this.error = "";
 			try {
@@ -343,10 +427,36 @@ export default {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: .85rem;
 }
-.teaching-schedule-form label { display: grid; gap: .35rem; min-width: 0; font-weight: 650; }
-.teaching-schedule-form label > span { font-size: .78rem; }
-.teaching-schedule-form label > small { color: var(--edge-color-ink-500, var(--text-muted)); font-size: .72rem; font-weight: 400; }
+.teaching-schedule-form label,
+.teaching-schedule-field { display: grid; gap: .35rem; min-width: 0; font-weight: 650; }
+.teaching-schedule-form label > span,
+.teaching-schedule-field > span { font-size: .78rem; }
+.teaching-schedule-form label > small,
+.teaching-schedule-field small { color: var(--edge-color-ink-500, var(--text-muted)); font-size: .72rem; font-weight: 400; }
 .teaching-schedule-form .wide { grid-column: 1 / -1; }
+.room-field-help {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .75rem;
+	flex-wrap: wrap;
+}
+.room-quick-create {
+	display: grid;
+	gap: .75rem;
+	padding: .8rem;
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-md, 8px);
+	background: var(--edge-color-surface-subtle, var(--control-bg));
+}
+.room-quick-create__heading > div { display: grid; gap: .2rem; }
+.room-quick-create__heading small { color: var(--edge-color-ink-500, var(--text-muted)); font-size: .72rem; font-weight: 400; }
+.room-quick-create__grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: .75rem;
+}
+.room-quick-create__actions { display: flex; justify-content: flex-end; gap: .5rem; }
 .schedule-safety-note {
 	display: grid;
 	gap: .2rem;
@@ -366,7 +476,8 @@ export default {
 	font-size: .8rem;
 }
 @media (max-width: 700px) {
-	.teaching-schedule-form { grid-template-columns: 1fr; }
+	.teaching-schedule-form,
+	.room-quick-create__grid { grid-template-columns: 1fr; }
 	.teaching-schedule-form .wide { grid-column: auto; }
 }
 </style>
