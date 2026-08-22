@@ -37,7 +37,7 @@
 						</label>
 					</div>
 					<template #actions>
-						<button type="button" class="edge-button" @click="openNativeList">Native Schedule List</button>
+						<button type="button" class="edge-button" @click="openNativeList">Native Schedule List ↗</button>
 						<button type="button" class="edge-button edge-button--primary" @click="load">Refresh</button>
 					</template>
 				</EdgeFilterBar>
@@ -77,18 +77,28 @@
 					<div v-else class="schedule-list">
 						<button v-for="row in context.schedules" :key="row.name" type="button" class="schedule-card" @click="openSchedule(row.name)">
 							<div class="schedule-card-date"><strong>{{ row.schedule_date }}</strong><span>{{ formatTime(row.from_time) }} – {{ formatTime(row.to_time) }}</span></div>
-							<div class="schedule-card-main"><strong>{{ row.course || 'Subject not set' }}</strong><span>{{ row.student_group_name || row.student_group || 'Class not set' }}</span><small>{{ row.instructor_name || row.instructor || 'Instructor not assigned' }}</small></div>
-							<div class="schedule-card-room"><span>{{ row.room || 'Room not assigned' }}</span><small>Open schedule →</small></div>
+							<div class="schedule-card-main"><strong>{{ row.course_name || row.course || 'Subject not set' }}</strong><span>{{ row.student_group_name || row.student_group || 'Class not set' }}</span><small>{{ row.instructor_name || row.instructor || 'Instructor not assigned' }}</small></div>
+							<div class="schedule-card-room"><span>{{ row.room_name || row.room || 'Room not assigned' }}</span><small>Open native record ↗</small></div>
 						</button>
 					</div>
 				</section>
 			</template>
 		</EdgePageLayout>
+
+		<TeachingScheduleCreateDialog
+			:open="createDialogOpen"
+			:branch="filters.branch"
+			:branch-name="activeBranchName"
+			:reference-date="filters.reference_date"
+			@close="createDialogOpen = false"
+			@saved="scheduleCreated"
+		/>
 	</EdgeAppShell>
 </template>
 
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
+import TeachingScheduleCreateDialog from "./TeachingScheduleCreateDialog.vue";
 
 const emptyContext = () => ({
 	user: {}, selected_branch: {}, current_branch: {}, allowed_branches: [], permissions: {}, academic_calendar: {},
@@ -97,11 +107,13 @@ const emptyContext = () => ({
 
 export default {
 	name: "EduEdgeTeachingSchedule",
+	components: { TeachingScheduleCreateDialog },
 	data() {
 		const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
 		return {
 			loading: true,
 			error: "",
+			createDialogOpen: false,
 			menuItems: EDUEDGE_MENU_ITEMS,
 			filters: { branch: "", reference_date: today, view: "day" },
 			context: emptyContext(),
@@ -153,6 +165,7 @@ export default {
 		},
 		async changeBranch() {
 			if (!this.filters.branch) return;
+			this.createDialogOpen = false;
 			try {
 				await frappe.call("eduedge.api.branch_context.switch_school_branch", { branch: this.filters.branch });
 				await this.load();
@@ -165,10 +178,19 @@ export default {
 				frappe.msgprint({ title: __("Academic Calendar required"), message: __("Configure an Academic Session and Term / Semester covering the selected date before adding a Schedule."), indicator: "orange" });
 				return;
 			}
-			window.location.href = "/app/course-schedule/new-course-schedule";
+			this.createDialogOpen = true;
 		},
-		openSchedule(name) { if (name) window.location.href = `/app/course-schedule/${encodeURIComponent(name)}`; },
-		openNativeList() { window.location.href = "/app/course-schedule"; },
+		async scheduleCreated(result) {
+			this.createDialogOpen = false;
+			if (result?.schedule_date) this.filters.reference_date = result.schedule_date;
+			await this.load();
+			frappe.show_alert?.({ message: __("Teaching Schedule created"), indicator: "green" });
+		},
+		openSchedule(name) {
+			if (!name) return;
+			window.open(`/app/course-schedule/${encodeURIComponent(name)}`, "_blank", "noopener");
+		},
+		openNativeList() { window.open("/app/course-schedule", "_blank", "noopener"); },
 	},
 };
 </script>
