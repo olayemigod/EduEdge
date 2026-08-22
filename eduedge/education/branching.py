@@ -31,6 +31,7 @@ from eduedge.education.offerings import (
 	validate_student_admission,
 	validate_student_applicant,
 )
+from eduedge.education.schedule_conflicts import validate_course_schedule_conflicts
 from eduedge.services.branch_context import get_allowed_school_branches
 
 
@@ -151,6 +152,7 @@ def before_validate_student_group(doc, method=None) -> None:
 def before_validate_course_schedule(doc, method=None) -> None:
 	_before_validate_course_schedule(doc, method)
 	assert_schedule_instructor_assignment(doc)
+	validate_course_schedule_conflicts(doc)
 
 
 def _validate_student_enrollment_institution(doc, student_branch: str | None) -> None:

@@ -169,8 +169,6 @@ class TestSessionLaunchDelivery(FrappeTestCase):
         self.assertEqual(class_teacher["context"]["summary"]["class_responsibility_missing"], 0)
         self.assertTrue(class_teacher["context"]["summary"]["class_responsibility_ready"])
 
-        # Session Launch does not invent a timetable or Scheme of Work while
-        # preparing teaching responsibility. Those remain separately auditable.
         final = class_teacher["context"]
         self.assertEqual(final["summary"]["scheduled_teaching_contexts"], 0)
         self.assertEqual(final["summary"]["unscheduled_teaching_contexts"], 1)
@@ -184,9 +182,6 @@ class TestSessionLaunchDelivery(FrappeTestCase):
             )
         )
 
-        # The guided Teaching Schedule UI writes a real native Course Schedule.
-        # EduEdge and Frappe Education validation remain authoritative for exact
-        # Class/Subject/Instructor/Room context and overlap safety.
         room = self._insert(
             "Room",
             room_name=f"QA Delivery Room {self.suffix}",
@@ -217,6 +212,8 @@ class TestSessionLaunchDelivery(FrappeTestCase):
         self.assertTrue(scheduled_context["schedule_ready"])
         self.assertEqual(scheduled_context["schedule_count"], 1)
 
+        # Regression: Frappe Education's native overlap query misses a second
+        # interval with the exact same start and a different end (09:00-09:08).
         with self.assertRaises(frappe.ValidationError):
             create_teaching_schedule(
                 branch=branch.name,
@@ -226,8 +223,8 @@ class TestSessionLaunchDelivery(FrappeTestCase):
                 course=course.name,
                 instructor=instructor.name,
                 room=room.name,
-                from_time="09:30:00",
-                to_time="10:30:00",
+                from_time="09:00:00",
+                to_time="09:08:00",
             )
         self.assertEqual(
             frappe.db.count(
