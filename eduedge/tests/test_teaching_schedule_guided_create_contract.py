@@ -68,7 +68,8 @@ class TestTeachingScheduleGuidedCreateContract(unittest.TestCase):
         self.assertIn("MAX_LINK_RESULTS = 50", api)
         self.assertIn('filters={"school_branch": resolved_branch, "academic_year": academic_year, "is_active": 1}', api)
         self.assertIn('filters={BRANCH_FIELD: resolved_branch}', api)
-        self.assertIn('filters={"name": ["in", course_names]}', api)
+        self.assertIn('filters: dict = {"name": ["in", course_names]}', api)
+        self.assertIn("filters=filters", api)
         self.assertIn("_validate_offering_date", api)
         self.assertIn("_schedule_group", api)
 
