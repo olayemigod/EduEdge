@@ -30,6 +30,7 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         exact = (APP / "education" / "instructor_assignments.py").read_text(encoding="utf-8")
         self.assertIn("_before_validate_course_schedule(doc, method)", branching)
         self.assertIn("assert_schedule_instructor_assignment(doc)", branching)
+        self.assertIn("validate_course_schedule_conflicts(doc)", branching)
         self.assertIn("assert_instructor_assignment(", operations)
         self.assertIn('if not frappe.db.exists(ASSIGNMENT_DOCTYPE, {"school_branch": branch}):', exact)
 
@@ -60,8 +61,22 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             "reference_date: frm.doc.schedule_date",
             "async course(frm)",
             'await frm.set_value("instructor", null)',
+            "student_group(frm) { applyStudentGroupChange(frm); }",
         ):
             self.assertIn(token, source)
+
+    def test_refresh_hydrates_saved_schedule_without_clearing_schedule_fields(self):
+        source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
+        self.assertIn("async function hydrateStudentGroupContext(frm)", source)
+        self.assertIn("if (frm.doc.student_group) hydrateStudentGroupContext(frm);", source)
+        self.assertIn("async function applyStudentGroupChange(frm)", source)
+        self.assertIn('const fixedCourse = message.group_based_on === "Course" ? (message.course || null) : null;', source)
+        hydrate_body = source.split("async function hydrateStudentGroupContext(frm)", 1)[1].split(
+            "async function applyStudentGroupChange(frm)", 1
+        )[0]
+        self.assertNotIn("frm.set_value", hydrate_body)
+        self.assertNotIn("instructor: null", hydrate_body)
+        self.assertNotIn("room: null", hydrate_body)
 
 
 if __name__ == "__main__":
