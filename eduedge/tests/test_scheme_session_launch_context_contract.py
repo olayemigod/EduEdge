@@ -30,7 +30,8 @@ class TestSchemeSessionLaunchContextContract(unittest.TestCase):
     def test_runtime_consumes_route_year_and_explains_approval_gate(self):
         source = (APP / "public" / "js" / "eduedge_scheme_of_work" / "session_context.js").read_text(encoding="utf-8")
         for token in (
-            'params.get("academic_year")',
+            '"academic_year", "program_offering", "academic_term"',
+            'const value = params.get(key)',
             'params.get("branch") || params.get("school_branch")',
             'academic_year: this.filters.academic_year || undefined',
             'eduedge.api.scheme_of_work_session_context.get_scheme_workbench',
