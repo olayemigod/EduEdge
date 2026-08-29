@@ -6,11 +6,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from eduedge.api.session_launch import _get_launch_by_name, _require_manager
 from eduedge.education.custom_fields import BRANCH_FIELD
-from eduedge.platform.access import require_eduedge_access
 
 
-LAUNCH_DOCTYPE = "EduEdge Academic Session Launch"
 SCHEDULE_DOCTYPE = "EduEdge CBT Exam Schedule"
 ASSIGNMENT_DOCTYPE = "EduEdge CBT Candidate Assignment"
 TEMPLATE_DOCTYPE = "EduEdge CBT Exam Template"
@@ -28,13 +27,11 @@ def _require_read(doctype: str) -> None:
 
 
 def _launch(name: str):
-	require_eduedge_access(feature_key="academics", action="get_session_launch_assessment_cbt_readiness")
-	_require_read(LAUNCH_DOCTYPE)
-	if not name or not frappe.db.exists(LAUNCH_DOCTYPE, name):
-		frappe.throw(_("Session Launch could not be found."), frappe.DoesNotExistError)
-	doc = frappe.get_doc(LAUNCH_DOCTYPE, name)
-	doc.check_permission("read")
-	return doc
+	# The orchestration DocType intentionally remains System Manager-only. Normal
+	# Session Launch managers access it through this governed API, while every
+	# downstream Assessment/CBT list still applies its own Frappe permissions.
+	_require_manager("get_session_launch_assessment_cbt_readiness")
+	return _get_launch_by_name(str(name or "").strip())
 
 
 def _terms(academic_year: str) -> list[dict]:
