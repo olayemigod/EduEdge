@@ -5,6 +5,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import get_datetime, getdate
 
+from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.branch_context import get_allowed_school_branches
 
 
@@ -96,10 +97,10 @@ class EduEdgeSchoolEvent(Document):
 			group = frappe.db.get_value(
 				"Student Group",
 				self.student_group,
-				["program", "academic_year", "eduedge_school_branch"],
+				["program", "academic_year", BRANCH_FIELD],
 				as_dict=True,
 			)
-			if not group or group.academic_year != self.academic_year or group.eduedge_school_branch != self.school_branch:
+			if not group or group.academic_year != self.academic_year or group.get(BRANCH_FIELD) != self.school_branch:
 				frappe.throw(_("The selected Class Arm is outside this Branch or Academic Session."), frappe.ValidationError)
 			if self.program and group.program and group.program != self.program:
 				frappe.throw(_("The selected Class Arm does not belong to the selected Class / Programme."), frappe.ValidationError)
