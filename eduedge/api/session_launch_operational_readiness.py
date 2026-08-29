@@ -4,14 +4,14 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, get_time
 
 from eduedge.api.session_launch import _get_launch_by_name, _require_manager
 from eduedge.api.session_launch_assessment import get_assessment_cbt_readiness
 from eduedge.api.session_launch_delivery import _context as get_delivery_context
 from eduedge.api.session_launch_learners import _context as get_learner_context
 from eduedge.api.session_launch_structure import _context_for_doc as get_structure_context
-from eduedge.education.schedule_conflicts import _find_overlap
+from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.academic_calendar import get_enabled_institution_calendar
 
 
@@ -19,6 +19,12 @@ STATUS_READY = "Ready"
 STATUS_ATTENTION = "Attention"
 STATUS_BLOCKED = "Blocked"
 MAX_ISSUES = 30
+MAX_ASSESSMENT_CONFLICT_ROWS = 5000
+RESOURCE_LABELS = {
+	"student_group": "Class Arm",
+	"instructor": "Instructor / Assessment Supervisor",
+	"room": "Room",
+}
 
 
 def _category(
@@ -43,49 +49,127 @@ def _category(
 	}
 
 
+def _add_interval(
+	buckets: dict[tuple[str, str, str], list[dict]],
+	*,
+	row: dict,
+	resource_type: str,
+	value: str | None,
+	source_type: str,
+	source_name: str,
+) -> None:
+	if not value or not row.get("schedule_date") or row.get("from_time") is None or row.get("to_time") is None:
+		return
+	start = get_time(row.get("from_time"))
+	end = get_time(row.get("to_time"))
+	if start >= end:
+		return
+	key = (str(row.get("schedule_date")), resource_type, str(value))
+	buckets[key].append(
+		{
+			"source_type": source_type,
+			"source_name": source_name,
+			"start": start,
+			"end": end,
+		}
+	)
+
+
+def _assessment_conflict_rows(delivery: dict) -> tuple[list[dict], bool]:
+	branches = sorted({row.get("branch") for row in delivery.get("branches") or [] if row.get("branch")})
+	if not branches or not frappe.has_permission("Assessment Plan", "read"):
+		return [], False
+	rows = frappe.get_list(
+		"Assessment Plan",
+		filters={
+			BRANCH_FIELD: ["in", branches],
+			"academic_year": delivery.get("academic_year"),
+			"docstatus": ["!=", 2],
+		},
+		fields=["name", "student_group", "room", "supervisor", "schedule_date", "from_time", "to_time"],
+		order_by="schedule_date asc, from_time asc, name asc",
+		page_length=MAX_ASSESSMENT_CONFLICT_ROWS,
+	)
+	return [dict(row) for row in rows], len(rows) >= MAX_ASSESSMENT_CONFLICT_ROWS
+
+
 def _timetable_conflicts(delivery: dict) -> list[str]:
-	"""Detect conflicts in existing schedules with the same canonical overlap helper used on writes."""
+	"""Scan existing Teaching Schedules and Assessment Plans in memory.
+
+	Course Schedule write-time validation remains authoritative. Operational
+	readiness batches the already permission-filtered records so a large timetable
+	does not issue several overlap queries per row.
+	"""
+	buckets: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
 	issues: list[str] = []
-	seen: set[tuple] = set()
+
 	for branch in delivery.get("branches") or []:
-		for row in branch.get("schedule_rows") or []:
-			for doctype, fieldname, value, label in (
-				("Course Schedule", "student_group", row.get("student_group"), "Class Arm"),
-				("Course Schedule", "instructor", row.get("instructor"), "Instructor"),
-				("Course Schedule", "room", row.get("room"), "Room"),
-				("Assessment Plan", "student_group", row.get("student_group"), "Class Arm"),
-				("Assessment Plan", "room", row.get("room"), "Room"),
-				("Assessment Plan", "supervisor", row.get("instructor"), "Assessment Supervisor"),
+		for raw in branch.get("schedule_rows") or []:
+			row = dict(raw)
+			for resource_type, value in (
+				("student_group", row.get("student_group")),
+				("instructor", row.get("instructor")),
+				("room", row.get("room")),
 			):
-				if not value:
-					continue
-				overlap = _find_overlap(
-					doctype=doctype,
-					fieldname=fieldname,
+				_add_interval(
+					buckets,
+					row=row,
+					resource_type=resource_type,
 					value=value,
-					schedule_date=row.get("schedule_date"),
-					from_time=row.get("from_time"),
-					to_time=row.get("to_time"),
-					exclude_name=row.get("name") if doctype == "Course Schedule" else None,
+					source_type="Teaching Schedule",
+					source_name=row.get("name") or "",
 				)
-				if not overlap:
+
+	assessment_rows, assessment_truncated = _assessment_conflict_rows(delivery)
+	if assessment_truncated:
+		issues.append(
+			_("Assessment conflict scan reached its safety limit; narrow the Session scope before activation.")
+		)
+	for row in assessment_rows:
+		for resource_type, value in (
+			("student_group", row.get("student_group")),
+			("instructor", row.get("supervisor")),
+			("room", row.get("room")),
+		):
+			_add_interval(
+				buckets,
+				row=row,
+				resource_type=resource_type,
+				value=value,
+				source_type="Assessment Plan",
+				source_name=row.get("name") or "",
+			)
+
+	seen: set[tuple] = set()
+	for (schedule_date, resource_type, value), intervals in buckets.items():
+		active: list[dict] = []
+		for current in sorted(intervals, key=lambda row: (row["start"], row["end"], row["source_type"], row["source_name"])):
+			active = [row for row in active if row["end"] > current["start"]]
+			for other in active:
+				if current["source_type"] == other["source_type"] == "Assessment Plan":
 					continue
-				signature = tuple(sorted((str(row.get("name") or ""), f"{doctype}:{overlap.name}"))) + (fieldname, str(value))
+				pair = tuple(sorted((
+					f"{current['source_type']}:{current['source_name']}",
+					f"{other['source_type']}:{other['source_name']}",
+				)))
+				signature = pair + (schedule_date, resource_type, value)
 				if signature in seen:
 					continue
 				seen.add(signature)
 				issues.append(
-					_('{0} {1} conflicts with {2} {3} for {4} "{5}".').format(
-						_("Teaching Schedule"),
-						row.get("name"),
-						_(doctype),
-						overlap.name,
-						_(label),
+					_("{0} {1} conflicts with {2} {3} on {4} for {5} \"{6}\".").format(
+						_(current["source_type"]),
+						current["source_name"],
+						_(other["source_type"]),
+						other["source_name"],
+						schedule_date,
+						_(RESOURCE_LABELS[resource_type]),
 						value,
 					)
 				)
 				if len(issues) >= MAX_ISSUES:
 					return issues
+			active.append(current)
 	return issues
 
 
@@ -133,7 +217,7 @@ def _structure_category(structure: dict, delivery: dict) -> dict:
 	delivery_summary = delivery.get("summary") or {}
 	issues: list[str] = []
 	blocked = False
-	if not cint(summary.get("classes")):
+	if not cint(summary.get("intended_classes")):
 		issues.append(_("No Classes / Programmes are configured for this Institution."))
 		blocked = True
 	if not cint(delivery_summary.get("class_intakes")):
@@ -158,7 +242,7 @@ def _structure_category(structure: dict, delivery: dict) -> dict:
 		_("Session class structure is operationally ready.") if status == STATUS_READY else _("Resolve outstanding class structure preparation before final review."),
 		route="/app/eduedge-class-arms",
 		metrics={
-			"classes": cint(summary.get("classes")),
+			"classes": cint(summary.get("intended_classes")),
 			"class_intakes": cint(delivery_summary.get("class_intakes")),
 			"class_arms": cint(delivery_summary.get("class_arms")),
 			"missing_intakes": cint(summary.get("missing_intakes")),
