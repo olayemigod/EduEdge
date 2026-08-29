@@ -4,7 +4,7 @@
 			<div>
 				<p class="edge-eyebrow">Guided Academic Delivery</p>
 				<h2><span class="session-delivery-step">7</span> Academic Delivery</h2>
-				<p>Validate Class Subjects, assign teaching responsibility, confirm Class Teachers where required, and see exactly which Class Arm × Subject contexts still need timetable or Scheme preparation.</p>
+				<p>Validate Class Subjects, assign teaching responsibility, confirm Class Teachers where required, and prepare governed Teaching Schedule and Scheme readiness for the destination Session.</p>
 			</div>
 			<button type="button" class="edge-button" :disabled="loading || working" @click="load">{{ loading ? "Refreshing..." : "Refresh" }}</button>
 		</div>
@@ -97,6 +97,7 @@
 					</table>
 				</div>
 			</article>
+
 			<article class="session-delivery-card">
 				<div class="session-delivery-card-heading">
 					<div><h3>Teaching Schedule & Scheme Readiness</h3><small>Session Launch audits real Course Schedule and Scheme of Work records. Historical schedules, lesson delivery and results are never copied forward.</small></div>
@@ -107,18 +108,19 @@
 				</div>
 				<div v-if="!teachingRows.length" class="session-delivery-empty">No teaching contexts are available for schedule/Scheme validation yet.</div>
 				<div v-else class="session-delivery-table-wrap">
-					<table class="session-delivery-table">
-						<thead><tr><th>Branch</th><th>Class Intake</th><th>Class Arm</th><th>Subject</th><th>Teaching Schedule</th><th>Scheme of Work</th></tr></thead>
+					<table class="session-delivery-table session-delivery-table--schedule">
+						<thead><tr><th>Branch</th><th>Class Intake</th><th>Class Arm</th><th>Subject</th><th>Teaching Schedule</th><th>Scheme of Work</th><th></th></tr></thead>
 						<tbody>
 							<tr v-for="row in teachingRows" :key="`delivery-${row.context_key}`">
 								<td>{{ row.branch_name }}</td><td>{{ row.offering_label }}</td><td>{{ row.student_group_label }}</td><td><strong>{{ row.course_label }}</strong></td>
 								<td><span :class="statusClass(row.schedule_ready)">{{ row.schedule_ready ? `${row.schedule_count} scheduled` : row.student_group ? "Not scheduled" : "Class-wide context" }}</span></td>
 								<td><span :class="statusClass(row.scheme_ready)">{{ row.scheme_status }}</span></td>
+								<td><button v-if="row.student_group" type="button" class="edge-button" :disabled="working || !row.assigned" @click="planTimetable(row)">{{ row.schedule_ready ? "Add weekly slot" : "Plan timetable" }}</button></td>
 							</tr>
 						</tbody>
 					</table>
 				</div>
-				<p class="session-delivery-rule"><strong>Timetable safety:</strong> this slice audits scheduling readiness but does not generate Course Schedule records. Timetable creation stays in Academic Operations until a shared governed bulk scheduler can validate time, room and Instructor conflicts before writing.</p>
+				<p class="session-delivery-rule"><strong>Timetable safety:</strong> Step 7B is preview-first. EduEdge expands an explicit weekly slot only inside the selected Term, validates every date against the Class, Subject, Instructor, Room, academic calendar, existing Teaching Schedules and Assessment Plans, then creates native Course Schedule rows only after a clean preview.</p>
 			</article>
 
 			<div class="session-delivery-footer">
@@ -138,6 +140,10 @@ const ASSIGN_SUBJECT_METHOD = "eduedge.api.session_launch_delivery.assign_guided
 const ASSIGN_CLASS_METHOD = "eduedge.api.session_launch_delivery.assign_guided_class_teacher";
 const INSTRUCTOR_QUERY = "eduedge.api.session_launch_delivery.guided_instructor_query";
 const COURSE_QUERY = "eduedge.api.session_launch_delivery.guided_course_query";
+const TIMETABLE_PREVIEW_METHOD = "eduedge.api.session_launch_timetable.preview_session_timetable";
+const TIMETABLE_CREATE_METHOD = "eduedge.api.session_launch_timetable.create_session_timetable";
+const TIMETABLE_INSTRUCTOR_QUERY = "eduedge.api.teaching_assignment_options.course_schedule_instructor_query";
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default {
 	name: "EduEdgeSessionDeliveryPanel",
@@ -172,7 +178,7 @@ export default {
 			return (this.payload.branches || []).flatMap((branch) => (branch.class_responsibilities || []).map((row) => ({ ...row, branch_name: branch.branch_name })));
 		},
 		teachingReviewDate() {
-			return this.teachingRows.find((row) => row.period_start_date)?.period_start_date || "";
+			return this.teachingRows.find((row) => row.period_start_date)?.period_start_date || this.payload.academic_terms?.[0]?.start_date || "";
 		},
 		reviewBranch() {
 			return this.branch || this.payload.branches?.[0]?.branch || "";
@@ -330,6 +336,137 @@ export default {
 			field.get_query = getQuery; field.df.get_query = getQuery;
 			dialog.show();
 		},
+		academicTerm(name) {
+			return (this.payload.academic_terms || []).find((term) => term.academic_term === name) || null;
+		},
+		generateWeeklyDates(startDate, endDate, weekday) {
+			const target = WEEKDAYS.indexOf(weekday);
+			if (target < 0 || !startDate || !endDate) return [];
+			const start = new Date(`${startDate}T12:00:00`);
+			const end = new Date(`${endDate}T12:00:00`);
+			if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+			const mondayBased = (date) => (date.getDay() + 6) % 7;
+			const cursor = new Date(start);
+			cursor.setDate(cursor.getDate() + ((target - mondayBased(cursor) + 7) % 7));
+			const rows = [];
+			while (cursor <= end && rows.length < 250) {
+				const year = cursor.getFullYear();
+				const month = String(cursor.getMonth() + 1).padStart(2, "0");
+				const day = String(cursor.getDate()).padStart(2, "0");
+				rows.push(`${year}-${month}-${day}`);
+				cursor.setDate(cursor.getDate() + 7);
+			}
+			return rows;
+		},
+		plannerRows(row, values) {
+			const term = this.academicTerm(values.academic_term);
+			if (!term?.start_date || !term?.end_date) return [];
+			return this.generateWeeklyDates(term.start_date, term.end_date, values.weekday).map((schedule_date) => ({
+				branch: row.school_branch || row.branch || this.reviewBranch,
+				program_offering: row.program_offering,
+				student_group: row.student_group,
+				course: row.course,
+				instructor: values.instructor,
+				room: values.room,
+				schedule_date,
+				from_time: values.from_time,
+				to_time: values.to_time,
+			}));
+		},
+		renderPlannerPreview(preview) {
+			const escape = (value) => frappe.utils.escape_html(String(value ?? ""));
+			const summary = preview?.summary || {};
+			const rows = preview?.rows || [];
+			const body = rows.map((row) => `<tr><td>${escape(row.schedule_date)}</td><td>${escape(row.from_time)}–${escape(row.to_time)}</td><td><strong>${escape(row.status)}</strong></td><td>${escape(row.reason || row.existing_name || "")}</td></tr>`).join("");
+			return `<div class="session-timetable-preview"><p><strong>${escape(summary.ready || 0)} ready</strong> · ${escape(summary.existing || 0)} existing · ${escape(summary.blocked || 0)} blocked</p><div class="session-timetable-preview-table"><table><thead><tr><th>Date</th><th>Time</th><th>Status</th><th>Reason</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+		},
+		planTimetable(row) {
+			const terms = this.payload.academic_terms || [];
+			if (!terms.length) {
+				frappe.msgprint({ title: __("Academic Calendar required"), message: __("Configure the Institution Terms / Semesters before preparing a timetable."), indicator: "orange" });
+				return;
+			}
+			let dialog;
+			let previewRows = [];
+			const resetPreview = () => {
+				previewRows = [];
+				if (!dialog) return;
+				dialog.fields_dict.preview_html?.$wrapper?.html(`<div class="session-delivery-dialog-guidance">${frappe.utils.escape_html(__("Preview checks every generated date before any Teaching Schedule is created."))}</div>`);
+				dialog.set_primary_action(__("Preview Timetable"), () => this.previewTimetable(row, dialog, (rows) => { previewRows = rows; }));
+			};
+			dialog = new frappe.ui.Dialog({
+				title: __("Plan Weekly Teaching Slot"),
+				fields: [
+					{ fieldname: "context", fieldtype: "HTML", options: `<div class="session-delivery-dialog-guidance"><strong>${frappe.utils.escape_html(row.student_group_label || row.student_group)}</strong> · ${frappe.utils.escape_html(row.course_label || row.course)}<br>${frappe.utils.escape_html(row.branch_name || row.school_branch || "")}</div>` },
+					{ fieldname: "academic_term", fieldtype: "Select", label: __("Term / Semester"), options: terms.map((term) => term.academic_term), default: terms[0].academic_term, reqd: 1, change: resetPreview },
+					{ fieldname: "weekday", fieldtype: "Select", label: __("Weekday"), options: WEEKDAYS, default: "Monday", reqd: 1, change: resetPreview },
+					{ fieldname: "from_time", fieldtype: "Time", label: __("From Time"), reqd: 1, change: resetPreview },
+					{ fieldname: "to_time", fieldtype: "Time", label: __("To Time"), reqd: 1, change: resetPreview },
+					{ fieldname: "instructor", fieldtype: "Link", label: __("Assigned Instructor"), options: "Instructor", reqd: 1, default: row.assignments?.length === 1 ? row.assignments[0].instructor : "", change: resetPreview },
+					{ fieldname: "room", fieldtype: "Link", label: __("Room"), options: "Room", reqd: 1, change: resetPreview },
+					{ fieldname: "preview_html", fieldtype: "HTML" },
+				],
+			});
+			const instructorField = dialog.fields_dict.instructor;
+			const instructorQuery = () => {
+				const term = this.academicTerm(dialog.get_value("academic_term")) || terms[0];
+				return { query: TIMETABLE_INSTRUCTOR_QUERY, filters: { school_branch: row.school_branch || row.branch || this.reviewBranch, student_group: row.student_group, course: row.course, reference_date: term?.start_date || this.teachingReviewDate } };
+			};
+			instructorField.get_query = instructorQuery; instructorField.df.get_query = instructorQuery;
+			const roomField = dialog.fields_dict.room;
+			const roomQuery = () => ({ filters: { eduedge_school_branch: row.school_branch || row.branch || this.reviewBranch } });
+			roomField.get_query = roomQuery; roomField.df.get_query = roomQuery;
+			resetPreview();
+			dialog.show();
+		},
+		async previewTimetable(row, dialog, rememberRows) {
+			const values = dialog.get_values();
+			if (!values) return;
+			const rows = this.plannerRows(row, values);
+			if (!rows.length) {
+				frappe.msgprint({ title: __("No timetable dates"), message: __("The selected Term and weekday do not produce any valid dates."), indicator: "orange" });
+				return;
+			}
+			dialog.disable_primary_action(); this.working = true; this.error = "";
+			try {
+				const response = await frappe.call({ method: TIMETABLE_PREVIEW_METHOD, type: "POST", args: { launch: this.launchName, rows: JSON.stringify(rows) } });
+				const preview = response.message || {};
+				rememberRows(rows);
+				dialog.fields_dict.preview_html.$wrapper.html(this.renderPlannerPreview(preview));
+				if ((preview.summary?.blocked || 0) > 0) {
+					dialog.set_primary_action(__("Preview Again"), () => this.previewTimetable(row, dialog, rememberRows));
+				} else if ((preview.summary?.ready || 0) > 0) {
+					dialog.set_primary_action(__(`Create ${preview.summary.ready} Schedule Rows`), () => this.createTimetable(dialog, rows));
+				} else {
+					dialog.set_primary_action(__("Close"), () => dialog.hide());
+				}
+			} catch (error) {
+				this.error = error?.message || "Timetable preview failed.";
+			} finally {
+				this.working = false; dialog.enable_primary_action();
+			}
+		},
+		async createTimetable(dialog, rows) {
+			dialog.disable_primary_action(); this.working = true; this.error = "";
+			try {
+				const response = await frappe.call({ method: TIMETABLE_CREATE_METHOD, type: "POST", args: { launch: this.launchName, rows: JSON.stringify(rows) } });
+				const result = response.message || {};
+				if (result.status === "Blocked") {
+					dialog.fields_dict.preview_html.$wrapper.html(this.renderPlannerPreview(result.preview || {}));
+					dialog.set_primary_action(__("Preview Again"), () => this.previewTimetable({}, dialog, () => {}));
+					frappe.show_alert({ message: __("Timetable changed while you were reviewing it. Preview again."), indicator: "orange" });
+					return;
+				}
+				this.applyPayload(result.context || {});
+				dialog.hide();
+				frappe.show_alert({ message: __(`${result.created_count || 0} Teaching Schedule rows created`), indicator: "green" });
+			} catch (error) {
+				this.error = error?.message || "Teaching Schedule rows could not be created.";
+			} finally {
+				this.working = false;
+				if (dialog.is_visible) dialog.enable_primary_action();
+			}
+		},
 		openTeachingSchedule() {
 			this.openReview("/app/eduedge-teaching-schedule", {
 				branch: this.reviewBranch,
@@ -356,8 +493,9 @@ export default {
 .session-delivery-step{display:grid;place-items:center;width:2rem;height:2rem;border:1px solid var(--border-color);border-radius:999px;font-size:.9rem}.session-delivery-metrics{display:flex;flex-wrap:wrap;gap:.5rem}.session-delivery-metrics>span{display:grid;gap:.1rem;min-width:10rem;padding:.55rem .65rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.session-delivery-metrics small{color:var(--text-muted)}.session-delivery-metrics strong{font-size:1.05rem}
 .session-delivery-readiness{display:flex;flex-wrap:wrap;gap:.45rem}.session-delivery-status{display:inline-flex;padding:.22rem .48rem;border:1px solid currentColor;border-radius:999px;font-size:.76rem}.session-delivery-status.is-ready{color:var(--green-600,#16803c)}.session-delivery-status.is-warning{color:var(--orange-600,#b54708)}
 .session-delivery-card{display:grid;gap:.8rem;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.session-delivery-card-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}.session-delivery-card-heading h3{margin:0}.session-delivery-card-heading small{display:block;max-width:65rem;color:var(--text-muted)}.session-delivery-actions{display:flex;gap:.5rem;flex-wrap:wrap}
-.session-delivery-table-wrap{overflow:auto;border:1px solid var(--border-color);border-radius:8px}.session-delivery-table{width:100%;min-width:900px;border-collapse:collapse;color:var(--text-color)}.session-delivery-table--teaching{min-width:1050px}.session-delivery-table th,.session-delivery-table td{padding:.6rem .7rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}.session-delivery-table th{font-size:.78rem;color:var(--text-muted);background:var(--control-bg)}.session-delivery-table tr:last-child td{border-bottom:0}.session-delivery-table small{display:block;color:var(--text-muted)}
+.session-delivery-table-wrap{overflow:auto;border:1px solid var(--border-color);border-radius:8px}.session-delivery-table{width:100%;min-width:900px;border-collapse:collapse;color:var(--text-color)}.session-delivery-table--teaching,.session-delivery-table--schedule{min-width:1050px}.session-delivery-table th,.session-delivery-table td{padding:.6rem .7rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}.session-delivery-table th{font-size:.78rem;color:var(--text-muted);background:var(--control-bg)}.session-delivery-table tr:last-child td{border-bottom:0}.session-delivery-table small{display:block;color:var(--text-muted)}
 .session-delivery-subjects{display:flex;flex-wrap:wrap;gap:.3rem}.session-delivery-subjects span{padding:.15rem .35rem;border:1px solid var(--border-color);border-radius:999px;font-size:.75rem}.session-delivery-subjects em,.session-delivery-muted{color:var(--text-muted);font-style:normal}.session-delivery-empty,.session-delivery-message{padding:.75rem;border-radius:8px;background:var(--control-bg);color:var(--text-muted)}.session-delivery-message--error{color:var(--red-600,#b42318)}.session-delivery-rule{margin:0;color:var(--text-muted);font-size:.82rem}.session-delivery-footer{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}.session-delivery-ready-text{color:var(--green-600,#16803c)!important}
 :global(.session-delivery-dialog-guidance){padding:.7rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg);color:var(--text-muted)}
+:global(.session-timetable-preview){display:grid;gap:.55rem;margin-top:.5rem}:global(.session-timetable-preview p){margin:0;color:var(--text-muted)}:global(.session-timetable-preview-table){max-height:18rem;overflow:auto;border:1px solid var(--border-color);border-radius:8px}:global(.session-timetable-preview-table table){width:100%;border-collapse:collapse}:global(.session-timetable-preview-table th),:global(.session-timetable-preview-table td){padding:.45rem .55rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}:global(.session-timetable-preview-table th){background:var(--control-bg);color:var(--text-muted);font-size:.76rem}
 @media(max-width:800px){.session-delivery-header,.session-delivery-card-heading{align-items:stretch;flex-direction:column}}
 </style>
