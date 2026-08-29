@@ -185,6 +185,17 @@
 				@operational-updated="handleOperationalUpdated"
 			/>
 
+			<EduEdgeSessionFinalReviewPanel
+				v-if="launch?.name && (showAllSteps || activeStepKey === 'final_review')"
+				:launch-name="launch.name"
+				:academic-year="targetAcademicYear"
+				:institution="institution"
+				:branch="context.branch || ''"
+				@save-step="saveCurrentStep"
+				@final-review-updated="handleFinalReviewUpdated"
+				@activated="handleActivated"
+			/>
+
 			<div v-if="launch && visibleFutureOverviewSteps.length" class="session-launch-step-grid session-launch-step-grid--future">
 				<article
 					v-for="step in visibleFutureOverviewSteps"
@@ -234,6 +245,7 @@ import EduEdgeSessionLearnersPanel from "./EduEdgeSessionLearnersPanel.vue";
 import EduEdgeSessionDeliveryPanel from "./EduEdgeSessionDeliveryPanel.vue";
 import EduEdgeSessionAssessmentPanel from "./EduEdgeSessionAssessmentPanel.vue";
 import EduEdgeSessionOperationalReadinessPanel from "./EduEdgeSessionOperationalReadinessPanel.vue";
+import EduEdgeSessionFinalReviewPanel from "./EduEdgeSessionFinalReviewPanel.vue";
 
 const GET_METHOD = "eduedge.api.session_launch.get_session_launch_context";
 const START_METHOD = "eduedge.api.session_launch.start_or_resume_session_launch";
@@ -241,13 +253,13 @@ const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
 const PREPARE_METHOD = "eduedge.api.session_launch.prepare_session_foundation";
 const SAVE_SESSION_METHOD = "eduedge.api.academic_sessions.save_academic_session";
 const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
-const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment", "academic_delivery", "assessment_cbt", "operational_readiness"]);
+const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment", "academic_delivery", "assessment_cbt", "operational_readiness", "final_review"]);
 const STRUCTURE_STEPS = new Set(["class_structure", "class_intakes", "class_arms"]);
 const LEARNER_STEPS = new Set(["student_progression", "admissions_enrollment"]);
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
-	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel, EduEdgeSessionDeliveryPanel, EduEdgeSessionAssessmentPanel, EduEdgeSessionOperationalReadinessPanel },
+	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel, EduEdgeSessionDeliveryPanel, EduEdgeSessionAssessmentPanel, EduEdgeSessionOperationalReadinessPanel, EduEdgeSessionFinalReviewPanel },
 	data() {
 		return {
 			loading: true,
@@ -265,6 +277,7 @@ export default {
 			deliverySummary: {},
 			assessmentSummary: {},
 			operationalSummary: {},
+			finalReviewSummary: {},
 			activeStepKey: "",
 			showAllSteps: false,
 		};
@@ -280,22 +293,14 @@ export default {
 		allOverviewSteps() {
 			return (this.readiness.steps || []).map((step) => {
 				if (step.key === "assessment_cbt") {
-					return {
-						...step,
-						implemented: true,
-						ready: Boolean(this.assessmentSummary.ready),
-						status: this.assessmentSummary.status || "Review required",
-						message: this.assessmentSummary.message || "Review Assessment planning and any configured CBT sittings for the Session.",
-					};
+					return { ...step, implemented: true, ready: Boolean(this.assessmentSummary.ready), status: this.assessmentSummary.status || "Review required", message: this.assessmentSummary.message || "Review Assessment planning and any configured CBT sittings for the Session." };
 				}
 				if (step.key === "operational_readiness") {
-					return {
-						...step,
-						implemented: true,
-						ready: Boolean(this.operationalSummary.ready),
-						status: this.operationalSummary.status || "Review required",
-						message: this.operationalSummary.message || "Review live operational blockers and warnings before Final Review.",
-					};
+					return { ...step, implemented: true, ready: Boolean(this.operationalSummary.ready), status: this.operationalSummary.status || "Review required", message: this.operationalSummary.message || "Review live operational blockers and warnings before Final Review." };
+				}
+				if (step.key === "final_review") {
+					const active = this.finalReviewSummary.status === "Active" || this.launch?.status === "Active";
+					return { ...step, implemented: true, ready: active, status: active ? "Active" : (this.finalReviewSummary.status || "Final review required"), message: this.finalReviewSummary.message || "Review blockers and warnings, then activate the Academic Session." };
 				}
 				return step;
 			});
@@ -310,12 +315,7 @@ export default {
 		visibleFutureOverviewSteps() { return this.showAllSteps ? this.futureOverviewSteps : this.futureOverviewSteps.filter((step) => step.key === this.activeStepKey); },
 		foundationReadyCount() {
 			const sessionReady = Boolean((this.readiness.steps || []).find((step) => step.key === "session_terms")?.ready);
-			return [
-				sessionReady,
-				Boolean(this.structureSummary.class_structure_ready),
-				Boolean(this.structureSummary.intakes_ready),
-				Boolean(this.structureSummary.arms_structure_ready),
-			].filter(Boolean).length;
+			return [sessionReady, Boolean(this.structureSummary.class_structure_ready), Boolean(this.structureSummary.intakes_ready), Boolean(this.structureSummary.arms_structure_ready)].filter(Boolean).length;
 		},
 		foundationProgressPercent() { return Math.round((this.foundationReadyCount / 4) * 100); },
 	},
@@ -346,6 +346,7 @@ export default {
 				this.deliverySummary = {};
 				this.assessmentSummary = {};
 				this.operationalSummary = {};
+				this.finalReviewSummary = {};
 				this.activeStepKey = "";
 				this.showAllSteps = false;
 				return;
@@ -363,6 +364,7 @@ export default {
 			this.deliverySummary = {};
 			this.assessmentSummary = {};
 			this.operationalSummary = {};
+			this.finalReviewSummary = {};
 			this.readiness = { steps: [], summary: {} };
 			this.activeStepKey = "";
 			this.showAllSteps = false;
@@ -413,25 +415,11 @@ export default {
 				this.error = error?.message || "Session foundation could not be prepared.";
 			} finally { this.saving = false; }
 		},
-		selectStep(stepKey) {
-			if (!this.allOverviewSteps.some((step) => step.key === stepKey)) return;
-			this.activeStepKey = stepKey;
-			this.showAllSteps = false;
-		},
-		previousStep() {
-			if (this.activeStepIndex <= 0) return;
-			this.selectStep(this.allOverviewSteps[this.activeStepIndex - 1].key);
-		},
-		nextStep() {
-			if (this.activeStepIndex >= this.allOverviewSteps.length - 1) return;
-			this.selectStep(this.allOverviewSteps[this.activeStepIndex + 1].key);
-		},
+		selectStep(stepKey) { if (this.allOverviewSteps.some((step) => step.key === stepKey)) { this.activeStepKey = stepKey; this.showAllSteps = false; } },
+		previousStep() { if (this.activeStepIndex > 0) this.selectStep(this.allOverviewSteps[this.activeStepIndex - 1].key); },
+		nextStep() { if (this.activeStepIndex < this.allOverviewSteps.length - 1) this.selectStep(this.allOverviewSteps[this.activeStepIndex + 1].key); },
 		toggleShowAllSteps() {
-			if (this.showAllSteps) {
-				this.showAllSteps = false;
-				if (!this.activeStepKey) this.activeStepKey = this.launch?.current_step_key || this.allOverviewSteps[0]?.key || "session_terms";
-				return;
-			}
+			if (this.showAllSteps) { this.showAllSteps = false; if (!this.activeStepKey) this.activeStepKey = this.launch?.current_step_key || this.allOverviewSteps[0]?.key || "session_terms"; return; }
 			this.showAllSteps = true;
 		},
 		handleStructureUpdated(summary) { this.structureSummary = summary || {}; },
@@ -439,6 +427,12 @@ export default {
 		handleDeliveryUpdated(summary) { this.deliverySummary = summary || {}; },
 		handleAssessmentUpdated(summary) { this.assessmentSummary = summary || {}; },
 		handleOperationalUpdated(summary) { this.operationalSummary = summary || {}; },
+		handleFinalReviewUpdated(summary) { this.finalReviewSummary = summary || {}; },
+		handleActivated(payload) {
+			this.finalReviewSummary = { status: "Active", ready: true, message: "Academic Session activated." };
+			if (this.launch) this.launch = { ...this.launch, status: payload?.status || "Active", current_step_key: "final_review", current_step_label: "Final Review & Activation" };
+			this.activeStepKey = "final_review";
+		},
 		async openStep(step) {
 			if (!step?.route) return;
 			const reviewTab = window.open("about:blank", "_blank");
@@ -451,8 +445,7 @@ export default {
 			if (this.institution) params.set("institution", this.institution);
 			if (this.context.branch) params.set("branch", this.context.branch);
 			const url = `${step.route}${params.toString() ? `?${params}` : ""}`;
-			if (reviewTab) reviewTab.location.href = url;
-			else window.open(url, "_blank", "noopener,noreferrer");
+			if (reviewTab) reviewTab.location.href = url; else window.open(url, "_blank", "noopener,noreferrer");
 		},
 		newSession() {
 			const dialog = new frappe.ui.Dialog({
@@ -471,23 +464,15 @@ export default {
 					try {
 						const response = await frappe.call({ method: SAVE_SESSION_METHOD, type: "POST", args: values });
 						const name = response.message?.name || values.academic_year_name;
-						dialog.hide();
-						frappe.show_alert({ message: __("Academic Session created"), indicator: "green" });
-						await this.load(name);
-						this.newTerm();
-					} catch (error) {
-						frappe.msgprint({ title: __("Academic Session could not be created"), message: error?.message || __("Review the Session details and try again."), indicator: "red" });
-					} finally { dialog.enable_primary_action(); }
+						dialog.hide(); frappe.show_alert({ message: __("Academic Session created"), indicator: "green" }); await this.load(name); this.newTerm();
+					} catch (error) { frappe.msgprint({ title: __("Academic Session could not be created"), message: error?.message || __("Review the Session details and try again."), indicator: "red" }); }
+					finally { dialog.enable_primary_action(); }
 				},
 			});
-			dialog.$wrapper?.addClass("session-launch-dialog");
-			dialog.show();
+			dialog.$wrapper?.addClass("session-launch-dialog"); dialog.show();
 		},
 		newTerm() {
-			if (!this.targetAcademicYear) {
-				frappe.msgprint({ title: __("Select an Academic Session"), message: __("Select or create the target Academic Session before adding a Term."), indicator: "orange" });
-				return;
-			}
+			if (!this.targetAcademicYear) { frappe.msgprint({ title: __("Select an Academic Session"), message: __("Select or create the target Academic Session before adding a Term."), indicator: "orange" }); return; }
 			const dialog = new frappe.ui.Dialog({
 				title: __("New Academic Term"),
 				fields: [
@@ -502,18 +487,12 @@ export default {
 				primary_action_label: __("Add Term"),
 				primary_action: async (values) => {
 					dialog.disable_primary_action();
-					try {
-						await frappe.call({ method: SAVE_TERM_METHOD, type: "POST", args: values });
-						dialog.hide();
-						frappe.show_alert({ message: __("Academic Term created"), indicator: "green" });
-						await this.load(this.targetAcademicYear);
-					} catch (error) {
-						frappe.msgprint({ title: __("Academic Term could not be created"), message: error?.message || __("Review the Term details and try again."), indicator: "red" });
-					} finally { dialog.enable_primary_action(); }
+					try { await frappe.call({ method: SAVE_TERM_METHOD, type: "POST", args: values }); dialog.hide(); frappe.show_alert({ message: __("Academic Term created"), indicator: "green" }); await this.load(this.targetAcademicYear); }
+					catch (error) { frappe.msgprint({ title: __("Academic Term could not be created"), message: error?.message || __("Review the Term details and try again."), indicator: "red" }); }
+					finally { dialog.enable_primary_action(); }
 				},
 			});
-			dialog.$wrapper?.addClass("session-launch-dialog");
-			dialog.show();
+			dialog.$wrapper?.addClass("session-launch-dialog"); dialog.show();
 		},
 		stepNumber(step) { return Math.max(this.allOverviewSteps.findIndex((row) => row.key === step.key) + 1, 1); },
 		metricEntries(step) {
