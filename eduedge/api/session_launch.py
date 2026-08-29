@@ -79,7 +79,14 @@ STEP_DEFINITIONS = [
 		"label": "Assessment & CBT",
 		"description": "Prepare assessment structures and CBT readiness without copying historical results or attempts.",
 		"route": "/app/eduedge-assessment-operations",
-		"implemented": False,
+		"implemented": True,
+	},
+	{
+		"key": "school_calendar",
+		"label": "School Calendar & Events",
+		"description": "Review the unified academic calendar and prepare managed School Events for the new Session.",
+		"route": "/app/eduedge-school-calendar",
+		"implemented": True,
 	},
 	{
 		"key": "operational_readiness",
@@ -281,6 +288,21 @@ def _enrollment_metrics(branches: list[str], academic_year: str) -> dict:
 	}
 
 
+def _school_event_count(branches: list[str], academic_year: str) -> int:
+	if not branches or not frappe.db.exists("DocType", "EduEdge School Event"):
+		return 0
+	if not frappe.has_permission("EduEdge School Event", "read"):
+		return 0
+	return len(
+		frappe.get_list(
+			"EduEdge School Event",
+			filters={"school_branch": ["in", branches], "academic_year": academic_year, "status": ["!=", "Archived"]},
+			fields=["name"],
+			page_length=5000,
+		)
+	)
+
+
 def _step_payload(definition: dict, *, ready: bool = False, status: str = "Not started", metrics: dict | None = None, message: str = "") -> dict:
 	return {
 		**definition,
@@ -300,6 +322,7 @@ def _readiness(institution: str, academic_year: str, source_academic_year: str |
 	offering_count = _offering_count(branch_names, academic_year)
 	class_arm_count = _class_arm_count(branch_names, academic_year)
 	enrollments = _enrollment_metrics(branch_names, academic_year)
+	school_event_count = _school_event_count(branch_names, academic_year)
 
 	steps: list[dict] = []
 	for definition in STEP_DEFINITIONS:
@@ -354,6 +377,21 @@ def _readiness(institution: str, academic_year: str, source_academic_year: str |
 					message="Structural rollover remains student-free; Slice 2 will embed the validated rollover planner here.",
 				)
 			)
+		elif key == "school_calendar":
+			ready = bool(calendar)
+			steps.append(
+				_step_payload(
+					definition,
+					ready=ready,
+					status="Ready to review" if ready else "Needs attention",
+					metrics={"institution_calendar": calendar.name if calendar else "", "school_events": school_event_count},
+					message=(
+						"The academic calendar is ready. Review or add School Events; events are optional and do not duplicate academic records."
+						if ready
+						else "Prepare the Institution Academic Calendar before reviewing School Events."
+					),
+				)
+			)
 		else:
 			metrics = {}
 			if key == "student_progression":
@@ -364,9 +402,13 @@ def _readiness(institution: str, academic_year: str, source_academic_year: str |
 				_step_payload(
 					definition,
 					ready=False,
-					status="Planned",
+					status="Review required" if definition.get("implemented") else "Planned",
 					metrics=metrics,
-					message="This stage is part of the saved launch plan and will be activated in a later implementation slice.",
+					message=(
+						"Open this implemented stage to review its live readiness."
+						if definition.get("implemented")
+						else "This stage is part of the saved launch plan and will be activated in a later implementation slice."
+					),
 				)
 			)
 
