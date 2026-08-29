@@ -15,6 +15,7 @@ STEP_LABELS = {
 	"admissions_enrollment": "Admissions & Enrollment",
 	"academic_delivery": "Academic Delivery",
 	"assessment_cbt": "Assessment & CBT",
+	"school_calendar": "School Calendar & Events",
 	"operational_readiness": "Operational Readiness",
 	"final_review": "Final Review & Activation",
 }
