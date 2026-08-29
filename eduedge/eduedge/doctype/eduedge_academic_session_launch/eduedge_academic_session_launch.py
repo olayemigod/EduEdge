@@ -21,6 +21,17 @@ STEP_LABELS = {
 }
 
 ALLOWED_STATUSES = {"Draft", "Preparing", "Ready for Review", "Ready", "Active", "Closed"}
+IMMUTABLE_ACTIVATION_FIELDS = (
+	"ready_by",
+	"ready_on",
+	"activated_by",
+	"activated_on",
+	"previous_active_launch",
+	"previous_active_academic_year",
+	"warning_acknowledgement",
+	"readiness_snapshot_hash",
+	"readiness_snapshot",
+)
 
 
 class EduEdgeAcademicSessionLaunch(Document):
@@ -37,6 +48,7 @@ class EduEdgeAcademicSessionLaunch(Document):
 		self._validate_source_session()
 		self._validate_state()
 		self._validate_duplicate()
+		self._protect_activation_snapshot()
 		self.current_step_label = STEP_LABELS[self.current_step_key]
 
 	def _validate_identity(self):
@@ -75,4 +87,15 @@ class EduEdgeAcademicSessionLaunch(Document):
 					self.academic_year,
 				),
 				frappe.DuplicateEntryError,
+			)
+
+	def _protect_activation_snapshot(self):
+		previous = self.get_doc_before_save()
+		if not previous or previous.status not in {"Active", "Closed"}:
+			return
+		changed = [fieldname for fieldname in IMMUTABLE_ACTIVATION_FIELDS if previous.get(fieldname) != self.get(fieldname)]
+		if changed:
+			frappe.throw(
+				_("The Session activation snapshot is immutable after activation."),
+				frappe.ValidationError,
 			)
