@@ -175,6 +175,16 @@
 				@assessment-updated="handleAssessmentUpdated"
 			/>
 
+			<EduEdgeSessionOperationalReadinessPanel
+				v-if="launch?.name && (showAllSteps || activeStepKey === 'operational_readiness')"
+				:launch-name="launch.name"
+				:academic-year="targetAcademicYear"
+				:institution="institution"
+				:branch="context.branch || ''"
+				@save-step="saveCurrentStep"
+				@operational-updated="handleOperationalUpdated"
+			/>
+
 			<div v-if="launch && visibleFutureOverviewSteps.length" class="session-launch-step-grid session-launch-step-grid--future">
 				<article
 					v-for="step in visibleFutureOverviewSteps"
@@ -223,6 +233,7 @@ import EduEdgeSessionStructurePanel from "./EduEdgeSessionStructurePanel.vue";
 import EduEdgeSessionLearnersPanel from "./EduEdgeSessionLearnersPanel.vue";
 import EduEdgeSessionDeliveryPanel from "./EduEdgeSessionDeliveryPanel.vue";
 import EduEdgeSessionAssessmentPanel from "./EduEdgeSessionAssessmentPanel.vue";
+import EduEdgeSessionOperationalReadinessPanel from "./EduEdgeSessionOperationalReadinessPanel.vue";
 
 const GET_METHOD = "eduedge.api.session_launch.get_session_launch_context";
 const START_METHOD = "eduedge.api.session_launch.start_or_resume_session_launch";
@@ -230,13 +241,13 @@ const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
 const PREPARE_METHOD = "eduedge.api.session_launch.prepare_session_foundation";
 const SAVE_SESSION_METHOD = "eduedge.api.academic_sessions.save_academic_session";
 const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
-const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment", "academic_delivery", "assessment_cbt"]);
+const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment", "academic_delivery", "assessment_cbt", "operational_readiness"]);
 const STRUCTURE_STEPS = new Set(["class_structure", "class_intakes", "class_arms"]);
 const LEARNER_STEPS = new Set(["student_progression", "admissions_enrollment"]);
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
-	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel, EduEdgeSessionDeliveryPanel, EduEdgeSessionAssessmentPanel },
+	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel, EduEdgeSessionDeliveryPanel, EduEdgeSessionAssessmentPanel, EduEdgeSessionOperationalReadinessPanel },
 	data() {
 		return {
 			loading: true,
@@ -253,6 +264,7 @@ export default {
 			learnersSummary: {},
 			deliverySummary: {},
 			assessmentSummary: {},
+			operationalSummary: {},
 			activeStepKey: "",
 			showAllSteps: false,
 		};
@@ -267,14 +279,25 @@ export default {
 		},
 		allOverviewSteps() {
 			return (this.readiness.steps || []).map((step) => {
-				if (step.key !== "assessment_cbt") return step;
-				return {
-					...step,
-					implemented: true,
-					ready: Boolean(this.assessmentSummary.ready),
-					status: this.assessmentSummary.status || "Review required",
-					message: this.assessmentSummary.message || "Review Assessment planning and any configured CBT sittings for the Session.",
-				};
+				if (step.key === "assessment_cbt") {
+					return {
+						...step,
+						implemented: true,
+						ready: Boolean(this.assessmentSummary.ready),
+						status: this.assessmentSummary.status || "Review required",
+						message: this.assessmentSummary.message || "Review Assessment planning and any configured CBT sittings for the Session.",
+					};
+				}
+				if (step.key === "operational_readiness") {
+					return {
+						...step,
+						implemented: true,
+						ready: Boolean(this.operationalSummary.ready),
+						status: this.operationalSummary.status || "Review required",
+						message: this.operationalSummary.message || "Review live operational blockers and warnings before Final Review.",
+					};
+				}
+				return step;
 			});
 		},
 		activeStepIndex() { return Math.max(this.allOverviewSteps.findIndex((step) => step.key === this.activeStepKey), 0); },
@@ -322,6 +345,7 @@ export default {
 				this.learnersSummary = {};
 				this.deliverySummary = {};
 				this.assessmentSummary = {};
+				this.operationalSummary = {};
 				this.activeStepKey = "";
 				this.showAllSteps = false;
 				return;
@@ -338,6 +362,7 @@ export default {
 			this.learnersSummary = {};
 			this.deliverySummary = {};
 			this.assessmentSummary = {};
+			this.operationalSummary = {};
 			this.readiness = { steps: [], summary: {} };
 			this.activeStepKey = "";
 			this.showAllSteps = false;
@@ -413,6 +438,7 @@ export default {
 		handleLearnersUpdated(summary) { this.learnersSummary = summary || {}; },
 		handleDeliveryUpdated(summary) { this.deliverySummary = summary || {}; },
 		handleAssessmentUpdated(summary) { this.assessmentSummary = summary || {}; },
+		handleOperationalUpdated(summary) { this.operationalSummary = summary || {}; },
 		async openStep(step) {
 			if (!step?.route) return;
 			const reviewTab = window.open("about:blank", "_blank");
