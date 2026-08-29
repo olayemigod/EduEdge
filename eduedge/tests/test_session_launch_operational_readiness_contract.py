@@ -31,9 +31,16 @@ class TestSessionLaunchOperationalReadinessContract(unittest.TestCase):
     def test_partial_branch_scope_and_timetable_collisions_are_hard_blockers(self):
         source = (APP / "api" / "session_launch_operational_readiness.py").read_text(encoding="utf-8")
         self.assertIn('STATUS_READY if complete else STATUS_BLOCKED', source)
-        self.assertIn("_find_overlap", source)
+        self.assertIn("_assessment_conflict_rows", source)
+        self.assertIn("buckets: dict[tuple[str, str, str], list[dict]] = defaultdict(list)", source)
         self.assertIn('blocked = bool(conflicts)', source)
         self.assertIn('"timetable_conflicts": len(conflicts)', source)
+        self.assertNotIn("_find_overlap", source)
+
+    def test_structure_uses_canonical_intended_class_count(self):
+        source = (APP / "api" / "session_launch_operational_readiness.py").read_text(encoding="utf-8")
+        self.assertIn('summary.get("intended_classes")', source)
+        self.assertNotIn('summary.get("classes")', source)
 
     def test_optional_unplanned_cbt_does_not_block_session_launch(self):
         source = (APP / "api" / "session_launch_operational_readiness.py").read_text(encoding="utf-8")
@@ -67,7 +74,7 @@ class TestSessionLaunchOperationalReadinessContract(unittest.TestCase):
         self.assertIn("handleOperationalUpdated", source)
         self.assertIn("get_session_launch_operational_readiness", panel)
         self.assertIn("Save Operational Readiness here", panel)
-        self.assertIn("Ready / Attention / Blocked" if False else "Overall readiness", panel)
+        self.assertIn("Overall readiness", panel)
 
     def test_calendar_precedes_operational_readiness_and_final_review(self):
         source = (APP / "api" / "session_launch.py").read_text(encoding="utf-8")
