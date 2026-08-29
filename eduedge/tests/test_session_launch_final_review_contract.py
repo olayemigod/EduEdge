@@ -64,6 +64,16 @@ class TestSessionLaunchFinalReviewContract(unittest.TestCase):
             self.assertIn(fieldname, fields)
             self.assertEqual(fields[fieldname].get("read_only"), 1)
 
+    def test_launch_manager_roles_have_read_only_doctype_access(self):
+        path = APP / "eduedge" / "doctype" / "eduedge_academic_session_launch" / "eduedge_academic_session_launch.json"
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        permissions = {row["role"]: row for row in meta.get("permissions", [])}
+        for role in ("EduEdge Administrator", "School Administrator", "Academic Administrator", "Registrar"):
+            self.assertEqual(permissions[role].get("read"), 1)
+            self.assertFalse(permissions[role].get("create"))
+            self.assertFalse(permissions[role].get("write"))
+            self.assertFalse(permissions[role].get("delete"))
+
     def test_activation_snapshot_is_immutable_after_activation(self):
         source = (APP / "eduedge" / "doctype" / "eduedge_academic_session_launch" / "eduedge_academic_session_launch.py").read_text(encoding="utf-8")
         self.assertIn("IMMUTABLE_ACTIVATION_FIELDS", source)
