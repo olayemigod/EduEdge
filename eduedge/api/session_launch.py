@@ -58,21 +58,21 @@ STEP_DEFINITIONS = [
 		"label": "Student Progression",
 		"description": "Promote, repeat, transfer, complete or graduate returning Students through governed destination Enrollments.",
 		"route": "/app/eduedge-student-progression",
-		"implemented": False,
+		"implemented": True,
 	},
 	{
 		"key": "admissions_enrollment",
 		"label": "Admissions & Enrollment",
 		"description": "Prepare new admissions, enrollment capacity and unresolved learner placement.",
 		"route": "/app/eduedge-admissions",
-		"implemented": False,
+		"implemented": True,
 	},
 	{
 		"key": "academic_delivery",
 		"label": "Academic Delivery",
 		"description": "Subjects, Instructor assignments, teaching schedule and Scheme readiness.",
 		"route": "/app/eduedge-academic-readiness",
-		"implemented": False,
+		"implemented": True,
 	},
 	{
 		"key": "assessment_cbt",
@@ -91,16 +91,16 @@ STEP_DEFINITIONS = [
 	{
 		"key": "operational_readiness",
 		"label": "Operational Readiness",
-		"description": "Review enabled finance, boarding, transport, pickup, portal and notification capabilities.",
+		"description": "Review Session foundation, Branch scope, learner placement, academic delivery, Assessment/CBT, calendar and attendance readiness.",
 		"route": "/app/eduedge-setup-center",
-		"implemented": False,
+		"implemented": True,
 	},
 	{
 		"key": "final_review",
 		"label": "Final Review & Activation",
 		"description": "Resolve blockers, review readiness and activate the Session for operations.",
 		"route": "/app/eduedge-academic-readiness",
-		"implemented": False,
+		"implemented": True,
 	},
 ]
 
@@ -364,7 +364,7 @@ def _readiness(institution: str, academic_year: str, source_academic_year: str |
 					ready=False,
 					status="Review required" if offering_count else "Not started",
 					metrics={"class_intakes": offering_count},
-					message="Slice 2 will add selective bulk preparation here; current records are shown for guided review.",
+					message="Review intended Branch × Class combinations and create any missing destination Class Intakes.",
 				)
 			)
 		elif key == "class_arms":
@@ -374,7 +374,7 @@ def _readiness(institution: str, academic_year: str, source_academic_year: str |
 					ready=False,
 					status="Review required" if class_arm_count else "Not started",
 					metrics={"class_arms": class_arm_count},
-					message="Structural rollover remains student-free; Slice 2 will embed the validated rollover planner here.",
+					message="Review destination Class Arm structure and carry forward selected source structure without Students.",
 				)
 			)
 		elif key == "school_calendar":
