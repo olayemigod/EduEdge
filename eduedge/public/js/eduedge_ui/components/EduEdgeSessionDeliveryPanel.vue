@@ -387,12 +387,10 @@ export default {
 				return;
 			}
 			let dialog;
-			let previewRows = [];
 			const resetPreview = () => {
-				previewRows = [];
 				if (!dialog) return;
 				dialog.fields_dict.preview_html?.$wrapper?.html(`<div class="session-delivery-dialog-guidance">${frappe.utils.escape_html(__("Preview checks every generated date before any Teaching Schedule is created."))}</div>`);
-				dialog.set_primary_action(__("Preview Timetable"), () => this.previewTimetable(row, dialog, (rows) => { previewRows = rows; }));
+				dialog.set_primary_action(__("Preview Timetable"), () => this.previewTimetable(row, dialog));
 			};
 			dialog = new frappe.ui.Dialog({
 				title: __("Plan Weekly Teaching Slot"),
@@ -419,7 +417,7 @@ export default {
 			resetPreview();
 			dialog.show();
 		},
-		async previewTimetable(row, dialog, rememberRows) {
+		async previewTimetable(row, dialog) {
 			const values = dialog.get_values();
 			if (!values) return;
 			const rows = this.plannerRows(row, values);
@@ -431,12 +429,11 @@ export default {
 			try {
 				const response = await frappe.call({ method: TIMETABLE_PREVIEW_METHOD, type: "POST", args: { launch: this.launchName, rows: JSON.stringify(rows) } });
 				const preview = response.message || {};
-				rememberRows(rows);
 				dialog.fields_dict.preview_html.$wrapper.html(this.renderPlannerPreview(preview));
 				if ((preview.summary?.blocked || 0) > 0) {
-					dialog.set_primary_action(__("Preview Again"), () => this.previewTimetable(row, dialog, rememberRows));
+					dialog.set_primary_action(__("Preview Again"), () => this.previewTimetable(row, dialog));
 				} else if ((preview.summary?.ready || 0) > 0) {
-					dialog.set_primary_action(__(`Create ${preview.summary.ready} Schedule Rows`), () => this.createTimetable(dialog, rows));
+					dialog.set_primary_action(__(`Create ${preview.summary.ready} Schedule Rows`), () => this.createTimetable(row, dialog, rows));
 				} else {
 					dialog.set_primary_action(__("Close"), () => dialog.hide());
 				}
@@ -446,14 +443,14 @@ export default {
 				this.working = false; dialog.enable_primary_action();
 			}
 		},
-		async createTimetable(dialog, rows) {
+		async createTimetable(row, dialog, rows) {
 			dialog.disable_primary_action(); this.working = true; this.error = "";
 			try {
 				const response = await frappe.call({ method: TIMETABLE_CREATE_METHOD, type: "POST", args: { launch: this.launchName, rows: JSON.stringify(rows) } });
 				const result = response.message || {};
 				if (result.status === "Blocked") {
 					dialog.fields_dict.preview_html.$wrapper.html(this.renderPlannerPreview(result.preview || {}));
-					dialog.set_primary_action(__("Preview Again"), () => this.previewTimetable({}, dialog, () => {}));
+					dialog.set_primary_action(__("Preview Again"), () => this.previewTimetable(row, dialog));
 					frappe.show_alert({ message: __("Timetable changed while you were reviewing it. Preview again."), indicator: "orange" });
 					return;
 				}
