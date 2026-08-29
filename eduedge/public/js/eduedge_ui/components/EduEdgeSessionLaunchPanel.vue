@@ -165,6 +165,16 @@
 				@delivery-updated="handleDeliveryUpdated"
 			/>
 
+			<EduEdgeSessionAssessmentPanel
+				v-if="launch?.name && (showAllSteps || activeStepKey === 'assessment_cbt')"
+				:launch-name="launch.name"
+				:academic-year="targetAcademicYear"
+				:institution="institution"
+				:branch="context.branch || ''"
+				@save-step="saveCurrentStep"
+				@assessment-updated="handleAssessmentUpdated"
+			/>
+
 			<div v-if="launch && visibleFutureOverviewSteps.length" class="session-launch-step-grid session-launch-step-grid--future">
 				<article
 					v-for="step in visibleFutureOverviewSteps"
@@ -212,6 +222,7 @@
 import EduEdgeSessionStructurePanel from "./EduEdgeSessionStructurePanel.vue";
 import EduEdgeSessionLearnersPanel from "./EduEdgeSessionLearnersPanel.vue";
 import EduEdgeSessionDeliveryPanel from "./EduEdgeSessionDeliveryPanel.vue";
+import EduEdgeSessionAssessmentPanel from "./EduEdgeSessionAssessmentPanel.vue";
 
 const GET_METHOD = "eduedge.api.session_launch.get_session_launch_context";
 const START_METHOD = "eduedge.api.session_launch.start_or_resume_session_launch";
@@ -219,13 +230,13 @@ const SAVE_METHOD = "eduedge.api.session_launch.save_session_launch_progress";
 const PREPARE_METHOD = "eduedge.api.session_launch.prepare_session_foundation";
 const SAVE_SESSION_METHOD = "eduedge.api.academic_sessions.save_academic_session";
 const SAVE_TERM_METHOD = "eduedge.api.academic_sessions.save_academic_term";
-const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment", "academic_delivery"]);
+const EMBEDDED_WORKFLOW_STEPS = new Set(["class_structure", "class_intakes", "class_arms", "student_progression", "admissions_enrollment", "academic_delivery", "assessment_cbt"]);
 const STRUCTURE_STEPS = new Set(["class_structure", "class_intakes", "class_arms"]);
 const LEARNER_STEPS = new Set(["student_progression", "admissions_enrollment"]);
 
 export default {
 	name: "EduEdgeSessionLaunchPanel",
-	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel, EduEdgeSessionDeliveryPanel },
+	components: { EduEdgeSessionStructurePanel, EduEdgeSessionLearnersPanel, EduEdgeSessionDeliveryPanel, EduEdgeSessionAssessmentPanel },
 	data() {
 		return {
 			loading: true,
@@ -241,6 +252,7 @@ export default {
 			structureSummary: {},
 			learnersSummary: {},
 			deliverySummary: {},
+			assessmentSummary: {},
 			activeStepKey: "",
 			showAllSteps: false,
 		};
@@ -253,14 +265,25 @@ export default {
 			const targetStart = new Date(target.year_start_date);
 			return this.sessions.filter((row) => row.name !== this.targetAcademicYear && row.year_start_date && new Date(row.year_start_date) < targetStart);
 		},
-		allOverviewSteps() { return this.readiness.steps || []; },
+		allOverviewSteps() {
+			return (this.readiness.steps || []).map((step) => {
+				if (step.key !== "assessment_cbt") return step;
+				return {
+					...step,
+					implemented: true,
+					ready: Boolean(this.assessmentSummary.ready),
+					status: this.assessmentSummary.status || "Review required",
+					message: this.assessmentSummary.message || "Review Assessment planning and any configured CBT sittings for the Session.",
+				};
+			});
+		},
 		activeStepIndex() { return Math.max(this.allOverviewSteps.findIndex((step) => step.key === this.activeStepKey), 0); },
 		activeStep() { return this.allOverviewSteps.find((step) => step.key === this.activeStepKey) || this.allOverviewSteps[0] || null; },
 		activeStepLabel() { return this.activeStep?.label || this.launch?.current_step_label || "Session Launch"; },
 		structureStepActive() { return STRUCTURE_STEPS.has(this.activeStepKey); },
 		learnerStepActive() { return LEARNER_STEPS.has(this.activeStepKey); },
-		foundationOverviewSteps() { return (this.readiness.steps || []).filter((step) => step.key === "session_terms"); },
-		futureOverviewSteps() { return (this.readiness.steps || []).filter((step) => step.key !== "session_terms" && !EMBEDDED_WORKFLOW_STEPS.has(step.key)); },
+		foundationOverviewSteps() { return this.allOverviewSteps.filter((step) => step.key === "session_terms"); },
+		futureOverviewSteps() { return this.allOverviewSteps.filter((step) => step.key !== "session_terms" && !EMBEDDED_WORKFLOW_STEPS.has(step.key)); },
 		visibleFutureOverviewSteps() { return this.showAllSteps ? this.futureOverviewSteps : this.futureOverviewSteps.filter((step) => step.key === this.activeStepKey); },
 		foundationReadyCount() {
 			const sessionReady = Boolean((this.readiness.steps || []).find((step) => step.key === "session_terms")?.ready);
@@ -298,6 +321,7 @@ export default {
 				this.structureSummary = {};
 				this.learnersSummary = {};
 				this.deliverySummary = {};
+				this.assessmentSummary = {};
 				this.activeStepKey = "";
 				this.showAllSteps = false;
 				return;
@@ -313,6 +337,7 @@ export default {
 			this.structureSummary = {};
 			this.learnersSummary = {};
 			this.deliverySummary = {};
+			this.assessmentSummary = {};
 			this.readiness = { steps: [], summary: {} };
 			this.activeStepKey = "";
 			this.showAllSteps = false;
@@ -387,6 +412,7 @@ export default {
 		handleStructureUpdated(summary) { this.structureSummary = summary || {}; },
 		handleLearnersUpdated(summary) { this.learnersSummary = summary || {}; },
 		handleDeliveryUpdated(summary) { this.deliverySummary = summary || {}; },
+		handleAssessmentUpdated(summary) { this.assessmentSummary = summary || {}; },
 		async openStep(step) {
 			if (!step?.route) return;
 			const reviewTab = window.open("about:blank", "_blank");
@@ -463,7 +489,7 @@ export default {
 			dialog.$wrapper?.addClass("session-launch-dialog");
 			dialog.show();
 		},
-		stepNumber(step) { return Math.max((this.readiness.steps || []).findIndex((row) => row.key === step.key) + 1, 1); },
+		stepNumber(step) { return Math.max(this.allOverviewSteps.findIndex((row) => row.key === step.key) + 1, 1); },
 		metricEntries(step) {
 			const labels = { terms: "Terms", terms_missing_dates: "Terms missing dates", calendar: "Institution Calendar", classes: "Classes", class_intakes: "Class Intakes", class_arms: "Class Arms", submitted: "Submitted Enrollments", draft: "Draft Enrollments", source_session: "Source Session" };
 			return Object.entries(step?.metrics || {}).filter(([, value]) => value !== "" && value !== null && value !== undefined).map(([key, value]) => ({ key, label: labels[key] || key.replaceAll("_", " "), value }));
