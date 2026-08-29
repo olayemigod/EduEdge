@@ -13,6 +13,10 @@ from eduedge.api.session_launch_delivery import (
     assign_guided_subject_instructor,
     get_session_delivery_context,
 )
+from eduedge.api.session_launch_timetable import (
+    create_session_timetable,
+    preview_session_timetable,
+)
 from eduedge.api.teaching_schedule import create_teaching_schedule
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -212,6 +216,78 @@ class TestSessionLaunchDelivery(FrappeTestCase):
         self.assertTrue(scheduled_context["schedule_ready"])
         self.assertEqual(scheduled_context["schedule_count"], 1)
 
+        # Step 7B: preview-first weekly/batch creation uses the same native Course
+        # Schedule model and remains idempotent when the exact plan is retried.
+        planner_rows = [
+            {
+                "branch": branch.name,
+                "program_offering": offering["name"],
+                "student_group": arm["name"],
+                "course": course.name,
+                "instructor": instructor.name,
+                "room": room.name,
+                "schedule_date": date,
+                "from_time": "11:00:00",
+                "to_time": "12:00:00",
+            }
+            for date in ("2093-09-17", "2093-09-24")
+        ]
+        preview = preview_session_timetable(launch_name, planner_rows)
+        self.assertEqual(preview["summary"], {"total": 2, "ready": 2, "existing": 0, "blocked": 0})
+        self.assertTrue(preview["can_create"])
+
+        created = create_session_timetable(launch_name, planner_rows)
+        self.assertEqual(created["status"], "Created")
+        self.assertEqual(created["created_count"], 2)
+        self.assertEqual(len(created["created"]), 2)
+        self.assertEqual(
+            frappe.db.count("Course Schedule", {"student_group": arm["name"], "course": course.name}),
+            3,
+        )
+        self.assertEqual(created["context"]["summary"]["scheduled_teaching_contexts"], 1)
+
+        retry_preview = preview_session_timetable(launch_name, planner_rows)
+        self.assertEqual(retry_preview["summary"], {"total": 2, "ready": 0, "existing": 2, "blocked": 0})
+        self.assertFalse(retry_preview["can_create"])
+        self.assertTrue(retry_preview["idempotent"])
+        retried = create_session_timetable(launch_name, planner_rows)
+        self.assertEqual(retried["status"], "No Change")
+        self.assertEqual(retried["created_count"], 0)
+        self.assertEqual(retried["existing_count"], 2)
+        self.assertEqual(
+            frappe.db.count("Course Schedule", {"student_group": arm["name"], "course": course.name}),
+            3,
+        )
+
+        conflict_preview = preview_session_timetable(
+            launch_name,
+            [
+                {
+                    **planner_rows[0],
+                    "from_time": "11:30:00",
+                    "to_time": "12:30:00",
+                }
+            ],
+        )
+        self.assertEqual(conflict_preview["summary"]["blocked"], 1)
+        self.assertEqual(conflict_preview["summary"]["ready"], 0)
+        blocked = create_session_timetable(
+            launch_name,
+            [
+                {
+                    **planner_rows[0],
+                    "from_time": "11:30:00",
+                    "to_time": "12:30:00",
+                }
+            ],
+        )
+        self.assertEqual(blocked["status"], "Blocked")
+        self.assertEqual(blocked["created"], [])
+        self.assertEqual(
+            frappe.db.count("Course Schedule", {"student_group": arm["name"], "course": course.name}),
+            3,
+        )
+
         # Regression: Frappe Education's native overlap query misses a second
         # interval with the exact same start and a different end (09:00-09:08).
         with self.assertRaises(frappe.ValidationError):
@@ -231,5 +307,5 @@ class TestSessionLaunchDelivery(FrappeTestCase):
                 "Course Schedule",
                 {"student_group": arm["name"], "course": course.name},
             ),
-            1,
+            3,
         )
