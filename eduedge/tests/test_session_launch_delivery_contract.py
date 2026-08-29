@@ -77,7 +77,8 @@ class TestSessionLaunchDeliveryContract(unittest.TestCase):
             "Review Assignments in new tab",
             "Review Teaching Schedule in new tab",
             "Review Schemes in new tab",
-            "this slice audits scheduling readiness but does not generate Course Schedule records",
+            "Plan timetable",
+            "preview-first",
             "guided_instructor_query",
             "guided_course_query",
             "@emit",
@@ -108,14 +109,22 @@ class TestSessionLaunchDeliveryContract(unittest.TestCase):
         self.assertNotIn("get_all(\"Instructor\"", panel)
         self.assertNotIn("get_all(\"Course\"", panel)
 
-    def test_timetable_readiness_is_audited_without_copying_or_inventing_historical_schedules(self):
+    def test_timetable_readiness_is_audited_and_step_7b_uses_governed_native_creation(self):
         api = (APP / "api/session_launch_delivery.py").read_text(encoding="utf-8")
+        timetable = (APP / "api/session_launch_timetable.py").read_text(encoding="utf-8")
         panel = (APP / "public/js/eduedge_ui/components/EduEdgeSessionDeliveryPanel.vue").read_text(encoding="utf-8")
         self.assertIn('"schedule_date": ["between", [start_date, end_date]]', api)
         self.assertIn('"student_group": ["in", group_names]', api)
         self.assertNotIn('frappe.new_doc("Course Schedule")', api)
         self.assertNotIn('frappe.get_doc({"doctype": "Course Schedule"', api)
         self.assertIn("Historical schedules, lesson delivery and results are never copied forward", panel)
+        self.assertIn("TIMETABLE_PREVIEW_METHOD", panel)
+        self.assertIn("TIMETABLE_CREATE_METHOD", panel)
+        self.assertIn("generateWeeklyDates", panel)
+        self.assertIn("Preview Timetable", panel)
+        self.assertIn('"doctype": "Course Schedule"', timetable)
+        self.assertIn("doc.insert()", timetable)
+        self.assertNotIn("ignore_permissions=True", timetable)
 
     def test_teaching_schedule_review_opens_target_branch_and_academic_period(self):
         panel = (APP / "public/js/eduedge_ui/components/EduEdgeSessionDeliveryPanel.vue").read_text(encoding="utf-8")
