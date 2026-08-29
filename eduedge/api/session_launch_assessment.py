@@ -376,6 +376,6 @@ def get_assessment_cbt_readiness(launch: str) -> dict:
 			{"key": "assessment_operations", "label": "Assessment Operations", "route": "/app/eduedge-assessment-operations"},
 			{"key": "question_bank", "label": "Question Bank", "route": "/app/eduedge-question-bank"},
 			{"key": "exam_templates", "label": "Exam Templates", "route": "/app/eduedge-exam-templates"},
-			{"key": "cbt_schedule", "label": "CBT Schedule Operations", "route": "/app/eduedge-cbt-schedule-operations"},
+			{"key": "cbt_schedule", "label": "CBT Schedules", "route": "/app/eduedge-cbt-schedules"},
 		],
 	}
