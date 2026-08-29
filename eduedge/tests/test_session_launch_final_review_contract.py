@@ -17,6 +17,12 @@ class TestSessionLaunchFinalReviewContract(unittest.TestCase):
         self.assertIn("_require_activation_permission", source)
         self.assertIn("frappe.PermissionError", source)
 
+    def test_final_review_uses_governed_launch_api_without_direct_doctype_read(self):
+        source = (APP / "api" / "session_launch_final_review.py").read_text(encoding="utf-8")
+        self.assertIn('_require_manager("get_session_launch_final_review")', source)
+        self.assertIn("_get_launch_by_name(_normalise(launch))", source)
+        self.assertNotIn('doc.check_permission("read")', source)
+
     def test_hard_blockers_cannot_be_overridden(self):
         source = (APP / "api" / "session_launch_final_review.py").read_text(encoding="utf-8")
         self.assertIn('if blocked:', source)
