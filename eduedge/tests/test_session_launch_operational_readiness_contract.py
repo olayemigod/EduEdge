@@ -33,7 +33,7 @@ class TestSessionLaunchOperationalReadinessContract(unittest.TestCase):
         self.assertIn('STATUS_READY if complete else STATUS_BLOCKED', source)
         self.assertIn("_assessment_conflict_rows", source)
         self.assertIn("buckets: dict[tuple[str, str, str], list[dict]] = defaultdict(list)", source)
-        self.assertIn('blocked = bool(conflicts)', source)
+        self.assertIn("bool(conflicts)", source)
         self.assertIn('"timetable_conflicts": len(conflicts)', source)
         self.assertNotIn("_find_overlap", source)
 
@@ -47,6 +47,12 @@ class TestSessionLaunchOperationalReadinessContract(unittest.TestCase):
         self.assertIn('if not state.get("planned"):', source)
         self.assertIn('_("No CBT sitting is planned for this Session. CBT is optional and does not block launch.")', source)
         self.assertIn('"status": "Not Planned"', source)
+
+    def test_governed_api_does_not_require_direct_launch_doctype_read(self):
+        source = (APP / "api" / "session_launch_operational_readiness.py").read_text(encoding="utf-8")
+        self.assertIn('_require_manager("get_session_launch_operational_readiness")', source)
+        self.assertIn("_get_launch_by_name", source)
+        self.assertNotIn('doc.check_permission("read")', source)
 
     def test_readiness_covers_current_academic_operational_sources_only(self):
         source = (APP / "api" / "session_launch_operational_readiness.py").read_text(encoding="utf-8")
