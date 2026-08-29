@@ -144,9 +144,10 @@ def _close_previous_active(previous: dict | None, closed_on) -> None:
 
 @frappe.whitelist()
 def get_session_launch_final_review(launch: str) -> dict:
+	# The Session Launch DocType remains System Manager-only. Authorised launch
+	# managers review it through this API and never gain direct DocType access.
 	_require_manager("get_session_launch_final_review")
 	doc = _get_launch_by_name(_normalise(launch))
-	doc.check_permission("read")
 	return _context(doc)
 
 
