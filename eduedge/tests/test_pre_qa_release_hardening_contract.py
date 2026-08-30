@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import unittest
 
 
@@ -74,6 +75,31 @@ class TestPreQAReleaseHardeningContract(unittest.TestCase):
 			"Publish Until cannot be earlier than Publish From.",
 		):
 			self.assertIn(expected, source)
+
+	def test_school_event_default_and_migrated_permissions_are_least_privilege(self):
+		policy = (APP / "security" / "permission_policy.py").read_text(encoding="utf-8")
+		self.assertIn('"EduEdge School Event"', policy)
+		patches = (APP / "patches.txt").read_text(encoding="utf-8")
+		self.assertIn("eduedge.patches.v0_9.harden_school_event_permissions", patches)
+		patch = (APP / "patches" / "v0_9" / "harden_school_event_permissions.py").read_text(encoding="utf-8")
+		self.assertIn("harden_sensitive_managed_permissions", patch)
+		self.assertNotIn("apply_default_permission_baseline", patch)
+
+		metadata = json.loads(
+			(
+				APP
+				/ "eduedge"
+				/ "doctype"
+				/ "eduedge_school_event"
+				/ "eduedge_school_event.json"
+			).read_text(encoding="utf-8")
+		)
+		permissions = {row["role"]: row for row in metadata["permissions"]}
+		for role in ("School Administrator", "Academic Administrator", "Education Manager"):
+			for right in ("delete", "email", "share"):
+				self.assertFalse(int(permissions[role].get(right, 0)), f"{role} must not have default {right} on School Event")
+		self.assertTrue(int(permissions["System Manager"].get("delete", 0)))
+		self.assertTrue(int(permissions["EduEdge Administrator"].get("delete", 0)))
 
 	def test_school_calendar_context_uses_institution_owned_sessions_and_terms(self):
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
