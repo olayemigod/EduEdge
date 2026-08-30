@@ -33,8 +33,16 @@ class EduEdgeSchoolEvent(Document):
 		self._validate_branch()
 		self._validate_academic_context()
 		self._validate_dates()
+		self._validate_publication_window()
 		self._validate_audience()
 		self._validate_status()
+
+	def on_trash(self):
+		if (self.status or "Draft") != "Draft":
+			frappe.throw(
+				_("Only Draft School Events can be deleted. Use the governed Event lifecycle for scheduled, published, cancelled, completed, or archived Events."),
+				frappe.ValidationError,
+			)
 
 	def _validate_branch(self):
 		if not self.school_branch:
@@ -110,6 +118,10 @@ class EduEdgeSchoolEvent(Document):
 			)
 			if term and (getdate(start) < getdate(term.term_start_date) or getdate(end) > getdate(term.term_end_date)):
 				frappe.throw(_("A Term-scoped School Event must stay inside the selected Term dates."), frappe.ValidationError)
+
+	def _validate_publication_window(self):
+		if self.publish_from and self.publish_until and get_datetime(self.publish_until) < get_datetime(self.publish_from):
+			frappe.throw(_("Publish Until cannot be earlier than Publish From."), frappe.ValidationError)
 
 	def _validate_audience(self):
 		if self.audience_scope not in AUDIENCE_SCOPES:
