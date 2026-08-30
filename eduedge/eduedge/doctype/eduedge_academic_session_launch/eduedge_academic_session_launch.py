@@ -103,6 +103,13 @@ class EduEdgeAcademicSessionLaunch(Document):
 		previous = self.get_doc_before_save()
 		if not previous or previous.status not in {"Active", "Closed"}:
 			return
+		if previous.status == "Closed" and self.status != "Closed":
+			frappe.throw(_("A closed Session Launch cannot be reopened."), frappe.ValidationError)
+		if previous.status == "Active" and self.status not in {"Active", "Closed"}:
+			frappe.throw(
+				_("An active Session Launch can only remain Active or be closed by the governed activation workflow."),
+				frappe.ValidationError,
+			)
 		changed = [fieldname for fieldname in IMMUTABLE_ACTIVATION_FIELDS if previous.get(fieldname) != self.get(fieldname)]
 		if changed:
 			frappe.throw(
