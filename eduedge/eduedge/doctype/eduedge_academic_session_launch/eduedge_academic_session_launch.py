@@ -21,6 +21,7 @@ STEP_LABELS = {
 }
 
 ALLOWED_STATUSES = {"Draft", "Preparing", "Ready for Review", "Ready", "Active", "Closed"}
+PROTECTED_AUDIT_STATUSES = {"Ready for Review", "Ready", "Active", "Closed"}
 IMMUTABLE_ACTIVATION_FIELDS = (
 	"ready_by",
 	"ready_on",
@@ -50,6 +51,15 @@ class EduEdgeAcademicSessionLaunch(Document):
 		self._validate_duplicate()
 		self._protect_activation_snapshot()
 		self.current_step_label = STEP_LABELS[self.current_step_key]
+
+	def on_trash(self):
+		if self.status in PROTECTED_AUDIT_STATUSES:
+			frappe.throw(
+				_(
+					"A Session Launch that reached review, readiness, activation, or closure is retained as governance evidence and cannot be deleted."
+				),
+				frappe.ValidationError,
+			)
 
 	def _validate_identity(self):
 		if not self.institution or not frappe.db.exists("EduEdge Institution", self.institution):
