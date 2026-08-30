@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+
+from eduedge.patches.v0_9 import migrate_native_academic_hierarchy as migration
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +24,23 @@ class TestNativeHierarchyProgramCollisionContract(unittest.TestCase):
 			"values[ACADEMIC_SECTION_FIELD] = level.academic_section",
 		):
 			self.assertIn(expected, source)
+
+	def test_collision_uses_institution_suffix_then_stops_on_free_name(self):
+		with (
+			patch.object(migration.frappe.db, "get_value", return_value="MGVW"),
+			patch.object(migration.frappe.db, "exists", side_effect=[True, False]) as exists,
+		):
+			candidate = migration._available_program_name("Primary 1", "INST-1")
+		self.assertEqual(candidate, "Primary 1 (MGVW)")
+		self.assertEqual(exists.call_count, 2)
+
+	def test_second_collision_increments_suffix_without_overwriting(self):
+		with (
+			patch.object(migration.frappe.db, "get_value", return_value="MGVW"),
+			patch.object(migration.frappe.db, "exists", side_effect=[True, True, False]),
+		):
+			candidate = migration._available_program_name("Primary 1", "INST-1")
+		self.assertEqual(candidate, "Primary 1 (MGVW-2)")
 
 	def test_unowned_program_is_not_claimed_without_context_match(self):
 		source = PATCH.read_text(encoding="utf-8")
