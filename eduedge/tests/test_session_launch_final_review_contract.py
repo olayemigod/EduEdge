@@ -82,6 +82,13 @@ class TestSessionLaunchFinalReviewContract(unittest.TestCase):
         self.assertIn("_protect_activation_snapshot", source)
         self.assertIn("activation snapshot is immutable", source)
 
+    def test_reviewed_launch_governance_evidence_cannot_be_deleted(self):
+        source = (APP / "eduedge" / "doctype" / "eduedge_academic_session_launch" / "eduedge_academic_session_launch.py").read_text(encoding="utf-8")
+        self.assertIn('PROTECTED_AUDIT_STATUSES = {"Ready for Review", "Ready", "Active", "Closed"}', source)
+        self.assertIn("def on_trash(self):", source)
+        self.assertIn("self.status in PROTECTED_AUDIT_STATUSES", source)
+        self.assertIn("retained as governance evidence and cannot be deleted", source)
+
     def test_final_review_panel_is_embedded_in_session_launch(self):
         launch = (APP / "public" / "js" / "eduedge_ui" / "components" / "EduEdgeSessionLaunchPanel.vue").read_text(encoding="utf-8")
         panel = (APP / "public" / "js" / "eduedge_ui" / "components" / "EduEdgeSessionFinalReviewPanel.vue").read_text(encoding="utf-8")
