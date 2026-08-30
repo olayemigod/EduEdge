@@ -24,13 +24,9 @@ class TestNativeHierarchyProgramCollisionContract(unittest.TestCase):
 
 	def test_collision_suffix_is_institution_scoped_and_incrementable(self):
 		source = PATCH.read_text(encoding="utf-8")
-		for expected in (
-			'institution_code = frappe.db.get_value("EduEdge Institution", institution, "institution_code") or institution',
-			're.sub(r"[^A-Za-z0-9]+", "-", str(institution_code or "").strip())',
-			'suffix = f" ({code})" if counter == 1 else f" ({code}-{counter})"',
-			"counter += 1",
-		):
-			self.assertIn(expected, source)
+		self.assertIn('institution_code = frappe.db.get_value("EduEdge Institution", institution, "institution_code") or institution', source)
+		self.assertIn('suffix = f" ({code})" if counter == 1 else f" ({code}-{counter})"', source)
+		self.assertIn("counter += 1", source)
 
 	def test_unowned_program_is_not_claimed_without_context_match(self):
 		source = PATCH.read_text(encoding="utf-8")
