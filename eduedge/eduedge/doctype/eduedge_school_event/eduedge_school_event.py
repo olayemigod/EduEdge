@@ -20,6 +20,7 @@ AUDIENCE_SCOPES = {
 	"Specific Programme",
 	"Boarding Students",
 }
+PROGRAMME_AUDIENCE_SCOPES = {"Specific Class", "Specific Class Arm", "Specific Programme"}
 STATUSES = {"Draft", "Scheduled", "Published", "Cancelled", "Completed", "Archived"}
 
 
@@ -87,23 +88,43 @@ class EduEdgeSchoolEvent(Document):
 	def _validate_audience(self):
 		if self.audience_scope not in AUDIENCE_SCOPES:
 			frappe.throw(_("Select a valid Event audience."), frappe.ValidationError)
-		if self.audience_scope == "Specific Programme" and not self.program:
-			frappe.throw(_("Select the Programme for this audience."), frappe.ValidationError)
-		if self.audience_scope == "Specific Class" and not self.program:
+
+		if self.audience_scope not in PROGRAMME_AUDIENCE_SCOPES:
+			self.program = None
+			self.student_group = None
+			return
+
+		if not self.program:
 			frappe.throw(_("Select the Class / Programme for this audience."), frappe.ValidationError)
-		if self.audience_scope == "Specific Class Arm" and not self.student_group:
-			frappe.throw(_("Select the Class Arm for this audience."), frappe.ValidationError)
-		if self.student_group:
-			group = frappe.db.get_value(
-				"Student Group",
-				self.student_group,
-				["program", "academic_year", BRANCH_FIELD],
-				as_dict=True,
+		if not frappe.db.exists(
+			"EduEdge Program Offering",
+			{
+				"school_branch": self.school_branch,
+				"academic_year": self.academic_year,
+				"program": self.program,
+			},
+		):
+			frappe.throw(
+				_("The selected Class / Programme is not offered by this Branch in the selected Academic Session."),
+				frappe.ValidationError,
 			)
-			if not group or group.academic_year != self.academic_year or group.get(BRANCH_FIELD) != self.school_branch:
-				frappe.throw(_("The selected Class Arm is outside this Branch or Academic Session."), frappe.ValidationError)
-			if self.program and group.program and group.program != self.program:
-				frappe.throw(_("The selected Class Arm does not belong to the selected Class / Programme."), frappe.ValidationError)
+
+		if self.audience_scope != "Specific Class Arm":
+			self.student_group = None
+			return
+
+		if not self.student_group:
+			frappe.throw(_("Select the Class Arm for this audience."), frappe.ValidationError)
+		group = frappe.db.get_value(
+			"Student Group",
+			self.student_group,
+			["program", "academic_year", BRANCH_FIELD],
+			as_dict=True,
+		)
+		if not group or group.academic_year != self.academic_year or group.get(BRANCH_FIELD) != self.school_branch:
+			frappe.throw(_("The selected Class Arm is outside this Branch or Academic Session."), frappe.ValidationError)
+		if group.program and group.program != self.program:
+			frappe.throw(_("The selected Class Arm does not belong to the selected Class / Programme."), frappe.ValidationError)
 
 	def _validate_status(self):
 		if self.status not in STATUSES:
