@@ -91,29 +91,89 @@ def _get_or_create_program(level, department: str) -> str:
 		filters[INSTITUTION_FIELD] = level.institution
 	program = frappe.db.get_value("Program", filters, "name")
 	if program:
-		updates = {}
-		current_department = frappe.db.get_value("Program", program, "department")
-		if not current_department:
-			updates["department"] = department
-		if program_meta.has_field(ACADEMIC_SECTION_FIELD) and not frappe.db.get_value("Program", program, ACADEMIC_SECTION_FIELD):
-			updates[ACADEMIC_SECTION_FIELD] = level.academic_section
-		if updates:
-			frappe.db.set_value("Program", program, updates, update_modified=False)
+		_sync_program_context(program, level, department, program_meta)
 		return program
 
-	abbreviation = str(level.level_code or "").strip() or _abbreviation(level.level_name)
-	doc = frappe.get_doc(
-		{
-			"doctype": "Program",
-			"program_name": level.level_name,
-			"program_abbreviation": abbreviation,
-			"department": department,
-			INSTITUTION_FIELD: level.institution,
-			ACADEMIC_SECTION_FIELD: level.academic_section,
-		}
+	# ERPNext Education names Program from unique program_name. A legacy site can
+	# therefore already contain "Primary 1" while its new Institution field is
+	# blank or owned by another school. Reuse only when ownership/context is
+	# compatible; otherwise create a deterministic collision-safe visible name.
+	existing_fields = ["name", "department"]
+	if program_meta.has_field(INSTITUTION_FIELD):
+		existing_fields.append(INSTITUTION_FIELD)
+	if program_meta.has_field(ACADEMIC_SECTION_FIELD):
+		existing_fields.append(ACADEMIC_SECTION_FIELD)
+	existing = frappe.db.get_value(
+		"Program",
+		{"program_name": level.level_name},
+		existing_fields,
+		as_dict=True,
 	)
+	if existing and _program_is_compatible(existing, level, department, program_meta):
+		program = existing.name
+		_sync_program_context(program, level, department, program_meta)
+		return program
+
+	program_name = _available_program_name(level.level_name, level.institution)
+	abbreviation = str(level.level_code or "").strip() or _abbreviation(program_name)
+	values = {
+		"doctype": "Program",
+		"program_name": program_name,
+		"program_abbreviation": abbreviation,
+		"department": department,
+	}
+	if program_meta.has_field(INSTITUTION_FIELD):
+		values[INSTITUTION_FIELD] = level.institution
+	if program_meta.has_field(ACADEMIC_SECTION_FIELD):
+		values[ACADEMIC_SECTION_FIELD] = level.academic_section
+	doc = frappe.get_doc(values)
 	doc.insert(ignore_permissions=True)
 	return doc.name
+
+
+def _program_is_compatible(existing, level, department: str, program_meta) -> bool:
+	if not existing:
+		return False
+	if not program_meta.has_field(INSTITUTION_FIELD):
+		return True
+	owner = existing.get(INSTITUTION_FIELD)
+	if owner:
+		return owner == level.institution
+	# Do not silently claim an unowned global Program unless its legacy Section or
+	# Department already ties it to this exact academic hierarchy.
+	if existing.get("department") and existing.get("department") == department:
+		return True
+	if program_meta.has_field(ACADEMIC_SECTION_FIELD):
+		section = existing.get(ACADEMIC_SECTION_FIELD)
+		if section and section == level.academic_section:
+			return True
+	return False
+
+
+def _sync_program_context(program: str, level, department: str, program_meta) -> None:
+	updates = {}
+	current_department = frappe.db.get_value("Program", program, "department")
+	if not current_department:
+		updates["department"] = department
+	if program_meta.has_field(INSTITUTION_FIELD) and not frappe.db.get_value("Program", program, INSTITUTION_FIELD):
+		updates[INSTITUTION_FIELD] = level.institution
+	if program_meta.has_field(ACADEMIC_SECTION_FIELD) and not frappe.db.get_value("Program", program, ACADEMIC_SECTION_FIELD):
+		updates[ACADEMIC_SECTION_FIELD] = level.academic_section
+	if updates:
+		frappe.db.set_value("Program", program, updates, update_modified=False)
+
+
+def _available_program_name(base_name: str, institution: str) -> str:
+	base_name = str(base_name or "").strip()
+	institution_code = frappe.db.get_value("EduEdge Institution", institution, "institution_code") or institution
+	code = re.sub(r"[^A-Za-z0-9]+", "-", str(institution_code or "").strip()).strip("-") or "Institution"
+	candidate = base_name
+	counter = 1
+	while frappe.db.exists("Program", {"program_name": candidate}):
+		suffix = f" ({code})" if counter == 1 else f" ({code}-{counter})"
+		candidate = f"{base_name}{suffix}"
+		counter += 1
+	return candidate
 
 
 def _backfill_student_groups(level: str, program: str) -> None:
