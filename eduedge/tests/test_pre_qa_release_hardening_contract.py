@@ -58,6 +58,23 @@ class TestPreQAReleaseHardeningContract(unittest.TestCase):
 		):
 			self.assertIn(expected, source)
 
+	def test_school_event_lifecycle_history_and_publication_window_are_governed(self):
+		source = (
+			APP
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_school_event"
+			/ "eduedge_school_event.py"
+		).read_text(encoding="utf-8")
+		for expected in (
+			"def on_trash(self):",
+			'if (self.status or "Draft") != "Draft":',
+			"Only Draft School Events can be deleted.",
+			"def _validate_publication_window(self):",
+			"Publish Until cannot be earlier than Publish From.",
+		):
+			self.assertIn(expected, source)
+
 	def test_school_calendar_context_uses_institution_owned_sessions_and_terms(self):
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")
 		self.assertIn(
