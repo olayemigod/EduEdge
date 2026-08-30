@@ -46,6 +46,8 @@ override_whitelisted_methods = {
 	"eduedge.api.programme_offerings.get_programme_offerings_page": "eduedge.api.programme_offerings_safe.get_programme_offerings_page",
 	"eduedge.api.programme_offerings.get_programme_offering_options": "eduedge.api.programme_offerings_safe.get_programme_offering_options",
 	"eduedge.api.programme_offerings.save_programme_offering": "eduedge.api.programme_offerings_safe.save_programme_offering",
+	"eduedge.api.school_calendar.get_school_calendar_context": "eduedge.api.school_calendar_hardened.get_school_calendar_context",
+	"eduedge.api.school_calendar.get_event_form_options": "eduedge.api.school_calendar_hardened.get_event_form_options",
 	"eduedge.api.report_cards.get_report_card": "eduedge.api.report_cards_profiled.get_report_card",
 	"eduedge.api.report_cards.preview_report_card": "eduedge.api.report_cards_profiled.preview_report_card",
 	"eduedge.api.teacher_assignments.get_teacher_assignments_page": "eduedge.api.instructor_assignments.get_instructor_assignments_page",
