@@ -55,10 +55,36 @@ class EduEdgeSchoolEvent(Document):
 	def _validate_academic_context(self):
 		if not self.academic_year or not frappe.db.exists("Academic Year", self.academic_year):
 			frappe.throw(_("Select a valid Academic Session."), frappe.ValidationError)
+		calendar = frappe.db.get_value(
+			"EduEdge Institution Academic Calendar",
+			{
+				"institution": self.institution,
+				"academic_year": self.academic_year,
+				"enabled": 1,
+			},
+			"name",
+		)
+		if not calendar:
+			frappe.throw(
+				_("The selected Academic Session is not configured for this Institution."),
+				frappe.ValidationError,
+			)
 		if self.academic_term:
 			term_year = frappe.db.get_value("Academic Term", self.academic_term, "academic_year")
 			if term_year != self.academic_year:
 				frappe.throw(_("The selected Term must belong to the Event Academic Session."), frappe.ValidationError)
+			if not frappe.db.exists(
+				"EduEdge Academic Calendar Period",
+				{
+					"parent": calendar,
+					"parenttype": "EduEdge Institution Academic Calendar",
+					"academic_term": self.academic_term,
+				},
+			):
+				frappe.throw(
+					_("The selected Term is not configured in this Institution Academic Calendar."),
+					frappe.ValidationError,
+				)
 
 	def _validate_dates(self):
 		if not self.starts_on or not self.ends_on:
