@@ -12,6 +12,7 @@ app_include_js = [
 	"eduedge_terminology.bundle.js",
 	"eduedge_profile_identity.bundle.js",
 	"eduedge_product_menu.bundle.js",
+	"eduedge_product_menu_hardening.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 ]
 
@@ -179,7 +180,7 @@ permission_query_conditions = {
 	"EduEdge CBT Lifecycle Log": "eduedge.cbt.permissions.cbt_lifecycle_log_query",
 	"EduEdge CBT Attempt": "eduedge.cbt.permissions.cbt_attempt_query",
 	"EduEdge CBT Attempt Review": "eduedge.cbt.permissions.cbt_attempt_review_query",
-	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.cbt_attempt_scoring_key_query",
+	"EduEdge CBT Attempt Scoring Key": "eduedge.cbt.permissions.cbt_scoring_key_query",
 	"EduEdge CBT Attempt Answer": "eduedge.cbt.permissions.cbt_attempt_answer_query",
 	"EduEdge CBT Sync Log": "eduedge.cbt.permissions.cbt_sync_log_query",
 	"EduEdge CBT Result": "eduedge.cbt.permissions.cbt_result_query",
