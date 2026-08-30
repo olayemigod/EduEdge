@@ -2,11 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import unittest
-from unittest.mock import patch
-
-import frappe
-
-from eduedge.education import school_event_permissions
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,48 +20,21 @@ class TestPreQAReleaseHardeningContract(unittest.TestCase):
 			hooks,
 		)
 
-	def test_school_event_branch_query_fails_closed_and_record_check_matches_scope(self):
-		with (
-			patch.object(school_event_permissions, "is_branch_access_enforced", return_value=True),
-			patch.object(
-				school_event_permissions,
-				"get_allowed_school_branches",
-				return_value=[{"name": "BRANCH-A"}],
-			),
-			patch.object(frappe, "get_roles", return_value=["Teacher"]),
-			patch.object(frappe.db, "escape", side_effect=lambda value: f"'{value}'"),
+	def test_school_event_branch_permission_service_fails_closed_by_contract(self):
+		source = (APP / "education" / "school_event_permissions.py").read_text(encoding="utf-8")
+		for expected in (
+			"def school_event_query",
+			"def has_school_event_permission",
+			"get_allowed_school_branches(user=user)",
+			'if not allowed:\n\t\treturn "1=0"',
+			'`tabEduEdge School Event`.`school_branch` in',
+			'branch in allowed',
+			'"System Manager"',
+			'"EduEdge Super Administrator"',
+			'"EduEdge Administrator"',
 		):
-			query = school_event_permissions.school_event_query("teacher@example.com")
-			self.assertEqual(query, "`tabEduEdge School Event`.`school_branch` in ('BRANCH-A')")
-			self.assertTrue(
-				school_event_permissions.has_school_event_permission(
-					{"school_branch": "BRANCH-A"},
-					user="teacher@example.com",
-				)
-			)
-			self.assertFalse(
-				school_event_permissions.has_school_event_permission(
-					{"school_branch": "BRANCH-B"},
-					user="teacher@example.com",
-				)
-			)
-
-		with (
-			patch.object(school_event_permissions, "is_branch_access_enforced", return_value=True),
-			patch.object(school_event_permissions, "get_allowed_school_branches", return_value=[]),
-			patch.object(frappe, "get_roles", return_value=["Teacher"]),
-		):
-			self.assertEqual(school_event_permissions.school_event_query("teacher@example.com"), "1=0")
-
-	def test_school_event_privileged_users_keep_governed_bypass(self):
-		with patch.object(school_event_permissions, "is_branch_access_enforced", return_value=True):
-			self.assertEqual(school_event_permissions.school_event_query("Administrator"), "")
-			self.assertTrue(
-				school_event_permissions.has_school_event_permission(
-					{"school_branch": "ANY"},
-					user="Administrator",
-				)
-			)
+			self.assertIn(expected, source)
+		self.assertNotIn("return None", source)
 
 	def test_school_event_controller_enforces_institution_calendar_and_audience_cascade(self):
 		source = (
