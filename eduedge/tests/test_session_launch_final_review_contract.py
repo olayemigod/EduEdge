@@ -81,6 +81,9 @@ class TestSessionLaunchFinalReviewContract(unittest.TestCase):
         self.assertIn('previous.status not in {"Active", "Closed"}', source)
         self.assertIn("_protect_activation_snapshot", source)
         self.assertIn("activation snapshot is immutable", source)
+        self.assertIn('previous.status == "Closed" and self.status != "Closed"', source)
+        self.assertIn('previous.status == "Active" and self.status not in {"Active", "Closed"}', source)
+        self.assertIn("A closed Session Launch cannot be reopened", source)
 
     def test_reviewed_launch_governance_evidence_cannot_be_deleted(self):
         source = (APP / "eduedge" / "doctype" / "eduedge_academic_session_launch" / "eduedge_academic_session_launch.py").read_text(encoding="utf-8")
