@@ -1,0 +1,37 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-07-22 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["institution", "academic_year", "is_current", "enabled", "start_date", "end_date", "periods_section", "periods", "notes"],
+ "fields": [
+  {"fieldname":"institution","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Institution","options":"EduEdge Institution","reqd":1},
+  {"fieldname":"academic_year","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Academic Year","options":"Academic Year","reqd":1},
+  {"default":"0","fieldname":"is_current","fieldtype":"Check","in_list_view":1,"label":"Current Calendar"},
+  {"default":"1","fieldname":"enabled","fieldtype":"Check","in_list_view":1,"label":"Enabled"},
+  {"fieldname":"start_date","fieldtype":"Date","label":"Start Date","reqd":1},
+  {"fieldname":"end_date","fieldtype":"Date","label":"End Date","reqd":1},
+  {"fieldname":"periods_section","fieldtype":"Section Break","label":"Academic Periods"},
+  {"fieldname":"periods","fieldtype":"Table","label":"Academic Periods","options":"EduEdge Academic Calendar Period","reqd":1},
+  {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
+ ],
+ "modified": "2026-07-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Institution Academic Calendar",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1},
+  {"create":1,"delete":1,"read":1,"report":1,"role":"EduEdge Administrator","write":1},
+  {"create":1,"read":1,"report":1,"role":"School Administrator","write":1},
+  {"create":1,"read":1,"report":1,"role":"Academic Administrator","write":1},
+  {"read":1,"report":1,"role":"Teacher"}
+ ],
+ "search_fields": "institution,academic_year",
+ "sort_field": "start_date",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "academic_year",
+ "track_changes": 1
+}

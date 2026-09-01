@@ -1,0 +1,43 @@
+{
+ "actions": [],
+ "allow_import": 0,
+ "autoname": "format:CBT-SYNC-{#####}",
+ "creation": "2026-07-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "is_submittable": 0,
+ "field_order": ["attempt", "client_session_id", "idempotency_key", "payload_hash", "client_saved_at", "server_received_at", "answer_count", "applied_count", "duplicate_count", "reported_pending_count", "sync_status", "error_details"],
+ "fields": [
+  {"fieldname": "attempt", "fieldtype": "Link", "in_list_view": 1, "in_standard_filter": 1, "label": "CBT Attempt", "options": "EduEdge CBT Attempt", "read_only": 1, "reqd": 1},
+  {"fieldname": "client_session_id", "fieldtype": "Data", "in_standard_filter": 1, "label": "Client Session ID", "read_only": 1},
+  {"fieldname": "idempotency_key", "fieldtype": "Data", "in_list_view": 1, "in_standard_filter": 1, "label": "Idempotency Key", "read_only": 1, "reqd": 1},
+  {"fieldname": "payload_hash", "fieldtype": "Data", "hidden": 1, "label": "Payload Hash", "read_only": 1},
+  {"fieldname": "client_saved_at", "fieldtype": "Datetime", "label": "Client Saved At", "read_only": 1},
+  {"fieldname": "server_received_at", "fieldtype": "Datetime", "in_list_view": 1, "label": "Server Received At", "read_only": 1},
+  {"default": "0", "fieldname": "answer_count", "fieldtype": "Int", "label": "Answers Received", "read_only": 1},
+  {"default": "0", "fieldname": "applied_count", "fieldtype": "Int", "label": "Answers Applied", "read_only": 1},
+  {"default": "0", "fieldname": "duplicate_count", "fieldtype": "Int", "label": "Duplicates Ignored", "read_only": 1},
+  {"default": "0", "fieldname": "reported_pending_count", "fieldtype": "Int", "label": "Client Pending After Sync", "read_only": 1},
+  {"default": "Applied", "fieldname": "sync_status", "fieldtype": "Select", "in_standard_filter": 1, "label": "Sync Status", "options": "Applied\nDuplicate\nConflict\nRejected", "read_only": 1},
+  {"fieldname": "error_details", "fieldtype": "Small Text", "label": "Error Details", "read_only": 1}
+ ],
+ "links": [],
+ "modified": "2026-07-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge CBT Sync Log",
+ "owner": "Administrator",
+ "permissions": [
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "EduEdge Super Administrator"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "EduEdge Administrator"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "School Administrator"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Academic Administrator"},
+  {"print": 1, "read": 1, "report": 1, "role": "CBT Invigilator"}
+ ],
+ "search_fields": "attempt,client_session_id,idempotency_key",
+ "sort_field": "server_received_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

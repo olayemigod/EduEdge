@@ -1,0 +1,34 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-07-22 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["section_name", "section_code", "institution", "sequence", "enabled", "description"],
+ "fields": [
+  {"fieldname":"section_name","fieldtype":"Data","in_list_view":1,"label":"Academic Section Name","reqd":1},
+  {"fieldname":"section_code","fieldtype":"Data","in_list_view":1,"label":"Academic Section Code","reqd":1},
+  {"fieldname":"institution","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Institution","options":"EduEdge Institution","reqd":1},
+  {"default":"10","fieldname":"sequence","fieldtype":"Int","label":"Sequence"},
+  {"default":"1","fieldname":"enabled","fieldtype":"Check","in_list_view":1,"label":"Enabled"},
+  {"fieldname":"description","fieldtype":"Small Text","label":"Description"}
+ ],
+ "modified": "2026-07-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Academic Section",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1},
+  {"create":1,"delete":1,"read":1,"report":1,"role":"EduEdge Administrator","write":1},
+  {"create":1,"read":1,"report":1,"role":"School Administrator","write":1},
+  {"create":1,"read":1,"report":1,"role":"Academic Administrator","write":1},
+  {"read":1,"role":"Teacher"}
+ ],
+ "search_fields": "section_name,section_code,institution",
+ "sort_field": "sequence",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "section_name",
+ "track_changes": 1
+}

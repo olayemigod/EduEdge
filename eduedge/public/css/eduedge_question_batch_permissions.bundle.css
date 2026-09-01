@@ -1,0 +1,4 @@
+/* Fail closed: upload controls stay hidden until the server confirms Import permission. */
+.eduedge-question-batch-root:not([data-can-upload="1"]) .eduedge-batch-tabs button:nth-child(2) {
+	display: none !important;
+}

@@ -19,6 +19,49 @@ PURPOSE_FIELD = {
 }
 
 
+def academic_period_dates(academic_year: str | None, academic_term: str | None = None) -> tuple[str | None, str | None]:
+	"""Resolve academic period bounds from native Education masters."""
+	if academic_term:
+		row = frappe.db.get_value(
+			"Academic Term",
+			academic_term,
+			["term_start_date", "term_end_date"],
+			as_dict=True,
+		) or {}
+		if row.get("term_start_date") or row.get("term_end_date"):
+			return row.get("term_start_date"), row.get("term_end_date")
+	if academic_year:
+		row = frappe.db.get_value(
+			"Academic Year",
+			academic_year,
+			["year_start_date", "year_end_date"],
+			as_dict=True,
+		) or {}
+		return row.get("year_start_date"), row.get("year_end_date")
+	return None, None
+
+
+def resolve_program_offering_period_dates(offering) -> tuple[str | None, str | None]:
+	"""Return effective Offering dates, falling back to its calendar context."""
+	if isinstance(offering, str):
+		row = frappe.db.get_value(
+			"EduEdge Program Offering",
+			offering,
+			["start_date", "end_date", "academic_year", "academic_term"],
+			as_dict=True,
+		) or {}
+	else:
+		row = offering
+	if not row:
+		return None, None
+	getter = row.get if hasattr(row, "get") else lambda key: getattr(row, key, None)
+	fallback_start, fallback_end = academic_period_dates(
+		getter("academic_year"),
+		getter("academic_term"),
+	)
+	return getter("start_date") or fallback_start, getter("end_date") or fallback_end
+
+
 def validate_program_offering(
 	*,
 	branch: str | None,
@@ -76,6 +119,7 @@ def get_matching_offerings(
 	academic_term: str | None,
 	purpose: Purpose,
 ) -> list[dict]:
+	"""Prefer session-wide Offerings and use term-bound records only as legacy fallback."""
 	purpose_field = PURPOSE_FIELD[purpose]
 	rows = frappe.get_all(
 		"EduEdge Program Offering",
@@ -98,12 +142,11 @@ def get_matching_offerings(
 		],
 		order_by="academic_term asc, modified desc",
 	)
+	sessional = [row for row in rows if not row.get("academic_term")]
+	if sessional:
+		return sessional
 	if academic_term:
-		return [
-			row
-			for row in rows
-			if not row.get("academic_term") or row.get("academic_term") == academic_term
-		]
+		return [row for row in rows if row.get("academic_term") == academic_term]
 	return rows
 
 

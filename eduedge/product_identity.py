@@ -16,6 +16,7 @@ FEATURE_KEYS = frozenset(
 		"attendance",
 		"assessment",
 		"cbt",
+		"cbt_public_exam",
 		"offline_resilient_cbt",
 		"student_pickup",
 		"school_bus",

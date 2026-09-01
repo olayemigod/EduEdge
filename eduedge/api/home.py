@@ -2,16 +2,33 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import nowdate
+from frappe.utils import cint, nowdate
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.services.branch_context import get_active_branch_context
+from eduedge.services.institution_context import get_effective_institution_context
 from eduedge.services.setup_readiness import get_setup_readiness
 
 
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required."), frappe.PermissionError)
+
+
+def _permission_aware_count(doctype: str, filters: dict) -> int:
+	"""Count only records visible through the current user's Frappe permissions."""
+	if not frappe.has_permission(doctype, "read", user=frappe.session.user):
+		return 0
+	try:
+		rows = frappe.get_list(
+			doctype,
+			filters=filters,
+			fields=[{"COUNT": "*", "as": "count"}],
+			limit_page_length=1,
+		)
+	except (frappe.PermissionError, frappe.DoesNotExistError):
+		return 0
+	return cint((rows[0] if rows else {}).get("count"))
 
 
 def _count_for_branches(
@@ -34,7 +51,7 @@ def _count_for_branches(
 		return 0
 	branch_filter: str | list = branches[0] if len(branches) == 1 else ["in", branches]
 	filters = {resolved_fieldname: branch_filter, **(extra_filters or {})}
-	return frappe.db.count(doctype, filters)
+	return _permission_aware_count(doctype, filters)
 
 
 @frappe.whitelist()
@@ -55,6 +72,10 @@ def get_home_context() -> dict:
 	else:
 		branch_names = [current_branch["name"]] if current_branch and current_branch.get("name") else []
 
+	institution_context = get_effective_institution_context(
+		company=active_company,
+		branch=(current_branch or {}).get("name"),
+	)
 	readiness = get_setup_readiness()
 	full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
 	all_branch_options = [
@@ -69,18 +90,27 @@ def get_home_context() -> dict:
 	return {
 		"product": "EduEdge",
 		"user": {"name": frappe.session.user, "full_name": full_name},
-		"tenant_name": active_company or readiness.get("school", {}).get("default_company"),
+		"tenant_name": institution_context.get("institution_name")
+		or active_company
+		or readiness.get("school", {}).get("default_company"),
+		"current_institution": {
+			"name": institution_context.get("institution") or "",
+			"institution_name": institution_context.get("institution_name") or "",
+			"institution_type": institution_context.get("institution_type") or "",
+			"institution_type_name": institution_context.get("institution_type_name") or "",
+		},
 		"current_branch": current_branch,
 		"allowed_branches": allowed_branches,
 		"active_scope": branch_context["active_scope"],
 		"active_company": active_company,
 		"active_label": branch_context["active_label"],
+		"institution_context": institution_context,
 		"all_branches_key": branch_context["all_branches_key"],
 		"all_branch_options": all_branch_options,
 		"can_switch_branch": branch_context["can_switch_branch"],
 		"can_view_all_branches": branch_context["can_view_all_branches"],
 		"branch_access_enforced": branch_context["enforcement_enabled"],
-		"can_manage_branch_access": bool({"System Manager", "EduEdge Administrator"}.intersection(frappe.get_roles(frappe.session.user))),
+		"can_manage_branch_access": bool({"System Manager", "EduEdge Super Administrator", "EduEdge Administrator"}.intersection(frappe.get_roles(frappe.session.user))),
 		"requires_branch_selection": bool(
 			branch_context["active_scope"] == "branch"
 			and allowed_branches

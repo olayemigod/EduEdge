@@ -1,0 +1,46 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:company",
+ "creation": "2026-07-27 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "company_section",
+  "company",
+  "question_governance_section",
+  "question_approval_mode",
+  "allow_bulk_question_approval",
+  "max_bulk_question_approval",
+  "require_separate_question_approver",
+  "allow_academic_admin_override"
+ ],
+ "fields": [
+  {"fieldname":"company_section","fieldtype":"Section Break","label":"Company Operations Default"},
+  {"description":"Legal and accounting owner whose Institutions inherit these defaults unless an Institution preference is enabled.","fieldname":"company","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Company","options":"Company","reqd":1,"unique":1},
+  {"fieldname":"question_governance_section","fieldtype":"Section Break","label":"Question Governance"},
+  {"default":"Recommended","description":"Recommended follows the selected Institution Type: Simple for Primary and Training Centre; Standard for Secondary and Tertiary.","fieldname":"question_approval_mode","fieldtype":"Select","in_list_view":1,"label":"Question Approval Mode","options":"Recommended\nSimple\nStandard","reqd":1},
+  {"default":"1","fieldname":"allow_bulk_question_approval","fieldtype":"Check","label":"Allow Bulk Question Approval"},
+  {"default":"100","description":"Safety limit for one governed bulk action. Maximum supported value is 100.","fieldname":"max_bulk_question_approval","fieldtype":"Int","label":"Maximum Questions per Bulk Action","reqd":1},
+  {"default":"1","fieldname":"require_separate_question_approver","fieldtype":"Check","label":"Require Different Author and Approver"},
+  {"default":"1","fieldname":"allow_academic_admin_override","fieldtype":"Check","label":"Allow Academic Administrator Override"}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-07-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Company Operations Settings",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"EduEdge Administrator","share":1,"write":1},
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}
+ ],
+ "sort_field": "company",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "company",
+ "track_changes": 1
+}

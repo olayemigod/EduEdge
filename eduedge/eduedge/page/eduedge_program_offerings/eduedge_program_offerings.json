@@ -11,13 +11,7 @@
  "name": "eduedge-program-offerings",
  "owner": "Administrator",
  "page_name": "eduedge-program-offerings",
- "roles": [
-  {"role":"System Manager"},
-  {"role":"EduEdge Administrator"},
-  {"role":"School Administrator"},
-  {"role":"Academic Administrator"},
-  {"role":"Teacher"}
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,

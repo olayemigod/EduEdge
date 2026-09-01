@@ -1,0 +1,381 @@
+/*
+ * Explicit page bundle for Multiple Questions.
+ *
+ * The Frappe asset builder emits the JavaScript entry for this Vue page but
+ * does not emit its Single File Component scoped style block as a standalone
+ * asset on the target bench. Keep these selectors page-specific and load this
+ * bundle before mounting the component.
+ */
+
+.eduedge-batch-tabs {
+	display: inline-flex;
+	gap: 0.35rem;
+	padding: 0.35rem;
+	border: 1px solid var(--edge-border, #e2e8f0);
+	border-radius: var(--edge-radius-lg, 0.9rem);
+	background: var(--edge-surface-subtle, #f8fafc);
+}
+
+.eduedge-batch-tabs button {
+	padding: 0.65rem 1rem;
+	border: 0;
+	border-radius: var(--edge-radius-md, 0.7rem);
+	background: transparent;
+	font-weight: 600;
+}
+
+.eduedge-batch-tabs button.active {
+	background: var(--edge-surface, #fff);
+	box-shadow: var(--edge-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.08));
+	color: var(--edge-primary, #1f6feb);
+}
+
+.eduedge-batch-panel,
+.eduedge-batch-workspace,
+.eduedge-question-card {
+	border: 1px solid var(--edge-border, #e2e8f0);
+	border-radius: var(--edge-radius-lg, 0.9rem);
+	background: var(--edge-surface, #fff);
+	box-shadow: var(--edge-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+.eduedge-batch-panel,
+.eduedge-batch-workspace {
+	margin-top: 1rem;
+	padding: 1.25rem;
+}
+
+.eduedge-batch-panel__heading,
+.eduedge-batch-workspace__heading,
+.eduedge-question-card__heading,
+.eduedge-card-answers__heading,
+.eduedge-batch-heading-actions,
+.eduedge-upload-actions {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.eduedge-batch-panel__heading h2,
+.eduedge-batch-workspace__heading h2 {
+	margin: 0.2rem 0 0.3rem;
+	font-size: 1.15rem;
+}
+
+.eduedge-batch-panel__heading p,
+.eduedge-batch-workspace__heading p,
+.eduedge-card-answers__heading span,
+.eduedge-batch-field small,
+.eduedge-upload-guide,
+.eduedge-upload-drop span {
+	color: var(--edge-text-muted, #64748b);
+}
+
+.eduedge-common-fields,
+.eduedge-question-card__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+	gap: 1rem;
+	margin-top: 1rem;
+}
+
+.eduedge-question-card__grid--marks {
+	grid-template-columns: repeat(2, minmax(10rem, 14rem));
+}
+
+.eduedge-batch-field {
+	display: grid;
+	gap: 0.38rem;
+	min-width: 0;
+	font-size: 0.84rem;
+	font-weight: 600;
+	color: var(--edge-text-muted, #64748b);
+}
+
+.eduedge-batch-field b {
+	color: var(--edge-danger, #dc2626);
+}
+
+.eduedge-batch-field--wide {
+	margin-top: 1rem;
+}
+
+.eduedge-batch-lookup {
+	position: relative;
+}
+
+.eduedge-batch-suggestions {
+	position: absolute;
+	top: calc(100% - 0.2rem);
+	z-index: 20;
+	display: grid;
+	width: 100%;
+	max-height: 15rem;
+	overflow: auto;
+	border: 1px solid var(--edge-border, #e2e8f0);
+	border-radius: var(--edge-radius-md, 0.7rem);
+	background: var(--edge-surface, #fff);
+	box-shadow: var(--edge-shadow-lg, 0 12px 24px rgba(15, 23, 42, 0.12));
+}
+
+.eduedge-batch-suggestions button {
+	padding: 0.7rem;
+	border: 0;
+	border-bottom: 1px solid var(--edge-border, #e2e8f0);
+	background: transparent;
+	text-align: left;
+}
+
+.eduedge-batch-suggestions button:hover {
+	background: var(--edge-primary-soft, #eff6ff);
+}
+
+.eduedge-question-cards {
+	display: grid;
+	gap: 1rem;
+	margin-top: 1rem;
+}
+
+.eduedge-question-card {
+	padding: 1rem;
+}
+
+.eduedge-question-card__heading {
+	align-items: center;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid var(--edge-border, #e2e8f0);
+}
+
+.eduedge-question-card__heading > div {
+	display: flex;
+	align-items: center;
+	gap: 0.7rem;
+}
+
+.eduedge-question-number,
+.eduedge-answer-option {
+	display: inline-grid;
+	place-items: center;
+	width: 2rem;
+	height: 2rem;
+	border-radius: 999px;
+	background: var(--edge-primary-soft, #eff6ff);
+	color: var(--edge-primary, #1f6feb);
+	font-weight: 700;
+}
+
+.eduedge-remove-question {
+	border: 0;
+	background: transparent;
+	color: var(--edge-danger, #dc2626);
+	font-weight: 600;
+}
+
+.eduedge-card-answers {
+	margin-top: 1rem;
+	padding: 1rem;
+	border-radius: var(--edge-radius-md, 0.7rem);
+	background: var(--edge-surface-subtle, #f8fafc);
+}
+
+.eduedge-card-answers__heading {
+	align-items: center;
+}
+
+.eduedge-card-answers__heading > div {
+	display: grid;
+	gap: 0.2rem;
+}
+
+.eduedge-card-answer-list {
+	display: grid;
+	gap: 0.65rem;
+	margin-top: 0.8rem;
+}
+
+.eduedge-card-answer-row {
+	display: grid;
+	grid-template-columns: auto minmax(12rem, 1fr) auto auto;
+	align-items: center;
+	gap: 0.7rem;
+}
+
+.eduedge-answer-correct {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin: 0;
+	font-weight: 600;
+}
+
+.eduedge-answer-controls {
+	display: flex;
+	gap: 0.25rem;
+}
+
+.eduedge-answer-controls button {
+	width: 2rem;
+	height: 2rem;
+	border: 1px solid var(--edge-border, #e2e8f0);
+	border-radius: 0.45rem;
+	background: var(--edge-surface, #fff);
+}
+
+.eduedge-card-empty,
+.eduedge-upload-guide {
+	margin-top: 0.8rem;
+	padding: 0.9rem;
+	border: 1px dashed var(--edge-border, #cbd5e1);
+	border-radius: var(--edge-radius-md, 0.7rem);
+	background: var(--edge-surface, #fff);
+}
+
+.eduedge-card-empty {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.eduedge-upload-guide code {
+	font-size: 0.82rem;
+}
+
+.eduedge-upload-drop {
+	display: grid;
+	place-items: center;
+	gap: 0.35rem;
+	margin-top: 1rem;
+	padding: 2rem;
+	border: 2px dashed var(--edge-border, #cbd5e1);
+	border-radius: var(--edge-radius-lg, 0.9rem);
+	background: var(--edge-surface-subtle, #f8fafc);
+	text-align: center;
+	cursor: pointer;
+}
+
+.eduedge-upload-drop.has-file {
+	border-color: var(--edge-primary, #1f6feb);
+	background: var(--edge-primary-soft, #eff6ff);
+}
+
+.eduedge-upload-drop input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+}
+
+.eduedge-upload-actions {
+	justify-content: flex-end;
+	margin-top: 0.8rem;
+}
+
+.eduedge-preview-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(8rem, 1fr));
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+.eduedge-preview-summary div {
+	display: grid;
+	gap: 0.25rem;
+	padding: 0.9rem;
+	border: 1px solid var(--edge-border, #e2e8f0);
+	border-radius: var(--edge-radius-md, 0.7rem);
+}
+
+.eduedge-preview-summary span {
+	color: var(--edge-text-muted, #64748b);
+	font-size: 0.82rem;
+}
+
+.eduedge-preview-summary strong {
+	font-size: 1.35rem;
+}
+
+.eduedge-preview-table-wrap {
+	margin-top: 1rem;
+	overflow: auto;
+	border: 1px solid var(--edge-border, #e2e8f0);
+	border-radius: var(--edge-radius-md, 0.7rem);
+}
+
+.eduedge-preview-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.84rem;
+}
+
+.eduedge-preview-table th,
+.eduedge-preview-table td {
+	padding: 0.7rem;
+	border-bottom: 1px solid var(--edge-border, #e2e8f0);
+	text-align: left;
+	vertical-align: top;
+}
+
+.eduedge-preview-table th {
+	background: var(--edge-surface-subtle, #f8fafc);
+	white-space: nowrap;
+}
+
+.eduedge-preview-table tr.invalid {
+	background: rgba(220, 38, 38, 0.04);
+}
+
+.eduedge-valid-row {
+	color: var(--edge-success, #15803d);
+	font-weight: 700;
+}
+
+.eduedge-invalid-row {
+	color: var(--edge-danger, #dc2626);
+}
+
+.eduedge-batch-error,
+.eduedge-batch-success {
+	display: grid;
+	gap: 0.25rem;
+	margin-top: 1rem;
+	padding: 0.9rem;
+	border-radius: var(--edge-radius-md, 0.7rem);
+}
+
+.eduedge-batch-error {
+	border: 1px solid rgba(220, 38, 38, 0.25);
+	background: rgba(220, 38, 38, 0.06);
+	color: var(--edge-danger, #b91c1c);
+}
+
+.eduedge-batch-success {
+	border: 1px solid rgba(21, 128, 61, 0.25);
+	background: rgba(21, 128, 61, 0.06);
+	color: var(--edge-success, #166534);
+}
+
+@media (max-width: 760px) {
+	.eduedge-batch-panel__heading,
+	.eduedge-batch-workspace__heading,
+	.eduedge-question-card__heading,
+	.eduedge-card-answers__heading,
+	.eduedge-card-empty {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.eduedge-card-answer-row {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.eduedge-answer-correct,
+	.eduedge-answer-controls {
+		grid-column: 2;
+	}
+
+	.eduedge-preview-summary {
+		grid-template-columns: 1fr;
+	}
+}

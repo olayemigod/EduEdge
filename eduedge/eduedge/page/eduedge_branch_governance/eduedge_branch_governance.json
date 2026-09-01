@@ -11,12 +11,7 @@
  "name": "eduedge-branch-governance",
  "owner": "Administrator",
  "page_name": "eduedge-branch-governance",
- "roles": [
-  {"role": "System Manager"},
-  {"role": "EduEdge Administrator"},
-  {"role": "School Administrator"},
-  {"role": "Bursar"}
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,

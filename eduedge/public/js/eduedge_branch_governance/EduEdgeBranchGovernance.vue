@@ -89,9 +89,9 @@
 					</div>
 					<EdgeActionBar label="Enable enforcement only after testing one-branch, multi-branch, no-switch, and HQ users.">
 						<template #actions>
-							<button type="button" class="edge-button" @click="openRoute('/app/eduedge-settings')">Open settings</button>
+							<button type="button" class="edge-button" @click="openRoute('/app/eduedge-settings-center')">Open settings</button>
 							<button
-								v-if="context.permissions.can_manage_access"
+								v-if="context.permissions.can_manage_enforcement"
 								type="button"
 								class="edge-button edge-button--primary"
 								:disabled="working || (!context.settings.enforcement_enabled && !context.can_enable_enforcement)"
@@ -150,7 +150,7 @@
 						</div>
 						<button v-if="context.permissions.can_view_access_details" type="button" class="edge-button" @click="openRoute('/app/eduedge-user-branch-access')">Open native list</button>
 					</div>
-					<EdgeEmptyState v-if="!context.permissions.can_view_access_details" title="Assignment details restricted" description="Only System Manager and EduEdge Administrator can view or change named user assignments. Coverage summaries remain available." />
+					<EdgeEmptyState v-if="!context.permissions.can_view_access_details" title="Assignment details restricted" description="Your current Role Permission Manager settings do not provide read access to named user branch assignments. Coverage summaries remain available." />
 					<EdgeEmptyState v-else-if="!filteredAssignments.length" title="No matching branch assignments" description="Add a direct campus assignment or approved company HQ assignment." />
 					<div v-else class="eduedge-table-wrap">
 						<table class="table table-bordered eduedge-governance-table">
@@ -250,7 +250,7 @@ export default {
 				user: {}, companies: [], selected_company: null, branches: [], assignments: [], activation_checks: [],
 				settings: { enforcement_enabled: false, hq_all_branch_view_enabled: true },
 				counts: { enabled_branches: 0, active_assignments: 0, covered_branches: 0, accounting_ready_branches: 0 },
-				permissions: { can_manage_access: false, can_view_access_details: false, can_manage_accounting: false },
+				permissions: { can_manage_access: false, can_view_access_details: false, can_manage_accounting: false, can_manage_enforcement: false },
 				can_enable_enforcement: false,
 			},
 		};

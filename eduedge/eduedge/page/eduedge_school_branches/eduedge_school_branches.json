@@ -11,14 +11,7 @@
  "name": "eduedge-school-branches",
  "owner": "Administrator",
  "page_name": "eduedge-school-branches",
- "roles": [
-  {"role":"System Manager"},
-  {"role":"EduEdge Administrator"},
-  {"role":"School Administrator"},
-  {"role":"Academic Administrator"},
-  {"role":"Bursar"},
-  {"role":"Teacher"}
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,

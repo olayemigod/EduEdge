@@ -1,3 +1,8 @@
+import { createApp, h, reactive } from "vue";
+
+import EdgeFormDialogFallback from "./components/EdgeFormDialogFallback.vue";
+import EdgeLinkFieldFallback from "./components/EdgeLinkFieldFallback.vue";
+
 function emptyResourceModalState() {
 	return {
 		open: false,
@@ -81,7 +86,7 @@ export async function openResourceModal(modal, { resource, name = "", context = 
 		});
 		const schema = response.message || {};
 		modal.title = schema.title || "Edit record";
-		modal.subtitle = schema.subtitle || "";
+		modal.subtitle = [schema.subtitle, schema.advanced_note].filter(Boolean).join(" ");
 		modal.submitLabel = schema.submit_label || (name ? "Save Changes" : "Create");
 		modal.fields = schema.fields || [];
 		modal.values = { ...(schema.values || {}) };
@@ -94,6 +99,82 @@ export async function openResourceModal(modal, { resource, name = "", context = 
 	} finally {
 		modal.loading = false;
 	}
+}
+
+function mountEdgeResourceDialog({ resource, name = "", context = {}, onSaved } = {}) {
+	if (typeof document === "undefined") return Promise.resolve(null);
+
+	return new Promise((resolve) => {
+		const host = document.createElement("div");
+		host.className = "eduedge-edge-form-dialog-host";
+		document.body.appendChild(host);
+
+		const modal = reactive(createResourceModalState());
+		let app = null;
+		let finished = false;
+
+		const finish = (value = null) => {
+			if (finished || modal.busy) return;
+			finished = true;
+			closeResourceModal(modal);
+			queueMicrotask(() => {
+				try {
+					app?.unmount();
+				} finally {
+					host.remove();
+					resolve(value);
+				}
+			});
+		};
+
+		const submit = async () => {
+			const saved = await saveResourceModal(modal);
+			if (!saved) return;
+			try {
+				await onSaved?.(saved);
+			} finally {
+				finish(saved);
+			}
+		};
+
+		const Root = {
+			name: "EduEdgeResourceDialogHost",
+			render() {
+				return h(EdgeFormDialogFallback, {
+					open: modal.open,
+					title: modal.title,
+					subtitle: modal.subtitle,
+					fields: modal.fields,
+					modelValue: modal.values,
+					fieldErrors: modal.fieldErrors,
+					error: modal.error,
+					loading: modal.loading,
+					busy: modal.busy,
+					submitLabel: modal.submitLabel,
+					showFullForm: Boolean(modal.fullFormRoute),
+					onClose: () => finish(null),
+					"onUpdate:modelValue": (values) => updateResourceModalValues(modal, values),
+					onFieldChange: (payload) => handleResourceFieldChange(modal, payload),
+					onSearchOptions: (payload) => searchResourceOptions(modal, payload),
+					onSubmit: submit,
+					onOpenFullForm: () => openResourceFullForm(modal),
+				});
+			},
+		};
+
+		app = createApp(Root);
+		app.component("EdgeLinkField", EdgeLinkFieldFallback);
+		app.mount(host);
+
+		openResourceModal(modal, { resource, name, context }).catch((error) => {
+			modal.loading = false;
+			modal.error = errorMessage(error, "The resource editor could not be loaded.");
+		});
+	});
+}
+
+export async function openNativeResourceDialog({ resource, name = "", context = {}, onSaved } = {}) {
+	return mountEdgeResourceDialog({ resource, name, context, onSaved });
 }
 
 export function closeResourceModal(modal) {
@@ -111,6 +192,14 @@ export async function handleResourceFieldChange(modal, { field, values } = {}) {
 	modal.values = { ...(values || modal.values || {}) };
 	modal.fieldErrors = { ...(modal.fieldErrors || {}), [field?.fieldname]: "" };
 	modal.error = "";
+
+	for (const fieldname of field?.clear_fields || []) {
+		if (fieldname === field?.fieldname) continue;
+		if (!emptyValue(modal.values?.[fieldname])) {
+			modal.values = { ...modal.values, [fieldname]: "" };
+		}
+		modal.fieldErrors = { ...(modal.fieldErrors || {}), [fieldname]: "" };
+	}
 
 	for (const fieldname of field?.refresh_fields || []) {
 		const target = (modal.fields || []).find((item) => item.fieldname === fieldname);
@@ -139,11 +228,15 @@ export async function searchResourceOptions(modal, { field, query = "", values =
 			values: JSON.stringify(values || modal.values || {}),
 		});
 		if (modal.searchTokens?.[fieldname] !== token) return;
+		const options = response.message || [];
 		modal.fields = (modal.fields || []).map((item) =>
 			item.fieldname === fieldname
-				? { ...item, options: response.message || [], options_loading: false }
+				? { ...item, options, options_loading: false }
 				: item
 		);
+		if (emptyValue(modal.values?.[fieldname]) && options.length === 1) {
+			modal.values = { ...modal.values, [fieldname]: options[0].value ?? options[0].name ?? "" };
+		}
 	} catch (error) {
 		if (modal.searchTokens?.[fieldname] !== token) return;
 		modal.fields = (modal.fields || []).map((item) =>

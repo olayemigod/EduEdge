@@ -1,3 +1,22 @@
 [pre_model_sync]
 
 [post_model_sync]
+eduedge.patches.v0_8.backfill_examination_centre_status
+eduedge.patches.v0_8.enforce_examination_centre_master_lifecycle
+eduedge.patches.v0_8.enforce_cbt_master_lifecycle
+eduedge.patches.v0_8.backfill_cbt_question_topics
+eduedge.patches.v0_8.apply_role_permission_baseline
+eduedge.patches.v0_8.normalize_training_progress_permissions
+eduedge.patches.v0_8.backfill_exam_template_reuse_scope
+eduedge.patches.v0_8.backfill_user_access_scope
+eduedge.patches.v0_8.add_cbt_candidate_assignment_unique_indexes
+eduedge.patches.v0_9.ensure_current_academic_calendars
+eduedge.patches.v0_9.migrate_native_academic_hierarchy
+eduedge.patches.v0_9.harden_training_progress_permissions
+eduedge.patches.v0_9.harden_sensitive_role_permissions
+eduedge.patches.v0_9.add_people_operations_permissions
+eduedge.patches.v0_9.add_curriculum_management_permissions
+eduedge.patches.v0_9.add_department_hierarchy_permissions
+eduedge.patches.v0_9.normalize_instructor_assignment_titles
+eduedge.patches.v0_9.rename_scheme_of_work_page_route
+eduedge.patches.v0_9.harden_school_event_permissions

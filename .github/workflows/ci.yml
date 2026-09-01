@@ -19,6 +19,8 @@ jobs:
         run: python -c "import json, pathlib; [json.loads(p.read_text()) for p in pathlib.Path('.').rglob('*.json')]"
       - name: Validate frontend entry scripts
         run: |
+          node --check eduedge/public/js/education/program.js
+          node --check eduedge/public/js/education/course.js
           node --check eduedge/public/js/education/student_admission.js
           node --check eduedge/public/js/education/student_applicant.js
           node --check eduedge/public/js/education/program_enrollment.js
@@ -34,24 +36,87 @@ jobs:
           node --check eduedge/eduedge/doctype/eduedge_instructor_branch_assignment/eduedge_instructor_branch_assignment.js
           node --check eduedge/eduedge/doctype/eduedge_result_publication/eduedge_result_publication.js
           node --check eduedge/eduedge/doctype/eduedge_report_card_review/eduedge_report_card_review.js
+          node --check eduedge/eduedge/doctype/eduedge_examination_centre/eduedge_examination_centre.js
+          node --check eduedge/eduedge/doctype/eduedge_cbt_question/eduedge_cbt_question.js
+          node --check eduedge/eduedge/doctype/eduedge_cbt_exam_template/eduedge_cbt_exam_template.js
+          node --check eduedge/eduedge/doctype/eduedge_cbt_exam_schedule/eduedge_cbt_exam_schedule.js
+          node --check eduedge/eduedge/doctype/eduedge_cbt_candidate_assignment/eduedge_cbt_candidate_assignment.js
+          node --check eduedge/public/js/eduedge_cbt_runtime_storage.js
+          node --check eduedge/public/js/eduedge_cbt_candidate.js
+          node --check eduedge/public/js/eduedge_cbt_candidate_serialization.js
+          node --check eduedge/public/js/eduedge_cbt_invigilation.bundle.js
+          node --check eduedge/public/js/eduedge_cbt_marking.bundle.js
+          node --check eduedge/public/js/eduedge_cbt_attempt_review.bundle.js
+          node --check eduedge/public/js/eduedge_ui/app_factory.js
+          node --check eduedge/public/js/eduedge_ui/native_frappe_dialog.js
           node --check eduedge/public/js/eduedge_ui/navigation.js
           node --check eduedge/public/js/eduedge_ui/resource_modal.js
+          node --check eduedge/public/js/eduedge_terminology.bundle.js
+          node --check eduedge/public/js/eduedge_profile_identity.bundle.js
+          node --check eduedge/public/js/eduedge_shell_identity.bundle.js
+          node --check eduedge/public/js/eduedge_institution_structure.bundle.js
+          node --check eduedge/public/js/eduedge_academic_foundation.bundle.js
+          node --check eduedge/public/js/eduedge_academic_foundation/qa_fixes.js
+          node --check eduedge/public/js/eduedge_programmes.bundle.js
+          node --check eduedge/public/js/eduedge_programme_offerings.bundle.js
+          node --check eduedge/public/js/eduedge_class_arms.bundle.js
+          node --check eduedge/public/js/eduedge_students.bundle.js
+          node --check eduedge/public/js/eduedge_student_enrollments.bundle.js
+          node --check eduedge/public/js/eduedge_student_progression.bundle.js
+          node --check eduedge/public/js/eduedge_instructors.bundle.js
+          node --check eduedge/public/js/eduedge_instructor_assignments.bundle.js
+          node --check eduedge/public/js/eduedge_curriculum.bundle.js
           node --check eduedge/public/js/eduedge_product_menu.bundle.js
           node --check eduedge/public/js/eduedge_resource_page_loader.bundle.js
           node --check eduedge/public/js/eduedge_resource_center.bundle.js
           node --check eduedge/public/js/eduedge_settings_center.bundle.js
+          node --check eduedge/public/js/eduedge_institution_operations_settings.bundle.js
           node --check eduedge/public/js/eduedge_home.bundle.js
           node --check eduedge/public/js/eduedge_academic_operations.bundle.js
+          node --check eduedge/public/js/eduedge_cbt_operations.bundle.js
+          node --check eduedge/public/js/eduedge_cbt_schedules.bundle.js
+          node --check eduedge/public/js/eduedge_exam_templates.bundle.js
+          node --check eduedge/public/js/eduedge_exam_template_builder.bundle.js
+          node --check eduedge/public/js/eduedge_question_bank.bundle.js
+          node --check eduedge/public/js/eduedge_question_responsibilities.bundle.js
+          node --check eduedge/public/js/eduedge_question_builder.bundle.js
+          node --check eduedge/public/js/eduedge_question_builder/rich_text_editor.js
+          node --check eduedge/public/js/eduedge_question_batch.bundle.js
           node --check eduedge/public/js/eduedge_assessment_operations.bundle.js
           node --check eduedge/public/js/eduedge_report_cards.bundle.js
           node --check eduedge/public/js/eduedge_branch_governance.bundle.js
           node --check eduedge/eduedge/page/eduedge_home/eduedge_home.js
           node --check eduedge/eduedge/page/eduedge_setup_center/eduedge_setup_center.js
           node --check eduedge/eduedge/page/eduedge_academic_operations/eduedge_academic_operations.js
+          node --check eduedge/eduedge/page/eduedge_programs/eduedge_programs.js
+          node --check eduedge/eduedge/page/eduedge_program_offerings/eduedge_program_offerings.js
+          node --check eduedge/eduedge/page/eduedge_class_arms/eduedge_class_arms.js
+          node --check eduedge/eduedge/page/eduedge_students/eduedge_students.js
+          node --check eduedge/eduedge/page/eduedge_student_enrollments/eduedge_student_enrollments.js
+          node --check eduedge/eduedge/page/eduedge_student_progression/eduedge_student_progression.js
+          node --check eduedge/eduedge/page/eduedge_instructors/eduedge_instructors.js
+          node --check eduedge/eduedge/page/eduedge_instructor_assignments/eduedge_instructor_assignments.js
+          node --check eduedge/eduedge/page/eduedge_curriculum/eduedge_curriculum.js
+          node --check eduedge/eduedge/page/eduedge_my_profile/eduedge_my_profile.js
+          node --check eduedge/eduedge/page/eduedge_institution_profile/eduedge_institution_profile.js
+          node --check eduedge/eduedge/page/eduedge_cbt_operations/eduedge_cbt_operations.js
+          node --check eduedge/eduedge/page/eduedge_cbt_schedules/eduedge_cbt_schedules.js
+          node --check eduedge/eduedge/page/eduedge_exam_templates/eduedge_exam_templates.js
+          node --check eduedge/eduedge/page/eduedge_exam_template_builder/eduedge_exam_template_builder.js
+          node --check eduedge/eduedge/page/eduedge_question_bank/eduedge_question_bank.js
+          node --check eduedge/eduedge/page/eduedge_question_responsibilities/eduedge_question_responsibilities.js
+          node --check eduedge/eduedge/page/eduedge_cbt_invigilation/eduedge_cbt_invigilation.js
+          node --check eduedge/eduedge/page/eduedge_cbt_marking/eduedge_cbt_marking.js
+          node --check eduedge/eduedge/page/eduedge_cbt_attempt_review/eduedge_cbt_attempt_review.js
+          node --check eduedge/eduedge/page/eduedge_question_builder/eduedge_question_builder.js
+          node --check eduedge/eduedge/page/eduedge_question_batch/eduedge_question_batch.js
           node --check eduedge/eduedge/page/eduedge_assessment_operations/eduedge_assessment_operations.js
           node --check eduedge/eduedge/page/eduedge_report_cards/eduedge_report_cards.js
           node --check eduedge/eduedge/page/eduedge_branch_governance/eduedge_branch_governance.js
           node --check eduedge/eduedge/page/eduedge_settings_center/eduedge_settings_center.js
+          node --check eduedge/eduedge/page/eduedge_institution_structure/eduedge_institution_structure.js
+          node --check eduedge/eduedge/page/eduedge_academic_foundation/eduedge_academic_foundation.js
+          node --check eduedge/eduedge/page/eduedge_institution_operations_settings/eduedge_institution_operations_settings.js
       - name: Run pure contract tests
         id: contract-tests
         shell: bash
