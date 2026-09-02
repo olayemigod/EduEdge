@@ -50,7 +50,7 @@ class TestInstructorAssignmentLegacyAPIRetirementContract(unittest.TestCase):
             / "eduedge_instructor_assignments"
             / "EduEdgeInstructorAssignments.vue"
         ).read_text(encoding="utf-8")
-        self.assertIn("eduedge.api.instructor_assignments.get_instructor_assignments_page", component)
+        self.assertIn("eduedge.api.instructor_assignment_runtime.get_instructor_assignments_page", component)
         self.assertIn("eduedge.api.instructor_assignments.preview_instructor_assignment_batch", component)
         self.assertIn("eduedge.api.instructor_assignments.save_instructor_assignment_batch", component)
         self.assertNotIn("eduedge.api.teacher_assignments", component)

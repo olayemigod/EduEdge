@@ -1,0 +1,138 @@
+name: EdgeSuite UI Candidate Compatibility
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: eduedge-edgeui-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: EduEdge + reconciled EdgeSuite UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Check out EduEdge
+        uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          check-latest: true
+
+      - name: Verify EdgeSuite UI access token
+        shell: bash
+        env:
+          EDGESUITE_UI_TOKEN: ${{ secrets.EDGESUITE_UI_TOKEN }}
+        run: |
+          test -n "$EDGESUITE_UI_TOKEN"
+
+      - name: Install bench prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmariadb-dev pkg-config redis-tools
+          python -m pip install --upgrade frappe-bench
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Create clean Frappe v16 bench
+        run: |
+          bench init \
+            --frappe-branch version-16 \
+            --python "$(command -v python)" \
+            --skip-assets \
+            --skip-redis-config-generation \
+            frappe-bench
+          cd frappe-bench
+          bench set-config -g db_host 127.0.0.1
+          bench set-config -g redis_cache redis://127.0.0.1:6379
+          bench set-config -g redis_queue redis://127.0.0.1:6379
+          bench set-config -g redis_socketio redis://127.0.0.1:6379
+
+      - name: Check out exact governed EdgeSuite UI 1.1.0 candidate
+        uses: actions/checkout@v6
+        with:
+          repository: olayemigod/processedge-edge-suite-ui
+          ref: e40ea4d7dc000d17443a0571c1e246b61bfd3e1d
+          token: ${{ secrets.EDGESUITE_UI_TOKEN }}
+          path: edgesuite-ui-source
+
+      - name: Fetch ERPNext, Education, EdgeSuite UI, and EduEdge
+        working-directory: frappe-bench
+        run: |
+          bench get-app --branch version-16 --skip-assets https://github.com/frappe/erpnext.git
+          bench get-app --branch version-16 --skip-assets https://github.com/frappe/education.git
+          bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
+          bench get-app --skip-assets "$GITHUB_WORKSPACE"
+
+      - name: Create clean EduEdge integration site
+        working-directory: frappe-bench
+        run: |
+          bench new-site eduedge-ci.localhost \
+            --db-host 127.0.0.1 \
+            --mariadb-root-password root \
+            --admin-password admin \
+            --no-mariadb-socket
+          bench --site eduedge-ci.localhost install-app erpnext
+          bench --site eduedge-ci.localhost install-app education
+          bench --site eduedge-ci.localhost install-app edgesuite_ui
+          bench --site eduedge-ci.localhost install-app eduedge
+          bench --site eduedge-ci.localhost set-config allow_tests true
+
+      - name: Build, migrate twice, and verify shared runtime
+        working-directory: frappe-bench
+        run: |
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "e40ea4d7dc000d17443a0571c1e246b61bfd3e1d"
+          grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
+          bench build --app edgesuite_ui
+          bench build --app education
+          bench build --app eduedge
+          bench --site eduedge-ci.localhost migrate
+          bench --site eduedge-ci.localhost migrate
+          grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
+          test -f apps/edgesuite_ui/edgesuite_ui/search_ranking.py
+
+      - name: Run full EduEdge database-backed tests
+        working-directory: frappe-bench
+        shell: bash
+        run: |
+          set -o pipefail
+          bench --site eduedge-ci.localhost run-tests --app eduedge 2>&1 | tee /tmp/eduedge-edgeui-candidate-tests.log
+
+      - name: Preserve failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eduedge-edgeui-candidate-failure
+          path: /tmp/eduedge-edgeui-candidate-tests.log
+          if-no-files-found: ignore
+          retention-days: 3

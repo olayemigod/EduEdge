@@ -34,14 +34,18 @@ class TestAcademicOperationsRefactorContract(unittest.TestCase):
     def test_teaching_schedule_wraps_native_course_schedule(self):
         source = (APP / "public/js/eduedge_teaching_schedule/EduEdgeTeachingSchedule.vue").read_text(encoding="utf-8")
         api = (APP / "api/teaching_schedule.py").read_text(encoding="utf-8")
-        for token in ("Day", "Week", "Upcoming", "Rooms", "/app/course-schedule/new-course-schedule"):
+        for token in ("Day", "Week", "Upcoming", "Rooms", "TeachingScheduleCreateDialog"):
             self.assertIn(token, source)
+        self.assertNotIn('/app/course-schedule/new-course-schedule', source)
+        self.assertIn('window.open("/app/course-schedule", "_blank", "noopener")', source)
         self.assertIn('params.get("date")', source)
         self.assertIn('params.get("view")', source)
         self.assertIn('frappe.has_permission("Course Schedule", "read")', api)
+        self.assertIn('frappe.has_permission("Course Schedule", "create")', api)
         self.assertIn('"Course Schedule"', api)
         self.assertIn("is_limited_instructor_user", api)
         self.assertIn("BRANCH_FIELD", api)
+        self.assertIn("doc.insert()", api)
 
     def test_attendance_requires_exact_schedule_for_take_attendance(self):
         source = (APP / "public/js/eduedge_attendance/EduEdgeAttendance.vue").read_text(encoding="utf-8")

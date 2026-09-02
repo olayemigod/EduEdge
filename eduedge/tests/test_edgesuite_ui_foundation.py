@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
 GLOBAL_DESK_BUNDLES = {
 	"eduedge_product_menu.bundle.js",
+	"eduedge_product_menu_hardening.bundle.js",
 	"eduedge_profile_identity.bundle.js",
 	"eduedge_shell_identity.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
@@ -80,9 +81,23 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 				self.assertRegex(source, r"window\.createEduEdge[A-Za-z]+App")
 
 	def test_root_product_pages_use_edge_app_shell(self):
-		vue_root = APP / "public" / "js"
-		for path in vue_root.glob("eduedge_*/*.vue"):
-			with self.subTest(path=path):
+		page_root = APP / "eduedge" / "page"
+		bundle_root = APP / "public" / "js"
+		root_bundles: set[str] = set()
+		for loader in page_root.glob("*/*.js"):
+			match = re.search(r'frappe\.require\("(eduedge_[^"]+\.bundle\.js)"', loader.read_text())
+			if match and match.group(1) not in GLOBAL_DESK_BUNDLES:
+				root_bundles.add(match.group(1))
+
+		self.assertTrue(root_bundles, "Expected at least one EduEdge Desk page bundle")
+		for bundle_name in sorted(root_bundles):
+			bundle = bundle_root / bundle_name
+			with self.subTest(bundle=bundle_name):
+				self.assertTrue(bundle.exists(), f"Missing Desk page bundle: {bundle_name}")
+				bundle_source = bundle.read_text()
+				match = re.search(r'import\s+\w+\s+from\s+"(\./[^\"]+\.vue)"', bundle_source)
+				self.assertIsNotNone(match, f"Could not resolve root Vue component for {bundle_name}")
+				path = bundle_root / match.group(1).removeprefix("./")
 				source = path.read_text()
 				self.assertIn("<EdgeAppShell", source)
 				self.assertNotIn('from "edgesuite_ui', source)

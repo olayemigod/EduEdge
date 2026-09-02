@@ -12,6 +12,7 @@ app_include_js = [
 	"eduedge_terminology.bundle.js",
 	"eduedge_profile_identity.bundle.js",
 	"eduedge_product_menu.bundle.js",
+	"eduedge_product_menu_hardening.bundle.js",
 	"eduedge_resource_page_loader.bundle.js",
 ]
 
@@ -46,6 +47,8 @@ override_whitelisted_methods = {
 	"eduedge.api.programme_offerings.get_programme_offerings_page": "eduedge.api.programme_offerings_safe.get_programme_offerings_page",
 	"eduedge.api.programme_offerings.get_programme_offering_options": "eduedge.api.programme_offerings_safe.get_programme_offering_options",
 	"eduedge.api.programme_offerings.save_programme_offering": "eduedge.api.programme_offerings_safe.save_programme_offering",
+	"eduedge.api.school_calendar.get_school_calendar_context": "eduedge.api.school_calendar_hardened.get_school_calendar_context",
+	"eduedge.api.school_calendar.get_event_form_options": "eduedge.api.school_calendar_hardened.get_event_form_options",
 	"eduedge.api.report_cards.get_report_card": "eduedge.api.report_cards_profiled.get_report_card",
 	"eduedge.api.report_cards.preview_report_card": "eduedge.api.report_cards_profiled.preview_report_card",
 	"eduedge.api.teacher_assignments.get_teacher_assignments_page": "eduedge.api.instructor_assignments.get_instructor_assignments_page",
@@ -148,6 +151,7 @@ permission_query_conditions = {
 	"Fee Structure": "eduedge.education.academic_permissions.fee_structure_query",
 	"EduEdge Enrollment Status Log": "eduedge.education.academic_branch_permissions.enrollment_status_log_query",
 	"EduEdge School Branch": "eduedge.education.permissions.school_branch_query",
+	"EduEdge School Event": "eduedge.education.school_event_permissions.school_event_query",
 	"Student Admission": "eduedge.education.permissions.student_admission_query",
 	"Student Applicant": "eduedge.education.permissions.student_applicant_query",
 	"Student": "eduedge.education.permissions.student_query",
@@ -204,6 +208,7 @@ has_permission = {
 	"Fee Structure": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"EduEdge Enrollment Status Log": "eduedge.education.academic_branch_permissions.has_enrollment_status_log_permission",
 	"EduEdge School Branch": "eduedge.education.permissions.has_school_branch_record_permission",
+	"EduEdge School Event": "eduedge.education.school_event_permissions.has_school_event_permission",
 	"Student Admission": "eduedge.education.permissions.has_student_admission_permission",
 	"Student Applicant": "eduedge.education.permissions.has_student_applicant_permission",
 	"Student": "eduedge.education.permissions.has_student_permission",

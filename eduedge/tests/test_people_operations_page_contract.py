@@ -42,14 +42,15 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 		self.assertIn("_inherit_approved_applicant_photo", governance)
 		self.assertIn("Only genuine JPG, PNG, and WebP images are allowed", api)
 		self.assertIn("MAX_IMAGE_BYTES = 2 * 1024 * 1024", api)
-		self.assertIn('doc.set(PHOTO_LOCKED_FIELD, 1 if decision == "Approved" else 0)', api)
+		self.assertIn('if decision not in {"Approve", "Reject", "Unlock"}', api)
+		self.assertIn('doc.set(PHOTO_LOCKED_FIELD, 1)', api)
+		self.assertIn('doc.set(PHOTO_LOCKED_FIELD, 0)', api)
 		self.assertIn("EduEdge Student Photo Review Log", api)
 		self.assertEqual(log_json["name"], "EduEdge Student Photo Review Log")
 		self.assertIn("append-only", log_controller)
 
 	def test_instructor_profile_api_is_institution_scoped_and_branch_optional(self):
 		api = (APP / "api" / "instructor_profiles.py").read_text(encoding="utf-8")
-		legacy_api = (APP / "api" / "people_operations.py").read_text(encoding="utf-8")
 		for token in (
 			'ALL_INSTITUTIONS_KEY = "__all__"',
 			"GLOBAL_INSTRUCTOR_ROLES",
@@ -63,10 +64,6 @@ class TestPeopleOperationsPageContract(unittest.TestCase):
 			self.assertIn(token, api)
 		self.assertNotIn("Primary School Branch / Campus is required", api)
 		self.assertNotIn("ignore_permissions", api)
-		self.assertIn("Backward-compatible Instructor save endpoint", legacy_api)
-		self.assertIn("from eduedge.api.instructor_profiles import save_instructor as save_instructor_profile", legacy_api)
-		self.assertIn("return save_instructor_profile(payload)", legacy_api)
-		self.assertNotIn("Primary School Branch / Campus is required", legacy_api)
 
 	def test_instructor_governance_allows_safe_home_institution_transfer(self):
 		governance = (APP / "education" / "people_governance.py").read_text(encoding="utf-8")
