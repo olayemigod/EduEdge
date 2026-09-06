@@ -77,10 +77,8 @@ function patchEduEdgeDesktopLauncher() {
 }
 
 function navigateEduEdgeHomeSameTab() {
-	if (typeof frappe?.set_route === "function") {
-		frappe.set_route("eduedge-home");
-		return;
-	}
+	// Use the exact canonical Desk route. location.assign navigates the current
+	// browsing context, so a normal desktop-icon click cannot create a new tab.
 	window.location.assign(EDUEDGE_DESKTOP_HOME_ROUTE);
 }
 
