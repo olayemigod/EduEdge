@@ -32,13 +32,13 @@ class TestEduEdgeDesktopLauncherContract(unittest.TestCase):
 			'a.desktop-icon[data-id="EduEdge"]',
 			'anchor.setAttribute("href", EDUEDGE_DESKTOP_HOME_ROUTE)',
 			'anchor.removeAttribute("target")',
-			'frappe.set_route("eduedge-home")',
 			'window.location.assign(EDUEDGE_DESKTOP_HOME_ROUTE)',
 			'document.addEventListener("click", handleEduEdgeDesktopLauncherClick, true)',
 			'window.EduEdgeDesktopLauncher = Object.freeze',
 		):
 			self.assertIn(contract, script)
 
+		self.assertNotIn('frappe.set_route("eduedge-home")', script)
 		self.assertNotIn('window.open(', script)
 		self.assertNotIn('target", "_blank"', script)
 
