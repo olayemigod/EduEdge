@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
-GLOBAL_DESK_BUNDLES = {
+NON_PAGE_APP_BUNDLES = {
 	"eduedge_product_menu.bundle.js",
 	"eduedge_product_menu_hardening.bundle.js",
 	"eduedge_profile_identity.bundle.js",
@@ -13,6 +13,7 @@ GLOBAL_DESK_BUNDLES = {
 	"eduedge_resource_page_loader.bundle.js",
 	"eduedge_terminology.bundle.js",
 	"eduedge_question_rich_text.bundle.js",
+	"eduedge_question_editor_stability.bundle.js",
 }
 
 
@@ -72,7 +73,7 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 		self.assertIn("resolveEdgeSuiteRuntime", factory)
 
 		for path in bundle_root.glob("eduedge_*.bundle.js"):
-			if path.name in GLOBAL_DESK_BUNDLES:
+			if path.name in NON_PAGE_APP_BUNDLES:
 				continue
 			with self.subTest(path=path):
 				source = path.read_text()
@@ -86,7 +87,7 @@ class TestEdgeSuiteUIFoundation(unittest.TestCase):
 		root_bundles: set[str] = set()
 		for loader in page_root.glob("*/*.js"):
 			match = re.search(r'frappe\.require\("(eduedge_[^"]+\.bundle\.js)"', loader.read_text())
-			if match and match.group(1) not in GLOBAL_DESK_BUNDLES:
+			if match and match.group(1) not in NON_PAGE_APP_BUNDLES:
 				root_bundles.add(match.group(1))
 
 		self.assertTrue(root_bundles, "Expected at least one EduEdge Desk page bundle")
