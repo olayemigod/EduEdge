@@ -75,7 +75,7 @@ function protectQuestionEditor(editor, registry) {
 }
 
 function markDraftSaveAction(root) {
-	const buttons = [...root.querySelectorAll("button:not([disabled])")].filter(
+	const buttons = [...root.querySelectorAll("button")].filter(
 		(button) => String(button.textContent || "").trim().toLowerCase() === "save draft",
 	);
 	if (buttons.length !== 1) return;
