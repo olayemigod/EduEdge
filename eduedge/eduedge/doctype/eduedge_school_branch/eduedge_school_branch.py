@@ -54,12 +54,14 @@ class EduEdgeSchoolBranch(Document):
 
 	def before_validate(self) -> None:
 		self.branch_code = _normalize_branch_code(self.branch_code)
+		self._derive_institution_context()
 		if (self.is_default or self.is_main_branch) and not self.enabled:
 			frappe.throw(_("A default or main School Branch must be enabled."), frappe.ValidationError)
 
 	def validate(self) -> None:
 		self._validate_company()
 		self._validate_company_change()
+		self._validate_institution()
 		self._validate_contact_details()
 		self._validate_cost_centers()
 		self._validate_accounts()
@@ -72,7 +74,7 @@ class EduEdgeSchoolBranch(Document):
 			frappe.db.set_value(
 				"EduEdge School Branch",
 				{
-					"company": self.company,
+					"institution": self.institution,
 					fieldname: 1,
 					"name": ["!=", self.name],
 				},
@@ -81,6 +83,22 @@ class EduEdgeSchoolBranch(Document):
 				update_modified=False,
 			)
 
+	def _derive_institution_context(self) -> None:
+		if not self.institution:
+			return
+		institution = frappe.db.get_value(
+			"EduEdge Institution",
+			self.institution,
+			["company", "institution_type", "enabled"],
+			as_dict=True,
+		)
+		if not institution or not institution.enabled:
+			frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+		if self.company and self.company != institution.company:
+			frappe.throw(_("School Branch and Institution must belong to the same Company."), frappe.ValidationError)
+		self.company = institution.company
+		self.institution_type = institution.institution_type
+
 	def _validate_company(self) -> None:
 		if frappe.db.get_value("Company", self.company, "is_group") == 1:
 			frappe.throw(_("A group Company cannot be used as a school branch company."))
@@ -88,6 +106,29 @@ class EduEdgeSchoolBranch(Document):
 	def _validate_company_change(self) -> None:
 		if self.is_new() or not self.has_value_changed("company"):
 			return
+		if self._has_linked_records():
+			frappe.throw(
+				_("Company cannot change after branch-linked education or access records exist."),
+				frappe.ValidationError,
+			)
+
+	def _validate_institution(self) -> None:
+		if not self.institution:
+			frappe.throw(_("Institution is required for every EduEdge School Branch."), frappe.ValidationError)
+		institution = frappe.db.get_value(
+			"EduEdge Institution",
+			self.institution,
+			["company", "institution_type", "enabled"],
+			as_dict=True,
+		)
+		if not institution or not institution.enabled:
+			frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+		if institution.company != self.company:
+			frappe.throw(_("School Branch and Institution must belong to the same Company."), frappe.ValidationError)
+		if institution.institution_type != self.institution_type:
+			frappe.throw(_("Institution Type must be inherited from the selected Institution."), frappe.ValidationError)
+
+	def _has_linked_records(self) -> bool:
 		for doctype, fieldname in LINKED_BRANCH_DOCTYPES:
 			if not frappe.db.exists("DocType", doctype):
 				continue
@@ -97,10 +138,8 @@ class EduEdgeSchoolBranch(Document):
 			except frappe.DoesNotExistError:
 				continue
 			if frappe.db.exists(doctype, {fieldname: self.name}):
-				frappe.throw(
-					_("Company cannot change after branch-linked education or access records exist."),
-					frappe.ValidationError,
-				)
+				return True
+		return False
 
 	def _validate_contact_details(self) -> None:
 		if self.email and not validate_email_address(self.email):

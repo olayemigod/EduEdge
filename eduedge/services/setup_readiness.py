@@ -51,9 +51,13 @@ def get_setup_readiness() -> dict:
 
 	if enforcement_enabled and not branch_access_count:
 		blockers.append("User Branch Access enforcement is enabled but no active assignments exist.")
-	elif not enforcement_enabled:
+	elif not enforcement_enabled and branch_count > 1:
+		blockers.append(
+			"Branch Access enforcement is disabled on a multi-branch school. Review staff assignments and enable enforcement before operational use."
+		)
+	elif not enforcement_enabled and branch_count == 1:
 		warnings.append(
-			"User Branch Access enforcement is disabled. Configure and review assignments before activation."
+			"User Branch Access enforcement is disabled. Configure and review assignments before adding another Branch / Campus."
 		)
 	if branch_count and accounting_ready_count < branch_count:
 		warnings.append(

@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import frappe
+
+from eduedge.api import programme_offerings_safe as base
+
+MAX_OPTION_ROWS = 500
+CALENDAR_DOCTYPE = "EduEdge Institution Academic Calendar"
+
+
+def _all_academic_years(institution: str | None) -> list[dict]:
+	"""Return every readable Academic Session, independent of calendar readiness.
+
+	Academic Year is a global academic master. Once the user has DocType read
+	permission, Class Intake discovery must not apply Institution Calendar or
+	User-Permission value filtering that can make a valid future Session disappear.
+	Institution Calendar readiness is attached separately below and remains
+	validated before term-dependent operations run.
+	"""
+	if not frappe.has_permission("Academic Year", "read"):
+		return []
+
+	# Use get_all only after the explicit DocType permission gate above. Academic
+	# Years are global structural masters and the same Sessions are already exposed
+	# by Student Progression. Per-value filtering here caused future Sessions to
+	# disappear from Class Intakes even though the user could operate on them.
+	years = frappe.get_all(
+		"Academic Year",
+		fields=["name", "year_start_date", "year_end_date"],
+		order_by="year_start_date desc, name desc",
+		page_length=MAX_OPTION_ROWS,
+	)
+
+	calendar_by_year: dict[str, dict] = {}
+	if (
+		institution
+		and frappe.db.exists("DocType", CALENDAR_DOCTYPE)
+		and frappe.has_permission(CALENDAR_DOCTYPE, "read")
+	):
+		calendars = frappe.get_list(
+			CALENDAR_DOCTYPE,
+			filters={"institution": institution, "enabled": 1},
+			fields=["name", "academic_year", "start_date", "end_date", "is_current"],
+			order_by="is_current desc, start_date desc, modified desc",
+			page_length=MAX_OPTION_ROWS,
+		)
+		for calendar in calendars:
+			if calendar.academic_year and calendar.academic_year not in calendar_by_year:
+				calendar_by_year[calendar.academic_year] = dict(calendar)
+
+	result = []
+	for year in years:
+		calendar = calendar_by_year.get(year.name) or {}
+		result.append(
+			{
+				"name": year.name,
+				"year_start_date": year.year_start_date,
+				"year_end_date": year.year_end_date,
+				"calendar": calendar.get("name"),
+				"calendar_start_date": calendar.get("start_date"),
+				"calendar_end_date": calendar.get("end_date"),
+				"is_current": int(calendar.get("is_current") or 0),
+				"calendar_ready": bool(calendar.get("name")),
+			}
+		)
+	return result
+
+
+def _apply_all_sessions(result: dict, institution: str | None, academic_year: str | None) -> dict:
+	"""Apply the canonical Academic Session catalogue to a Class Intake payload."""
+	resolved_institution = (
+		result.get("institution")
+		or (result.get("filters") or {}).get("institution")
+		or (result.get("active_context") or {}).get("institution")
+		or institution
+	)
+	options = dict(result.get("options") or {})
+	options["academic_years"] = _all_academic_years(resolved_institution)
+	result["options"] = options
+
+	selected = str(academic_year or (result.get("filters") or {}).get("academic_year") or "").strip()
+	selected_option = next((row for row in options["academic_years"] if row.get("name") == selected), None)
+	result["selected_session_calendar_ready"] = (
+		bool(selected_option and selected_option.get("calendar_ready")) if selected else None
+	)
+	return result
+
+
+@frappe.whitelist()
+def get_programme_offering_session_options(
+	institution: str | None = None,
+	branch: str | None = None,
+	academic_year: str | None = None,
+	use_active_branch: int | str | bool = 0,
+) -> dict:
+	"""Programme Offering options with Session discovery separated from calendar readiness."""
+	result = base.get_programme_offering_options(
+		institution=institution,
+		branch=branch,
+		academic_year=academic_year,
+		use_active_branch=use_active_branch,
+	)
+	return _apply_all_sessions(result, institution, academic_year)
+
+
+@frappe.whitelist()
+def get_programme_offerings_page_with_sessions(**kwargs) -> dict:
+	"""Class Intake page payload with the same authoritative Session catalogue.
+
+	The EdgeSuite page historically called a page endpoint whose option builder was
+	calendar/value-permission filtered. Route that request through the current safe
+	page implementation, then replace only Academic Session discovery. Offering,
+	Institution, Branch, Programme and permission scoping remain unchanged.
+	"""
+	result = base.get_programme_offerings_page(**kwargs)
+	return _apply_all_sessions(
+		result,
+		str(kwargs.get("institution") or "").strip() or None,
+		str(kwargs.get("academic_year") or "").strip() or None,
+	)

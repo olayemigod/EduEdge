@@ -86,8 +86,12 @@ class TestAssessmentOperationsContract(unittest.TestCase):
 			/ "eduedge_assessment_operations.js"
 		).read_text()
 		self.assertIn("<EdgeAppShell", vue)
-		self.assertIn("edgeui.bundle.js", loader)
-		self.assertLess(loader.index("edgeui.bundle.js"), loader.index("eduedge_assessment_operations.bundle.js"))
+		self.assertIn("edgesuite_ui.bundle.js", loader)
+		self.assertLess(
+			loader.index("edgesuite_ui.bundle.js"),
+			loader.index("eduedge_assessment_operations.bundle.js"),
+		)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
 		self.assertIn("Result publication control", vue)
 
 

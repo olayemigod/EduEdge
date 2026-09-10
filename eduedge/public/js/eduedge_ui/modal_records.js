@@ -28,6 +28,52 @@ function messageFromError(error, fallback) {
 	);
 }
 
+function translateModalText(value) {
+	if (value === undefined || value === null || value === "") return value;
+	const translate = window.EduEdgeTerminology?.translateText || frappe.eduedge?.translateText;
+	return typeof translate === "function" ? translate(String(value)) : value;
+}
+
+function translateModalOption(option) {
+	if (option === undefined || option === null || option === "") return null;
+	if (typeof option !== "object" || Array.isArray(option)) {
+		const value = String(option);
+		return { value, label: translateModalText(value) };
+	}
+	const value = String(option.value ?? option.name ?? option.label ?? "");
+	if (!value) return null;
+	return {
+		...option,
+		value,
+		label: translateModalText(option.label ?? value),
+		description: translateModalText(option.description),
+	};
+}
+
+function translateModalField(field) {
+	if (!field || typeof field !== "object") return field;
+	return {
+		...field,
+		label: translateModalText(field.label),
+		description: translateModalText(field.description),
+		placeholder: translateModalText(field.placeholder),
+		help: translateModalText(field.help),
+		options: Array.isArray(field.options)
+			? field.options.map(translateModalOption).filter(Boolean)
+			: field.options,
+	};
+}
+
+function translateModalSchema(schema = {}) {
+	return {
+		...schema,
+		title: translateModalText(schema.title),
+		subtitle: translateModalText(schema.subtitle),
+		submit_label: translateModalText(schema.submit_label),
+		fields: Array.isArray(schema.fields) ? schema.fields.map(translateModalField) : [],
+	};
+}
+
 function conditionMatches(condition, values = {}) {
 	if (!condition || !condition.field) return true;
 	const actual = values[condition.field];
@@ -84,7 +130,7 @@ export async function openRecordModal(modal, { resource, name = "", context = {}
 			name: name || undefined,
 			context: JSON.stringify(context || {}),
 		});
-		const schema = response.message || {};
+		const schema = translateModalSchema(response.message || {});
 		modal.title = schema.title || "Edit record";
 		modal.subtitle = schema.subtitle || "";
 		modal.submitLabel = schema.submit_label || (name ? "Save Changes" : "Create");
@@ -134,9 +180,12 @@ export async function searchRecordModalOptions(modal, { field, query = "", value
 			context: JSON.stringify(modal.context || {}),
 		});
 		if (modal.searchTokens?.[fieldname] !== token) return;
+		const options = Array.isArray(response.message)
+			? response.message.map(translateModalOption).filter(Boolean)
+			: [];
 		modal.fields = (modal.fields || []).map((item) =>
 			item.fieldname === fieldname
-				? { ...item, options: response.message || [], options_loading: false }
+				? { ...item, options, options_loading: false }
 				: item
 		);
 	} catch (error) {

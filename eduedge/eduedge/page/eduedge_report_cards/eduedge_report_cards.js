@@ -35,7 +35,9 @@ frappe.pages["eduedge-report-cards"].on_page_show = function (wrapper) {
 		).appendTo(page.body);
 	};
 
-	frappe.require("edgeui.bundle.js", () => {
+	// The legacy `edgeui.bundle.js` manifest key is intentionally not loaded.
+	// Mixed-app sites must resolve the collision-safe standalone runtime instead.
+	frappe.require("edgesuite_ui.bundle.js", () => {
 		if (wrapper.current_visit_id !== visitId) return;
 		const runtime = window.EdgeSuiteUI || window.EdgeUI;
 		if (!runtime?.install || !runtime?.components?.EdgeAppShell) {

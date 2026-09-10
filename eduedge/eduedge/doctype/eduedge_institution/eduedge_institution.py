@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import re
+
+import frappe
+from frappe import _
+from frappe.model.document import Document
+from frappe.utils import cint, validate_email_address
+from frappe.utils.html_utils import sanitize_html
+
+
+APPROVAL_MODES = {"Recommended", "Simple", "Standard"}
+MAX_BULK_QUESTIONS = 100
+
+
+class EduEdgeInstitution(Document):
+	def before_naming(self) -> None:
+		self.institution_code = _normalize_code(self.institution_code)
+
+	def before_validate(self) -> None:
+		self.institution_code = _normalize_code(self.institution_code)
+		self.official_name = self.official_name or self.institution_name
+		self.motto = _plain_text(self.motto, limit=240)
+		self.report_footer = _plain_text(self.report_footer, limit=1000)
+
+	def validate(self) -> None:
+		if not self.is_new() and self.has_value_changed("institution_code"):
+			frappe.throw(_("Institution Code cannot change after creation."), frappe.ValidationError)
+		self._validate_company()
+		self._validate_company_change()
+		self._validate_institution_type()
+		self._validate_contact_details()
+		self._validate_report_identity()
+		self._validate_operations_preferences()
+		if self.is_default and not self.enabled:
+			frappe.throw(_("A default Institution must be enabled."), frappe.ValidationError)
+
+	def on_update(self) -> None:
+		if self.is_default:
+			frappe.db.set_value(
+				"EduEdge Institution",
+				{"company": self.company, "is_default": 1, "name": ["!=", self.name]},
+				"is_default",
+				0,
+				update_modified=False,
+			)
+		frappe.clear_cache(doctype="EduEdge Institution")
+
+	def _validate_company(self) -> None:
+		if not frappe.db.exists("Company", self.company):
+			frappe.throw(_("Select a valid Company."), frappe.ValidationError)
+		if frappe.db.get_value("Company", self.company, "is_group") == 1:
+			frappe.throw(_("A group Company cannot own an EduEdge Institution."), frappe.ValidationError)
+
+	def _validate_company_change(self) -> None:
+		if self.is_new() or not self.has_value_changed("company"):
+			return
+		if frappe.db.exists("EduEdge School Branch", {"institution": self.name}):
+			frappe.throw(
+				_("Company cannot change after School Branches are linked to this Institution."),
+				frappe.ValidationError,
+			)
+
+	def _validate_institution_type(self) -> None:
+		if not frappe.db.exists(
+			"EduEdge Institution Type",
+			{"name": self.institution_type, "enabled": 1},
+		):
+			frappe.throw(_("Select an enabled EduEdge Institution Type."), frappe.ValidationError)
+
+	def _validate_contact_details(self) -> None:
+		if self.email and not validate_email_address(self.email):
+			frappe.throw(_("Enter a valid institution email address."), frappe.ValidationError)
+		for fieldname in ("phone", "whatsapp_number"):
+			if self.get(fieldname) and len(self.get(fieldname)) > 40:
+				frappe.throw(
+					_("{0} must not exceed 40 characters.").format(self.meta.get_label(fieldname)),
+					frappe.ValidationError,
+				)
+
+	def _validate_report_identity(self) -> None:
+		if self.report_card_letter_head and not frappe.db.exists(
+			"Letter Head", self.report_card_letter_head
+		):
+			frappe.throw(_("Select a valid Report Card Letter Head."), frappe.ValidationError)
+
+	def _validate_operations_preferences(self) -> None:
+		self.question_approval_mode = self.question_approval_mode or "Recommended"
+		if self.question_approval_mode not in APPROVAL_MODES:
+			frappe.throw(_("Question Approval Mode must be Recommended, Simple, or Standard."), frappe.ValidationError)
+		self.max_bulk_question_approval = cint(self.max_bulk_question_approval or MAX_BULK_QUESTIONS)
+		if not 1 <= self.max_bulk_question_approval <= MAX_BULK_QUESTIONS:
+			frappe.throw(
+				_("Maximum Questions per Bulk Action must be between 1 and {0}.").format(MAX_BULK_QUESTIONS),
+				frappe.ValidationError,
+			)
+
+
+def _normalize_code(value: str | None) -> str:
+	code = re.sub(r"[^A-Z0-9]+", "-", str(value or "").strip().upper()).strip("-")
+	if not code:
+		frappe.throw(_("Institution Code is required."))
+	return code
+
+
+def _plain_text(value: str | None, *, limit: int) -> str | None:
+	text = sanitize_html(str(value or "").strip(), always_sanitize=True, disallowed_tags="*")
+	if len(text) > limit:
+		frappe.throw(_("Institution profile text is longer than the allowed limit."), frappe.ValidationError)
+	return text or None

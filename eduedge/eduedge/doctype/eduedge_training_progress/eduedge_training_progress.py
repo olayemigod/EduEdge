@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 
-from eduedge.training.permissions import TRAINING_OVERSIGHT_ROLES
+from eduedge.access_control import user_has_role_permission
+
+TRAINING_PROGRESS_DOCTYPE = "EduEdge Training Progress"
+TRAINING_OVERSIGHT_PERMISSION = "report"
 
 
 class EduEdgeTrainingProgress(Document):
@@ -11,13 +15,21 @@ class EduEdgeTrainingProgress(Document):
 		self._validate_owner()
 		self.progress_percent = max(0, min(100, float(self.progress_percent or 0)))
 
+	def on_trash(self) -> None:
+		frappe.throw(
+			_("Training progress records cannot be deleted. They are retained as staff training history."),
+			frappe.ValidationError,
+		)
+
 	def _validate_owner(self) -> None:
 		user = frappe.session.user
 		if user == "Administrator":
 			return
-		roles = set(frappe.get_roles(user))
-		if self.user != user and not TRAINING_OVERSIGHT_ROLES.intersection(roles):
-			frappe.throw(
-				"You can update only your own training progress.",
-				frappe.PermissionError,
-			)
+		if self.user == user:
+			return
+		if user_has_role_permission(TRAINING_PROGRESS_DOCTYPE, TRAINING_OVERSIGHT_PERMISSION, user):
+			return
+		frappe.throw(
+			_("You can update only your own training progress."),
+			frappe.PermissionError,
+		)

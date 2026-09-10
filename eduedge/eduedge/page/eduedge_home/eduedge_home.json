@@ -11,16 +11,7 @@
  "name": "eduedge-home",
  "owner": "Administrator",
  "page_name": "eduedge-home",
- "roles": [
-  {"role": "System Manager"},
-  {"role": "EduEdge Administrator"},
-  {"role": "School Administrator"},
-  {"role": "Academic Administrator"},
-  {"role": "Bursar"},
-  {"role": "Teacher"},
-  {"role": "CBT Invigilator"},
-  {"role": "Student Safety Officer"}
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,

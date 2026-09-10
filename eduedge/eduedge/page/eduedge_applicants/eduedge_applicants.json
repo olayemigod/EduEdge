@@ -11,13 +11,7 @@
  "name": "eduedge-applicants",
  "owner": "Administrator",
  "page_name": "eduedge-applicants",
- "roles": [
-  {"role":"System Manager"},
-  {"role":"EduEdge Administrator"},
-  {"role":"School Administrator"},
-  {"role":"Academic Administrator"},
-  {"role":"Teacher"}
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,

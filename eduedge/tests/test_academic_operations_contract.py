@@ -32,10 +32,13 @@ class TestAcademicOperationsContract(unittest.TestCase):
 
 	def test_aggregate_queries_use_frappe_v16_function_dicts(self):
 		text = (ROOT / "eduedge" / "api" / "academic_operations.py").read_text()
+		safe = (ROOT / "eduedge" / "api" / "academic_operations_safe.py").read_text()
 		self.assertIn('{"COUNT": "name", "as": "student_count"}', text)
 		self.assertIn('{"COUNT": "name", "as": "record_count"}', text)
+		self.assertIn('{"COUNT": "name", "as": "record_count"}', safe)
 		self.assertNotIn("count(name) as student_count", text)
 		self.assertNotIn("count(name) as record_count", text)
+		self.assertNotIn("count(name) as record_count", safe)
 
 	def test_academic_operations_page_uses_edgesuite_shell(self):
 		component = (
@@ -56,7 +59,64 @@ class TestAcademicOperationsContract(unittest.TestCase):
 		).read_text()
 		self.assertIn("<EdgeAppShell", component)
 		self.assertIn("<EdgePageLayout", component)
-		self.assertLess(loader.index("edgeui.bundle.js"), loader.index("eduedge_academic_operations.bundle.js"))
+		self.assertIn("<EdgeDashboardLayout", component)
+		self.assertIn("<EdgeFilterBar", component)
+		self.assertLess(
+			loader.index("edgesuite_ui.bundle.js"),
+			loader.index("eduedge_academic_operations.bundle.js"),
+		)
+		self.assertNotIn('frappe.require("edgeui.bundle.js"', loader)
+
+	def test_academic_operations_surfaces_calendar_and_readiness_context(self):
+		safe = (ROOT / "eduedge" / "api" / "academic_operations_safe.py").read_text()
+		component = (
+			ROOT
+			/ "eduedge"
+			/ "public"
+			/ "js"
+			/ "eduedge_academic_operations"
+			/ "EduEdgeAcademicOperations.vue"
+		).read_text()
+		for contract in (
+			"calendar_gap",
+			"attendance_coverage",
+			"attendance_missing_groups",
+			"attendance_incomplete_groups",
+			"room_usage",
+			"unassigned_room_sessions",
+		):
+			self.assertIn(contract, safe)
+			self.assertIn(contract, component)
+		self.assertIn("No configured period", safe)
+		self.assertIn("Institution calendar", component)
+		self.assertIn("Scheduled attendance coverage", component)
+		self.assertIn("Room usage", component)
+
+	def test_attendance_coverage_is_branch_date_submission_and_schedule_scoped(self):
+		safe = (ROOT / "eduedge" / "api" / "academic_operations_safe.py").read_text()
+		self.assertIn('"docstatus": 1', safe)
+		self.assertIn('BRANCH_FIELD: branch', safe)
+		self.assertIn('"date": date', safe)
+		self.assertIn('"course_schedule": ["in", schedule_names]', safe)
+		self.assertIn('group_by="course_schedule, status"', safe)
+		self.assertIn('"course_schedule": schedule["name"]', safe)
+		self.assertIn('"complete": expected > 0 and submitted >= expected', safe)
+
+	def test_academic_operations_uses_dynamic_terminology_and_safe_navigation(self):
+		component = (
+			ROOT
+			/ "eduedge"
+			/ "public"
+			/ "js"
+			/ "eduedge_academic_operations"
+			/ "EduEdgeAcademicOperations.vue"
+		).read_text()
+		for term_key in ("student_group", "class_session", "student", "instructor", "course", "programme"):
+			self.assertIn(f"term('{term_key}'", component)
+		self.assertIn("openEduEdgeRoute", component)
+		self.assertIn("/app/eduedge-academic-foundation", component)
+		self.assertIn("/app/eduedge-program-offerings", component)
+		self.assertIn("Submitted attendance is immutable", component)
 
 	def test_hooks_scope_academic_records_by_branch(self):
 		hooks = (ROOT / "eduedge" / "hooks.py").read_text()

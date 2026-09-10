@@ -11,14 +11,7 @@
  "name": "eduedge-students",
  "owner": "Administrator",
  "page_name": "eduedge-students",
- "roles": [
-  {"role":"System Manager"},
-  {"role":"EduEdge Administrator"},
-  {"role":"School Administrator"},
-  {"role":"Academic Administrator"},
-  {"role":"Bursar"},
-  {"role":"Teacher"}
- ],
+ "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,

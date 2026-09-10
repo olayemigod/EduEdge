@@ -1,0 +1,48 @@
+/* Focused browser-QA corrections for the EduEdge EdgeSuite shell. */
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__nav {
+	gap: .12rem;
+	padding-bottom: .4rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section {
+	gap: .08rem;
+	margin-top: 0 !important;
+	padding-top: 0 !important;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section + .edge-sidebar__section {
+	margin-top: .12rem !important;
+	padding-top: .12rem !important;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__items {
+	margin: 0;
+	padding-bottom: 0;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section.is-collapsed {
+	gap: 0;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section-toggle,
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section-title {
+	margin: 0;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section-icon,
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section-toggle .edge-icon {
+	align-items: center;
+	display: inline-flex;
+	flex: 0 0 1rem;
+	height: 1rem;
+	justify-content: center;
+	width: 1rem;
+}
+
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section-icon svg,
+.edge-app-shell[data-edge-product="eduedge"] .edge-sidebar__section-toggle .edge-icon svg {
+	display: block;
+	height: 1rem;
+	width: 1rem;
+}

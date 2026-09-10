@@ -36,6 +36,16 @@ class TestRepositoryContract(unittest.TestCase):
 			with self.subTest(path=path):
 				json.loads(path.read_text())
 
+	def test_doctype_packages_have_controller_and_init(self):
+		doctype_root = APP_ROOT / "eduedge" / "doctype"
+		for json_path in sorted(doctype_root.glob("*/*.json")):
+			with self.subTest(path=json_path):
+				self.assertEqual(json_path.parent.name, json_path.stem)
+				self.assertTrue((json_path.parent / "__init__.py").exists())
+				controller = json_path.with_suffix(".py")
+				self.assertTrue(controller.exists())
+				compile(controller.read_text(), str(controller), "exec")
+
 	def test_setup_loader_loads_edgesuite_first(self):
 		path = (
 			APP_ROOT

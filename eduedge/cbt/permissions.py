@@ -1,0 +1,346 @@
+from __future__ import annotations
+
+import frappe
+
+from eduedge.access_control import user_has_role_permission
+from eduedge.cbt.public_access import can_assign_public_exams, can_author_public_exams
+from eduedge.services.branch_context import (
+	get_allowed_school_branches,
+	is_branch_access_enforced,
+)
+
+CBT_DOCTYPES = (
+	"EduEdge Examination Centre",
+	"EduEdge CBT Question",
+	"EduEdge CBT Exam Template",
+	"EduEdge CBT Exam Schedule",
+	"EduEdge CBT Candidate Assignment",
+	"EduEdge CBT Intervention Log",
+	"EduEdge CBT Lifecycle Log",
+	"EduEdge CBT Attempt",
+	"EduEdge CBT Attempt Review",
+	"EduEdge CBT Attempt Scoring Key",
+	"EduEdge CBT Attempt Answer",
+	"EduEdge CBT Sync Log",
+	"EduEdge CBT Result",
+	"EduEdge CBT Result Item",
+	"EduEdge CBT Marking Log",
+	"EduEdge CBT Result Sync Log",
+)
+
+PUBLIC_ASSIGNMENT_DOCTYPES = {
+	"EduEdge CBT Candidate Assignment",
+	"EduEdge CBT Intervention Log",
+}
+
+SCHOOL_EXAM = "School Examination"
+REUSE_UNIVERSAL = "Universal"
+REUSE_INSTITUTION = "Institution-wide"
+REUSE_BRANCH = "Branch-wide"
+SCHEDULE_DOCTYPE = "EduEdge CBT Exam Schedule"
+ASSIGNMENT_DOCTYPE = "EduEdge CBT Candidate Assignment"
+LIFECYCLE_DOCTYPE = "EduEdge CBT Lifecycle Log"
+
+
+def examination_centre_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge Examination Centre", user)
+
+
+def cbt_question_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Question", user)
+
+
+def cbt_exam_template_query(user: str | None = None) -> str:
+	return _exam_template_condition(user)
+
+
+def cbt_exam_schedule_query(user: str | None = None) -> str:
+	return _school_branch_condition(SCHEDULE_DOCTYPE, user)
+
+
+def cbt_candidate_assignment_query(user: str | None = None) -> str:
+	return _school_branch_condition(ASSIGNMENT_DOCTYPE, user)
+
+
+def cbt_intervention_log_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Intervention Log", user)
+
+
+def cbt_lifecycle_log_query(user: str | None = None) -> str:
+	return _lifecycle_log_condition(user)
+
+
+def cbt_attempt_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Attempt", user)
+
+
+def cbt_attempt_review_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Attempt Review", user)
+
+
+def cbt_attempt_scoring_key_query(user: str | None = None) -> str:
+	return _attempt_reference_condition("EduEdge CBT Attempt Scoring Key", user)
+
+
+def cbt_attempt_answer_query(user: str | None = None) -> str:
+	return _attempt_reference_condition("EduEdge CBT Attempt Answer", user)
+
+
+def cbt_sync_log_query(user: str | None = None) -> str:
+	return _attempt_reference_condition("EduEdge CBT Sync Log", user)
+
+
+def cbt_result_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Result", user)
+
+
+def cbt_result_item_query(user: str | None = None) -> str:
+	return _result_reference_condition("EduEdge CBT Result Item", user)
+
+
+def cbt_marking_log_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Marking Log", user)
+
+
+def cbt_result_sync_log_query(user: str | None = None) -> str:
+	return _school_branch_condition("EduEdge CBT Result Sync Log", user)
+
+
+def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
+	"""Allow role permissions unless exact public capability or branch isolation denies the record."""
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return True
+	if doc and doc.doctype == "EduEdge CBT Exam Template":
+		return _has_exam_template_scope_permission(doc, resolved_user)
+
+	branch = doc.get("school_branch") if doc else None
+	if not branch:
+		if doc and doc.doctype == LIFECYCLE_DOCTYPE:
+			return _has_lifecycle_public_access(doc, resolved_user)
+		return _has_public_record_access(doc.doctype if doc else None, resolved_user)
+	if not is_branch_access_enforced():
+		return True
+
+	allowed = _allowed_branch_names(resolved_user)
+	return branch in allowed
+
+
+def _has_exam_template_scope_permission(doc, user: str) -> bool:
+	if doc.get("exam_scope") != SCHOOL_EXAM:
+		return _has_public_record_access(doc.doctype, user)
+	if not is_branch_access_enforced():
+		return True
+	rows = _allowed_branch_rows(user)
+	scope = doc.get("template_reuse_scope") or REUSE_BRANCH
+	if scope == REUSE_UNIVERSAL:
+		return doc.get("company") in {row.get("company") for row in rows}
+	if scope == REUSE_INSTITUTION:
+		return doc.get("institution") in {row.get("institution") for row in rows}
+	return doc.get("school_branch") in {row.get("name") for row in rows}
+
+
+def has_attempt_reference_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	attempt_name = doc.get("attempt") if doc else None
+	if not attempt_name:
+		return False
+	attempt = frappe.db.get_value(
+		"EduEdge CBT Attempt",
+		attempt_name,
+		["name", "school_branch", "exam_scope"],
+		as_dict=True,
+	)
+	if not attempt:
+		return False
+	attempt.doctype = "EduEdge CBT Attempt"
+	return has_school_branch_permission(attempt, resolved_user, permission_type)
+
+
+def has_result_reference_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	result_name = (doc.get("parent") or doc.get("result")) if doc else None
+	if not result_name:
+		return False
+	result = frappe.db.get_value(
+		"EduEdge CBT Result",
+		result_name,
+		["name", "school_branch"],
+		as_dict=True,
+	)
+	if not result:
+		return False
+	result.doctype = "EduEdge CBT Result"
+	return has_school_branch_permission(result, resolved_user, permission_type)
+
+
+def _school_branch_condition(doctype: str, user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+
+	public_allowed = _has_public_record_access(doctype, resolved_user)
+	branch_column = f"`tab{doctype}`.`school_branch`"
+	school_records_only = f"`tab{doctype}`.`school_branch` is not null"
+	if not is_branch_access_enforced():
+		return "" if public_allowed else school_records_only
+
+	allowed = _allowed_branch_names(resolved_user)
+	conditions: list[str] = []
+	if allowed:
+		values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+		conditions.append(f"{branch_column} in ({values})")
+	if public_allowed:
+		conditions.append(f"{branch_column} is null")
+	if not conditions:
+		return "1=0"
+	return "(" + " OR ".join(conditions) + ")"
+
+
+def _lifecycle_log_condition(user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+
+	doctype = LIFECYCLE_DOCTYPE
+	branch_column = f"`tab{doctype}`.`school_branch`"
+	reference_column = f"`tab{doctype}`.`reference_doctype`"
+	conditions: list[str] = []
+
+	if not is_branch_access_enforced():
+		conditions.append(f"{branch_column} is not null")
+	else:
+		allowed = _allowed_branch_names(resolved_user)
+		if allowed:
+			values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+			conditions.append(f"{branch_column} in ({values})")
+
+	if can_author_public_exams(resolved_user):
+		conditions.append(
+			f"({branch_column} is null AND {reference_column} = {frappe.db.escape(SCHEDULE_DOCTYPE)})"
+		)
+	if can_assign_public_exams(resolved_user):
+		conditions.append(
+			f"({branch_column} is null AND {reference_column} = {frappe.db.escape(ASSIGNMENT_DOCTYPE)})"
+		)
+	if not conditions:
+		return "1=0"
+	return "(" + " OR ".join(conditions) + ")"
+
+
+def _exam_template_condition(user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	doctype = "EduEdge CBT Exam Template"
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+
+	public_allowed = _has_public_record_access(doctype, resolved_user)
+	public_condition = (
+		f"`tab{doctype}`.`exam_scope` != {frappe.db.escape(SCHOOL_EXAM)}"
+		if public_allowed
+		else ""
+	)
+	if not is_branch_access_enforced():
+		return "" if public_allowed else f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)}"
+
+	rows = _allowed_branch_rows(resolved_user)
+	branches = sorted({row.get("name") for row in rows if row.get("name")})
+	institutions = sorted({row.get("institution") for row in rows if row.get("institution")})
+	companies = sorted({row.get("company") for row in rows if row.get("company")})
+	branch_values = ", ".join(frappe.db.escape(value) for value in branches) or "''"
+	institution_values = ", ".join(frappe.db.escape(value) for value in institutions) or "''"
+	company_values = ", ".join(frappe.db.escape(value) for value in companies) or "''"
+	school_condition = (
+		f"`tab{doctype}`.`exam_scope` = {frappe.db.escape(SCHOOL_EXAM)} AND ("
+		f"(`tab{doctype}`.`template_reuse_scope` = {frappe.db.escape(REUSE_UNIVERSAL)} "
+		f"AND `tab{doctype}`.`company` in ({company_values})) OR "
+		f"(`tab{doctype}`.`template_reuse_scope` = {frappe.db.escape(REUSE_INSTITUTION)} "
+		f"AND `tab{doctype}`.`institution` in ({institution_values})) OR "
+		f"((`tab{doctype}`.`template_reuse_scope` = {frappe.db.escape(REUSE_BRANCH)} "
+		f"OR `tab{doctype}`.`template_reuse_scope` is null OR `tab{doctype}`.`template_reuse_scope` = '') "
+		f"AND `tab{doctype}`.`school_branch` in ({branch_values}))"
+		")"
+	)
+	if public_condition:
+		return f"({school_condition}) OR ({public_condition})"
+	return school_condition
+
+
+def _has_lifecycle_public_access(doc, user: str) -> bool:
+	reference_doctype = doc.get("reference_doctype")
+	if reference_doctype == SCHEDULE_DOCTYPE:
+		return can_author_public_exams(user)
+	if reference_doctype == ASSIGNMENT_DOCTYPE:
+		return can_assign_public_exams(user)
+	return False
+
+
+def _attempt_reference_condition(doctype: str, user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+
+	branch_conditions = _reference_branch_conditions(resolved_user, "attempt")
+	if not branch_conditions:
+		return "1=0"
+	return (
+		f"exists (select 1 from `tabEduEdge CBT Attempt` attempt "
+		f"where attempt.name = `tab{doctype}`.`attempt` "
+		f"and ({' OR '.join(branch_conditions)}))"
+	)
+
+
+def _result_reference_condition(doctype: str, user: str | None) -> str:
+	resolved_user = user or frappe.session.user
+	if not _is_cbt_operational_user(resolved_user):
+		return ""
+
+	branch_conditions = _reference_branch_conditions(resolved_user, "result")
+	if not branch_conditions:
+		return "1=0"
+	return (
+		f"exists (select 1 from `tabEduEdge CBT Result` result "
+		f"where result.name = `tab{doctype}`.`parent` "
+		f"and ({' OR '.join(branch_conditions)}))"
+	)
+
+
+def _reference_branch_conditions(user: str, alias: str) -> list[str]:
+	conditions: list[str] = []
+	if not is_branch_access_enforced():
+		conditions.append(f"{alias}.school_branch is not null")
+	else:
+		allowed = _allowed_branch_names(user)
+		if allowed:
+			values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+			conditions.append(f"{alias}.school_branch in ({values})")
+	if can_author_public_exams(user):
+		conditions.append(f"{alias}.school_branch is null")
+	return conditions
+
+
+def _has_public_record_access(doctype: str | None, user: str) -> bool:
+	if doctype in PUBLIC_ASSIGNMENT_DOCTYPES:
+		return can_assign_public_exams(user)
+	return can_author_public_exams(user)
+
+
+def _allowed_branch_rows(user: str) -> list[dict]:
+	"""Return explicit enabled Branch assignments; an empty list fails closed."""
+	if not frappe.db.count("EduEdge School Branch", {"enabled": 1}):
+		return []
+	return [dict(row) for row in get_allowed_school_branches(user=user)]
+
+
+def _allowed_branch_names(user: str) -> set[str]:
+	return {row.get("name") for row in _allowed_branch_rows(user) if row.get("name")}
+
+
+def _is_cbt_operational_user(user: str) -> bool:
+	if not user or user == "Guest":
+		return False
+	return any(
+		user_has_role_permission(doctype, permission_type, user)
+		for doctype in CBT_DOCTYPES
+		for permission_type in ("read", "create", "write", "report")
+	)

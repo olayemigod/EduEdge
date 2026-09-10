@@ -13,10 +13,13 @@
 		margin-bottom: 16px;
 		border-bottom: 2px solid #222;
 	}
-	.report-header img { max-height: 64px; max-width: 110px; }
+	.report-header img { max-height: 72px; max-width: 120px; }
+	.report-school { display: flex; align-items: center; gap: 12px; }
+	.report-school h2 { margin: 0; }
+	.report-school p, .report-title p { margin: 3px 0 0; }
+	.report-contact { font-size: 8pt; color: #555; }
 	.report-title { text-align: right; }
 	.report-title h1 { margin: 0; font-size: 22px; }
-	.report-title p { margin: 3px 0 0; }
 	.meta-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -31,24 +34,16 @@
 		gap: 8px;
 		margin: 14px 0;
 	}
-	.summary-card {
-		border: 1px solid #ccc;
-		padding: 8px;
-		text-align: center;
-	}
+	.summary-card { border: 1px solid #ccc; padding: 8px; text-align: center; }
 	.summary-card strong { display: block; font-size: 15px; }
 	table { width: 100%; border-collapse: collapse; margin: 12px 0; }
 	th, td { border: 1px solid #bbb; padding: 6px; }
 	th { background: #eee; }
-	.comments {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 12px;
-		margin-top: 14px;
-	}
+	.comments { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
 	.comment-box { border: 1px solid #bbb; min-height: 80px; padding: 8px; }
 	.comment-box h4 { margin: 0 0 6px; }
-	.footer-note { margin-top: 18px; font-size: 8pt; color: #555; }
+	.institution-footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #bbb; text-align: center; }
+	.footer-note { margin-top: 8px; font-size: 8pt; color: #555; }
 </style>
 
 <div class="page-break">
@@ -56,10 +51,19 @@
 		<div>{{ letterhead }}</div>
 	{% else %}
 		<div class="report-header">
-			<div>
-				{% if company.company_logo %}<img src="{{ company.company_logo }}">{% endif %}
-				<h2 style="margin: 4px 0;">{{ company.company_name or company.name or branch.branch_name }}</h2>
-				<p>{{ branch.branch_name }}{% if branch.branch_code %} · {{ branch.branch_code }}{% endif %}</p>
+			<div class="report-school">
+				{% if branding.logo %}<img src="{{ branding.logo }}">{% endif %}
+				<div>
+					<h2>{{ branding.official_name or branding.institution_name or company.company_name or company.name or branch.branch_name }}</h2>
+					{% if branding.motto %}<p><em>{{ branding.motto }}</em></p>{% endif %}
+					<p>{{ branch.branch_name }}{% if branch.branch_code %} · {{ branch.branch_code }}{% endif %}</p>
+					<p class="report-contact">
+						{% if branding.formatted_address %}{{ branding.formatted_address }}{% endif %}
+						{% if branding.phone %}{% if branding.formatted_address %} · {% endif %}{{ branding.phone }}{% endif %}
+						{% if branding.email %}{% if branding.formatted_address or branding.phone %} · {% endif %}{{ branding.email }}{% endif %}
+						{% if branding.website %}{% if branding.formatted_address or branding.phone or branding.email %} · {% endif %}{{ branding.website }}{% endif %}
+					</p>
+				</div>
 			</div>
 			<div class="report-title">
 				<h1>{{ _("Student Report Card") }}</h1>
@@ -113,5 +117,6 @@
 		<div class="comment-box"><h4>{{ _("Progression Recommendation") }}</h4><p>{{ review.progression_recommendation or summary.suggested_progression or _("Pending Review") }}</p></div>
 		<div class="comment-box"><h4>{{ _("Progression Review Status") }}</h4><p>{{ review.progression_status or _("Draft") }}</p></div>
 	</div>
+	{% if branding.report_footer %}<div class="institution-footer">{{ branding.report_footer }}</div>{% endif %}
 	<div class="footer-note">{{ _("This report card was generated from submitted Assessment Results under published result scope") }} {{ publication.name }}. {{ _("Corrections require the standard cancellation and amendment workflow.") }}</div>
 </div>

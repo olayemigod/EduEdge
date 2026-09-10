@@ -27,6 +27,9 @@ const EDGEDGE_BRANCH_ACCOUNT_QUERIES = {
 
 frappe.ui.form.on("EduEdge School Branch", {
 	setup(frm) {
+		frm.set_query("institution", () => ({
+			filters: { company: frm.doc.company || undefined, enabled: 1 },
+		}));
 		for (const fieldname of EDGEDGE_BRANCH_COST_CENTERS) {
 			frm.set_query(fieldname, () => ({
 				filters: { company: frm.doc.company, is_group: 0, disabled: 0 },
@@ -42,7 +45,27 @@ frappe.ui.form.on("EduEdge School Branch", {
 		}));
 	},
 
+	async institution(frm) {
+		if (!frm.doc.institution) {
+			await frm.set_value("institution_type", null);
+			return;
+		}
+		const response = await frappe.db.get_value(
+			"EduEdge Institution",
+			frm.doc.institution,
+			["company", "institution_type"]
+		);
+		const values = response?.message || {};
+		if (values.company && frm.doc.company !== values.company) {
+			await frm.set_value("institution", null);
+			frappe.msgprint(__("Select an Institution that belongs to the chosen Company."));
+			return;
+		}
+		if (values.institution_type) await frm.set_value("institution_type", values.institution_type);
+	},
+
 	company(frm) {
+		if (frm.doc.institution) frm.set_value("institution", null);
 		const dependentFields = [
 			...EDGEDGE_BRANCH_COST_CENTERS,
 			...Object.keys(EDGEDGE_BRANCH_ACCOUNT_QUERIES),

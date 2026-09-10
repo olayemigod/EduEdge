@@ -1,0 +1,36 @@
+{
+ "actions": [],
+ "creation": "2026-07-21 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "display_order",
+  "section_label",
+  "question",
+  "question_type",
+  "topic",
+  "mark",
+  "negative_mark"
+ ],
+ "fields": [
+  {"default": "0", "fieldname": "display_order", "fieldtype": "Int", "in_list_view": 1, "label": "Order"},
+  {"fieldname": "section_label", "fieldtype": "Data", "in_list_view": 1, "label": "Section"},
+  {"fieldname": "question", "fieldtype": "Link", "in_list_view": 1, "label": "Approved CBT Question", "options": "EduEdge CBT Question", "reqd": 1},
+  {"fetch_from": "question.question_type", "fieldname": "question_type", "fieldtype": "Data", "in_list_view": 1, "label": "Question Type", "read_only": 1},
+  {"fetch_from": "question.topic", "fieldname": "topic", "fieldtype": "Data", "label": "Topic", "read_only": 1},
+  {"default": "0", "fieldname": "mark", "fieldtype": "Float", "in_list_view": 1, "label": "Mark", "read_only": 1},
+  {"default": "0", "fieldname": "negative_mark", "fieldtype": "Float", "label": "Negative Mark", "read_only": 1}
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge CBT Template Question",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "idx",
+ "sort_order": "ASC",
+ "states": []
+}

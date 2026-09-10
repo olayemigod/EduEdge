@@ -1,0 +1,38 @@
+{
+ "actions": [],
+ "allow_import": 0,
+ "autoname": "format:CBT-KEY-{#####}",
+ "creation": "2026-07-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "is_submittable": 0,
+ "field_order": ["attempt", "question_snapshot_key", "question_type", "correct_option_ids_json", "answer_key", "marking_guide", "mark", "negative_mark"],
+ "fields": [
+  {"fieldname": "attempt", "fieldtype": "Link", "in_list_view": 1, "in_standard_filter": 1, "label": "CBT Attempt", "options": "EduEdge CBT Attempt", "read_only": 1, "reqd": 1},
+  {"fieldname": "question_snapshot_key", "fieldtype": "Data", "in_list_view": 1, "label": "Question Snapshot Key", "read_only": 1, "reqd": 1},
+  {"fieldname": "question_type", "fieldtype": "Data", "label": "Question Type", "read_only": 1},
+  {"fieldname": "correct_option_ids_json", "fieldtype": "Long Text", "label": "Correct Option IDs", "read_only": 1},
+  {"fieldname": "answer_key", "fieldtype": "Small Text", "label": "Answer Key", "read_only": 1},
+  {"fieldname": "marking_guide", "fieldtype": "Text", "label": "Marking Guide", "read_only": 1},
+  {"default": "0", "fieldname": "mark", "fieldtype": "Float", "label": "Mark", "read_only": 1},
+  {"default": "0", "fieldname": "negative_mark", "fieldtype": "Float", "label": "Negative Mark", "read_only": 1}
+ ],
+ "links": [],
+ "modified": "2026-07-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge CBT Attempt Scoring Key",
+ "owner": "Administrator",
+ "permissions": [
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "EduEdge Super Administrator"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "EduEdge Administrator"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "School Administrator"},
+  {"export": 1, "print": 1, "read": 1, "report": 1, "role": "Academic Administrator"}
+ ],
+ "search_fields": "attempt,question_snapshot_key",
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 0
+}

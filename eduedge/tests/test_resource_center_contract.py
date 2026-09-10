@@ -69,22 +69,38 @@ class TestResourceCenterContract(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, api + safety)
 
-	def test_resource_pages_use_edgesuite_dialog_crud(self):
+	def test_resource_pages_use_native_frappe_dialog_crud(self):
 		component = (APP / "public/js/eduedge_resource_center/EduEdgeResourceCenter.vue").read_text(encoding="utf-8")
 		client = (APP / "public/js/eduedge_ui/resource_modal.js").read_text(encoding="utf-8")
+		native = (APP / "public/js/eduedge_ui/native_frappe_dialog.js").read_text(encoding="utf-8")
 		loader = (APP / "public/js/eduedge_resource_page_loader.bundle.js").read_text(encoding="utf-8")
 		for expected in (
 			"<EdgeAppShell",
-			"<EdgeFormDialog",
-			"<EdgeModal",
+			"openNativeResourceDialog",
+			"new frappe.ui.Dialog",
 			"get_resource_page",
+			"get_resource_editor",
+			"save_resource_record",
 			"delete_resource_record",
-			"openResourceModal",
+			"search_resource_options",
+			"frappe.confirm",
 		):
-			self.assertIn(expected, component + client)
+			self.assertIn(expected, component + client + native)
 		self.assertIn("registerEduEdgeResourcePage", loader)
 		self.assertIn("eduedge_resource_center.bundle.js", loader)
-		self.assertNotIn("new frappe.ui.Dialog", component + client)
+		self.assertNotIn("<EdgeFormDialog", component)
+		self.assertNotIn("<EdgeModal", component)
+
+	def test_local_dialog_fallbacks_are_available_for_non_resource_pages(self):
+		factory = (APP / "public/js/eduedge_ui/app_factory.js").read_text(encoding="utf-8")
+		modal = APP / "public/js/eduedge_ui/components/EdgeModalFallback.vue"
+		form = APP / "public/js/eduedge_ui/components/EdgeFormDialogFallback.vue"
+		self.assertTrue(modal.exists())
+		self.assertTrue(form.exists())
+		self.assertIn('app.component("EdgeModal", EdgeModalFallback)', factory)
+		self.assertIn('app.component("EdgeFormDialog", EdgeFormDialogFallback)', factory)
+		self.assertNotIn("registerFallbackComponent", factory)
+		self.assertLess(factory.index("runtime.install(app);"), factory.index('app.component("EdgeModal"'))
 
 	def test_quick_entry_mutations_are_platform_guarded(self):
 		hooks = (APP / "hooks.py").read_text(encoding="utf-8")

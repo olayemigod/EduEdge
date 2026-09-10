@@ -4,9 +4,14 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.academic_operations import assert_instructor_assignment
+from eduedge.education.curriculum_permissions import is_teacher_user
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_assignment_capabilities import require_instructor_assignment_capability
+from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.teaching_assignments import require_course_assignment
 
 PUBLICATION_DOCTYPE = "EduEdge Result Publication"
 PUBLICATION_LOG_DOCTYPE = "EduEdge Result Publication Log"
@@ -24,7 +29,23 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 	_assign_branch(doc, group.get(BRANCH_FIELD))
 	_validate_branch(doc)
 	_validate_linked_context(doc, group)
-
+	if is_teacher_user():
+		program_offering = group.get(OFFERING_FIELD) or _resolve_group_offering(group)
+		require_course_assignment(
+			doc.course,
+			branch=doc.get(BRANCH_FIELD),
+			program_offering=program_offering,
+			student_group=doc.student_group,
+		)
+		require_instructor_assignment_capability(
+			"can_create_assessment_plans",
+			user=frappe.session.user,
+			school_branch=doc.get(BRANCH_FIELD),
+			program_offering=program_offering or "",
+			student_group=doc.student_group,
+			course=doc.course,
+			on_date=doc.schedule_date or nowdate(),
+		)
 	if doc.room:
 		room_branch = frappe.db.get_value("Room", doc.room, BRANCH_FIELD)
 		if room_branch != doc.get(BRANCH_FIELD):
@@ -32,23 +53,48 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 				_("Assessment room must belong to the selected School Branch / Campus."),
 				frappe.ValidationError,
 			)
+	_validate_examiner_and_supervisor(doc)
 
+
+def _validate_examiner_and_supervisor(doc) -> None:
+	"""Keep Subject examination responsibility separate from Branch supervision."""
 	reference_date = doc.schedule_date or nowdate()
-	for fieldname, label in (("examiner", _("Examiner")), ("supervisor", _("Supervisor"))):
-		instructor = doc.get(fieldname)
-		if not instructor:
-			continue
+	if doc.get("examiner"):
 		try:
 			assert_instructor_assignment(
-				instructor,
+				doc.examiner,
+				doc.get(BRANCH_FIELD),
+				reference_date=reference_date,
+			)
+			assert_schedule_instructor_assignment(
+				frappe._dict(
+					{
+						"instructor": doc.examiner,
+						"student_group": doc.student_group,
+						"course": doc.course,
+						"schedule_date": reference_date,
+						BRANCH_FIELD: doc.get(BRANCH_FIELD),
+					}
+				)
+			)
+		except frappe.ValidationError:
+			frappe.throw(
+				_("Examiner {0} must have an effective Subject Instructor Assignment for this Class, Subject and assessment date.").format(doc.examiner),
+				frappe.ValidationError,
+			)
+
+	if doc.get("supervisor"):
+		try:
+			# A Supervisor/Invigilator does not need to teach the assessed Subject. The
+			# operational requirement here is valid Branch eligibility on the date.
+			assert_instructor_assignment(
+				doc.supervisor,
 				doc.get(BRANCH_FIELD),
 				reference_date=reference_date,
 			)
 		except frappe.ValidationError:
 			frappe.throw(
-				_("{0} {1} is not assigned to School Branch / Campus {2}.").format(
-					label, instructor, doc.get(BRANCH_FIELD)
-				),
+				_("Supervisor {0} must have active Branch eligibility for the assessment date.").format(doc.supervisor),
 				frappe.ValidationError,
 			)
 
@@ -60,7 +106,6 @@ def before_validate_assessment_result(doc, method=None) -> None:
 	resolved_branch = plan_branch or student_branch
 	_assign_branch(doc, resolved_branch)
 	_validate_branch(doc)
-
 	if plan_branch and doc.get(BRANCH_FIELD) != plan_branch:
 		frappe.throw(
 			_("Assessment Result Branch must match the selected Assessment Plan Branch."),
@@ -80,6 +125,21 @@ def before_validate_assessment_result(doc, method=None) -> None:
 				doc.student, plan.student_group
 			),
 			frappe.ValidationError,
+		)
+	if is_teacher_user():
+		group = _get_student_group(plan.student_group)
+		program_offering = group.get(OFFERING_FIELD) or _resolve_group_offering(group)
+		# Mark entry is an operational permission evaluated at the time of entry, not
+		# merely on the historic assessment date. Former Instructors therefore do not
+		# retain mark-entry access after their exact responsibility has ended.
+		require_instructor_assignment_capability(
+			"can_enter_marks",
+			user=frappe.session.user,
+			school_branch=doc.get(BRANCH_FIELD),
+			program_offering=program_offering or "",
+			student_group=plan.student_group,
+			course=plan.course,
+			on_date=nowdate(),
 		)
 
 
@@ -113,7 +173,6 @@ def validate_publication_scope(doc) -> None:
 				),
 				frappe.ValidationError,
 			)
-
 	if doc.is_new():
 		return
 	if doc.has_value_changed("status") and not getattr(
@@ -137,7 +196,6 @@ def get_publication_readiness(
 	group = _get_student_group(student_group)
 	if group.get(BRANCH_FIELD) != school_branch:
 		frappe.throw(_("Student Group belongs to another branch."), frappe.PermissionError)
-
 	plan_filters: dict = {
 		BRANCH_FIELD: school_branch,
 		"student_group": student_group,
@@ -161,7 +219,6 @@ def get_publication_readiness(
 	)
 	plan_names = [row.name for row in plans]
 	student_names = [row.student for row in students]
-
 	results = []
 	if plan_names and student_names:
 		results = frappe.get_all(
@@ -175,14 +232,12 @@ def get_publication_readiness(
 			fields=["name", "assessment_plan", "student", "docstatus", "total_score", "grade"],
 			page_length=0,
 		)
-
 	result_pairs = {(row.assessment_plan, row.student) for row in results}
 	expected = len(plans) * len(students)
 	submitted = sum(1 for row in results if row.docstatus == 1)
 	drafts = sum(1 for row in results if row.docstatus == 0)
 	missing = max(expected - len(result_pairs), 0)
 	ready = bool(plans and students and submitted == expected and drafts == 0 and missing == 0)
-
 	return {
 		"ready": ready,
 		"school_branch": school_branch,
@@ -266,13 +321,26 @@ def _validate_linked_context(doc, group) -> None:
 			)
 
 
+def _resolve_group_offering(group) -> str | None:
+	if group.get(OFFERING_FIELD):
+		return group.get(OFFERING_FIELD)
+	filters = {
+		"program": group.program,
+		"academic_year": group.academic_year,
+		"school_branch": group.get(BRANCH_FIELD),
+		"is_active": 1,
+	}
+	if group.academic_term:
+		filters["academic_term"] = group.academic_term
+	rows = frappe.get_all("EduEdge Program Offering", filters=filters, pluck="name", limit_page_length=2)
+	return rows[0] if len(rows) == 1 else None
+
+
 def _get_student_group(name: str):
-	row = frappe.db.get_value(
-		"Student Group",
-		name,
-		["name", "academic_year", "academic_term", "program", "course", BRANCH_FIELD],
-		as_dict=True,
-	)
+	fields = ["name", "academic_year", "academic_term", "program", "course", BRANCH_FIELD]
+	if frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+		fields.append(OFFERING_FIELD)
+	row = frappe.db.get_value("Student Group", name, fields, as_dict=True)
 	if not row:
 		frappe.throw(_("Student Group does not exist."), frappe.DoesNotExistError)
 	return row
@@ -285,6 +353,8 @@ def _get_assessment_plan(name: str):
 		[
 			"name",
 			"student_group",
+			"course",
+			"schedule_date",
 			"academic_year",
 			"academic_term",
 			"assessment_group",
