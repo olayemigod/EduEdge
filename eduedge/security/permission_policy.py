@@ -29,6 +29,7 @@ SENSITIVE_DOCTYPES = (
 	"Assessment Plan",
 	"Assessment Result",
 	"EduEdge Program Offering",
+	"EduEdge School Event",
 	"EduEdge Result Publication",
 	"EduEdge Report Card Review",
 	"EduEdge Examination Centre",

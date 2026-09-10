@@ -1,11 +1,19 @@
 import InstructorAssignmentCapabilityDialog from "./eduedge_ui/components/InstructorAssignmentCapabilityDialog.vue";
+import InstructorRecordSelector from "./eduedge_instructor_assignments/InstructorRecordSelector.vue";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
 const ADMIN_STATE_METHOD = "eduedge.api.instructor_assignment_capabilities.get_instructor_assignment_capability_admin_states";
+const RUNTIME_PAGE_METHOD = "eduedge.api.instructor_assignment_runtime.get_instructor_assignments_page";
+const FILTERED_PAGE_METHOD = "eduedge.api.instructor_assignment_register.get_instructor_assignment_register_page";
 const capabilityBusy = new WeakMap();
+const selectorApps = new WeakMap();
 
 export function createEduEdgeInstructorAssignmentCapabilityApp(rootProps = null) {
 	return createEduEdgeApp(InstructorAssignmentCapabilityDialog, rootProps);
+}
+
+export function createEduEdgeInstructorRecordSelectorApp(rootProps = null) {
+	return createEduEdgeApp(InstructorRecordSelector, rootProps);
 }
 
 function capabilityCount(item) {
@@ -36,6 +44,62 @@ function openCapabilityDialog({ item, onBusy, onComplete }) {
 	});
 	app.mount(host);
 	return { app, host, close: cleanup };
+}
+
+function shouldLoadFilteredRegister(proxy) {
+	return Boolean(proxy?.instructor || proxy?.registerFilters?.instructor);
+}
+
+function registerRequestArgs(proxy, args = {}) {
+	return {
+		...(args || {}),
+		instructor: proxy?.instructor || proxy?.registerFilters?.instructor || args?.instructor || undefined,
+		register_filters: JSON.stringify(proxy?.registerFilters || {}),
+		register_page: proxy?.registerPage || 1,
+		register_page_size: proxy?.registerPageSize || 50,
+	};
+}
+
+function redirectRuntimeRegisterCall(proxy, originalCall) {
+	return function redirectedRuntimeCall(methodOrOptions, args, ...rest) {
+		if (methodOrOptions === RUNTIME_PAGE_METHOD) {
+			return originalCall.call(
+				frappe,
+				FILTERED_PAGE_METHOD,
+				registerRequestArgs(proxy, args),
+				...rest,
+			);
+		}
+		if (methodOrOptions && typeof methodOrOptions === "object" && methodOrOptions.method === RUNTIME_PAGE_METHOD) {
+			return originalCall.call(frappe, {
+				...methodOrOptions,
+				method: FILTERED_PAGE_METHOD,
+				args: registerRequestArgs(proxy, methodOrOptions.args || {}),
+			}, args, ...rest);
+		}
+		return originalCall.call(frappe, methodOrOptions, args, ...rest);
+	};
+}
+
+function upgradeInstructorRecordToolbar(proxy) {
+	if (!proxy?.canManage) return;
+	const root = document.querySelector(".eduedge-instructor-assignments-root");
+	if (!root) return;
+	const existing = selectorApps.get(proxy);
+	if (existing?.host?.isConnected) return;
+	if (existing) {
+		try { existing.app?.unmount?.(); } catch (error) { console.error("Failed to refresh Instructor record selector", error); }
+		selectorApps.delete(proxy);
+	}
+	const select = root.querySelector("select[data-eduedge-view-instructor]");
+	if (!select) return;
+	const host = document.createElement("div");
+	host.className = "eduedge-instructor-record-selector-host";
+	host.dataset.eduedgeInstructorRecordSelector = "1";
+	select.replaceWith(host);
+	const app = createEduEdgeInstructorRecordSelectorApp({ controller: proxy });
+	app.mount(host);
+	selectorApps.set(proxy, { app, host });
 }
 
 async function loadCapabilityStates(proxy) {
@@ -122,9 +186,20 @@ function install(component) {
 	if (typeof existingLoad !== "function") return;
 
 	methods.load = async function (...args) {
-		const result = await existingLoad.apply(this, args);
+		const originalCall = frappe.call;
+		let promise;
+		if (shouldLoadFilteredRegister(this)) {
+			frappe.call = redirectRuntimeRegisterCall(this, originalCall);
+		}
+		try {
+			promise = existingLoad.apply(this, args);
+		} finally {
+			frappe.call = originalCall;
+		}
+		const result = await promise;
 		await loadCapabilityStates(this);
 		await this.$nextTick?.();
+		upgradeInstructorRecordToolbar(this);
 		syncCapabilityActions(this);
 		return result;
 	};
@@ -136,4 +211,5 @@ export function installInstructorAssignmentCapabilities(component = window.EduEd
 
 installInstructorAssignmentCapabilities(window.EduEdgeInstructorAssignments);
 window.createEduEdgeInstructorAssignmentCapabilityApp = createEduEdgeInstructorAssignmentCapabilityApp;
+window.createEduEdgeInstructorRecordSelectorApp = createEduEdgeInstructorRecordSelectorApp;
 window.installInstructorAssignmentCapabilities = installInstructorAssignmentCapabilities;

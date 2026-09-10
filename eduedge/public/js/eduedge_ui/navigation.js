@@ -157,6 +157,7 @@ export function buildEduEdgeMenuItems() {
 		menuGroup("academic-setup", __("Academic Setup"), "book", [
 			menuItem(__("Academic Operations"), "/app/eduedge-academic-operations", "calendar", __("Daily academic command centre, alerts, and shortcuts")),
 			menuItem(__("Teaching Schedule"), "/app/eduedge-teaching-schedule", "calendar", __(`Day, week, upcoming ${sessions.toLowerCase()}, and room usage`)),
+			menuItem(__("School Calendar & Events"), "/app/eduedge-school-calendar", "calendar", __("Unified academic dates, assessments, CBT schedules, teaching overlays, and managed School Events")),
 			menuItem(__("Attendance"), "/app/eduedge-attendance", "clipboard", __("Take attendance, review registers, and resolve missing registers")),
 			menuItem(__("Academic Readiness"), "/app/eduedge-academic-readiness", "report", __("Management view of assignment coverage, Instructor identity, Scheme approval, curriculum delivery, and assessment planning activity")),
 			menuItem(__("Academic Foundation"), "/app/eduedge-academic-foundation", "book", __(`${sections}, ${levels}, and Institution calendars`)),
@@ -219,7 +220,7 @@ document.addEventListener("page-change", refreshEduEdgeMenuItems);
 
 export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-home", "/app/eduedge-my-profile", "/app/eduedge-academic-operations",
-	"/app/eduedge-teaching-schedule", "/app/eduedge-attendance",
+	"/app/eduedge-teaching-schedule", "/app/eduedge-school-calendar", "/app/eduedge-attendance",
 	"/app/eduedge-class-arms", "/app/eduedge-admissions", "/app/eduedge-applicants",
 	"/app/eduedge-students", "/app/eduedge-student-enrollments", "/app/eduedge-student-progression", "/app/eduedge-instructors",
 	"/app/eduedge-instructor-assignments", "/app/eduedge-programs", "/app/eduedge-curriculum",

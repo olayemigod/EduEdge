@@ -2,6 +2,7 @@ import { createApp, defineComponent, h } from "vue";
 import EdgeFormDialogFallback from "./components/EdgeFormDialogFallback.vue";
 import EdgeLinkFieldFallback from "./components/EdgeLinkFieldFallback.vue";
 import EdgeModalFallback from "./components/EdgeModalFallback.vue";
+import EduEdgeMultiLinkField from "./components/EduEdgeMultiLinkField.vue";
 import { EDUEDGE_SECTION_STATE_KEY } from "./navigation";
 
 export function resolveEdgeSuiteRuntime(requiredComponents = ["EdgeAppShell"]) {
@@ -58,5 +59,6 @@ export function createEduEdgeApp(rootComponent, rootProps = null) {
 	app.component("EdgeModal", EdgeModalFallback);
 	app.component("EdgeLinkField", EdgeLinkFieldFallback);
 	app.component("EdgeFormDialog", EdgeFormDialogFallback);
+	app.component("EduEdgeMultiLinkField", EduEdgeMultiLinkField);
 	return app;
 }

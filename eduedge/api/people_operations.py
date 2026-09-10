@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime, nowdate
 
+from eduedge.api.fuzzy_search import CANDIDATE_LIMIT, rank_link_rows
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
@@ -200,6 +201,35 @@ def _student_detail(name: str) -> dict:
 	return result
 
 
+def _rank_student_rows(rows: list[dict], search: str, start: int, length: int) -> tuple[list[dict], bool]:
+	candidates = []
+	for source in rows:
+		row = dict(source)
+		row["value"] = row.get("name")
+		row["label"] = row.get("student_name") or row.get("name")
+		row["description"] = " · ".join(
+			str(value)
+			for value in (
+				row.get("student_email_id"),
+				row.get("student_mobile_number"),
+				row.get("first_name"),
+				row.get("last_name"),
+			)
+			if value
+		)
+		candidates.append(row)
+	ranked = rank_link_rows(
+		candidates,
+		search,
+		exact_fields=("value", "student_mobile_number", "student_email_id"),
+		search_fields=("label", "description"),
+		start=0,
+		page_length=CANDIDATE_LIMIT,
+	)
+	has_more = start + length < len(ranked)
+	return ranked[start : start + length], has_more
+
+
 @frappe.whitelist()
 def get_students_page(
 	branch: str | None = None,
@@ -211,17 +241,9 @@ def get_students_page(
 	_require_permission("Student", "read")
 	resolved, selected, allowed = _resolve_branch(branch)
 	filters: dict[str, Any] = {BRANCH_FIELD: resolved}
-	or_filters = None
-	if str(search or "").strip():
-		needle = f"%{str(search).strip()}%"
-		or_filters = {
-			"name": ["like", needle],
-			"student_name": ["like", needle],
-			"student_email_id": ["like", needle],
-			"student_mobile_number": ["like", needle],
-		}
 	length = min(max(cint(page_length), 1), MAX_PAGE_LENGTH)
 	start = max(cint(start), 0)
+	search = str(search or "").strip()
 	fields = _row_fields(
 		"Student",
 		[
@@ -230,17 +252,26 @@ def get_students_page(
 			PHOTO_STATUS_FIELD, PHOTO_LOCKED_FIELD,
 		],
 	)
-	rows = frappe.get_list(
-		"Student",
-		filters=filters,
-		or_filters=or_filters,
-		fields=fields,
-		order_by="student_name asc",
-		start=start,
-		page_length=length + 1,
-	)
-	has_more = len(rows) > length
-	rows = rows[:length]
+	if search:
+		candidate_rows = frappe.get_list(
+			"Student",
+			filters=filters,
+			fields=fields,
+			order_by="student_name asc",
+			page_length=CANDIDATE_LIMIT,
+		)
+		rows, has_more = _rank_student_rows(candidate_rows, search, start, length)
+	else:
+		rows = frappe.get_list(
+			"Student",
+			filters=filters,
+			fields=fields,
+			order_by="student_name asc",
+			start=start,
+			page_length=length + 1,
+		)
+		has_more = len(rows) > length
+		rows = rows[:length]
 	return {
 		"allowed_branches": allowed,
 		"selected_branch": selected,
@@ -370,59 +401,45 @@ def set_student_photo(reference_doctype: str, reference_name: str, file_url: str
 		doc.set(PHOTO_APPROVED_ON_FIELD, None)
 		doc.set(PHOTO_REVIEW_NOTE_FIELD, None)
 	doc.save()
-	_append_photo_log(doc, "Replaced" if old_image else "Uploaded", old_image, file_url)
-	return doc.as_dict(no_nulls=False)
+	_append_photo_log(doc, "Upload", old_image, file_url)
+	return _student_detail(doc.name) if reference_doctype == "Student" else doc.as_dict(no_nulls=False)
 
 
 @frappe.whitelist(methods=["POST"])
 def review_student_photo(reference_doctype: str, reference_name: str, decision: str, note: str | None = None) -> dict:
 	require_eduedge_access(feature_key="academics", action="review_student_photo")
 	_require_people_manager()
-	if reference_doctype not in {"Student Applicant", "Student"} or decision not in {"Approved", "Rejected"}:
-		frappe.throw(_("Invalid photo review request."), frappe.ValidationError)
+	if reference_doctype not in {"Student Applicant", "Student"}:
+		frappe.throw(_("Invalid student photo target."), frappe.ValidationError)
 	doc = frappe.get_doc(reference_doctype, reference_name)
 	doc.check_permission("write")
-	if not doc.get("image"):
-		frappe.throw(_("Upload a photo before completing review."), frappe.ValidationError)
-	if doc.meta.has_field(BRANCH_FIELD) and doc.get(BRANCH_FIELD):
-		assert_branch_access(doc.get(BRANCH_FIELD))
-	doc.set(PHOTO_STATUS_FIELD, decision)
-	doc.set(PHOTO_LOCKED_FIELD, 1 if decision == "Approved" else 0)
-	doc.set(PHOTO_APPROVED_BY_FIELD, frappe.session.user if decision == "Approved" else None)
-	doc.set(PHOTO_APPROVED_ON_FIELD, now_datetime() if decision == "Approved" else None)
-	doc.set(PHOTO_REVIEW_NOTE_FIELD, note)
+	decision = str(decision or "").strip().title()
+	if decision not in {"Approve", "Reject", "Unlock"}:
+		frappe.throw(_("Select Approve, Reject, or Unlock."), frappe.ValidationError)
+	old_image = doc.get("image")
+	if decision == "Approve":
+		if not old_image:
+			frappe.throw(_("Upload a profile photo before approval."), frappe.ValidationError)
+		_validate_private_image(old_image, reference_doctype, reference_name)
+		doc.set(PHOTO_STATUS_FIELD, "Approved")
+		doc.set(PHOTO_LOCKED_FIELD, 1)
+		doc.set(PHOTO_APPROVED_BY_FIELD, frappe.session.user)
+		doc.set(PHOTO_APPROVED_ON_FIELD, now_datetime())
+		doc.set(PHOTO_REVIEW_NOTE_FIELD, note)
+	elif decision == "Reject":
+		doc.set("image", None)
+		doc.set(PHOTO_STATUS_FIELD, "Rejected")
+		doc.set(PHOTO_LOCKED_FIELD, 0)
+		doc.set(PHOTO_APPROVED_BY_FIELD, frappe.session.user)
+		doc.set(PHOTO_APPROVED_ON_FIELD, now_datetime())
+		doc.set(PHOTO_REVIEW_NOTE_FIELD, note)
+	else:
+		doc.set(PHOTO_LOCKED_FIELD, 0)
+		doc.set(PHOTO_STATUS_FIELD, "Pending Review" if old_image else "Not Uploaded")
+		doc.set(PHOTO_REVIEW_NOTE_FIELD, note)
 	doc.save()
-	_append_photo_log(doc, decision, doc.image, doc.image, note)
-
-	if reference_doctype == "Student Applicant" and decision == "Approved":
-		student_name = frappe.db.get_value("Student", {"student_applicant": doc.name}, "name")
-		if student_name:
-			student = frappe.get_doc("Student", student_name)
-			student.check_permission("write")
-			old_image = student.image
-			student.image = doc.image
-			student.set(PHOTO_STATUS_FIELD, "Approved")
-			student.set(PHOTO_LOCKED_FIELD, 1)
-			student.set(PHOTO_APPROVED_BY_FIELD, frappe.session.user)
-			student.set(PHOTO_APPROVED_ON_FIELD, now_datetime())
-			student.set(PHOTO_REVIEW_NOTE_FIELD, note)
-			student.save()
-			_append_photo_log(student, "Approved", old_image, student.image, _("Copied from approved admission application."))
-	return doc.as_dict(no_nulls=False)
-
-
-def _instructor_detail(name: str) -> dict:
-	doc = frappe.get_doc("Instructor", name)
-	doc.check_permission("read")
-	result = doc.as_dict(no_nulls=False)
-	result["assignments"] = frappe.get_list(
-		"EduEdge Instructor Assignment",
-		filters={"instructor": doc.name},
-		fields=["name", "assignment_title", "school_branch", "program_offering", "student_group", "course", "assignment_type", "enabled"],
-		order_by="modified desc",
-		limit_page_length=50,
-	) if frappe.db.exists("DocType", "EduEdge Instructor Assignment") else []
-	return result
+	_append_photo_log(doc, decision, old_image, doc.get("image"), note)
+	return _student_detail(doc.name) if reference_doctype == "Student" else doc.as_dict(no_nulls=False)
 
 
 @frappe.whitelist()
@@ -435,227 +452,84 @@ def get_instructors_page(
 ) -> dict:
 	_require_permission("Instructor", "read")
 	resolved, selected, allowed = _resolve_branch(branch)
-	institution = selected.get("institution")
-	filters: dict[str, Any] = {}
-	meta = frappe.get_meta("Instructor")
-	if meta.has_field(INSTITUTION_FIELD):
-		filters[INSTITUTION_FIELD] = institution
-	if meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD):
-		filters[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = resolved
+	filters: dict[str, Any] = {INSTRUCTOR_PRIMARY_BRANCH_FIELD: resolved}
 	or_filters = None
 	if str(search or "").strip():
 		needle = f"%{str(search).strip()}%"
-		or_filters = {"name": ["like", needle], "instructor_name": ["like", needle]}
+		or_filters = {
+			"name": ["like", needle],
+			"instructor_name": ["like", needle],
+			"eduedge_email": ["like", needle],
+			"eduedge_mobile": ["like", needle],
+			"department": ["like", needle],
+		}
 	length = min(max(cint(page_length), 1), MAX_PAGE_LENGTH)
 	start = max(cint(start), 0)
+	fields = _row_fields(
+		"Instructor",
+		[
+			"name", "instructor_name", "image", "status", "department", "employee", INSTITUTION_FIELD,
+			INSTRUCTOR_PRIMARY_BRANCH_FIELD, "eduedge_email", "eduedge_mobile", "eduedge_qualification",
+			"eduedge_specialisation", "eduedge_employment_type",
+			PHOTO_STATUS_FIELD, PHOTO_LOCKED_FIELD,
+		],
+	)
 	rows = frappe.get_list(
 		"Instructor",
 		filters=filters,
 		or_filters=or_filters,
-		fields=_row_fields(
-			"Instructor",
-			["name", "instructor_name", "employee", "department", "status", "image", INSTITUTION_FIELD, INSTRUCTOR_PRIMARY_BRANCH_FIELD, "eduedge_email", "eduedge_mobile"],
-		),
+		fields=fields,
 		order_by="instructor_name asc",
 		start=start,
 		page_length=length + 1,
 	)
 	has_more = len(rows) > length
 	rows = rows[:length]
-	departments = frappe.get_list(
-		"Department",
-		filters={INSTITUTION_FIELD: institution} if frappe.get_meta("Department").has_field(INSTITUTION_FIELD) else {},
-		fields=["name", "department_name"],
-		order_by="department_name asc",
-		limit_page_length=300,
-	)
 	return {
 		"allowed_branches": allowed,
 		"selected_branch": selected,
 		"instructors": rows,
 		"instructor": _instructor_detail(instructor) if instructor else None,
-		"departments": departments,
-		"employees": frappe.get_list("Employee", filters={"status": "Active"}, fields=["name", "employee_name", "department", "gender"], order_by="employee_name asc", limit_page_length=500) if frappe.db.exists("DocType", "Employee") and frappe.has_permission("Employee", "read") else [],
-		"genders": _standard_options()["genders"],
+		"options": _standard_options(),
 		"permissions": {
 			"can_create": frappe.has_permission("Instructor", "create"),
 			"can_write": frappe.has_permission("Instructor", "write"),
+			"can_manage_photo": bool(PEOPLE_MANAGER_ROLES.intersection(frappe.get_roles())),
 		},
 		"paging": {"start": start, "page_length": length, "has_more": has_more},
 	}
 
 
-def _ensure_branch_eligibility(instructor: str, branch: str) -> None:
-	assignment_name = frappe.db.get_value(
-		"EduEdge Instructor Branch Assignment",
-		{"instructor": instructor, "school_branch": branch},
-		"name",
-	)
-	for other in frappe.get_all(
-		"EduEdge Instructor Branch Assignment",
-		filters={"instructor": instructor, "is_primary": 1, "name": ["!=", assignment_name or ""]},
-		pluck="name",
-	):
-		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", other)
-		doc.check_permission("write")
-		doc.is_primary = 0
-		doc.save()
-	if assignment_name:
-		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", assignment_name)
-		doc.check_permission("write")
-	else:
-		_require_permission("EduEdge Instructor Branch Assignment", "create")
-		doc = frappe.new_doc("EduEdge Instructor Branch Assignment")
-		doc.instructor = instructor
-		doc.school_branch = branch
-	doc.enabled = 1
-	doc.is_primary = 1
-	doc.valid_from = doc.valid_from or nowdate()
-	doc.save()
+def _instructor_detail(name: str) -> dict:
+	doc = frappe.get_doc("Instructor", name)
+	doc.check_permission("read")
+	result = doc.as_dict(no_nulls=False)
+	result["assignment_count"] = frappe.db.count("EduEdge Instructor Assignment", {"instructor": name, "enabled": 1}) if frappe.db.exists("DocType", "EduEdge Instructor Assignment") else 0
+	return result
 
 
 @frappe.whitelist(methods=["POST"])
 def save_instructor(payload: str | dict) -> dict:
-	"""Backward-compatible Instructor save endpoint.
-
-	The current Instructor Profile workspace is Institution-scoped and permits a
-	blank Primary Branch. Delegate to the authoritative profile service so older
-	cached bundles cannot reintroduce the retired Branch-required rule.
-	"""
-	from eduedge.api.instructor_profiles import save_instructor as save_instructor_profile
-
-	return save_instructor_profile(payload)
-
-
-@frappe.whitelist(methods=["POST"])
-def set_instructor_photo(instructor: str, file_url: str) -> dict:
-	require_eduedge_access(feature_key="academics", action="set_instructor_photo")
-	_require_people_manager()
-	doc = frappe.get_doc("Instructor", instructor)
-	doc.check_permission("write")
-	_validate_private_image(file_url, "Instructor", instructor)
-	doc.image = file_url
-	doc.save()
-	return _instructor_detail(doc.name)
-
-
-def _assignment_options(branch: str, offering: str | None = None, student_group: str | None = None) -> dict:
-	resolved, selected, allowed = _resolve_branch(branch)
-	institution = selected.get("institution")
-	offering_filters = {"school_branch": resolved, "is_active": 1}
-	offerings = frappe.get_list(
-		"EduEdge Program Offering",
-		filters=offering_filters,
-		fields=["name", "offering_title", "program", "academic_year", "academic_term", "institution"],
-		order_by="academic_year desc, offering_title asc",
-		limit_page_length=300,
-	)
-	selected_offering = next((row for row in offerings if row.name == offering), None)
-	group_filters: dict[str, Any] = {BRANCH_FIELD: resolved, "disabled": 0}
-	if offering and frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
-		group_filters[OFFERING_FIELD] = offering
-	groups = frappe.get_list(
-		"Student Group",
-		filters=group_filters,
-		fields=_row_fields("Student Group", ["name", "student_group_name", "eduedge_display_name", "program", "academic_year", "academic_term", OFFERING_FIELD]),
-		order_by="student_group_name asc",
-		limit_page_length=300,
-	)
-	selected_group = next((row for row in groups if row.name == student_group), None)
-	program = (selected_offering or {}).get("program") or (selected_group or {}).get("program")
-	courses = frappe.get_all(
-		"Program Course",
-		filters={"parent": program, "parenttype": "Program"},
-		fields=["course"],
-		order_by="idx asc",
-		limit_page_length=300,
-	) if program else []
-	eligible_names = frappe.get_all(
-		"EduEdge Instructor Branch Assignment",
-		filters={"school_branch": resolved, "enabled": 1},
-		pluck="instructor",
-		limit_page_length=500,
-	)
-	instructor_filters: dict[str, Any] = {"name": ["in", eligible_names], "status": "Active"}
-	instructors = frappe.get_list(
-		"Instructor",
-		filters=instructor_filters,
-		fields=["name", "instructor_name", "department"],
-		order_by="instructor_name asc",
-		limit_page_length=500,
-	) if eligible_names else []
-	return {
-		"allowed_branches": allowed,
-		"selected_branch": selected,
-		"offerings": offerings,
-		"groups": groups,
-		"courses": courses,
-		"instructors": instructors,
-		"selected_offering": selected_offering,
-		"selected_group": selected_group,
-	}
-
-
-@frappe.whitelist()
-def get_instructor_assignment_options(branch: str, offering: str | None = None, student_group: str | None = None) -> dict:
-	_require_permission("EduEdge Instructor Assignment", "read")
-	return _assignment_options(branch, offering, student_group)
-
-
-@frappe.whitelist()
-def get_instructor_assignments_page(
-	branch: str | None = None,
-	offering: str | None = None,
-	student_group: str | None = None,
-	assignment: str | None = None,
-) -> dict:
-	_require_permission("EduEdge Instructor Assignment", "read")
-	resolved, _, _ = _resolve_branch(branch)
-	options = _assignment_options(resolved, offering, student_group)
-	filters: dict[str, Any] = {"school_branch": resolved}
-	if offering:
-		filters["program_offering"] = offering
-	if student_group:
-		filters["student_group"] = student_group
-	rows = frappe.get_list(
-		"EduEdge Instructor Assignment",
-		filters=filters,
-		fields=["name", "assignment_title", "instructor", "instructor_name", "assignment_type", "program_offering", "student_group", "course", "academic_year", "academic_term", "enabled", "valid_from", "valid_to"],
-		order_by="modified desc",
-		limit_page_length=300,
-	)
-	selected = None
-	if assignment:
-		doc = frappe.get_doc("EduEdge Instructor Assignment", assignment)
-		doc.check_permission("read")
-		selected = doc.as_dict(no_nulls=False)
-	return {
-		**options,
-		"assignments": rows,
-		"assignment": selected,
-		"permissions": {
-			"can_create": frappe.has_permission("EduEdge Instructor Assignment", "create"),
-			"can_write": frappe.has_permission("EduEdge Instructor Assignment", "write"),
-		},
-	}
-
-
-@frappe.whitelist(methods=["POST"])
-def save_instructor_assignment(payload: str | dict) -> dict:
-	require_eduedge_access(feature_key="academics", action="save_instructor_assignment")
+	require_eduedge_access(feature_key="academics", action="save_instructor")
 	data = _parse_payload(payload)
 	name = str(data.get("name") or "").strip()
 	if name:
-		doc = frappe.get_doc("EduEdge Instructor Assignment", name)
+		doc = frappe.get_doc("Instructor", name)
 		doc.check_permission("write")
 	else:
-		_require_permission("EduEdge Instructor Assignment", "create")
-		doc = frappe.new_doc("EduEdge Instructor Assignment")
-	for fieldname in (
-		"instructor", "assignment_type", "enabled", "school_branch", "program_offering",
-		"student_group", "course", "valid_from", "valid_to", "notes",
-	):
-		if fieldname in data:
+		_require_permission("Instructor", "create")
+		doc = frappe.new_doc("Instructor")
+	for fieldname in INSTRUCTOR_FIELDS:
+		if doc.meta.has_field(fieldname) and fieldname in data:
 			doc.set(fieldname, data.get(fieldname))
+	branch = str(data.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD) or "").strip()
+	if not branch:
+		frappe.throw(_("Primary School Branch / Campus is required."), frappe.ValidationError)
+	assert_branch_access(branch)
+	institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
+	if doc.meta.has_field(INSTITUTION_FIELD):
+		doc.set(INSTITUTION_FIELD, institution)
+	if not doc.instructor_name:
+		frappe.throw(_("Instructor Name is required."), frappe.ValidationError)
 	doc.save()
-	return doc.as_dict(no_nulls=False)
+	return _instructor_detail(doc.name)

@@ -94,7 +94,8 @@ class TestAcademicFoundationOperationsAlignmentContract(unittest.TestCase):
 			self.assertIn(fieldname, group_js)
 		self.assertIn("clearStudentGroupContext", group_js)
 		self.assertIn("academic_operations_review.course_query", group_js)
-		self.assertIn("applyStudentGroupContext", schedule_js)
+		self.assertIn("applyStudentGroupChange", schedule_js)
+		self.assertIn("hydrateStudentGroupContext", schedule_js)
 		self.assertIn("schedule_date(frm)", schedule_js)
 
 	def test_offering_page_uses_direct_institution_terminology_but_no_term_identity(self):

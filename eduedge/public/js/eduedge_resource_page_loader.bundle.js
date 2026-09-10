@@ -37,10 +37,12 @@ window.registerEduEdgeResourcePage = function registerEduEdgeResourcePage({
 			$(`<div class="alert alert-danger p-6 text-center"><strong>${__("EduEdge page failed to load")}</strong><div>${frappe.utils.escape_html(message || "")}</div></div>`).appendTo(page.body);
 		};
 
-		frappe.require("edgeui.bundle.js", () => {
+		frappe.require("edgesuite_ui.bundle.js", () => {
 			if (wrapper.current_visit_id !== visitId) return;
-			const runtime = window.EdgeSuiteUI || window.EdgeUI;
-			if (!runtime?.install || !runtime?.components?.EdgeAppShell || !runtime?.components?.EdgeFormDialog) {
+			const runtime = [window.EdgeSuiteUI, window.EdgeUI].find(
+				(candidate) => typeof candidate?.install === "function" && Boolean(candidate?.components?.EdgeAppShell)
+			);
+			if (!runtime) {
 				fail(__("The standalone EdgeSuite UI runtime is unavailable or incomplete."));
 				return;
 			}

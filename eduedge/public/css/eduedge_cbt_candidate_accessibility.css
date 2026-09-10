@@ -1,0 +1,24 @@
+@media (prefers-reduced-motion: reduce) {
+	.cbt-spinner {
+		animation: none !important;
+	}
+
+	.cbt-button,
+	.cbt-option {
+		transition: none !important;
+	}
+}
+
+@media (forced-colors: active) {
+	.cbt-button,
+	.cbt-question-number,
+	.cbt-option,
+	.cbt-text-answer,
+	.cbt-numeric-answer {
+		forced-color-adjust: auto;
+	}
+
+	.cbt-question-number.pending::after {
+		border: 1px solid ButtonText;
+	}
+}

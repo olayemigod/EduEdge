@@ -24,6 +24,7 @@ RESOURCE_DOCTYPES = {
 	"institution": "EduEdge Institution",
 	"company_operations_settings": "EduEdge Company Operations Settings",
 	"school_branch": "EduEdge School Branch",
+	"school_event": "EduEdge School Event",
 	"user_branch_access": "EduEdge User Branch Access",
 	"instructor_branch_assignment": "EduEdge Instructor Branch Assignment",
 	"instructor_assignment": "EduEdge Instructor Assignment",
@@ -75,6 +76,13 @@ ROUTE_REQUIREMENTS = {
 	"/app/eduedge-academic-sessions": (
 		("academic_year", "read"),
 		("academic_term", "read"),
+	),
+	"/app/eduedge-school-calendar": (
+		("school_event", "read"),
+		("school_branch", "read"),
+		("academic_year", "read"),
+		("assessment_plan", "read"),
+		("course_schedule", "read"),
 	),
 	"/app/eduedge-curriculum": (
 		("course", "read"),

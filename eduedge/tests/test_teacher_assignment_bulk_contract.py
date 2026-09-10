@@ -28,8 +28,10 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             "rows: this.rows.map",
             "newRow(",
             "duplicateRow(row)",
-            "coursesFor(row)",
-            "groupsFor(row)",
+            "InstructorAssignmentSearchFields",
+            ':row="row"',
+            '@update:class-arms="row.student_groups = $event"',
+            '@update:courses="row.courses = $event"',
         ):
             self.assertIn(token, component)
         for retired in (
@@ -38,6 +40,8 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             "form.student_groups.includes",
             "form.courses.includes",
             "Skipped because the Subject is not configured for that Class",
+            "coursesFor(row)",
+            "groupsFor(row)",
         ):
             self.assertNotIn(retired, component)
 
@@ -90,6 +94,13 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             / "eduedge_instructor_assignments"
             / "EduEdgeInstructorAssignments.vue"
         ).read_text(encoding="utf-8")
+        search_fields = (
+            APP
+            / "public"
+            / "js"
+            / "eduedge_instructor_assignments"
+            / "InstructorAssignmentSearchFields.vue"
+        ).read_text(encoding="utf-8")
         for token in (
             "program_courses.get(offering.program",
             "course_institution",
@@ -97,8 +108,11 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             "Class Arm does not belong to the selected Programme Offering",
         ):
             self.assertIn(token, api)
-        self.assertIn("These {{ courseLabel(row, true).toLowerCase() }} apply only to this row's selected Class", component)
+        self.assertIn("Multiple Subjects or Class Arms selected inside that row apply only to that row", component)
         self.assertIn("courseLabel(row", component)
+        self.assertIn("EduEdgeMultiLinkField", search_fields)
+        self.assertIn(':context="{ branch: row.branch, program_offering: row.program_offering }"', search_fields)
+        self.assertIn("searchCourses(row, query)", search_fields)
 
     def test_exact_existing_records_and_primary_responsibility_conflicts_are_checked(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
@@ -129,7 +143,7 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             / "eduedge_instructor_assignments"
             / "EduEdgeInstructorAssignments.vue"
         ).read_text(encoding="utf-8")
-        self.assertIn("eduedge.api.instructor_assignments.get_instructor_assignments_page", component)
+        self.assertIn("eduedge.api.instructor_assignment_runtime.get_instructor_assignments_page", component)
         self.assertIn("eduedge.api.instructor_assignments.preview_instructor_assignment_batch", component)
         self.assertIn("eduedge.api.instructor_assignments.save_instructor_assignment_batch", component)
         self.assertNotIn("eduedge.api.teacher_assignments", component)
@@ -194,6 +208,7 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             / "eduedge_instructor_assignments"
             / "EduEdgeInstructorAssignments.vue"
         ).read_text(encoding="utf-8")
+        search_api = (APP / "api" / "instructor_assignment_link_search.py").read_text(encoding="utf-8")
         for token in (
             "period_start_date",
             "period_end_date",
@@ -201,8 +216,9 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             "Valid To cannot be later than the selected Class academic period",
         ):
             self.assertIn(token, api)
-        self.assertIn("offering.period_start_date", component)
-        self.assertIn("offering.period_end_date", component)
+        self.assertIn('row["period_start_date"], row["period_end_date"]', search_api)
+        self.assertIn("option?.period_start_date", component)
+        self.assertIn("option?.period_end_date", component)
 
     def test_assignment_scope_and_subject_instructor_migration_are_idempotent(self):
         metadata = json.loads(

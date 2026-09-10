@@ -32,10 +32,16 @@
 						</label>
 						<label>
 							<span>Student</span>
-							<select v-model="filters.student" class="form-control" @change="studentFilterChanged">
-								<option value="">All Students</option>
-								<option v-for="row in data.students" :key="row.name" :value="row.name">{{ row.student_name || row.name }}</option>
-							</select>
+							<EdgeLinkField
+								v-model="filters.student"
+								:selected-label="filterStudentLabel"
+								:searcher="searchFilterStudents"
+								:context="{ branch: filters.branch }"
+								placeholder="Search Student name, ID, mobile or email"
+								:open-on-focus="true"
+								@select="filterStudentSelected"
+								@clear="filterStudentCleared"
+							/>
 						</label>
 					</div>
 					<template #actions>
@@ -83,10 +89,17 @@
 						<div class="eduedge-enrollment-grid">
 							<label>
 								<span>Student *</span>
-								<select v-model="draft.student" class="form-control" :disabled="!canEdit || Boolean(draft.name)" @change="studentChanged">
-									<option value="">Select Student</option>
-									<option v-for="row in data.students" :key="row.name" :value="row.name">{{ row.student_name || row.name }} · {{ row.name }}</option>
-								</select>
+								<EdgeLinkField
+									v-model="draft.student"
+									:selected-label="draftStudentLabel"
+									:searcher="searchDraftStudents"
+									:context="{ branch: draft.branch }"
+									placeholder="Search Student name, ID, mobile or email"
+									:disabled="!canEdit || Boolean(draft.name) || !draft.branch"
+									:open-on-focus="true"
+									@select="draftStudentSelected"
+									@clear="draftStudentCleared"
+								/>
 							</label>
 							<label>
 								<span>Target Branch / Campus *</span>
@@ -97,12 +110,17 @@
 							</label>
 							<label class="wide">
 								<span>Programme Offering *</span>
-								<select v-model="draft.offering" class="form-control" :disabled="!canEdit || !draft.student || !draft.branch || optionsLoading" @change="offeringChanged">
-									<option value="">{{ draft.student && draft.branch ? 'Select Programme Offering' : 'Select Student and Branch first' }}</option>
-									<option v-for="row in options.offerings" :key="row.name" :value="row.name">
-										{{ row.offering_title || row.name }} · {{ row.academic_year }}{{ row.academic_term ? ` · ${row.academic_term}` : '' }}
-									</option>
-								</select>
+								<EdgeLinkField
+									v-model="draft.offering"
+									:selected-label="draftOfferingLabel"
+									:searcher="searchOfferings"
+									:context="{ branch: draft.branch, student: draft.student }"
+									:placeholder="draft.student && draft.branch ? 'Search Programme Offering, class or session' : 'Select Student and Branch first'"
+									:disabled="!canEdit || !draft.student || !draft.branch || optionsLoading"
+									:open-on-focus="true"
+									@select="offeringSelected"
+									@clear="offeringCleared"
+								/>
 							</label>
 							<label><span>Enrollment date *</span><input v-model="draft.enrollment_date" type="date" class="form-control" :disabled="!canEdit" /></label>
 							<label><span>Student category</span><select v-model="draft.student_category" class="form-control" :disabled="!canEdit"><option value="">Not specified</option><option v-for="row in data.student_categories" :key="row.name" :value="row.name">{{ row.name }}</option></select></label>
@@ -155,10 +173,10 @@ const blankDraft = (branch = "", student = "") => ({
 	can_edit: true, can_submit: true,
 });
 const blankData = () => ({
-	allowed_branches: [], selected_branch: {}, students: [], offerings: [], enrollments: [], enrollment: null,
-	courses: [], student_categories: [], school_houses: [], permissions: {}, paging: { start: 0, page_length: 25, has_more: false },
+	allowed_branches: [], selected_branch: {}, selected_student: null, enrollments: [], enrollment: null,
+	student_categories: [], school_houses: [], permissions: {}, paging: { start: 0, page_length: 25, has_more: false },
 });
-const blankOptions = () => ({ offerings: [], context: {}, courses: [], student: {}, branch: {} });
+const blankOptions = () => ({ context: {}, courses: [], student: {}, branch: {} });
 
 export default {
 	name: "EduEdgeStudentEnrollments",
@@ -167,6 +185,7 @@ export default {
 			menuItems: EDUEDGE_MENU_ITEMS, loading: true, loaded: false, optionsLoading: false, saving: false,
 			error: "", saveError: "", filters: { branch: "", student: "", start: 0 }, data: blankData(),
 			options: blankOptions(), draft: blankDraft(), initialCreateMode: false, initialOffering: "",
+			filterStudentLabel: "", draftStudentLabel: "", draftOfferingLabel: "",
 		};
 	},
 	computed: {
@@ -192,41 +211,63 @@ export default {
 	},
 	methods: {
 		openRoute: openEduEdgeRoute,
+		async callSearch(method, args) {
+			const response = await frappe.call(method, args);
+			return response.message || [];
+		},
+		searchFilterStudents(query) {
+			if (!this.filters.branch) return Promise.resolve([]);
+			return this.callSearch("eduedge.api.enrollment_link_search.search_eligible_students", { branch: this.filters.branch, query, page_length: 20 });
+		},
+		searchDraftStudents(query) {
+			if (!this.draft.branch) return Promise.resolve([]);
+			return this.callSearch("eduedge.api.enrollment_link_search.search_eligible_students", { branch: this.draft.branch, query, page_length: 20 });
+		},
+		searchOfferings(query) {
+			if (!this.draft.branch || !this.draft.student) return Promise.resolve([]);
+			return this.callSearch("eduedge.api.enrollment_link_search.search_enrollment_offerings", { branch: this.draft.branch, student: this.draft.student, query, page_length: 20 });
+		},
 		async load(reset = false, enrollment = "") {
 			if (reset) this.filters.start = 0;
 			this.loading = true; this.error = "";
 			try {
-				const response = await frappe.call("eduedge.api.student_enrollments.get_student_enrollments_page", {
+				const response = await frappe.call("eduedge.api.student_enrollment_runtime.get_student_enrollments_page", {
 					branch: this.filters.branch || undefined, student: this.filters.student || undefined,
 					enrollment: enrollment || undefined, start: this.filters.start, page_length: this.data.paging.page_length || 25,
 				});
 				this.data = response.message || blankData();
 				this.filters.branch = this.data.selected_branch?.name || this.filters.branch;
-				this.options.offerings = this.data.offerings || [];
+				if (this.data.selected_student?.name === this.filters.student) this.filterStudentLabel = this.data.selected_student.student_name || this.data.selected_student.name;
 				this.loaded = true;
 				if (this.data.enrollment) {
 					const row = this.data.enrollment;
 					this.draft = { ...blankDraft(row.eduedge_school_branch || this.filters.branch, row.student), ...row, branch: row.eduedge_school_branch || this.filters.branch, offering: row.eduedge_program_offering || "", boarding_student: Number(row.boarding_student || 0) };
 					this.filters.student = row.student || this.filters.student;
+					this.filterStudentLabel = row.student_name || this.filterStudentLabel;
+					this.draftStudentLabel = row.student_name || row.student || "";
 					await this.loadOptions();
 				} else if (!this.draft.name) {
 					this.draft.branch = this.filters.branch;
 					this.draft.eduedge_school_branch = this.filters.branch;
 					this.draft.student = this.filters.student;
+					this.draftStudentLabel = this.filterStudentLabel;
 				}
 			} catch (error) { this.error = error?.message || "Student Enrollments could not be loaded."; }
 			finally { this.loading = false; }
 		},
 		async loadOptions() {
-			if (!this.draft.student || !this.draft.branch) { this.options = { ...blankOptions(), offerings: this.data.offerings || [] }; return; }
+			if (!this.draft.student || !this.draft.branch || !this.draft.offering) { this.options = blankOptions(); return; }
 			this.optionsLoading = true; this.saveError = "";
 			try {
-				const response = await frappe.call("eduedge.api.student_enrollments.get_student_enrollment_options", {
-					student: this.draft.student, branch: this.draft.branch, offering: this.draft.offering || undefined,
+				const response = await frappe.call("eduedge.api.student_enrollment_runtime.get_student_enrollment_context", {
+					student: this.draft.student, branch: this.draft.branch, offering: this.draft.offering,
 				});
 				this.options = { ...blankOptions(), ...(response.message || {}) };
-				if (this.context.name) this.applyContext(this.context);
-			} catch (error) { this.options = { ...blankOptions(), offerings: this.data.offerings || [] }; this.saveError = error?.message || "Enrollment options could not be loaded."; }
+				if (this.context.name) {
+					this.applyContext(this.context);
+					this.draftOfferingLabel = this.context.offering_title || this.context.name;
+				}
+			} catch (error) { this.options = blankOptions(); this.saveError = error?.message || "Enrollment context could not be loaded."; }
 			finally { this.optionsLoading = false; }
 		},
 		applyContext(context) {
@@ -239,21 +280,46 @@ export default {
 		},
 		async newEnrollment() {
 			this.draft = blankDraft(this.filters.branch || this.data.selected_branch?.name || "", this.filters.student || "");
-			this.options = { ...blankOptions(), offerings: this.data.offerings || [] };
-			if (this.initialOffering && this.options.offerings.some((row) => row.name === this.initialOffering)) {
+			this.draftStudentLabel = this.filterStudentLabel;
+			this.draftOfferingLabel = "";
+			this.options = blankOptions();
+			if (this.initialOffering && this.draft.student && this.draft.branch) {
 				this.draft.offering = this.initialOffering;
 				this.draft.eduedge_program_offering = this.initialOffering;
+				await this.loadOptions();
 			}
 			this.saveError = "";
-			if (this.draft.student && this.draft.branch) await this.loadOptions();
 		},
 		async editEnrollment(name) { await this.load(false, name); },
 		async branchChanged() {
-			this.initialOffering = ""; this.filters.student = ""; this.draft = blankDraft(this.filters.branch, ""); this.options = blankOptions(); await this.load(true);
+			this.initialOffering = ""; this.filters.student = ""; this.filterStudentLabel = "";
+			this.draft = blankDraft(this.filters.branch, ""); this.draftStudentLabel = ""; this.draftOfferingLabel = ""; this.options = blankOptions(); await this.load(true);
 		},
-		async studentFilterChanged() { this.draft = blankDraft(this.filters.branch, this.filters.student); if (this.initialOffering) this.draft.offering = this.initialOffering; await this.load(true); if (this.filters.student) await this.loadOptions(); },
-		async studentChanged() { this.filters.student = this.draft.student; if (!this.draft.student) { this.draft.offering = ""; this.draft.eduedge_program_offering = ""; } await this.loadOptions(); },
-		async draftBranchChanged() { this.initialOffering = ""; this.filters.branch = this.draft.branch; this.filters.student = ""; this.draft.student = ""; this.draft.offering = ""; this.draft.eduedge_program_offering = ""; this.draft.program = ""; this.draft.academic_year = ""; this.draft.academic_term = ""; this.draft.student_batch_name = ""; await this.load(true); this.draft.branch = this.filters.branch; await this.loadOptions(); },
+		async filterStudentSelected(option) { this.filterStudentLabel = option?.label || option?.value || ""; await this.studentFilterChanged(); },
+		async filterStudentCleared() { this.filters.student = ""; this.filterStudentLabel = ""; await this.studentFilterChanged(); },
+		async studentFilterChanged() {
+			this.draft = blankDraft(this.filters.branch, this.filters.student);
+			this.draftStudentLabel = this.filterStudentLabel;
+			this.draftOfferingLabel = "";
+			this.options = blankOptions();
+			await this.load(true);
+		},
+		async draftStudentSelected(option) { this.draftStudentLabel = option?.label || option?.value || ""; await this.studentChanged(); },
+		async draftStudentCleared() { this.draft.student = ""; this.draftStudentLabel = ""; await this.studentChanged(); },
+		async studentChanged() {
+			this.filters.student = this.draft.student;
+			this.filterStudentLabel = this.draftStudentLabel;
+			this.draft.offering = ""; this.draft.eduedge_program_offering = ""; this.draftOfferingLabel = ""; this.options = blankOptions();
+			await this.load(true);
+		},
+		async draftBranchChanged() {
+			this.initialOffering = ""; this.filters.branch = this.draft.branch; this.filters.student = ""; this.filterStudentLabel = "";
+			this.draft.student = ""; this.draftStudentLabel = ""; this.draft.offering = ""; this.draftOfferingLabel = ""; this.draft.eduedge_program_offering = "";
+			this.draft.program = ""; this.draft.academic_year = ""; this.draft.academic_term = ""; this.draft.student_batch_name = ""; this.options = blankOptions();
+			await this.load(true); this.draft.branch = this.filters.branch;
+		},
+		async offeringSelected(option) { this.draftOfferingLabel = option?.label || option?.value || ""; await this.offeringChanged(); },
+		async offeringCleared() { this.draft.offering = ""; this.draftOfferingLabel = ""; this.draft.eduedge_program_offering = ""; this.options = blankOptions(); },
 		async offeringChanged() { await this.loadOptions(); },
 		async save(submit = false) {
 			if (!this.canSave) return;
