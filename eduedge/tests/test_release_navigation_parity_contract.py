@@ -45,7 +45,7 @@ class TestReleaseNavigationParityContract(unittest.TestCase):
 	def test_global_menu_hardening_is_not_mistaken_for_a_page_vue_bundle(self):
 		foundation_test = (APP / "tests" / "test_edgesuite_ui_foundation.py").read_text(encoding="utf-8")
 		self.assertIn('"eduedge_product_menu_hardening.bundle.js"', foundation_test)
-		self.assertIn("GLOBAL_DESK_BUNDLES", foundation_test)
+		self.assertIn("NON_PAGE_APP_BUNDLES", foundation_test)
 
 
 if __name__ == "__main__":
