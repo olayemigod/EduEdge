@@ -10,6 +10,8 @@ from eduedge.education.report_cards import (
 	OPERATIONAL_ROLES,
 	REVIEW_DOCTYPE,
 	assert_report_card_access,
+	assert_report_card_review_management,
+	can_manage_report_card_reviews,
 	get_publication_student_summaries,
 	get_published_publication,
 	get_student_report_card_payload,
@@ -80,6 +82,11 @@ def get_report_card_context(
 		order_by="published_on desc, modified desc",
 		page_length=200,
 	)
+	publications = [
+		row for row in publications
+		if can_manage_report_card_reviews(row)
+	]
+
 
 	selected_publication = None
 	students = []
@@ -106,6 +113,9 @@ def get_report_card_context(
 		"current_branch": current_branch,
 		"allowed_branches": get_allowed_school_branches(),
 		"can_approve": bool(APPROVER_ROLES.intersection(roles)),
+		"can_review": bool(
+			selected_publication and can_manage_report_card_reviews(selected_publication)
+		),
 		"filters": {
 			"branch": resolved_branch,
 			"publication": publication,
@@ -137,8 +147,15 @@ def get_report_card_context(
 @guard_eduedge_action("assessment", action="prepare_report_cards")
 def prepare_report_cards(publication: str) -> dict:
 	_require_operator()
+	locked_publication = frappe.db.sql(
+		"select name from `tabEduEdge Result Publication` where name=%s for update",
+		(publication,),
+	)
+	if not locked_publication:
+		frappe.throw(_("Result Publication does not exist."), frappe.DoesNotExistError)
 	publication_row = get_published_publication(publication)
 	assert_branch_access(publication_row.school_branch)
+	assert_report_card_review_management(publication_row)
 	summaries = get_publication_student_summaries(publication)
 	created = 0
 	updated = 0
@@ -182,6 +199,7 @@ def save_report_card_review(
 	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
 	doc.check_permission("write")
 	assert_branch_access(doc.school_branch)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(
 			_("Only Draft report-card reviews can be edited. Reopen the review first."),
@@ -213,8 +231,8 @@ def save_report_card_review(
 @guard_eduedge_action("assessment", action="recommend_progression")
 def recommend_progression(review: str) -> dict:
 	_require_operator()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(_("Only Draft reviews can be recommended."), frappe.ValidationError)
 	if doc.progression_recommendation == "Pending Review":
@@ -241,8 +259,7 @@ def recommend_progression(review: str) -> dict:
 @guard_eduedge_action("assessment", action="approve_progression")
 def approve_progression(review: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status != "Recommended":
 		frappe.throw(_("Only Recommended reviews can be approved."), frappe.ValidationError)
 	settings = frappe.get_single("EduEdge Settings")
@@ -267,8 +284,7 @@ def approve_progression(review: str) -> dict:
 @guard_eduedge_action("assessment", action="reopen_progression_review")
 def reopen_progression_review(review: str, reason: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status not in {"Recommended", "Approved"}:
 		frappe.throw(_("Only Recommended or Approved reviews can be reopened."))
 	reason = (reason or "").strip()
@@ -363,6 +379,19 @@ def preview_report_card(publication: str, student: str) -> None:
 	frappe.response.filename = f"Report Card {student}.pdf"
 	frappe.response.filecontent = get_pdf(final_html)
 	frappe.response.type = "pdf"
+
+
+def _get_review_for_update(name: str):
+	rows = frappe.db.sql(
+		"select name from `tabEduEdge Report Card Review` where name=%s for update",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Report Card Review does not exist."), frappe.DoesNotExistError)
+	doc = frappe.get_doc(REVIEW_DOCTYPE, name)
+	doc.check_permission("write")
+	assert_branch_access(doc.school_branch)
+	return doc
 
 
 def _transition(doc, to_status: str, *, updates: dict | None = None) -> None:
