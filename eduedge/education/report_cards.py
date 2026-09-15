@@ -14,6 +14,7 @@ from education.education.report.course_wise_assessment_report.course_wise_assess
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.instructor_scope import get_user_instructor_names, is_limited_instructor_user
+from eduedge.education.teaching_assignments import has_class_responsibility_assignment
 from eduedge.education.report_card_issues import get_effective_issued_payload
 from eduedge.education.profiled_report_cards import (
 	get_profiled_publication_student_summaries,
@@ -187,6 +188,32 @@ def assert_report_card_access(publication, student: str, *, write: bool = False)
 		)
 	if not in_scope:
 		frappe.throw(_("Student is outside the published class scope."), frappe.PermissionError)
+
+
+def can_manage_report_card_reviews(publication, user: str | None = None) -> bool:
+	resolved_user = user or frappe.session.user
+	roles = set(frappe.get_roles(resolved_user))
+	if not OPERATIONAL_ROLES.intersection(roles):
+		return False
+	if not is_limited_instructor_user(resolved_user):
+		return True
+	return has_class_responsibility_assignment(
+		publication.student_group,
+		user=resolved_user,
+		academic_term=publication.academic_term,
+		academic_year=publication.academic_year,
+	)
+
+
+def assert_report_card_review_management(publication, user: str | None = None) -> None:
+	if can_manage_report_card_reviews(publication, user):
+		return
+	frappe.throw(
+		_(
+			"Only the effective Class Teacher, Form Teacher, Head of Class / Level, or an authorized academic administrator can manage this report-card review."
+		),
+		frappe.PermissionError,
+	)
 
 
 def _assert_publication_operator_scope(publication) -> None:
