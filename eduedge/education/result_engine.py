@@ -83,6 +83,8 @@ def compose_terminal_subject_results(profile: str, result_rows: list) -> dict:
 				continue
 			if config["absence_policy"] == "Exclude from Denominator":
 				continue
+			if config["absence_policy"] != "Treat as Zero":
+				frappe.throw(_("Unsupported absence policy."), frappe.ValidationError)
 
 		component = subject["components"][component_key]
 		maximum_score = flt(_value(row, "maximum_score"))
