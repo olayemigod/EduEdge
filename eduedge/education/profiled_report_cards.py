@@ -45,6 +45,16 @@ def get_profiled_publication_student_summaries(publication, review_doctype: str)
 		page_length=0,
 	)
 	review_by_student = {row.student: row for row in reviews}
+	issues = frappe.get_all(
+		"EduEdge Report Card Issue",
+		filters={"result_publication": publication.name, "student": ["in", student_names]},
+		fields=["name", "student", "issue_version", "issued_on", "payload_hash"],
+		order_by="student asc, issue_version desc, creation desc",
+		page_length=0,
+	)
+	issue_by_student = {}
+	for row in issues:
+		issue_by_student.setdefault(row.student, row)
 	output = []
 	for snapshot in snapshots:
 		payload = get_snapshot_payload(publication.name, snapshot.student)
@@ -53,6 +63,8 @@ def get_profiled_publication_student_summaries(publication, review_doctype: str)
 		summary = summary_from_snapshot_payload(payload)
 		review = review_by_student.get(snapshot.student)
 		summary["review"] = dict(review) if review else None
+		issue = issue_by_student.get(snapshot.student)
+		summary["issue"] = dict(issue) if issue else None
 		output.append(summary)
 	return output
 
