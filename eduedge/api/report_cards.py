@@ -82,6 +82,11 @@ def get_report_card_context(
 		order_by="published_on desc, modified desc",
 		page_length=200,
 	)
+	publications = [
+		row for row in publications
+		if can_manage_report_card_reviews(row)
+	]
+
 
 	selected_publication = None
 	students = []
