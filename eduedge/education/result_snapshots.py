@@ -413,19 +413,45 @@ def _attendance_summary(publication_doc, students: list[str], *, periods: list[d
 		"Student Attendance",
 		filters={
 			BRANCH_FIELD: publication_doc.school_branch,
+			"student_group": publication_doc.student_group,
 			"student": ["in", students],
 			"docstatus": 1,
 			"date": ["between", [from_date, to_date]],
 		},
-		fields=["student", "date", "status"],
+		fields=["student", "date", "status", "course_schedule"],
 		page_length=0,
 	)
 	opened_dates = {str(row.date) for row in rows if row.date}
 	school_opened = len(opened_dates)
-	counts: dict[str, dict] = defaultdict(lambda: {"Present": 0, "Absent": 0, "Leave": 0})
+
+	# A school-day report must not count every Subject/Course Schedule attendance
+	# row as another day present. Prefer the single Student Group daily record
+	# where it exists; otherwise collapse course-level attendance into one status
+	# per Student/date.
+	by_student_date: dict[tuple[str, str], list] = defaultdict(list)
 	for row in rows:
-		status = row.status or ""
-		counts[row.student][status] = counts[row.student].get(status, 0) + 1
+		if not row.date:
+			continue
+		by_student_date[(row.student, str(row.date))].append(row)
+
+	counts: dict[str, dict] = defaultdict(lambda: {"Present": 0, "Absent": 0, "Leave": 0})
+	for (student, _date), day_rows in by_student_date.items():
+		daily_rows = [row for row in day_rows if not row.course_schedule]
+		if daily_rows:
+			day_status = daily_rows[0].status or ""
+		else:
+			statuses = {row.status or "" for row in day_rows}
+			if "Present" in statuses:
+				day_status = "Present"
+			elif "Leave" in statuses:
+				day_status = "Leave"
+			elif "Absent" in statuses:
+				day_status = "Absent"
+			else:
+				day_status = ""
+		if day_status:
+			counts[student][day_status] = counts[student].get(day_status, 0) + 1
+
 	output = {}
 	for student in students:
 		student_counts = counts[student]
