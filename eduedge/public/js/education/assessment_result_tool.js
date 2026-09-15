@@ -36,6 +36,8 @@ async function setup_eduedge_mark_entry(frm, table) {
 	const criteria = context.criteria || [];
 	const resultState = context.results || {};
 	const debounceTimers = new Map();
+	const draftStorageKey = `eduedge:mark-entry:v1:${frappe.session.user}:${frm.doc.assessment_plan}`;
+	let browserDrafts = readBrowserDrafts(draftStorageKey);
 
 	add_eduedge_toolbar(frm, table, context);
 	add_score_state_column(table, resultState);
@@ -59,6 +61,26 @@ async function setup_eduedge_mark_entry(frm, table) {
 		};
 	};
 
+	const persistBrowserRow = (row) => {
+		if (!row || row.classList.contains("text-muted")) return;
+		const payload = collectRow(row);
+		browserDrafts[payload.student] = { ...payload, updated_at: new Date().toISOString() };
+		writeBrowserDrafts(draftStorageKey, browserDrafts);
+	};
+
+	const clearBrowserRow = (student) => {
+		if (!browserDrafts[student]) return;
+		delete browserDrafts[student];
+		writeBrowserDrafts(draftStorageKey, browserDrafts);
+	};
+
+	const rowReadyForServer = (row) => {
+		const state = row.querySelector(".eduedge-score-state")?.value || "Scored";
+		if (state !== "Scored") return true;
+		return [...row.querySelectorAll("input.student-result-data")]
+			.every((input) => String(input.value ?? "").trim() !== "");
+	};
+
 	const updateTotal = (row) => {
 		const state = row.querySelector(".eduedge-score-state")?.value || "Scored";
 		let total = 0;
@@ -75,7 +97,13 @@ async function setup_eduedge_mark_entry(frm, table) {
 	const saveRows = async (rows) => {
 		const editable = rows.filter((row) => !row.classList.contains("text-muted"));
 		if (!editable.length) return;
-		const payload = editable.map(collectRow);
+		const ready = editable.filter(rowReadyForServer);
+		editable.forEach(persistBrowserRow);
+		if (!ready.length) {
+			set_autosave_status(table, navigator.onLine ? "Browser draft saved · complete the row to sync" : "Offline · browser draft saved");
+			return;
+		}
+		const payload = ready.map(collectRow);
 		try {
 			const result = await frappe.call({
 				method: "eduedge.api.mark_entry.save_mark_entry_batch",
@@ -87,6 +115,7 @@ async function setup_eduedge_mark_entry(frm, table) {
 				freeze: false,
 			});
 			(result.message?.saved || []).forEach((saved) => {
+				clearBrowserRow(saved.student);
 				const row = rowForStudent(saved.student);
 				if (!row) return;
 				row.classList.remove("eduedge-save-error");
@@ -119,7 +148,13 @@ async function setup_eduedge_mark_entry(frm, table) {
 		if (!row || row.classList.contains("text-muted")) return;
 		const student = row.dataset.student;
 		clearTimeout(debounceTimers.get(student));
-		set_autosave_status(table, "Unsaved changes");
+		persistBrowserRow(row);
+		if (!rowReadyForServer(row)) {
+			set_autosave_status(table, navigator.onLine ? "Browser draft saved · complete the row to sync" : "Offline · browser draft saved");
+			return;
+		}
+		set_autosave_status(table, navigator.onLine ? "Saving…" : "Offline · browser draft saved");
+		if (!navigator.onLine) return;
 		debounceTimers.set(
 			student,
 			setTimeout(() => saveRows([row]), 650)
@@ -127,7 +162,9 @@ async function setup_eduedge_mark_entry(frm, table) {
 	};
 
 	table.querySelectorAll("tbody tr[data-student]").forEach((row) => {
+		restoreBrowserDraft(row, browserDrafts[row.dataset.student]);
 		apply_score_state(row);
+		updateTotal(row);
 		row.querySelectorAll("input.student-result-data, input.result-comment").forEach((input) => {
 			input.addEventListener("input", () => {
 				updateTotal(row);
@@ -173,8 +210,9 @@ async function setup_eduedge_mark_entry(frm, table) {
 		});
 
 		if (touched.size) {
-			set_autosave_status(table, `Pasted ${touched.size} row(s) · saving…`);
-			saveRows([...touched]);
+			[...touched].forEach(persistBrowserRow);
+			set_autosave_status(table, navigator.onLine ? `Pasted ${touched.size} row(s) · syncing complete rows…` : `Pasted ${touched.size} row(s) · offline browser draft saved`);
+			if (navigator.onLine) saveRows([...touched]);
 		}
 	});
 
@@ -241,6 +279,37 @@ function apply_score_state(row) {
 		if (state !== "Scored") input.value = 0;
 	});
 	row.dataset.scoreState = state;
+}
+
+function readBrowserDrafts(key) {
+	try {
+		const value = JSON.parse(localStorage.getItem(key) || "{}");
+		return value && typeof value === "object" ? value : {};
+	} catch (_error) {
+		return {};
+	}
+}
+
+function writeBrowserDrafts(key, value) {
+	try {
+		if (Object.keys(value || {}).length) localStorage.setItem(key, JSON.stringify(value));
+		else localStorage.removeItem(key);
+	} catch (_error) {
+		// Server validation remains authoritative even when browser storage is unavailable.
+	}
+}
+
+function restoreBrowserDraft(row, draft) {
+	if (!draft || row.classList.contains("text-muted")) return;
+	const state = row.querySelector(".eduedge-score-state");
+	if (state && draft.score_state) state.value = draft.score_state;
+	for (const input of row.querySelectorAll("input.student-result-data")) {
+		const value = draft.assessment_details?.[input.dataset.criteria];
+		if (value !== undefined && value !== null) input.value = value;
+	}
+	const comment = row.querySelector(".result-comment");
+	if (comment && draft.comment !== undefined) comment.value = draft.comment;
+	row.classList.add("eduedge-browser-draft");
 }
 
 function set_autosave_status(table, text) {
