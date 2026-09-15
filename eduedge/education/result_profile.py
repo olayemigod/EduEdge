@@ -138,6 +138,9 @@ def get_result_profile_config(name: str) -> dict:
 			"show_progression": bool(doc.show_progression),
 			"show_grading_legend": bool(doc.show_grading_legend),
 			"show_next_period_date": bool(doc.show_next_period_date),
+			"show_report_signatory": bool(doc.show_report_signatory),
+			"show_official_stamp": bool(doc.show_official_stamp),
+			"show_verification_qr": bool(doc.show_verification_qr),
 		},
 		"components": [
 			{
