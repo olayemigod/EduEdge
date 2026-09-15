@@ -13,6 +13,27 @@ from eduedge.education.result_verification import build_issue_verification
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
 
 
+def generate_verification_token() -> str:
+	while True:
+		token = frappe.generate_hash(length=32)
+		if not frappe.db.exists(ISSUE_DOCTYPE, {"verification_token": token}):
+			return token
+
+
+def ensure_issue_verification_token(issue_name: str, current_token: str | None = None) -> str:
+	if current_token:
+		return current_token
+	token = generate_verification_token()
+	frappe.db.set_value(
+		ISSUE_DOCTYPE,
+		issue_name,
+		"verification_token",
+		token,
+		update_modified=False,
+	)
+	return token
+
+
 def create_report_card_issue(review: str) -> str:
 	review_doc = frappe.get_doc("EduEdge Report Card Review", review)
 	if review_doc.progression_status != "Approved":
@@ -56,7 +77,7 @@ def create_report_card_issue(review: str) -> str:
 			"result_mode": publication.get("result_mode") or "Terminal",
 			"result_profile": publication.get("result_profile"),
 			"payload_hash": payload_hash,
-			"verification_token": frappe.generate_hash(length=32),
+			"verification_token": generate_verification_token(),
 			"issued_by": frappe.session.user,
 			"issued_on": now_datetime(),
 			"payload_json": payload_json,
@@ -87,7 +108,8 @@ def get_effective_issued_payload(publication: str, student: str) -> dict | None:
 		"issue_version": int(row.issue_version or 1),
 		"payload_hash": row.payload_hash,
 	}
-	payload["verification"] = build_issue_verification(row.name, row.get("verification_token"))
+	verification_token = ensure_issue_verification_token(row.name, row.get("verification_token"))
+	payload["verification"] = build_issue_verification(row.name, verification_token)
 	return payload
 
 
