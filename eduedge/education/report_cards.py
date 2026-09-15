@@ -167,14 +167,13 @@ def assert_report_card_access(publication, student: str, *, write: bool = False)
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required."), frappe.PermissionError)
 
-	student_doc = frappe.get_doc("Student", student)
 	roles = set(frappe.get_roles(frappe.session.user))
-	if roles.intersection(OPERATIONAL_ROLES):
-		_assert_publication_operator_scope(publication)
-	else:
-		student_doc.check_permission("read")
-		if write:
-			frappe.throw(_("Published report cards are read-only."), frappe.PermissionError)
+	if not roles.intersection(OPERATIONAL_ROLES):
+		frappe.throw(
+			_("You are not permitted to access governed report cards."),
+			frappe.PermissionError,
+		)
+	_assert_publication_operator_scope(publication)
 
 	if publication.result_profile:
 		in_scope = frappe.db.exists(
