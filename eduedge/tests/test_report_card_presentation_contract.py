@@ -24,6 +24,15 @@ class TestReportCardPresentationContract(unittest.TestCase):
 		snapshot = (APP / "education" / "result_snapshots.py").read_text()
 		self.assertIn('"profile": config', snapshot)
 
+	def test_annual_pdf_density_adapts_to_dynamic_column_count(self):
+		template = (APP / "templates" / "report_card.html").read_text()
+		self.assertIn("annual_column_count", template)
+		self.assertIn('annual_density = "ultra" if annual_column_count > 18', template)
+		self.assertIn("annual-density-{{ annual_density }}", template)
+		self.assertIn(".annual-result-table.annual-density-compact", template)
+		self.assertIn(".annual-result-table.annual-density-ultra", template)
+		self.assertIn("overflow-wrap: anywhere", template)
+
 
 if __name__ == "__main__":
 	unittest.main()
