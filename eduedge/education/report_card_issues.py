@@ -87,6 +87,7 @@ def get_effective_issued_payload(publication: str, student: str) -> dict | None:
 		"issue_version": int(row.issue_version or 1),
 		"payload_hash": row.payload_hash,
 	}
+	payload["verification"] = build_issue_verification(row.name, row.get("verification_token"))
 	return payload
 
 
