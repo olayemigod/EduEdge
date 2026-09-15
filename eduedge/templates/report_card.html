@@ -194,7 +194,9 @@
 	<div class="summary-grid">
 		<div class="summary-card"><span>{{ _("Overall Percentage") }}</span><strong>{{ "%.2f"|format(summary.average_percent or 0) }}%</strong></div>
 		<div class="summary-card"><span>{{ _("Overall Grade") }}</span><strong>{{ summary.overall_grade or "-" }}</strong></div>
-		<div class="summary-card"><span>{{ _("Attendance") }}</span><strong>{{ "%.2f"|format(summary.attendance_percent or 0) }}%</strong></div>
+		{% if not profiled or presentation.show_attendance != false %}
+			<div class="summary-card"><span>{{ _("Attendance") }}</span><strong>{{ "%.2f"|format(summary.attendance_percent or 0) }}%</strong></div>
+		{% endif %}
 		<div class="summary-card"><span>{{ _("Subjects") }}</span><strong>{{ summary.course_count or 0 }}</strong></div>
 	</div>
 
