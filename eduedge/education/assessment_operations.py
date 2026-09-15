@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
@@ -11,6 +13,12 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import require_instructor_assignment_capability
 from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.result_engine import (
+	compose_cumulative_subject_results,
+	compose_terminal_subject_results,
+	get_result_periods,
+)
+from eduedge.education.result_profile import get_result_profile_config
 from eduedge.education.teaching_assignments import require_course_assignment
 
 PUBLICATION_DOCTYPE = "EduEdge Result Publication"
@@ -57,7 +65,6 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 
 
 def _validate_examiner_and_supervisor(doc) -> None:
-	"""Keep Subject examination responsibility separate from Branch supervision."""
 	reference_date = doc.schedule_date or nowdate()
 	if doc.get("examiner"):
 		try:
@@ -164,6 +171,11 @@ def validate_publication_scope(doc) -> None:
 			_("Result Publication Academic Term must match the Student Group."),
 			frappe.ValidationError,
 		)
+	if not doc.get("result_profile") and not doc.assessment_group:
+		frappe.throw(
+			_("Select either a Result Profile or an Assessment Group for result publication."),
+			frappe.ValidationError,
+		)
 	if doc.academic_term:
 		actual_year = frappe.db.get_value("Academic Term", doc.academic_term, "academic_year")
 		if actual_year != doc.academic_year:
@@ -189,26 +201,82 @@ def get_publication_readiness(
 	school_branch: str,
 	student_group: str,
 	academic_year: str,
-	assessment_group: str,
+	assessment_group: str | None = None,
 	academic_term: str | None = None,
+	result_profile: str | None = None,
+	result_mode: str = "Terminal",
 ) -> dict:
 	assert_branch_access(school_branch)
 	group = _get_student_group(student_group)
 	if group.get(BRANCH_FIELD) != school_branch:
 		frappe.throw(_("Student Group belongs to another branch."), frappe.PermissionError)
+
+	profile_config = get_result_profile_config(result_profile) if result_profile else None
+	profile_blockers: list[dict] = []
+	assessment_groups = None
+	periods: list[dict] = []
+	if profile_config:
+		assessment_groups = sorted(
+			{
+				leaf
+				for source in profile_config.get("component_sources") or []
+				for leaf in source.get("leaf_assessment_groups") or []
+			}
+		)
+		if not assessment_groups:
+			profile_blockers.append({"reason": "Result Profile has no resolved Assessment Groups."})
+	if result_mode == "Annual":
+		if not profile_config:
+			profile_blockers.append(
+				{"reason": "Annual Result Publication requires a Result Profile.", "code": "RESULT_PROFILE_REQUIRED"}
+			)
+		elif group.academic_term:
+			profile_blockers.append(
+				{
+					"reason": "Annual results require a sessional Student Group/Class Arm. Legacy term-bound groups must be migrated or reviewed before annual publication.",
+					"code": "TERM_BOUND_ANNUAL_COHORT",
+				}
+			)
+		else:
+			periods = get_result_periods(profile_config, academic_year)
+			if not periods:
+				profile_blockers.append(
+					{"reason": "No Academic Calendar periods are enabled for result aggregation.", "code": "NO_RESULT_PERIODS"}
+				)
+
 	plan_filters: dict = {
 		BRANCH_FIELD: school_branch,
 		"student_group": student_group,
 		"academic_year": academic_year,
-		"assessment_group": assessment_group,
 		"docstatus": 1,
 	}
-	if academic_term:
+	if profile_config:
+		plan_filters["assessment_group"] = ["in", assessment_groups or ["__none__"]]
+	else:
+		if not assessment_group:
+			profile_blockers.append(
+				{"reason": "Select an Assessment Group or Result Profile.", "code": "RESULT_SCOPE_REQUIRED"}
+			)
+		plan_filters["assessment_group"] = assessment_group or "__none__"
+	if result_mode == "Annual":
+		plan_filters["academic_term"] = [
+			"in",
+			[row["academic_term"] for row in periods] or ["__none__"],
+		]
+	elif academic_term:
 		plan_filters["academic_term"] = academic_term
+
 	plans = frappe.get_all(
 		"Assessment Plan",
 		filters=plan_filters,
-		fields=["name", "assessment_name", "course", "maximum_assessment_score"],
+		fields=[
+			"name",
+			"assessment_name",
+			"assessment_group",
+			"course",
+			"academic_term",
+			"maximum_assessment_score",
+		],
 		order_by="schedule_date asc, course asc",
 	)
 	students = frappe.get_all(
@@ -221,6 +289,21 @@ def get_publication_readiness(
 	student_names = [row.student for row in students]
 	results = []
 	if plan_names and student_names:
+		result_fields = [
+			"name",
+			"assessment_plan",
+			"assessment_group",
+			"student",
+			"course",
+			"academic_term",
+			"docstatus",
+			"maximum_score",
+			"total_score",
+			"grade",
+			"grading_scale",
+		]
+		if frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
+			result_fields.append("eduedge_score_state")
 		results = frappe.get_all(
 			"Assessment Result",
 			filters={
@@ -229,7 +312,7 @@ def get_publication_readiness(
 				"student": ["in", student_names],
 				"docstatus": ["!=", 2],
 			},
-			fields=["name", "assessment_plan", "student", "docstatus", "total_score", "grade"],
+			fields=result_fields,
 			page_length=0,
 		)
 	result_pairs = {(row.assessment_plan, row.student) for row in results}
@@ -237,7 +320,40 @@ def get_publication_readiness(
 	submitted = sum(1 for row in results if row.docstatus == 1)
 	drafts = sum(1 for row in results if row.docstatus == 0)
 	missing = max(expected - len(result_pairs), 0)
-	ready = bool(plans and students and submitted == expected and drafts == 0 and missing == 0)
+
+	composition_blockers: list[dict] = []
+	unmapped_assessment_groups: set[str] = set()
+	if profile_config:
+		results_by_student: dict[str, list] = defaultdict(list)
+		for row in results:
+			if row.docstatus == 1:
+				results_by_student[row.student].append(row)
+		for student in student_names:
+			if result_mode == "Annual":
+				composed = compose_cumulative_subject_results(
+					profile_config,
+					results_by_student.get(student, []),
+					periods,
+				)
+			else:
+				composed = compose_terminal_subject_results(
+					profile_config,
+					results_by_student.get(student, []),
+				)
+			for blocker in composed.get("blockers") or []:
+				composition_blockers.append({"student": student, **blocker})
+			unmapped_assessment_groups.update(composed.get("unmapped_assessment_groups") or [])
+
+	all_blockers = profile_blockers + composition_blockers
+	ready = bool(
+		plans
+		and students
+		and submitted == expected
+		and drafts == 0
+		and missing == 0
+		and not all_blockers
+		and not unmapped_assessment_groups
+	)
 	return {
 		"ready": ready,
 		"school_branch": school_branch,
@@ -245,6 +361,9 @@ def get_publication_readiness(
 		"academic_year": academic_year,
 		"academic_term": academic_term,
 		"assessment_group": assessment_group,
+		"result_profile": result_profile,
+		"result_mode": result_mode,
+		"periods": periods,
 		"expected_results": expected,
 		"submitted_results": submitted,
 		"draft_results": drafts,
@@ -253,6 +372,8 @@ def get_publication_readiness(
 		"student_count": len(students),
 		"plans": plans,
 		"students": students,
+		"profile_blockers": all_blockers,
+		"unmapped_assessment_groups": sorted(unmapped_assessment_groups),
 	}
 
 
