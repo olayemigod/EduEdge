@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
@@ -90,6 +92,8 @@ def _validate_examiner_and_supervisor(doc) -> None:
 
 	if doc.get("supervisor"):
 		try:
+			# A Supervisor/Invigilator does not need to teach the assessed Subject. The
+			# operational requirement here is valid Branch eligibility on the date.
 			assert_instructor_assignment(
 				doc.supervisor,
 				doc.get(BRANCH_FIELD),
@@ -132,6 +136,9 @@ def before_validate_assessment_result(doc, method=None) -> None:
 	if is_teacher_user():
 		group = _get_student_group(plan.student_group)
 		program_offering = group.get(OFFERING_FIELD) or _resolve_group_offering(group)
+		# Mark entry is an operational permission evaluated at the time of entry, not
+		# merely on the historic assessment date. Former Instructors therefore do not
+		# retain mark-entry access after their exact responsibility has ended.
 		require_instructor_assignment_capability(
 			"can_enter_marks",
 			user=frappe.session.user,
