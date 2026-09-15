@@ -14,6 +14,8 @@ class TestResultAttendanceDayContract(unittest.TestCase):
 		self.assertIn("source_rows = daily_rows if daily_rows else rows", text)
 		self.assertIn('"Daily Student Group"', text)
 		self.assertIn('"Course Schedule Fallback"', text)
+		self.assertIn("course_only_dates", text)
+		self.assertIn("Attendance switches between daily class attendance and course-level attendance", text)
 
 	def test_official_attendance_fails_closed_on_incomplete_or_conflicting_days(self):
 		text = (APP / "education" / "result_snapshots.py").read_text()
@@ -21,6 +23,7 @@ class TestResultAttendanceDayContract(unittest.TestCase):
 		self.assertIn("missing_student_days", text)
 		self.assertIn("conflicting_student_days", text)
 		self.assertIn("duplicate_daily_student_days", text)
+		self.assertIn("invalid_status_days", text)
 		self.assertIn("Complete the attendance register before publishing official results.", text)
 		self.assertIn('"coverage_complete": coverage_complete', text)
 		self.assertIn('"school_opened": school_opened', text)
