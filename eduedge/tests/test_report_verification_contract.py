@@ -46,6 +46,13 @@ class TestReportVerificationContract(unittest.TestCase):
 		self.assertIn('name="code"', page)
 		self.assertIn("Verify Result", page)
 
+	def test_report_template_prefers_issue_record_and_prints_qr(self):
+		template = (APP / "templates" / "report_card.html").read_text()
+		self.assertIn("{% set issued = issue_record or issue %}", template)
+		self.assertIn("verification_qr_data_uri", template)
+		self.assertIn("verification_code", template)
+		self.assertIn("Verify this issued report card", template)
+
 	def test_existing_issues_are_backfilled_without_mutating_payload_hash(self):
 		patch = (APP / "patches" / "v1_0" / "backfill_report_card_verification_codes.py").read_text()
 		self.assertIn("generate_verification_code", patch)
