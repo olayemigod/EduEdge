@@ -13,6 +13,7 @@ from education.education.report.course_wise_assessment_report.course_wise_assess
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.instructor_scope import get_user_instructor_names, is_limited_instructor_user
 from eduedge.education.report_card_issues import get_effective_issued_payload
 from eduedge.education.profiled_report_cards import (
 	get_profiled_publication_student_summaries,
@@ -97,7 +98,7 @@ def validate_report_card_review(doc) -> None:
 			)
 		doc.set(fieldname, value)
 
-	assert_branch_access(publication.school_branch)
+	_assert_publication_operator_scope(publication)
 	if publication.result_profile:
 		if not frappe.db.exists(
 			"EduEdge Published Result Snapshot",
@@ -168,9 +169,7 @@ def assert_report_card_access(publication, student: str, *, write: bool = False)
 	student_doc = frappe.get_doc("Student", student)
 	roles = set(frappe.get_roles(frappe.session.user))
 	if roles.intersection(OPERATIONAL_ROLES):
-		assert_branch_access(publication.school_branch)
-		if write and not roles.intersection(OPERATIONAL_ROLES):
-			frappe.throw(_("You are not permitted to update report cards."), frappe.PermissionError)
+		_assert_publication_operator_scope(publication)
 	else:
 		student_doc.check_permission("read")
 		if write:
@@ -190,9 +189,25 @@ def assert_report_card_access(publication, student: str, *, write: bool = False)
 		frappe.throw(_("Student is outside the published class scope."), frappe.PermissionError)
 
 
+def _assert_publication_operator_scope(publication) -> None:
+	assert_branch_access(publication.school_branch)
+	user = frappe.session.user
+	if not is_limited_instructor_user(user):
+		return
+	instructors = get_user_instructor_names(user)
+	if not instructors or not frappe.db.exists(
+		"Course Schedule",
+		{"student_group": publication.student_group, "instructor": ["in", instructors]},
+	):
+		frappe.throw(
+			_("You are not assigned to this Student Group / Class."),
+			frappe.PermissionError,
+		)
+
+
 def get_publication_student_summaries(publication_name: str) -> list[dict]:
 	publication = get_published_publication(publication_name)
-	assert_branch_access(publication.school_branch)
+	_assert_publication_operator_scope(publication)
 	if publication.result_profile:
 		return get_profiled_publication_student_summaries(publication, REVIEW_DOCTYPE)
 
