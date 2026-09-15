@@ -262,6 +262,3 @@ fixtures = [
 	},
 ]
 
-# Test-only stabilization for clean ERPNext v16 sites. Runs inside the same
-# process before Frappe preloads upstream test dependencies.
-before_tests = "eduedge.ci.ensure_erpnext_test_roots"
