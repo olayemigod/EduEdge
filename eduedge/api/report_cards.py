@@ -16,6 +16,7 @@ from eduedge.education.report_cards import (
 	refresh_review_metrics,
 )
 from eduedge.education.offerings import assert_branch_access, get_context_branch
+from eduedge.education.report_card_issues import create_report_card_issue
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -255,7 +256,10 @@ def approve_progression(review: str) -> dict:
 			"approved_on": now_datetime(),
 		},
 	)
-	return _review_payload(doc.name)
+	issue_name = create_report_card_issue(doc.name)
+	payload = _review_payload(doc.name)
+	payload["report_card_issue"] = issue_name
+	return payload
 
 
 @frappe.whitelist()
