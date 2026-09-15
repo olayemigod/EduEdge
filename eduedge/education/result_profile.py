@@ -39,12 +39,35 @@ ABSENCE_POLICIES = {"Block Publication", "Exclude from Denominator", "Treat as Z
 
 
 def validate_result_profile(doc) -> None:
+	assert_result_profile_mutable(doc)
 	_validate_scope(doc)
 	_validate_calculation_settings(doc)
 	_validate_components(doc)
 	_validate_sources(doc)
 	_validate_metrics(doc)
 	_validate_default(doc)
+
+
+def assert_result_profile_mutable(doc) -> None:
+	if doc.is_new():
+		return
+	if not doc.has_value_changed("modified"):
+		# Document.validate runs for all saves; explicit field changes are checked below
+		# by looking for governed publications rather than trying to infer every child-row
+		# delta from the parent modified timestamp.
+		pass
+	locked = frappe.db.exists(
+		"EduEdge Result Publication",
+		{
+			"result_profile": doc.name,
+			"status": ["in", ["Pending Approval", "Approved"]],
+		},
+	)
+	if locked:
+		frappe.throw(
+			_("Result Profile cannot be changed while Result Publication {0} is pending approval or approved. Reject/publish that publication first.").format(locked),
+			frappe.ValidationError,
+		)
 
 
 def validate_publication_profile(doc) -> None:
@@ -183,6 +206,18 @@ def _validate_scope(doc) -> None:
 	)
 	if not institution or not institution.enabled:
 		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
+	if doc.grading_scale:
+		grading_meta = frappe.get_meta("Grading Scale")
+		if grading_meta.has_field("eduedge_institution"):
+			grading_institution = frappe.db.get_value(
+				"Grading Scale", doc.grading_scale, "eduedge_institution"
+			)
+			if grading_institution != doc.institution:
+				frappe.throw(
+					_("Grading Scale must belong to the selected Institution."),
+					frappe.ValidationError,
+				)
+
 	if doc.school_branch:
 		branch = frappe.db.get_value(
 			"EduEdge School Branch",
@@ -240,6 +275,7 @@ def _validate_sources(doc) -> None:
 	seen_groups: set[str] = set()
 	if not doc.component_sources:
 		frappe.throw(_("Map at least one Assessment Group to a Result Component."), frappe.ValidationError)
+	assessment_group_meta = frappe.get_meta("Assessment Group")
 	for row in doc.component_sources:
 		row.component_key = (row.component_key or "").strip().lower()
 		if row.component_key not in component_keys:
@@ -249,6 +285,17 @@ def _validate_sources(doc) -> None:
 				),
 				frappe.ValidationError,
 			)
+		if assessment_group_meta.has_field("eduedge_institution"):
+			group_institution = frappe.db.get_value(
+				"Assessment Group", row.assessment_group, "eduedge_institution"
+			)
+			if group_institution != doc.institution:
+				frappe.throw(
+					_("Assessment Group {0} must belong to the selected Institution.").format(
+						row.assessment_group
+					),
+					frappe.ValidationError,
+				)
 		if row.assessment_group in seen_groups:
 			frappe.throw(
 				_("Assessment Group {0} is mapped more than once.").format(row.assessment_group),
