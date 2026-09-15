@@ -155,7 +155,7 @@ def result_publication_query(user: str | None = None) -> str:
 
 
 def published_result_snapshot_query(user: str | None = None) -> str:
-	return _governed_result_query("EduEdge Published Result Snapshot", user)
+	return _class_responsibility_result_query("EduEdge Published Result Snapshot", user)
 
 
 def result_publication_log_query(user: str | None = None) -> str:
@@ -195,7 +195,7 @@ def report_card_review_query(user: str | None = None) -> str:
 
 
 def report_card_issue_query(user: str | None = None) -> str:
-	return _governed_result_query("EduEdge Report Card Issue", user)
+	return _class_responsibility_result_query("EduEdge Report Card Issue", user)
 
 
 def program_offering_query(user: str | None = None) -> str:
@@ -396,12 +396,40 @@ def has_result_publication_permission(doc, user=None, permission_type=None) -> b
 
 
 def has_published_result_snapshot_permission(doc, user=None, permission_type=None) -> bool:
-	return _has_governed_result_permission(doc, user, permission_type)
+	return _has_class_responsibility_result_permission(doc, user, permission_type)
 
 
 def has_report_card_review_permission(doc, user=None, permission_type=None) -> bool:
+	return _has_class_responsibility_result_permission(doc, user, permission_type)
+
+
+def has_report_card_issue_permission(doc, user=None, permission_type=None) -> bool:
+	return _has_class_responsibility_result_permission(doc, user, permission_type)
+
+
+def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool:
+	if not doc:
+		return True
+	publication = frappe.db.get_value(
+		"EduEdge Result Publication",
+		doc.get("result_publication"),
+		["school_branch", "student_group"],
+		as_dict=True,
+	)
+	if not publication:
+		return False
 	resolved_user = user or frappe.session.user
-	if not _has_governed_result_permission(doc, resolved_user, permission_type):
+	if not _should_apply_branch_scope(resolved_user):
+		return True
+	allowed = _allowed_branch_names(resolved_user)
+	if publication.school_branch not in allowed:
+		return False
+	return _has_instructor_student_group_scope(publication.student_group, resolved_user)
+
+
+def _has_class_responsibility_result_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	if not has_school_branch_permission(doc, resolved_user, permission_type):
 		return False
 	if not is_limited_instructor_user(resolved_user):
 		return True
@@ -428,30 +456,6 @@ def has_report_card_review_permission(doc, user=None, permission_type=None) -> b
 		academic_term=academic_term,
 		academic_year=academic_year,
 	)
-
-
-def has_report_card_issue_permission(doc, user=None, permission_type=None) -> bool:
-	return _has_governed_result_permission(doc, user, permission_type)
-
-
-def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool:
-	if not doc:
-		return True
-	publication = frappe.db.get_value(
-		"EduEdge Result Publication",
-		doc.get("result_publication"),
-		["school_branch", "student_group"],
-		as_dict=True,
-	)
-	if not publication:
-		return False
-	resolved_user = user or frappe.session.user
-	if not _should_apply_branch_scope(resolved_user):
-		return True
-	allowed = _allowed_branch_names(resolved_user)
-	if publication.school_branch not in allowed:
-		return False
-	return _has_instructor_student_group_scope(publication.student_group, resolved_user)
 
 
 def _class_responsibility_result_query(doctype: str, user: str | None = None) -> str:
