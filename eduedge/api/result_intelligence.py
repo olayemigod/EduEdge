@@ -326,6 +326,7 @@ def get_result_intelligence(
 		"subject_performance": subjects,
 		"student_performance": students,
 		"weak_subjects": subjects[:5],
+		"strong_subjects": list(reversed(subjects[-5:])),
 		"grade_distribution": _grade_distribution(payloads),
 		"publication_trend": _publication_trend(publications, payloads),
 		"notes": {
