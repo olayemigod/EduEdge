@@ -278,6 +278,136 @@ def _evidence_map(branch: str, academic_year: str, students: list[str]) -> dict[
 	return result
 
 
+def _approved_annual_result_evidence(
+	publication_name: str | None,
+	source,
+	outcome: str,
+) -> dict | None:
+	"""Validate an approved annual result handoff as progression evidence.
+
+	The result remains evidence only. This helper never mutates Program Enrollment,
+	Assessment Result, Result Publication, Report Card Review or snapshot records.
+	"""
+	publication_name = str(publication_name or "").strip()
+	if not publication_name:
+		return None
+
+	publication = frappe.db.get_value(
+		"EduEdge Result Publication",
+		publication_name,
+		[
+			"name",
+			"school_branch",
+			"student_group",
+			"academic_year",
+			"result_profile",
+			"result_mode",
+			"publication_version",
+			"status",
+			"report_card_ready",
+		],
+		as_dict=True,
+	)
+	if not publication:
+		frappe.throw(_("Approved annual result publication does not exist."), frappe.ValidationError)
+	if publication.status != "Published" or not cint(publication.report_card_ready):
+		frappe.throw(
+			_("Progression evidence must come from a Published, report-card-ready Result Publication."),
+			frappe.ValidationError,
+		)
+	if publication.result_mode != "Annual":
+		frappe.throw(
+			_("Only an Annual Result Publication can be used as progression-result evidence."),
+			frappe.ValidationError,
+		)
+	if not publication.result_profile:
+		frappe.throw(
+			_("Annual progression evidence requires a Result Profile publication."),
+			frappe.ValidationError,
+		)
+
+	source_branch = source.get(BRANCH_FIELD)
+	if publication.school_branch != source_branch:
+		frappe.throw(
+			_("Annual result evidence belongs to another Branch / Campus."),
+			frappe.PermissionError,
+		)
+	if publication.academic_year != source.academic_year:
+		frappe.throw(
+			_("Annual result evidence belongs to another Academic Session."),
+			frappe.ValidationError,
+		)
+
+	group = frappe.db.get_value(
+		"Student Group",
+		publication.student_group,
+		["name", "program", "academic_year", BRANCH_FIELD],
+		as_dict=True,
+	)
+	if not group:
+		frappe.throw(_("Published result Class / Student Group no longer exists."), frappe.ValidationError)
+	if (
+		group.program != source.program
+		or group.academic_year != source.academic_year
+		or group.get(BRANCH_FIELD) != source_branch
+	):
+		frappe.throw(
+			_("Annual result evidence does not match the source Enrollment academic context."),
+			frappe.ValidationError,
+		)
+
+	snapshot = frappe.db.get_value(
+		"EduEdge Published Result Snapshot",
+		{"result_publication": publication.name, "student": source.student},
+		["name", "payload_hash"],
+		as_dict=True,
+	)
+	if not snapshot:
+		frappe.throw(
+			_("The Student has no immutable Published Result Snapshot for this Annual Result Publication."),
+			frappe.ValidationError,
+		)
+
+	review = frappe.db.get_value(
+		"EduEdge Report Card Review",
+		{"result_publication": publication.name, "student": source.student},
+		[
+			"name",
+			"progression_status",
+			"progression_recommendation",
+			"approved_by",
+			"approved_on",
+		],
+		as_dict=True,
+	)
+	if not review or review.progression_status != "Approved":
+		frappe.throw(
+			_("The Student's annual result progression review must be Approved before it can be used for progression."),
+			frappe.ValidationError,
+		)
+	if review.progression_recommendation != outcome:
+		frappe.throw(
+			_("Approved annual result recommends {0}, not {1}. Reopen the report-card review if the decision must change.").format(
+				review.progression_recommendation or _("Pending Review"),
+				outcome,
+			),
+			frappe.ValidationError,
+		)
+
+	return {
+		"result_publication": publication.name,
+		"publication_version": cint(publication.publication_version or 1),
+		"result_profile": publication.result_profile,
+		"result_mode": publication.result_mode,
+		"published_snapshot": snapshot.name,
+		"snapshot_hash": snapshot.payload_hash,
+		"approved_review": review.name,
+		"approved_recommendation": review.progression_recommendation,
+		"approved_by": review.approved_by,
+		"approved_on": str(review.approved_on) if review.approved_on else None,
+	}
+
+
 def _recommendation(source: dict, current_status: str, evidence: dict) -> dict:
 	try:
 		target = progression_target(source.get("program"), source.get(PROGRESSION_LEVEL_FIELD))
@@ -564,10 +694,20 @@ def _validate_target_group(group_name: str | None, offering, target_level: str |
 	return {"name": group.name, "student_group_name": group.student_group_name}
 
 
-def _plan_row(source_name: str, outcome: str, destination_year: str | None, target_branch: str | None, target_group: str | None) -> dict:
+def _plan_row(
+	source_name: str,
+	outcome: str,
+	destination_year: str | None,
+	target_branch: str | None,
+	target_group: str | None,
+	result_publication: str | None = None,
+) -> dict:
 	source = _source_enrollment(source_name)
 	_validate_outcome(source, outcome)
 	evidence = _evidence_map(source.get(BRANCH_FIELD), source.academic_year, [source.student]).get(source.student) or {}
+	approved_annual_result = _approved_annual_result_evidence(result_publication, source, outcome)
+	if approved_annual_result:
+		evidence["approved_annual_result"] = approved_annual_result
 	recommendation = _recommendation(source.as_dict(), _status_map([source.name]).get(source.name, "Active"), evidence)
 	plan = {
 		"source_enrollment": source.name,
@@ -616,10 +756,20 @@ def preview_progression_batch(payload: str | dict) -> dict:
 	destination_year = str(data.get("destination_academic_year") or "").strip() or None
 	target_branch = str(data.get("target_branch") or "").strip() or None
 	target_group = str(data.get("target_student_group") or "").strip() or None
+	result_publication = str(data.get("result_publication") or "").strip() or None
 	rows = []
 	for source in sources:
 		try:
-			rows.append(_plan_row(source, outcome, destination_year, target_branch, target_group))
+			rows.append(
+				_plan_row(
+					source,
+					outcome,
+					destination_year,
+					target_branch,
+					target_group,
+					result_publication,
+				)
+			)
 		except (frappe.ValidationError, frappe.PermissionError) as exc:
 			rows.append({"source_enrollment": source, "outcome": outcome, "status": "blocked", "blocker": str(exc)})
 	return {
@@ -627,6 +777,7 @@ def preview_progression_batch(payload: str | dict) -> dict:
 		"destination_academic_year": destination_year,
 		"target_branch": target_branch,
 		"target_student_group": target_group,
+		"result_publication": result_publication,
 		"rows": rows,
 		"summary": {
 			"selected": len(rows),
@@ -781,7 +932,13 @@ def _existing_finalized_retry(source_name: str, outcome: str) -> dict | None:
 	return result
 
 
-def _finalize_target_outcome(source_name: str, outcome: str, reason: str, effective_date: str | None) -> dict:
+def _finalize_target_outcome(
+	source_name: str,
+	outcome: str,
+	reason: str,
+	effective_date: str | None,
+	result_publication: str | None = None,
+) -> dict:
 	source = _source_enrollment(source_name)
 	prepared = _existing_prepared_target(source.name, outcome)
 	if not prepared:
@@ -789,6 +946,23 @@ def _finalize_target_outcome(source_name: str, outcome: str, reason: str, effect
 	if cint(prepared.docstatus) != 1:
 		frappe.throw(_("Submit the prepared destination Program Enrollment before finalising progression."), frappe.ValidationError)
 	target = frappe.get_doc("Program Enrollment", prepared.name)
+	stored_evidence = frappe.parse_json(prepared.get(PROGRESSION_EVIDENCE_FIELD) or "{}")
+	if not isinstance(stored_evidence, dict):
+		stored_evidence = {}
+	stored_annual = stored_evidence.get("approved_annual_result") or {}
+	stored_publication = stored_annual.get("result_publication")
+	if result_publication and stored_publication and result_publication != stored_publication:
+		frappe.throw(
+			_("Prepared progression evidence belongs to another Annual Result Publication."),
+			frappe.ValidationError,
+		)
+	publication_to_validate = result_publication or stored_publication
+	if publication_to_validate:
+		stored_evidence["approved_annual_result"] = _approved_annual_result_evidence(
+			publication_to_validate,
+			source,
+			outcome,
+		)
 	status = FINAL_STATUS[outcome]
 	existing_log = _existing_final_log(source.name, target.name, status)
 	if existing_log:
@@ -802,14 +976,20 @@ def _finalize_target_outcome(source_name: str, outcome: str, reason: str, effect
 		"target_program_enrollment": target.name,
 		"target_student_group": prepared.get(PROGRESSION_TARGET_GROUP_FIELD),
 		"calculated_recommendation": prepared.get(PROGRESSION_RECOMMENDATION_FIELD),
-		"evidence_snapshot": prepared.get(PROGRESSION_EVIDENCE_FIELD),
+		"evidence_snapshot": json.dumps(stored_evidence, sort_keys=True),
 	})
 	log.insert()
 	_allocate_student_to_group(source, target, prepared.get(PROGRESSION_TARGET_GROUP_FIELD))
 	return {"name": log.name, "new_status": log.new_status, "target_program_enrollment": target.name, "target_student_group": log.target_student_group, "existing": False}
 
 
-def _finalize_direct_outcome(source_name: str, outcome: str, reason: str, effective_date: str | None) -> dict:
+def _finalize_direct_outcome(
+	source_name: str,
+	outcome: str,
+	reason: str,
+	effective_date: str | None,
+	result_publication: str | None = None,
+) -> dict:
 	source = _source_enrollment(source_name)
 	existing_retry = _existing_finalized_retry(source.name, outcome)
 	if existing_retry:
@@ -817,6 +997,9 @@ def _finalize_direct_outcome(source_name: str, outcome: str, reason: str, effect
 	_validate_outcome(source, outcome)
 	status = FINAL_STATUS[outcome]
 	evidence = _evidence_map(source.get(BRANCH_FIELD), source.academic_year, [source.student]).get(source.student) or {}
+	approved_annual_result = _approved_annual_result_evidence(result_publication, source, outcome)
+	if approved_annual_result:
+		evidence["approved_annual_result"] = approved_annual_result
 	recommendation = _recommendation(source.as_dict(), _status_map([source.name]).get(source.name, "Active"), evidence)
 	if outcome == "Graduate":
 		target = progression_target(source.program, source.get(PROGRESSION_LEVEL_FIELD) if source.meta.has_field(PROGRESSION_LEVEL_FIELD) else None)
@@ -846,6 +1029,7 @@ def finalize_progression_batch(payload: str | dict) -> dict:
 	if not reason:
 		frappe.throw(_("Enter the final progression decision reason/note."), frappe.ValidationError)
 	effective_date = str(data.get("effective_date") or "").strip() or None
+	result_publication = str(data.get("result_publication") or "").strip() or None
 	results = []
 	blocked = []
 	for source in sources:
@@ -857,9 +1041,25 @@ def finalize_progression_batch(payload: str | dict) -> dict:
 				continue
 			_validate_outcome(source_doc, outcome)
 			if outcome in TARGET_OUTCOMES:
-				results.append(_finalize_target_outcome(source, outcome, reason, effective_date))
+				results.append(
+					_finalize_target_outcome(
+						source,
+						outcome,
+						reason,
+						effective_date,
+						result_publication,
+					)
+				)
 			else:
-				results.append(_finalize_direct_outcome(source, outcome, reason, effective_date))
+				results.append(
+					_finalize_direct_outcome(
+						source,
+						outcome,
+						reason,
+						effective_date,
+						result_publication,
+					)
+				)
 		except (frappe.ValidationError, frappe.PermissionError, frappe.DuplicateEntryError) as exc:
 			blocked.append({"source_enrollment": source, "reason": str(exc)})
 	return {"outcome": outcome, "finalized": results, "blocked": blocked, "finalized_count": len(results), "blocked_count": len(blocked)}
