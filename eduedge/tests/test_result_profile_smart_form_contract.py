@@ -17,6 +17,14 @@ class TestResultProfileSmartFormContract(unittest.TestCase):
 		self.assertIn("refreshComponentKeyOptions", js)
 		self.assertIn("EduEdge Result Component Source", js)
 
+	def test_profile_requires_one_official_grading_scale(self):
+		path = APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.json"
+		payload = json.loads(path.read_text())
+		fields = {field["fieldname"]: field for field in payload["fields"]}
+		self.assertTrue(fields["grading_scale"].get("reqd"))
+		service = (APP / "education" / "result_profile.py").read_text()
+		self.assertIn("Select the official Grading Scale for this Result Profile", service)
+
 	def test_profile_links_are_cascade_filtered_by_institution(self):
 		js = (APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.js").read_text()
 		self.assertIn('frm.set_query("school_branch"', js)
