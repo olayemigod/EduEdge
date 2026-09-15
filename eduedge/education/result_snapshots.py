@@ -21,7 +21,7 @@ from eduedge.education.result_attendance import (
 	assert_official_attendance_complete,
 	build_result_attendance_summary,
 )
-from eduedge.education.result_profile import get_result_profile_config
+from eduedge.education.result_profile import get_publication_result_profile_config
 
 SNAPSHOT_DOCTYPE = "EduEdge Published Result Snapshot"
 
@@ -78,6 +78,7 @@ def create_publication_snapshots(publication: str) -> list[str]:
 
 
 def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
+	config = get_publication_result_profile_config(publication_doc)
 	readiness = get_publication_readiness(
 		school_branch=publication_doc.school_branch,
 		student_group=publication_doc.student_group,
@@ -86,6 +87,7 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 		assessment_group=publication_doc.assessment_group,
 		result_profile=publication_doc.result_profile,
 		result_mode=publication_doc.result_mode or "Terminal",
+		profile_config_override=config,
 	)
 	if not readiness["ready"]:
 		frappe.throw(
@@ -93,7 +95,6 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 			frappe.ValidationError,
 		)
 
-	config = get_result_profile_config(publication_doc.result_profile)
 	students = readiness["students"]
 	student_names = [row.student for row in students]
 	plan_names = [row.name for row in readiness["plans"]]
