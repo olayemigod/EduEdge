@@ -324,7 +324,16 @@ export default {
 			} catch (error) { this.plannerError = error?.message || "Destination progression context could not be resolved."; }
 			finally { this.destinationLoading = false; }
 		},
-		batchPayload() { return { source_enrollments: this.selected, outcome: this.planner.outcome, destination_academic_year: this.needsDestination ? this.planner.destination_academic_year : undefined, target_branch: this.planner.outcome === "Transfer" ? this.planner.target_branch : undefined, target_student_group: this.needsDestination ? this.planner.target_student_group : undefined, reason: this.planner.reason, effective_date: this.planner.effective_date }; },
+		batchPayload() { return {
+			source_enrollments: this.selected,
+			outcome: this.planner.outcome,
+			destination_academic_year: this.needsDestination ? this.planner.destination_academic_year : undefined,
+			target_branch: this.planner.outcome === "Transfer" ? this.planner.target_branch : undefined,
+			target_student_group: this.needsDestination ? this.planner.target_student_group : undefined,
+			reason: this.planner.reason,
+			effective_date: this.planner.effective_date,
+			result_publication: this.resultHandoff?.result_publication || undefined,
+		}; },
 		async previewSelected() {
 			if (!this.canPreview) return;
 			this.previewing = true; this.plannerError = ""; this.preview = null; this.prepareResult = null; this.finalizeResult = null;
