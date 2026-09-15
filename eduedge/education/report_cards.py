@@ -13,6 +13,7 @@ from education.education.report.course_wise_assessment_report.course_wise_assess
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.report_card_issues import get_effective_issued_payload
 from eduedge.education.profiled_report_cards import (
 	get_profiled_publication_student_summaries,
 	get_profiled_student_report_card_payload,
@@ -254,9 +255,18 @@ def get_publication_student_summaries(publication_name: str) -> list[dict]:
 	return summaries
 
 
-def get_student_report_card_payload(publication_name: str, student: str) -> dict:
+def get_student_report_card_payload(
+	publication_name: str,
+	student: str,
+	*,
+	_prefer_issued: bool = True,
+) -> dict:
 	publication = get_published_publication(publication_name)
 	assert_report_card_access(publication, student)
+	if _prefer_issued:
+		issued = get_effective_issued_payload(publication_name, student)
+		if issued:
+			return issued
 	if publication.result_profile:
 		return get_profiled_student_report_card_payload(publication, student, REVIEW_DOCTYPE)
 	student_row = frappe.db.get_value(
