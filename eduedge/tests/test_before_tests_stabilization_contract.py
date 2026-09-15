@@ -7,17 +7,24 @@ APP = ROOT / "eduedge"
 
 
 class TestBeforeTestsStabilizationContract(unittest.TestCase):
-	def test_test_root_stabilizer_runs_inside_frappe_test_process(self):
+	def test_test_root_stabilizer_is_not_registered_as_a_product_hook(self):
 		hooks = (APP / "hooks.py").read_text()
-		self.assertIn('before_tests = "eduedge.ci.ensure_erpnext_test_roots"', hooks)
+		self.assertNotIn("ensure_erpnext_test_roots", hooks)
 
-	def test_stabilizer_is_ci_test_only_and_commits_missing_item_group_root(self):
-		ci = (APP / "ci.py").read_text()
-		self.assertIn("def ensure_erpnext_test_roots()", ci)
-		self.assertIn('"Item Group", "All Item Groups"', ci)
-		self.assertIn("frappe.db.commit()", ci)
-		install = (APP / "install.py").read_text()
-		self.assertNotIn("ensure_erpnext_test_roots", install)
+	def test_test_package_rechecks_root_inside_the_frappe_test_process(self):
+		init = (APP / "tests" / "__init__.py").read_text()
+		self.assertIn("from eduedge.ci import ensure_erpnext_test_roots", init)
+		self.assertIn("ensure_erpnext_test_roots()", init)
+		self.assertIn('getattr(frappe.local, "site", None)', init)
+
+	def test_explicit_workflow_stabilization_remains_before_run_tests(self):
+		for filename in ("integration.yml", "edgesuite-ui-candidate-compat.yml"):
+			workflow = (ROOT / ".github" / "workflows" / filename).read_text()
+			self.assertIn("eduedge.ci.ensure_erpnext_test_roots", workflow)
+			self.assertLess(
+				workflow.index("eduedge.ci.ensure_erpnext_test_roots"),
+				workflow.index("run-tests"),
+			)
 
 
 if __name__ == "__main__":
