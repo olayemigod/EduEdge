@@ -128,6 +128,7 @@ def get_report_card_context(
 				for row in students
 				if (row.get("review") or {}).get("progression_status") == "Approved"
 			),
+			"issued": sum(1 for row in students if row.get("issue")),
 		},
 	}
 
