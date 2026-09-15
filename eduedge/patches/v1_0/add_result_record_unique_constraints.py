@@ -16,6 +16,11 @@ CONSTRAINTS = (
 		["result_publication", "student", "issue_version"],
 		"uniq_eduedge_issue_publication_student_version",
 	),
+	(
+		"EduEdge Report Card Review",
+		["result_publication", "student"],
+		"uniq_eduedge_review_publication_student",
+	),
 )
 
 
