@@ -17,6 +17,15 @@ class TestBeforeTestsStabilizationContract(unittest.TestCase):
 		self.assertIn("ensure_erpnext_test_roots()", init)
 		self.assertIn('getattr(frappe.local, "site", None)', init)
 
+	def test_optional_doctype_guard_is_test_only(self):
+		ci = (APP / "ci.py").read_text()
+		init = (APP / "tests" / "__init__.py").read_text()
+		hooks = (APP / "hooks.py").read_text()
+		self.assertIn("def install_frappe_v16_test_dependency_compat()", ci)
+		self.assertIn('if not frappe.db.exists("DocType", doctype):', ci)
+		self.assertIn("install_frappe_v16_test_dependency_compat()", init)
+		self.assertNotIn("install_frappe_v16_test_dependency_compat", hooks)
+
 	def test_explicit_workflow_stabilization_remains_before_run_tests(self):
 		for filename in ("integration.yml", "edgesuite-ui-candidate-compat.yml"):
 			workflow = (ROOT / ".github" / "workflows" / filename).read_text()
