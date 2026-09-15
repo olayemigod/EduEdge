@@ -42,7 +42,7 @@ class TestResultProfileFreezeContract(unittest.TestCase):
 		self.assertIn("profile_config_override=config", snapshots)
 		self.assertIn("def _readiness_profile_config", api)
 		self.assertIn('publication.get("status") in {"Draft", "Rejected"}', api)
-		self.assertIn("and not publication.get("supersedes_publication")", api)
+		self.assertIn('and not publication.get("supersedes_publication")', api)
 
 	def test_revision_scope_is_backend_immutable_and_sequential(self):
 		controller = (
