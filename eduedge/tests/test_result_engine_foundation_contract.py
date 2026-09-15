@@ -42,16 +42,18 @@ class TestResultEngineFoundationContract(unittest.TestCase):
 		self.assertIn("Annual Average Percentage", fields["calculation_basis"]["options"])
 		self.assertIn("Percentage", fields["display_as"]["options"])
 
-	def test_native_grade_term_and_result_records_receive_upgrade_safe_fields(self):
+	def test_native_grade_and_result_records_receive_upgrade_safe_fields(self):
 		text = (APP / "education" / "result_fields.py").read_text()
 		self.assertIn('"Grading Scale Interval"', text)
 		self.assertIn("eduedge_report_remark", text)
-		self.assertIn('"Academic Term"', text)
-		self.assertIn("eduedge_report_label", text)
-		self.assertIn("eduedge_annual_weight", text)
+		self.assertNotIn('"Academic Term": [', text)
 		self.assertIn('"Assessment Result"', text)
 		self.assertIn("eduedge_score_state", text)
 		self.assertIn("Not Offered", text)
+		period_path = APP / "eduedge" / "doctype" / "eduedge_academic_calendar_period" / "eduedge_academic_calendar_period.json"
+		period_fields = {field["fieldname"] for field in json.loads(period_path.read_text())["fields"]}
+		self.assertIn("report_label", period_fields)
+		self.assertIn("annual_result_weight", period_fields)
 
 	def test_result_engine_resolves_nested_assessment_groups_recursively(self):
 		text = (APP / "education" / "result_profile.py").read_text()
