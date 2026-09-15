@@ -1,12 +1,12 @@
-# EduEdge MVP Results and Report Cards QA Gate
+# EduEdge MVP Results, Report Cards and Result Operations QA Gate
 
-This gate covers the Result Profile, terminal/yearly result engine, publication snapshots, issued report cards and progression handoff introduced for the EduEdge MVP.
+This gate covers Smart Mark Entry, Result Profiles, terminal/yearly result processing, publication snapshots, issued report cards, Student/Guardian publishing, broadsheets, result intelligence and progression handoff introduced for the EduEdge MVP.
 
 ## Governing architecture
 
 Frappe Education remains the academic source of truth:
 
-`Assessment Group -> Assessment Plan -> Assessment Result -> EduEdge Result Profile -> Result Engine -> Result Publication -> Published Result Snapshot -> Report Card Review -> Issued Report Card`.
+`Assessment Group -> Assessment Plan -> Assessment Result -> EduEdge Result Profile -> Result Engine -> Result Publication -> Published Result Snapshot -> Report Card Review -> Issued Report Card -> Student/Guardian My Results`, with Broadsheet and Result Intelligence reading the immutable published snapshot rather than creating another result store.
 
 Do not create or edit a parallel marks ledger during QA.
 
@@ -27,6 +27,23 @@ Create a Result Profile with:
 - Average of Subject Percentages for the baseline overall percentage case.
 
 Configure presentation options and verify they are snapshotted at publication.
+
+## Smart Mark Entry
+
+Use the native Frappe Education `Assessment Result Tool` enhanced by EduEdge.
+
+Verify:
+
+1. single-cell score edits autosave as Draft Assessment Results;
+2. multi-cell spreadsheet paste maps across Student rows and configured assessment criteria;
+3. pasted values are bounded by the native criterion maximum and rejected again on the server if invalid;
+4. `Scored`, `Absent`, `Exempt`, and `Not Offered` remain distinct states;
+5. a genuine scored zero remains `0`, not Missing or Absent;
+6. submitted Assessment Results remain read-only and cannot be rewritten by autosave;
+7. autosave never auto-submits results;
+8. teacher assignment, Branch context and native Assessment Result permissions are still enforced;
+9. refresh/resume shows saved Draft values rather than losing entered marks;
+10. the native explicit Submit workflow still works after EduEdge enhancement.
 
 ## Calculation acceptance fixtures
 
@@ -142,6 +159,66 @@ Change these settings after a publication is issued and confirm that the old imm
 7. Re-approval must create Issue Version 2 and link it to the previous issue.
 8. Branding and Institution identity used by an issued report card must remain frozen for that issue.
 
+## Result verification and school identity
+
+For Result Profiles with the relevant presentation controls enabled:
+
+1. issued PDFs may show the configured report signatory name/title/signature;
+2. issued PDFs may show the Institution official stamp/seal;
+3. issued PDFs may show a verification QR code;
+4. the QR must resolve to the public `/eduedge-result-verify` page using an unguessable per-issue token;
+5. verification must validate both the token and immutable payload SHA-256;
+6. public verification must not reveal marks, teacher/principal comments or attendance;
+7. current issues show `Current`;
+8. an authentic older issue shows `Superseded` when a newer issue exists;
+9. an authentic issue whose review was reopened shows `Review Reopened`;
+10. report identity/presentation changes after issue must not rewrite the previous immutable issue.
+
+## Student / Guardian My Results portal
+
+Verify the authenticated `/eduedge-results` experience:
+
+1. a Student account resolves through native `Student.user`;
+2. Guardian access resolves through native `Guardian.user` plus the Student Guardian relationship;
+3. a Guardian linked to multiple children sees only those children;
+4. an unrelated logged-in user cannot fetch another Student by changing request parameters;
+5. only effective immutable `EduEdge Report Card Issue` records are shown;
+6. Draft reviews, unpublished snapshots and live Assessment Results are never exposed;
+7. reopening an Approved review removes that issue from the current official portal view until re-approved;
+8. re-approval exposes the newer issue version;
+9. the official PDF download is generated from the frozen issued payload;
+10. issued-result notifications contain no marks or result details and link back to the authenticated My Results portal.
+
+## Result Broadsheet
+
+Verify `/app/eduedge-result-broadsheet`:
+
+1. Branch, Academic Year, Class, Result Type and Terminal Academic Term filters cascade correctly;
+2. Annual mode uses the governed annual publication scope;
+3. if multiple Result Profiles are published for the same class/period, the user must choose the exact Published Result;
+4. the latest correction publication version is used for the exact selected scope;
+5. subject columns are dynamic from the immutable published snapshot;
+6. wide tables retain sticky Roll / Student identity columns and scroll safely;
+7. CSV export values exactly match the same immutable snapshot displayed on screen;
+8. Not Offered / Exempt subjects are not silently converted to scored zero;
+9. ranking/position is not invented when no Institution ranking policy exists;
+10. Branch isolation is enforced server-side.
+
+## Result Intelligence
+
+Verify `/app/eduedge-result-intelligence`:
+
+1. only management/academic roles with Branch access can load the page/API;
+2. latest Published Result Publication version wins per governed scope;
+3. class/student/subject/trend figures come only from immutable Published Result Snapshots;
+4. draft/live Assessment Results never appear in intelligence;
+5. subject Average/Highest/Lowest/Spread calculations use the configured published percentages;
+6. below-cohort-average is an action/review signal, not an inferred fail label;
+7. pass rate is not inferred until an explicit Institution pass-policy contract exists;
+8. corrected publication versions are not double-counted;
+9. Terminal and Annual filters behave correctly;
+10. light/dark mode, table overflow and Report Cards navigation are usable.
+
 ## Progression
 
 Terminal publication must not auto-promote a Student.
@@ -204,6 +281,6 @@ Before QA freeze:
 
 ## QA freeze rule
 
-Do not freeze `qa/eduedge-mvp-results-v1` until the exact Result Engine and Report Cards V2 heads have all required CI, integration and EdgeSuite compatibility checks green.
+Do not freeze `qa/eduedge-mvp-results-v1` until the exact combined `integration/eduedge-mvp-results-v1` head contains Result Engine, Report Cards V2, Smart Mark Entry, My Results portal, Result Broadsheet and Result Intelligence and that exact combined head has CI, Integration and EdgeSuite compatibility green.
 
 Once frozen, browser QA is performed only on that exact QA head. Corrections after freeze are blocker-only and must be revalidated before the QA head advances.
