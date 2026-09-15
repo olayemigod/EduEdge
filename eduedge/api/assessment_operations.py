@@ -12,6 +12,7 @@ from eduedge.education.assessment_operations import (
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.result_snapshots import create_publication_snapshots
+from eduedge.education.result_profile import get_result_profile_config
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -72,17 +73,39 @@ def get_assessment_context(
 	academic_term: str | None = None,
 	student_group: str | None = None,
 	assessment_group: str | None = None,
+	result_profile: str | None = None,
+	result_mode: str | None = None,
 ) -> dict:
 	_require_operator()
 	resolved_branch = _resolve_branch(branch)
 	default_year, default_term = _current_academic_defaults()
 	academic_year = academic_year or default_year
-	academic_term = academic_term if academic_term is not None else default_term
+	result_mode = result_mode or "Terminal"
+	if result_mode not in {"Terminal", "Annual"}:
+		frappe.throw(_("Invalid Result Mode."), frappe.ValidationError)
+	academic_term = None if result_mode == "Annual" else (academic_term if academic_term is not None else default_term)
+
+	institution = frappe.db.get_value("EduEdge School Branch", resolved_branch, "institution")
+	result_profiles = frappe.get_list(
+		"EduEdge Result Profile",
+		filters={"institution": institution, "is_active": 1},
+		fields=["name", "profile_name", "school_branch", "is_default", "annual_aggregation_method"],
+		order_by="is_default desc, profile_name asc",
+		page_length=200,
+	)
+	result_profiles = [
+		row for row in result_profiles
+		if not row.school_branch or row.school_branch == resolved_branch
+	]
+	if result_profile and result_profile not in {row.name for row in result_profiles}:
+		frappe.throw(_("Selected Result Profile is not available for this Branch / Institution."), frappe.PermissionError)
 
 	group_filters: dict = {BRANCH_FIELD: resolved_branch, "disabled": 0}
 	if academic_year:
 		group_filters["academic_year"] = academic_year
-	if academic_term:
+	if result_mode == "Annual":
+		group_filters["academic_term"] = ["is", "not set"]
+	elif academic_term:
 		group_filters["academic_term"] = ["in", [academic_term, ""]]
 	groups = frappe.get_list(
 		"Student Group",
@@ -109,7 +132,17 @@ def get_assessment_context(
 		plan_filters["academic_term"] = academic_term
 	if student_group:
 		plan_filters["student_group"] = student_group
-	if assessment_group:
+	if result_profile:
+		profile_config = get_result_profile_config(result_profile)
+		profile_groups = sorted(
+			{
+				leaf
+				for source in profile_config.get("component_sources") or []
+				for leaf in source.get("leaf_assessment_groups") or []
+			}
+		)
+		plan_filters["assessment_group"] = ["in", profile_groups or ["__none__"]]
+	elif assessment_group:
 		plan_filters["assessment_group"] = assessment_group
 	plans = frappe.get_list(
 		"Assessment Plan",
@@ -134,7 +167,7 @@ def get_assessment_context(
 
 	publication = None
 	readiness = None
-	if student_group and assessment_group and academic_year:
+	if student_group and academic_year and (assessment_group or result_profile):
 		publication_rows = frappe.get_all(
 			PUBLICATION_DOCTYPE,
 			filters={
@@ -142,7 +175,7 @@ def get_assessment_context(
 				"student_group": student_group,
 				"academic_year": academic_year,
 				"academic_term": academic_term or "",
-				"assessment_group": assessment_group,
+				"assessment_group": assessment_group or "",
 			},
 			fields=[
 				"name",
@@ -175,8 +208,8 @@ def get_assessment_context(
 			academic_year=academic_year,
 			academic_term=academic_term,
 			assessment_group=assessment_group,
-			result_profile=(publication or {}).get("result_profile"),
-			result_mode=(publication or {}).get("result_mode") or "Terminal",
+			result_profile=(publication or {}).get("result_profile") or result_profile,
+			result_mode=(publication or {}).get("result_mode") or result_mode,
 		)
 
 	current_branch = get_current_school_branch()
@@ -192,7 +225,9 @@ def get_assessment_context(
 			"academic_year": academic_year,
 			"academic_term": academic_term,
 			"student_group": student_group,
-			"assessment_group": assessment_group,
+			"assessment_group": assessment_group or "",
+			"result_profile": (publication or {}).get("result_profile") or result_profile,
+			"result_mode": (publication or {}).get("result_mode") or result_mode,
 		},
 		"counts": {
 			"plans": len(plans),
@@ -204,6 +239,7 @@ def get_assessment_context(
 		},
 		"student_groups": groups,
 		"assessment_groups": assessment_groups,
+		"result_profiles": result_profiles,
 		"plans": plans,
 		"publication": publication,
 		"readiness": readiness,
@@ -216,13 +252,17 @@ def ensure_result_publication(
 	school_branch: str,
 	student_group: str,
 	academic_year: str,
-	assessment_group: str,
+	assessment_group: str | None = None,
 	academic_term: str | None = None,
 	result_profile: str | None = None,
 	result_mode: str = "Terminal",
 ) -> dict:
 	_require_operator()
 	branch = _resolve_branch(school_branch)
+	if not assessment_group and not result_profile:
+		frappe.throw(_("Select a Result Profile or Assessment Group."), frappe.ValidationError)
+	if (result_mode or "Terminal") == "Annual":
+		academic_term = None
 	filters = {
 		"school_branch": branch,
 		"student_group": student_group,
@@ -407,7 +447,7 @@ def create_result_publication_revision(publication: str) -> dict:
 		"student_group": source.student_group,
 		"academic_year": source.academic_year,
 		"academic_term": source.academic_term or "",
-		"assessment_group": source.assessment_group,
+		"assessment_group": source.assessment_group or "",
 	}
 	frappe.db.sql(
 		"select name from `tabEduEdge Result Publication` "
@@ -453,7 +493,7 @@ def create_result_publication_revision(publication: str) -> dict:
 def get_report_card_readiness(
 	student_group: str,
 	academic_year: str,
-	assessment_group: str,
+	assessment_group: str | None = None,
 	academic_term: str | None = None,
 ) -> dict:
 	_require_login()
@@ -466,7 +506,7 @@ def get_report_card_readiness(
 			"student_group": student_group,
 			"academic_year": academic_year,
 			"academic_term": academic_term or "",
-			"assessment_group": assessment_group,
+			"assessment_group": assessment_group or "",
 		},
 		fields=["name", "status", "report_card_ready", "published_on", "publication_version"],
 		order_by="publication_version desc, creation desc",
