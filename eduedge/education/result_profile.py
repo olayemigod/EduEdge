@@ -218,6 +218,8 @@ def _validate_profile_name_scope(doc) -> None:
 
 
 def _validate_scope(doc) -> None:
+	if not doc.grading_scale:
+		frappe.throw(_("Select the official Grading Scale for this Result Profile."), frappe.ValidationError)
 	institution = frappe.db.get_value(
 		"EduEdge Institution", doc.institution, ["name", "enabled"], as_dict=True
 	)
