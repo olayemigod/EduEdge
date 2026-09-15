@@ -18,6 +18,10 @@ from eduedge.education.result_engine import (
 	compose_terminal_subject_results,
 	get_result_periods,
 )
+from eduedge.education.result_attendance import (
+	build_result_attendance_summary,
+	get_official_attendance_blockers,
+)
 from eduedge.education.result_profile import get_result_profile_config
 from eduedge.education.teaching_assignments import require_course_assignment
 
@@ -287,6 +291,21 @@ def get_publication_readiness(
 	)
 	plan_names = [row.name for row in plans]
 	student_names = [row.student for row in students]
+	if (
+		profile_config
+		and student_names
+		and (profile_config.get("presentation") or {}).get("show_attendance")
+	):
+		_, attendance_meta = build_result_attendance_summary(
+			school_branch=school_branch,
+			student_group=student_group,
+			academic_year=academic_year,
+			academic_term=academic_term,
+			result_mode=result_mode,
+			students=student_names,
+			periods=periods,
+		)
+		profile_blockers.extend(get_official_attendance_blockers(attendance_meta))
 	results = []
 	if plan_names and student_names:
 		result_fields = [
