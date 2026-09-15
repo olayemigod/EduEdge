@@ -68,6 +68,32 @@
 					</article>
 				</section>
 
+				<section class="intelligence-grid">
+					<article class="intel-panel">
+						<div class="panel-heading"><div><p class="edge-eyebrow">Strengths</p><h3>Strongest Subjects by Published Average</h3></div></div>
+						<EdgeEmptyState v-if="!report.strong_subjects.length" title="No published subject data" description="Publish results to populate subject strengths." />
+						<div v-else class="rank-list">
+							<div v-for="(row,index) in report.strong_subjects" :key="row.course" class="rank-row">
+								<span class="rank-number">{{ index + 1 }}</span>
+								<div><strong>{{ row.course_name }}</strong><small>{{ row.students }} students · highest {{ formatPercent(row.highest) }}</small></div>
+								<strong>{{ formatPercent(row.average) }}</strong>
+							</div>
+						</div>
+					</article>
+
+					<article class="intel-panel">
+						<div class="panel-heading"><div><p class="edge-eyebrow">Grade profile</p><h3>Published Grade Distribution</h3></div></div>
+						<EdgeEmptyState v-if="!report.grade_distribution.length" title="No grade distribution yet" description="Published graded results will appear here." />
+						<div v-else class="grade-list">
+							<div v-for="row in report.grade_distribution" :key="row.grade" class="grade-row">
+								<strong>{{ row.grade }}</strong>
+								<div class="grade-bar"><i :style="{ width: gradeShare(row.count) }"></i></div>
+								<span>{{ row.count }}</span>
+							</div>
+						</div>
+					</article>
+				</section>
+
 				<section class="intel-panel">
 					<div class="panel-heading">
 						<div><p class="edge-eyebrow">Subject analysis</p><h3>Subject Performance</h3></div>
@@ -115,6 +141,7 @@ const blankReport = () => ({
 	subject_performance: [],
 	student_performance: [],
 	weak_subjects: [],
+	strong_subjects: [],
 	grade_distribution: [],
 	publication_trend: [],
 	notes: { pass_policy: "", source: "" },
@@ -140,6 +167,10 @@ export default {
 		openRoute: openEduEdgeRoute,
 		formatPercent(value) { const number = Number(value); return Number.isFinite(number) ? `${number.toFixed(2)}%` : "-"; },
 		clampPercent(value) { return `${Math.min(Math.max(Number(value || 0), 0), 100)}%`; },
+		gradeShare(count) {
+			const total = (this.report.grade_distribution || []).reduce((sum, row) => sum + Number(row.count || 0), 0);
+			return total ? `${Math.min(Number(count || 0) / total * 100, 100)}%` : "0%";
+		},
 		async load() {
 			this.loading = true; this.error = "";
 			try {
@@ -170,5 +201,5 @@ export default {
 </script>
 
 <style scoped>
-.result-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem;width:100%}.result-filters label{display:grid;gap:.3rem;font-weight:600}.intelligence-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:1rem}.intel-panel{padding:1rem;margin-top:1rem;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.intelligence-grid .intel-panel{margin-top:0}.panel-heading{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-bottom:.75rem}.panel-heading h3{margin:.15rem 0 0}.panel-heading>span,.rank-row small,.trend-row small,.intel-table small,.intel-notes{color:var(--text-muted)}.rank-list,.trend-list{display:grid;gap:.55rem}.rank-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.65rem;padding:.6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.rank-row>div{display:grid}.rank-number{display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:50%;background:var(--card-bg);font-weight:700}.trend-row{display:grid;grid-template-columns:minmax(9rem,.7fr) minmax(10rem,1.3fr) auto;align-items:center;gap:.65rem}.trend-row>div:first-child{display:grid}.trend-bar{height:.45rem;border-radius:999px;background:var(--control-bg);overflow:hidden}.trend-bar i{display:block;height:100%;background:var(--primary)}.table-wrap{overflow:auto;border:1px solid var(--border-color);border-radius:8px}.intel-table{width:100%;border-collapse:collapse;min-width:650px}.intel-table th,.intel-table td{padding:.6rem;border-bottom:1px solid var(--border-color);text-align:left}.intel-table th{background:var(--control-bg);font-size:.78rem}.intel-table tbody tr:last-child td{border-bottom:0}.intel-table tbody tr{cursor:pointer}.intel-table tbody tr:hover{background:var(--control-bg)}.intel-table td:first-child{display:grid}.intel-notes{padding:.75rem 0;font-size:.82rem}.intel-notes p{margin:.25rem 0}.intelligence-error{color:var(--red-600,#b42318)}@media(max-width:1050px){.result-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.intelligence-grid{grid-template-columns:1fr}}@media(max-width:650px){.result-filters{grid-template-columns:1fr}.panel-heading{align-items:flex-start;flex-direction:column}}
+.result-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem;width:100%}.result-filters label{display:grid;gap:.3rem;font-weight:600}.intelligence-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:1rem}.intel-panel{padding:1rem;margin-top:1rem;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.intelligence-grid .intel-panel{margin-top:0}.panel-heading{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-bottom:.75rem}.panel-heading h3{margin:.15rem 0 0}.panel-heading>span,.rank-row small,.trend-row small,.intel-table small,.intel-notes{color:var(--text-muted)}.rank-list,.trend-list,.grade-list{display:grid;gap:.55rem}.rank-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.65rem;padding:.6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.rank-row>div{display:grid}.rank-number{display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:50%;background:var(--card-bg);font-weight:700}.trend-row{display:grid;grid-template-columns:minmax(9rem,.7fr) minmax(10rem,1.3fr) auto;align-items:center;gap:.65rem}.trend-row>div:first-child{display:grid}.trend-bar{height:.45rem;border-radius:999px;background:var(--control-bg);overflow:hidden}.trend-bar i{display:block;height:100%;background:var(--primary)}.grade-row{display:grid;grid-template-columns:minmax(4rem,.4fr) minmax(10rem,1fr) auto;align-items:center;gap:.65rem;padding:.45rem .1rem}.grade-bar{height:.45rem;border-radius:999px;background:var(--control-bg);overflow:hidden}.grade-bar i{display:block;height:100%;background:var(--primary)}.table-wrap{overflow:auto;border:1px solid var(--border-color);border-radius:8px}.intel-table{width:100%;border-collapse:collapse;min-width:650px}.intel-table th,.intel-table td{padding:.6rem;border-bottom:1px solid var(--border-color);text-align:left}.intel-table th{background:var(--control-bg);font-size:.78rem}.intel-table tbody tr:last-child td{border-bottom:0}.intel-table tbody tr{cursor:pointer}.intel-table tbody tr:hover{background:var(--control-bg)}.intel-table td:first-child{display:grid}.intel-notes{padding:.75rem 0;font-size:.82rem}.intel-notes p{margin:.25rem 0}.intelligence-error{color:var(--red-600,#b42318)}@media(max-width:1050px){.result-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.intelligence-grid{grid-template-columns:1fr}}@media(max-width:650px){.result-filters{grid-template-columns:1fr}.panel-heading{align-items:flex-start;flex-direction:column}}
 </style>
