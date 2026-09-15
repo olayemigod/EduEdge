@@ -13,7 +13,7 @@ from education.education.report.course_wise_assessment_report.course_wise_assess
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
-from eduedge.education.instructor_scope import get_user_instructor_names, is_limited_instructor_user
+from eduedge.education.instructor_scope import is_limited_instructor_user
 from eduedge.education.teaching_assignments import has_class_responsibility_assignment
 from eduedge.education.report_card_issues import get_effective_issued_payload
 from eduedge.education.profiled_report_cards import (
@@ -221,13 +221,16 @@ def _assert_publication_operator_scope(publication) -> None:
 	user = frappe.session.user
 	if not is_limited_instructor_user(user):
 		return
-	instructors = get_user_instructor_names(user)
-	if not instructors or not frappe.db.exists(
-		"Course Schedule",
-		{"student_group": publication.student_group, "instructor": ["in", instructors]},
+	if not has_class_responsibility_assignment(
+		publication.student_group,
+		user=user,
+		academic_term=publication.academic_term,
+		academic_year=publication.academic_year,
 	):
 		frappe.throw(
-			_("You are not assigned to this Student Group / Class."),
+			_(
+				"Full report-card access is limited to the effective Class Teacher, Form Teacher, Head of Class / Level, or an authorized academic administrator."
+			),
 			frappe.PermissionError,
 		)
 
