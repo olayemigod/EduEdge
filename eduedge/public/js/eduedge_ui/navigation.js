@@ -172,6 +172,7 @@ export function buildEduEdgeMenuItems() {
 		menuGroup("assessment-results", __("Assessments & Results"), "clipboard", [
 			menuItem(__(`${assessments} & Results`), "/app/eduedge-assessment-operations", "assessment", __(`Plan, approve, and publish ${assessments.toLowerCase()}`)),
 			menuItem(__("Report Cards"), "/app/eduedge-report-cards", "report", __("Comments, progression, and printing")),
+			menuItem(__("Result Intelligence"), "/app/eduedge-result-intelligence", "chart", __("Published class, subject, student, and trend intelligence")),
 		]),
 		menuGroup("cbt-delivery", __("CBT Delivery"), "monitor", [
 			menuItem(__("CBT Operations"), "/app/eduedge-cbt-operations", "assessment", __("Centres, templates, and readiness")),
@@ -229,7 +230,7 @@ export const EDUEDGE_UI_ROUTES = Object.freeze([
 	"/app/eduedge-cbt-marking", "/app/eduedge-cbt-review-workbench", "/app/eduedge-exam-templates",
 	"/app/eduedge-exam-template-builder", "/app/eduedge-question-bank", "/app/eduedge-question-responsibilities",
 	"/app/eduedge-question-builder", "/app/eduedge-question-batch", "/app/eduedge-assessment-operations",
-	"/app/eduedge-report-cards", "/app/eduedge-institution-profile", "/app/eduedge-school-branches",
+	"/app/eduedge-report-cards", "/app/eduedge-result-intelligence", "/app/eduedge-institution-profile", "/app/eduedge-school-branches",
 	"/app/eduedge-institution-structure", "/app/eduedge-institution-operations-settings",
 	"/app/eduedge-branch-governance", "/app/eduedge-setup-center", "/app/eduedge-settings-center",
 	"/app/eduedge-training-centre",
