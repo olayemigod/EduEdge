@@ -288,6 +288,12 @@ def ensure_result_publication(
 ) -> dict:
 	_require_operator()
 	branch = _resolve_branch(school_branch)
+	locked_group = frappe.db.sql(
+		"select name from `tabStudent Group` where name=%s for update",
+		(student_group,),
+	)
+	if not locked_group:
+		frappe.throw(_("Student Group does not exist."), frappe.DoesNotExistError)
 	if not assessment_group and not result_profile:
 		frappe.throw(_("Select a Result Profile or Assessment Group."), frappe.ValidationError)
 	if (result_mode or "Terminal") == "Annual":
