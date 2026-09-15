@@ -68,6 +68,7 @@
 					<EdgeStatCard label="Prepared Reviews" :value="context.counts.prepared_reviews || 0" helper="Report-card review records" />
 					<EdgeStatCard label="Recommended" :value="context.counts.recommended || 0" helper="Awaiting approval" />
 					<EdgeStatCard label="Approved" :value="context.counts.approved || 0" helper="Progression review completed" />
+					<EdgeStatCard label="Issued" :value="context.counts.issued || 0" helper="Immutable official report cards" />
 				</EdgeDashboardLayout>
 
 				<EdgeEmptyState
@@ -91,7 +92,10 @@
 								:class="{ 'is-active': selectedStudent?.student === row.student }"
 								@click="selectStudent(row)"
 							>
-								<div><strong>{{ row.student_name }}</strong><span>{{ row.student }} · Average {{ formatPercent(row.average_percent) }}</span></div>
+								<div>
+									<strong>{{ row.student_name }}</strong>
+									<span>{{ row.student }} · Average {{ formatPercent(row.average_percent) }}<template v-if="row.issue"> · Issue v{{ row.issue.issue_version }}</template></span>
+								</div>
 								<EdgeStatusBadge :label="row.review?.progression_status || 'Not Prepared'" :status="row.review?.progression_status || 'not-prepared'" :tone="reviewTone(row.review?.progression_status)" />
 							</button>
 						</div>
@@ -107,7 +111,8 @@
 									<p>
 										{{ selectedStudent.student }}
 										<span v-if="selectedStudent.group_roll_number"> · Roll {{ selectedStudent.group_roll_number }}</span>
-										<span v-if="selectedStudent.publication_version"> · Version {{ selectedStudent.publication_version }}</span>
+										<span v-if="selectedStudent.publication_version"> · Publication v{{ selectedStudent.publication_version }}</span>
+										<span v-if="selectedStudent.issue"> · Issue v{{ selectedStudent.issue.issue_version }}</span>
 									</p>
 								</div>
 								<button type="button" class="edge-button" @click="printReportCard">Print PDF</button>
