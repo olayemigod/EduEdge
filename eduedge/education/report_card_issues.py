@@ -8,6 +8,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from eduedge.services.institution_branding import get_institution_branding
+from eduedge.education.result_verification import build_issue_verification
 
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
 
@@ -55,6 +56,7 @@ def create_report_card_issue(review: str) -> str:
 			"result_mode": publication.get("result_mode") or "Terminal",
 			"result_profile": publication.get("result_profile"),
 			"payload_hash": payload_hash,
+			"verification_token": frappe.generate_hash(length=32),
 			"issued_by": frappe.session.user,
 			"issued_on": now_datetime(),
 			"payload_json": payload_json,
@@ -126,11 +128,36 @@ def _latest_issue_row(publication: str, student: str):
 	rows = frappe.get_all(
 		ISSUE_DOCTYPE,
 		filters={"result_publication": publication, "student": student},
-		fields=["name", "issue_version", "payload_hash", "payload_json"],
+		fields=["name", "issue_version", "payload_hash", "payload_json", "verification_token", "issued_on", "supersedes_issue"],
 		order_by="issue_version desc, creation desc",
 		limit=1,
 	)
 	return rows[0] if rows else None
+
+
+def get_report_card_issue_history(publication: str, student: str) -> list[dict]:
+	rows = frappe.get_all(
+		ISSUE_DOCTYPE,
+		filters={"result_publication": publication, "student": student},
+		fields=[
+			"name",
+			"issue_version",
+			"publication_version",
+			"supersedes_issue",
+			"payload_hash",
+			"issued_by",
+			"issued_on",
+		],
+		order_by="issue_version desc, creation desc",
+		page_length=0,
+	)
+	return [
+		{
+			**dict(row),
+			"fingerprint": str(row.payload_hash or "")[:16].upper(),
+		}
+		for row in rows
+	]
 
 
 def _next_issue_version(publication: str, student: str) -> int:
