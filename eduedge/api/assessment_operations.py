@@ -215,6 +215,8 @@ def get_assessment_context(
 				"name",
 				"title",
 				"result_profile",
+				"result_profile_config_hash",
+				"result_profile_config_json",
 				"result_mode",
 				"publication_version",
 				"supersedes_publication",
@@ -244,6 +246,11 @@ def get_assessment_context(
 			assessment_group=assessment_group,
 			result_profile=(publication or {}).get("result_profile") or result_profile,
 			result_mode=(publication or {}).get("result_mode") or result_mode,
+			profile_config_override=(
+				get_publication_result_profile_config(publication)
+				if publication and publication.get("result_profile")
+				else None
+			),
 		)
 
 	current_branch = get_current_school_branch()
@@ -338,6 +345,8 @@ def ensure_result_publication(
 				)
 			doc.result_mode = requested_mode
 		if doc.has_value_changed("result_profile") or doc.has_value_changed("result_mode"):
+			if not doc.supersedes_publication:
+				set_publication_result_profile_config(doc, None)
 			doc.save()
 			_refresh_readiness(doc)
 		return _publication_payload(name)
