@@ -72,13 +72,14 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 		row.report_card_review,
 		"progression_status",
 	)
-	latest_issue = frappe.db.get_value(
+	latest_rows = frappe.get_all(
 		ISSUE_DOCTYPE,
-		{"result_publication": row.result_publication, "student": row.student},
-		["name", "issue_version"],
-		as_dict=True,
+		filters={"result_publication": row.result_publication, "student": row.student},
+		fields=["name", "issue_version"],
 		order_by="issue_version desc, creation desc",
+		limit=1,
 	)
+	latest_issue = latest_rows[0] if latest_rows else None
 	if latest_issue and latest_issue.name != row.name:
 		status = "Superseded"
 		status_message = _("This is an authentic earlier issue. A newer official issue exists.")
