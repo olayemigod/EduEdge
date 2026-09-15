@@ -20,6 +20,15 @@ class TestResultBroadsheetContract(unittest.TestCase):
 		self.assertIn('filters["academic_term"] = ["is", "not set"]', api)
 		self.assertIn("Select an Academic Term for a Terminal broadsheet.", api)
 
+	def test_ambiguous_profile_scope_requires_exact_publication(self):
+		api = (APP / "api" / "result_broadsheet.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_result_broadsheet" / "EduEdgeResultBroadsheet.vue").read_text()
+		self.assertIn("publication_choices", api)
+		self.assertIn("More than one published Result Profile exists", api)
+		self.assertIn("Selected Result Publication is outside this broadsheet scope.", api)
+		self.assertIn("Published Result", vue)
+		self.assertIn("publicationLabel", vue)
+
 	def test_rank_is_not_inferred_without_policy(self):
 		api = (APP / "api" / "result_broadsheet.py").read_text()
 		self.assertIn("Position/rank is not inferred", api)
