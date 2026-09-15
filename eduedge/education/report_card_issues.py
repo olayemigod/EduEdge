@@ -9,6 +9,7 @@ from frappe.utils import now_datetime
 
 from eduedge.services.institution_branding import get_institution_branding
 from eduedge.education.result_verification import build_issue_verification
+from eduedge.education.result_notifications import notify_report_card_recipients
 
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
 
@@ -84,6 +85,7 @@ def create_report_card_issue(review: str) -> str:
 		}
 	)
 	issue.insert(ignore_permissions=True)
+	notify_report_card_recipients(issue.name)
 	return issue.name
 
 
