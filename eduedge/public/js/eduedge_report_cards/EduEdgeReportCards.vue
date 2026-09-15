@@ -193,6 +193,14 @@
 									<button v-if="isDraft" type="button" class="edge-button edge-button--primary" :disabled="working || editor.progression_recommendation === 'Pending Review'" @click="recommendProgression">Recommend</button>
 									<button v-if="context.can_approve && selectedStudent.review.progression_status === 'Recommended'" type="button" class="edge-button edge-button--primary" :disabled="working" @click="approveProgression">Approve</button>
 									<button v-if="context.can_approve && ['Recommended', 'Approved'].includes(selectedStudent.review.progression_status)" type="button" class="edge-button" :disabled="working" @click="reopenReview">Reopen</button>
+									<button
+										v-if="canContinueToProgression"
+										type="button"
+										class="edge-button edge-button--primary"
+										@click="continueToProgression"
+									>
+										Continue to Student Progression
+									</button>
 								</div>
 							</template>
 						</template>
@@ -222,6 +230,14 @@ export default {
 	},
 	computed: {
 		isDraft() { return this.selectedStudent?.review?.progression_status === "Draft"; },
+		canContinueToProgression() {
+			return Boolean(
+				this.selectedStudent?.result_mode === "Annual" &&
+				this.selectedStudent?.review?.progression_status === "Approved" &&
+				["Promote", "Repeat", "Transfer", "Graduate"].includes(this.editor.progression_recommendation) &&
+				this.selectedStudent?.source_program
+			);
+		},
 	},
 	mounted() { this.loadContext(); },
 	methods: {
@@ -332,6 +348,19 @@ export default {
 			} finally { this.working = false; }
 		},
 		approveProgression() { return this.callAction("eduedge.api.report_cards.approve_progression", { review: this.selectedStudent.review.name }); },
+		continueToProgression() {
+			if (!this.canContinueToProgression) return;
+			const params = new URLSearchParams({
+				branch: this.context.publication?.school_branch || this.filters.branch || "",
+				academic_year: this.context.publication?.academic_year || "",
+				program: this.selectedStudent.source_program || "",
+				student_group: this.context.publication?.student_group || "",
+				student: this.selectedStudent.student || "",
+				outcome: this.editor.progression_recommendation || "",
+				result_publication: this.context.publication?.name || "",
+			});
+			window.location.href = `/app/eduedge-student-progression?${params.toString()}`;
+		},
 		reopenReview() {
 			frappe.prompt(
 				[{ fieldname: "reason", fieldtype: "Small Text", label: __("Reopening reason"), reqd: 1 }],
