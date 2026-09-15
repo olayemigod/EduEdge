@@ -459,6 +459,11 @@ def _class_responsibility_result_query(doctype: str, user: str | None = None) ->
 	branch_condition = _branch_condition(doctype, resolved_user, fieldname="school_branch")
 	if not is_limited_instructor_user(resolved_user):
 		return branch_condition
+	if (
+		not frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		or not frappe.get_meta("Student Group").has_field(OFFERING_FIELD)
+	):
+		return "1=0"
 
 	instructor_values = _instructor_sql_values(resolved_user)
 	if not instructor_values:
