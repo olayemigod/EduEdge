@@ -5,6 +5,7 @@
 {% block head_include %}
 {{ super() }}
 <meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
 	.result-verify-shell{max-width:720px;margin:0 auto;padding:2rem 1rem 3rem}
@@ -36,7 +37,6 @@
 				<div><span>Institution</span><strong>{{ verification.institution_name or "-" }}</strong></div>
 				<div><span>Branch / Campus</span><strong>{{ verification.branch_name or "-" }}</strong></div>
 				<div><span>Student</span><strong>{{ verification.student_name or "-" }}</strong></div>
-				<div><span>Student ID</span><strong>{{ verification.student_id or "-" }}</strong></div>
 				<div><span>Class / Group</span><strong>{{ verification.student_group or "-" }}</strong></div>
 				<div><span>Academic Year</span><strong>{{ verification.academic_year or "-" }}</strong></div>
 				<div><span>Academic Period</span><strong>{{ verification.academic_term or verification.result_mode or "-" }}</strong></div>
