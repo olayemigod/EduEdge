@@ -11,6 +11,8 @@
   "student_group",
   "assessment_group",
   "result_profile",
+  "result_profile_config_hash",
+  "result_profile_config_json",
   "result_mode",
   "publication_version",
   "supersedes_publication",
