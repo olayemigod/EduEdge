@@ -83,6 +83,22 @@
    "description": "Optional V1 result composition profile. Historical publications without a profile remain valid."
   },
   {
+   "fieldname": "result_profile_config_hash",
+   "fieldtype": "Data",
+   "label": "Approved Result Profile Hash",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "result_profile_config_json",
+   "fieldtype": "Long Text",
+   "label": "Approved Result Profile Configuration",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
    "default": "Terminal",
    "fieldname": "result_mode",
    "fieldtype": "Select",
