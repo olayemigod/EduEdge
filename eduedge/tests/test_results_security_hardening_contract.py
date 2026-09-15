@@ -48,6 +48,8 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("term_end_date", teaching)
 		self.assertIn("year_end_date", teaching)
 		self.assertIn("def _class_responsibility_result_query", permissions)
+		self.assertIn('not frappe.db.exists("DocType", "EduEdge Instructor Assignment")', permissions)
+		self.assertIn('frappe.get_meta("Student Group").has_field(OFFERING_FIELD)', permissions)
 		self.assertIn('return _class_responsibility_result_query("EduEdge Report Card Review", user)', permissions)
 		self.assertIn("has_class_responsibility_assignment", permissions)
 		self.assertIn("def can_manage_report_card_reviews", service)
