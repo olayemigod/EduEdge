@@ -32,6 +32,25 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("You are not assigned to this Student Group / Class.", service)
 		self.assertNotIn("if write and not roles.intersection(OPERATIONAL_ROLES)", service)
 
+	def test_subject_teacher_cannot_acquire_class_teacher_review_authority(self):
+		teaching = (APP / "education" / "teaching_assignments.py").read_text()
+		permissions = (APP / "education" / "permissions.py").read_text()
+		service = (APP / "education" / "report_cards.py").read_text()
+		api = (APP / "api" / "report_cards.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
+		self.assertIn("def has_class_responsibility_assignment", teaching)
+		self.assertIn("CLASS_RESPONSIBILITY_TYPES", teaching)
+		self.assertIn("term_end_date", teaching)
+		self.assertIn("year_end_date", teaching)
+		self.assertIn('permission_type not in {"create", "write", "delete", "share"}', permissions)
+		self.assertIn("has_class_responsibility_assignment", permissions)
+		self.assertIn("def can_manage_report_card_reviews", service)
+		self.assertIn("def assert_report_card_review_management", service)
+		self.assertIn("assert_report_card_review_management", api)
+		self.assertIn('"can_review"', api)
+		self.assertIn("context.can_review", vue)
+		self.assertIn("Published results are read-only here.", vue)
+
 	def test_teacher_has_no_raw_snapshot_or_issue_payload_permission(self):
 		for relative in (
 			"eduedge/doctype/eduedge_published_result_snapshot/eduedge_published_result_snapshot.json",
