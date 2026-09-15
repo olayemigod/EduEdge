@@ -75,6 +75,8 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("where name=%s for update", assessment_api)
 		self.assertIn("def _get_review_for_update", report_api)
 		self.assertIn("where name=%s for update", report_api)
+		self.assertIn("select name from `tabStudent Group` where name=%s for update", assessment_api)
+		self.assertIn("select name from `tabEduEdge Result Publication` where name=%s for update", report_api)
 
 	def test_corrections_cannot_branch_from_stale_published_version(self):
 		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
@@ -89,6 +91,8 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn('["result_publication", "student"]', patch)
 		self.assertIn('"EduEdge Report Card Issue"', patch)
 		self.assertIn('["result_publication", "student", "issue_version"]', patch)
+		self.assertIn('"EduEdge Report Card Review"', patch)
+		self.assertIn('"uniq_eduedge_review_publication_student"', patch)
 		self.assertIn("frappe.db.add_unique", patch)
 		self.assertIn("def _constraint_exists", patch)
 		self.assertIn("if not _constraint_exists(doctype, constraint_name)", patch)
