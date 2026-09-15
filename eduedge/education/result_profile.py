@@ -84,7 +84,7 @@ def validate_publication_profile(doc) -> None:
 		return
 
 	profile = frappe.get_doc("EduEdge Result Profile", doc.result_profile)
-	if not profile.is_active:
+	if not profile.is_active and not doc.get("supersedes_publication"):
 		frappe.throw(_("Select an active Result Profile."), frappe.ValidationError)
 
 	branch = frappe.db.get_value(
