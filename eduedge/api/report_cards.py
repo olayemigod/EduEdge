@@ -147,6 +147,12 @@ def get_report_card_context(
 @guard_eduedge_action("assessment", action="prepare_report_cards")
 def prepare_report_cards(publication: str) -> dict:
 	_require_operator()
+	locked_publication = frappe.db.sql(
+		"select name from `tabEduEdge Result Publication` where name=%s for update",
+		(publication,),
+	)
+	if not locked_publication:
+		frappe.throw(_("Result Publication does not exist."), frappe.DoesNotExistError)
 	publication_row = get_published_publication(publication)
 	assert_branch_access(publication_row.school_branch)
 	assert_report_card_review_management(publication_row)
