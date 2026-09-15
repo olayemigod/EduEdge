@@ -22,13 +22,13 @@ BASIS_VALUE_FIELDS = {
 }
 
 
-def compose_terminal_subject_results(profile: str, result_rows: list) -> dict:
+def compose_terminal_subject_results(profile: str | dict, result_rows: list) -> dict:
 	"""Compose submitted native Assessment Results into report-level subject components.
 
 	The function deliberately does not create a second marks ledger. Native Frappe
 	Education Assessment Result remains the academic source of truth.
 	"""
-	config = get_result_profile_config(profile)
+	config = get_result_profile_config(profile) if isinstance(profile, str) else profile
 	source_index = get_component_source_index(config)
 	component_config = {row["component_key"]: row for row in config["components"]}
 	precision = cint(config.get("score_precision") or 2)

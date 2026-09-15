@@ -168,6 +168,8 @@ def get_assessment_context(
 			academic_year=academic_year,
 			academic_term=academic_term,
 			assessment_group=assessment_group,
+			result_profile=(publication or {}).get("result_profile"),
+			result_mode=(publication or {}).get("result_mode") or "Terminal",
 		)
 
 	current_branch = get_current_school_branch()
@@ -209,6 +211,8 @@ def ensure_result_publication(
 	academic_year: str,
 	assessment_group: str,
 	academic_term: str | None = None,
+	result_profile: str | None = None,
+	result_mode: str = "Terminal",
 ) -> dict:
 	_require_operator()
 	branch = _resolve_branch(school_branch)
@@ -223,7 +227,15 @@ def ensure_result_publication(
 	if name:
 		return _publication_payload(name)
 
-	doc = frappe.get_doc({"doctype": PUBLICATION_DOCTYPE, **filters, "status": "Draft"})
+	doc = frappe.get_doc(
+		{
+			"doctype": PUBLICATION_DOCTYPE,
+			**filters,
+			"result_profile": result_profile,
+			"result_mode": result_mode or "Terminal",
+			"status": "Draft",
+		}
+	)
 	doc.insert()
 	append_publication_log(
 		doc.name,
@@ -388,6 +400,8 @@ def _refresh_readiness(doc) -> dict:
 		academic_year=doc.academic_year,
 		academic_term=doc.academic_term,
 		assessment_group=doc.assessment_group,
+		result_profile=doc.get("result_profile"),
+		result_mode=doc.get("result_mode") or "Terminal",
 	)
 	updates = {
 		"expected_results": readiness["expected_results"],
@@ -440,6 +454,8 @@ def _publication_payload(name: str) -> dict:
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
 			"status",
 			"expected_results",
 			"submitted_results",
