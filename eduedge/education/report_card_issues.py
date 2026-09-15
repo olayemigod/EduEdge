@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import get_url, now_datetime
 
 from eduedge.services.institution_branding import get_institution_branding
 
@@ -40,7 +40,7 @@ def ensure_issue_verification_code(issue_name: str, current_code: str | None = N
 
 
 def build_verification_url(code: str) -> str:
-	base = frappe.utils.get_url().rstrip("/")
+	base = get_url().rstrip("/")
 	return f"{base}/verify-result?{urlencode({'code': code})}"
 
 
