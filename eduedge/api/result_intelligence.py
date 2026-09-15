@@ -329,7 +329,7 @@ def get_result_intelligence(
 		"grade_distribution": _grade_distribution(payloads),
 		"publication_trend": _publication_trend(publications, payloads),
 		"notes": {
-			"pass_rate": _("Pass rate is intentionally not inferred. Configure an explicit academic pass policy before introducing pass/fail analytics."),
+			"pass_policy": _("Pass rate is intentionally not inferred. Configure an explicit academic pass policy before introducing pass/fail analytics."),
 			"source": _("All figures come from immutable Published Result Snapshots, not live draft marks."),
 		},
 	}
