@@ -129,6 +129,16 @@ def get_result_profile_config(name: str) -> dict:
 		"minimum_eligible_periods": cint(doc.minimum_eligible_periods),
 		"missing_result_policy": doc.missing_result_policy,
 		"absence_policy": doc.absence_policy,
+		"presentation": {
+			"terminal_report_title": doc.terminal_report_title or "Terminal Report",
+			"annual_report_title": doc.annual_report_title or "Annual Result",
+			"show_student_photo": bool(doc.show_student_photo),
+			"show_attendance": bool(doc.show_attendance),
+			"show_comments": bool(doc.show_comments),
+			"show_progression": bool(doc.show_progression),
+			"show_grading_legend": bool(doc.show_grading_legend),
+			"show_next_period_date": bool(doc.show_next_period_date),
+		},
 		"components": [
 			{
 				"component_key": row.component_key,
