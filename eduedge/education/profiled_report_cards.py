@@ -168,7 +168,7 @@ def _prepare_courses(subjects: list[dict], profile: dict, mode: str) -> list[dic
 			for period in row.get("periods") or []:
 				period_row = dict(period)
 				period_row["display_components"] = [
-					component
+					_prepare_component_for_display(component)
 					for component in (period_row.get("components") or [])
 					if component.get("component_key") in visible_keys
 				]
@@ -178,12 +178,30 @@ def _prepare_courses(subjects: list[dict], profile: dict, mode: str) -> list[dic
 			row["period_map"] = period_map
 		else:
 			row["display_components"] = [
-				component
+				_prepare_component_for_display(component)
 				for component in (row.get("components") or [])
 				if component.get("component_key") in visible_keys
 			]
 		output.append(row)
 	return sorted(output, key=lambda row: (row.get("course_name") or "").casefold())
+
+
+def _prepare_component_for_display(component: dict) -> dict:
+	row = dict(component)
+	row["display_value"] = _component_display_value(row)
+	return row
+
+
+def _component_display_value(component: dict) -> str:
+	status_code = (component.get("status_code") or "").strip()
+	if status_code:
+		return status_code
+	if flt(component.get("maximum_score")) <= 0:
+		return "-"
+	value = flt(component.get("score"))
+	if value.is_integer():
+		return str(int(value))
+	return f"{value:.2f}".rstrip("0").rstrip(".")
 
 
 def _component_totals(courses: list[dict], components: list[dict]) -> list[dict]:
