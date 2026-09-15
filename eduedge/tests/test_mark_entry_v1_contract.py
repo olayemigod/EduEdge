@@ -38,6 +38,19 @@ class TestMarkEntryV1Contract(unittest.TestCase):
 		self.assertIn("eduedge-score-state", js)
 		self.assertIn("Save all drafts", js)
 
+	def test_partial_rows_are_browser_saved_until_server_complete(self):
+		js = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text()
+		self.assertIn("localStorage.setItem", js)
+		self.assertIn("restoreBrowserDraft", js)
+		self.assertIn("rowReadyForServer", js)
+		self.assertIn("Browser draft saved · complete the row to sync", js)
+		self.assertIn("navigator.onLine", js)
+
+	def test_successful_server_sync_clears_browser_draft(self):
+		js = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text()
+		self.assertIn("clearBrowserRow(saved.student)", js)
+		self.assertIn("localStorage.removeItem", js)
+
 	def test_mark_entry_does_not_auto_submit(self):
 		js = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text()
 		self.assertNotIn("submit_mark_entry_batch", js)
