@@ -6,6 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.education.custom_fields import BRANCH_FIELD
+
 CLASS_SCOPE = "Class / Programme Offering"
 CLASS_ARM_SCOPE = "Class Arm"
 ACADEMIC_ASSIGNMENT_SCOPES = {CLASS_SCOPE, CLASS_ARM_SCOPE}
@@ -149,6 +152,63 @@ def active_assignment_rows(
             )
         ]
     return result
+
+
+def has_class_responsibility_assignment(
+    student_group: str,
+    *,
+    user: str | None = None,
+    academic_term: str | None = None,
+    academic_year: str | None = None,
+    on_date=None,
+) -> bool:
+    """Return whether a limited Instructor owns the class-level reporting responsibility.
+
+    Result review/comment/progression authority is intentionally narrower than Subject
+    teaching access. It requires an effective Class Teacher, Form Teacher, or Head of
+    Class / Level assignment for the exact Class / Class Arm.
+    """
+    resolved_user = user or frappe.session.user
+    from eduedge.education.instructor_scope import (
+        get_active_instructor_names_for_user,
+        is_limited_instructor_user,
+    )
+
+    if not is_limited_instructor_user(resolved_user):
+        return True
+    instructors = get_active_instructor_names_for_user(resolved_user)
+    if len(instructors) != 1 or not student_group:
+        return False
+
+    fields = ["name", BRANCH_FIELD]
+    if frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+        fields.append(OFFERING_FIELD)
+    group = frappe.db.get_value("Student Group", student_group, fields, as_dict=True)
+    if not group:
+        return False
+    branch = group.get(BRANCH_FIELD)
+    program_offering = group.get(OFFERING_FIELD) if OFFERING_FIELD in fields else None
+    if not branch or not program_offering:
+        return False
+
+    reference_date = on_date
+    if not reference_date and academic_term:
+        reference_date = frappe.db.get_value("Academic Term", academic_term, "term_end_date")
+    if not reference_date and academic_year:
+        reference_date = frappe.db.get_value("Academic Year", academic_year, "year_end_date")
+
+    rows = active_assignment_rows(
+        resolved_user,
+        instructors=instructors,
+        branch=branch,
+        program_offering=program_offering,
+        student_group=student_group,
+        on_date=reference_date,
+    )
+    return any(
+        row.get("assignment_type") in CLASS_RESPONSIBILITY_TYPES and not row.get("course")
+        for row in rows
+    )
 
 
 def assigned_course_rows(
