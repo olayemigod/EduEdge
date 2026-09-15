@@ -2,9 +2,24 @@
 {% set mode = summary.result_mode or publication.result_mode or "Terminal" %}
 {% set issued = issue or issue_record %}
 {% set presentation = summary.profile.presentation if summary.profile and summary.profile.presentation else {} %}
+{% set terms = terminology or {} %}
+{% set academic_year_term = terms.get("academic_year") or {} %}
+{% set academic_term_term = terms.get("academic_term") or {} %}
+{% set student_group_term = terms.get("student_group") or {} %}
+{% set course_term = terms.get("course") or {} %}
+{% set academic_year_label = academic_year_term.get("singular") or _("Academic Year") %}
+{% set academic_term_label = academic_term_term.get("singular") or _("Academic Term") %}
+{% set student_group_label = student_group_term.get("singular") or _("Class") %}
+{% set course_label = course_term.get("singular") or _("Subject") %}
+{% set courses_label = course_term.get("plural") or _("Subjects") %}
+{% set annual_column_count = 0 %}
+{% if profiled and mode == "Annual" %}
+	{% set annual_column_count = 1 + ((summary.periods or [])|length * (summary.display_components or [])|length) + 4 + (summary.display_metrics or [])|length %}
+{% endif %}
+{% set annual_density = "ultra" if annual_column_count > 18 else ("compact" if annual_column_count > 14 else "normal") %}
 <style>
 	{% if profiled and mode == "Annual" %}
-	@page { size: A4 landscape; margin: 8mm; }
+	@page { size: A4 landscape; margin: {% if annual_density == "ultra" %}5mm{% elif annual_density == "compact" %}6mm{% else %}8mm{% endif %}; }
 	{% else %}
 	@page { size: A4 portrait; margin: 10mm; }
 	{% endif %}
@@ -88,7 +103,14 @@
 	td.subject { text-align: left; font-weight: 600; overflow-wrap: anywhere; }
 	.annual-result-table th,
 	.annual-result-table td { padding: 3px 2px; font-size: 7pt; }
+	.annual-result-table th { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
+	.annual-result-table.annual-density-compact th,
+	.annual-result-table.annual-density-compact td { padding: 2px 1.5px; font-size: 6.25pt; }
+	.annual-result-table.annual-density-ultra th,
+	.annual-result-table.annual-density-ultra td { padding: 1.5px 1px; font-size: 5.5pt; }
 	.annual-result-table .subject-col { width: 15%; }
+	.annual-result-table.annual-density-compact .subject-col { width: 13%; }
+	.annual-result-table.annual-density-ultra .subject-col { width: 11%; }
 	.terminal-result-table .subject-col { width: 24%; }
 	.comments {
 		display: grid;
@@ -182,10 +204,10 @@
 		<div class="meta-grid">
 			<div class="meta-row"><strong>{{ _("Student ID") }}</strong><span>{{ student.name }}</span></div>
 			<div class="meta-row"><strong>{{ _("Student Name") }}</strong><span>{{ student.student_name }}</span></div>
-			<div class="meta-row"><strong>{{ _("Class") }}</strong><span>{{ publication.student_group }}</span></div>
+			<div class="meta-row"><strong>{{ student_group_label }}</strong><span>{{ publication.student_group }}</span></div>
 			<div class="meta-row"><strong>{{ _("Roll Number") }}</strong><span>{{ summary.group_roll_number or "-" }}</span></div>
-			<div class="meta-row"><strong>{{ _("Academic Year") }}</strong><span>{{ publication.academic_year }}</span></div>
-			<div class="meta-row"><strong>{{ _("Academic Term") }}</strong><span>{{ summary.academic_term_label or publication.academic_term or "-" }}</span></div>
+			<div class="meta-row"><strong>{{ academic_year_label }}</strong><span>{{ publication.academic_year }}</span></div>
+			<div class="meta-row"><strong>{{ academic_term_label }}</strong><span>{{ summary.academic_term_label or publication.academic_term or "-" }}</span></div>
 			<div class="meta-row"><strong>{{ _("Branch / Campus") }}</strong><span>{{ branch.branch_name or branch.name }}</span></div>
 			<div class="meta-row"><strong>{{ _("Publication") }}</strong><span>{{ publication.name }}</span></div>
 		</div>
@@ -197,15 +219,15 @@
 		{% if not profiled or presentation.show_attendance != false %}
 			<div class="summary-card"><span>{{ _("Attendance") }}</span><strong>{{ "%.2f"|format(summary.attendance_percent or 0) }}%</strong></div>
 		{% endif %}
-		<div class="summary-card"><span>{{ _("Subjects") }}</span><strong>{{ summary.course_count or 0 }}</strong></div>
+		<div class="summary-card"><span>{{ courses_label }}</span><strong>{{ summary.course_count or 0 }}</strong></div>
 	</div>
 
 	{% if profiled and mode == "Annual" %}
 		<div class="table-wrap">
-			<table class="annual-result-table">
+			<table class="annual-result-table annual-density-{{ annual_density }}">
 				<thead>
 					<tr>
-						<th rowspan="2" class="subject-col">{{ _("Subject") }}</th>
+						<th rowspan="2" class="subject-col">{{ course_label }}</th>
 						{% for period in summary.periods %}
 							<th colspan="{{ summary.display_components|length }}">{{ period.display_label }}</th>
 						{% endfor %}
@@ -269,7 +291,7 @@
 			<table class="terminal-result-table">
 				<thead>
 					<tr>
-						<th class="subject-col">{{ _("Subject") }}</th>
+						<th class="subject-col">{{ course_label }}</th>
 						{% for component in summary.display_components %}
 							<th>{{ component.component_label }}</th>
 						{% endfor %}
@@ -316,7 +338,7 @@
 		<table>
 			<thead>
 				<tr>
-					<th>{{ _("Subject") }}</th>
+					<th>{{ course_label }}</th>
 					{% if show_marks %}<th>{{ _("Score") }}</th><th>{{ _("Maximum") }}</th>{% endif %}
 					<th>{{ _("Average") }}</th>
 					<th>{{ _("Grade") }}</th>
@@ -365,7 +387,7 @@
 		</thead>
 		<tbody>
 			<tr>
-				<td>{{ mode == "Annual" and _("Academic Year") or _("Academic Term") }}</td>
+				<td>{{ mode == "Annual" and academic_year_label or academic_term_label }}</td>
 				<td class="center">{{ summary.attendance_present or 0 }}</td>
 				<td class="center">{{ summary.attendance_absent or 0 }}</td>
 				<td class="center">{{ summary.attendance_leave or 0 }}</td>

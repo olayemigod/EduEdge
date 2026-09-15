@@ -5,7 +5,7 @@ from frappe import _
 from frappe.utils.pdf import get_pdf
 
 from eduedge.education.report_cards import get_student_report_card_payload
-from eduedge.services.institution_branding import get_institution_branding
+from eduedge.services.institution_branding import get_report_identity
 
 
 def _require_login() -> None:
@@ -14,41 +14,20 @@ def _require_login() -> None:
 
 
 def _attach_institution_identity(payload: dict) -> dict:
-	if payload.get("issue") and payload.get("branding"):
-		# Issued Report Cards freeze the Institution identity used at approval time.
+	if (
+		(payload.get("issue") or payload.get("issue_record"))
+		and payload.get("branding")
+		and payload.get("terminology")
+	):
 		return payload
-	branch = payload.get("branch") or {}
-	branch_name = branch.get("name")
-	institution_name = None
-	if branch_name:
-		institution_name = frappe.db.get_value(
-			"EduEdge School Branch", branch_name, "institution"
-		)
-	branding = get_institution_branding(institution_name, branch=branch_name)
-	institution = {}
-	if institution_name:
-		institution = dict(
-			frappe.db.get_value(
-				"EduEdge Institution",
-				institution_name,
-				[
-					"name",
-					"institution_name",
-					"official_name",
-					"short_name",
-					"institution_code",
-					"institution_type",
-				],
-				as_dict=True,
-			)
-			or {}
-		)
-	payload["institution"] = institution
-	payload["branding"] = branding
-	if branding.get("address"):
-		payload["address"] = branding["address"]
+	branch_name = (payload.get("branch") or {}).get("name")
+	identity = get_report_identity(branch=branch_name)
+	payload["institution"] = identity["institution"]
+	payload["branding"] = identity["branding"]
+	payload["terminology"] = identity["terminology"]
+	if identity.get("address"):
+		payload["address"] = identity["address"]
 	return payload
-
 
 @frappe.whitelist()
 def get_report_card(publication: str, student: str) -> dict:

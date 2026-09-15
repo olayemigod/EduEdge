@@ -88,6 +88,51 @@ def get_institution_branding(
 	}
 
 
+
+def get_report_identity(*, branch: str | None) -> dict[str, Any]:
+	"""Resolve the current institution identity and terminology for report rendering.
+
+	Issued report cards persist this returned payload so later branding or Institution
+	Type changes do not rewrite an already-issued document.
+	"""
+	branch_row = _get_branch(branch)
+	institution_name = (branch_row or {}).get("institution")
+	branding = get_institution_branding(institution_name, branch=branch)
+	institution = {}
+	if institution_name:
+		meta = frappe.get_meta("EduEdge Institution")
+		fields = [
+			fieldname
+			for fieldname in (
+				"name",
+				"institution_name",
+				"official_name",
+				"short_name",
+				"institution_code",
+				"institution_type",
+			)
+			if fieldname == "name" or meta.has_field(fieldname)
+		]
+		institution = dict(
+			frappe.db.get_value(
+				"EduEdge Institution",
+				institution_name,
+				fields,
+				as_dict=True,
+			)
+			or {}
+		)
+
+	from eduedge.services.institution_context import get_effective_institution_context
+
+	context = get_effective_institution_context(branch=branch)
+	return {
+		"institution": institution,
+		"branding": branding,
+		"terminology": context.get("terms") or {},
+		"address": branding.get("address") or {},
+	}
+
 def get_active_communication_identity(
 	*,
 	institution: str | None = None,

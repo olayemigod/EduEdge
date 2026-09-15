@@ -38,6 +38,24 @@ class TestInstitutionReportIdentityContract(unittest.TestCase):
 		self.assertIn('"report_signatory_signature"', branding)
 		self.assertIn('"official_stamp_image"', branding)
 
+	def test_report_cards_use_and_freeze_institution_terminology(self):
+		branding = (APP / "services" / "institution_branding.py").read_text()
+		issues = (APP / "education" / "report_card_issues.py").read_text()
+		api = (APP / "api" / "report_cards.py").read_text()
+		template = (APP / "templates" / "report_card.html").read_text()
+		self.assertIn("def get_report_identity", branding)
+		self.assertIn('"terminology": context.get("terms") or {}', branding)
+		self.assertIn('payload["terminology"] = identity["terminology"]', issues)
+		self.assertIn("get_report_identity", api)
+		self.assertIn("{% set student_group_label", template)
+		self.assertIn("{% set course_label", template)
+		self.assertIn("{% set courses_label", template)
+		self.assertIn("{% set academic_year_label", template)
+		self.assertIn("{% set academic_term_label", template)
+		self.assertIn("{{ student_group_label }}", template)
+		self.assertIn("{{ course_label }}", template)
+		self.assertIn("{{ courses_label }}", template)
+
 
 if __name__ == "__main__":
 	unittest.main()

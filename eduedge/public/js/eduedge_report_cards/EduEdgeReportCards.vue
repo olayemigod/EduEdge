@@ -438,14 +438,30 @@ export default {
 <style scoped>
 .eduedge-report-filters { display: grid; grid-template-columns: minmax(12rem, 0.7fr) minmax(16rem, 1.3fr); gap: 0.75rem; width: 100%; }
 .eduedge-report-filters label, .eduedge-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.eduedge-report-filters .form-control, .eduedge-field .form-control {
+	background: var(--control-bg);
+	color: var(--text-color, inherit);
+	border-color: var(--border-color);
+	min-height: 2.5rem;
+}
+.eduedge-report-filters .form-control:focus-visible, .eduedge-field .form-control:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+.eduedge-field textarea.form-control { min-height: 6rem; resize: vertical; }
+.eduedge-report-filters .form-control:disabled, .eduedge-field .form-control:disabled {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
 .eduedge-report-grid { display: grid; grid-template-columns: minmax(18rem, 0.8fr) minmax(0, 1.2fr); gap: 1rem; margin-top: 1rem; }
 .eduedge-panel { padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--edge-radius-lg, 12px); background: var(--card-bg); }
 .eduedge-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .eduedge-panel-heading h2 { margin: 0.2rem 0 0; }
 .eduedge-panel-heading p { margin: 0.2rem 0 0; color: var(--text-muted); }
 .eduedge-student-list { display: grid; gap: 0.45rem; max-height: 65vh; overflow: auto; }
-.eduedge-student-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: transparent; text-align: left; }
-.eduedge-student-row.is-active { outline: 2px solid var(--primary); }
+.eduedge-student-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: transparent; color: var(--text-color, inherit); text-align: left; }
+.eduedge-student-row.is-active { outline: 2px solid var(--primary); outline-offset: 1px; }
+.eduedge-student-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .eduedge-student-row div { display: grid; gap: 0.2rem; }
 .eduedge-student-row span { color: var(--text-muted); }
 .eduedge-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.65rem; margin-bottom: 1rem; }
@@ -457,7 +473,7 @@ export default {
 .eduedge-result-preview-heading h3 { margin: 0.15rem 0 0; font-size: 1rem; }
 .eduedge-snapshot-note { color: var(--text-muted); font-size: 0.8rem; }
 .eduedge-result-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 10px; }
-.eduedge-result-table { width: 100%; min-width: 42rem; border-collapse: collapse; }
+.eduedge-result-table { width: 100%; min-width: 42rem; border-collapse: collapse; color: var(--text-color, inherit); }
 .eduedge-result-table th, .eduedge-result-table td { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; text-align: left; }
 .eduedge-result-table th { background: var(--control-bg); font-size: 0.78rem; }
 .eduedge-result-table tr:last-child td { border-bottom: 0; }
