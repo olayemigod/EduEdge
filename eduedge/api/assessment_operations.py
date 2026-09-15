@@ -59,6 +59,33 @@ def _resolve_branch(branch: str | None = None) -> str:
 	return resolved
 
 
+
+def _publication_scope_filters(
+	*,
+	school_branch: str,
+	student_group: str,
+	academic_year: str,
+	academic_term: str | None,
+	assessment_group: str | None,
+	result_profile: str | None,
+	result_mode: str,
+) -> dict:
+	filters = {
+		"school_branch": school_branch,
+		"student_group": student_group,
+		"academic_year": academic_year,
+		"academic_term": academic_term if academic_term else ["is", "not set"],
+		"result_mode": result_mode or "Terminal",
+	}
+	if result_profile:
+		filters["result_profile"] = result_profile
+		filters["assessment_group"] = ["is", "not set"]
+	else:
+		filters["result_profile"] = ["is", "not set"]
+		filters["assessment_group"] = assessment_group
+	return filters
+
+
 def _current_academic_defaults() -> tuple[str | None, str | None]:
 	return (
 		frappe.db.get_single_value("Education Settings", "current_academic_year"),
@@ -170,13 +197,15 @@ def get_assessment_context(
 	if student_group and academic_year and (assessment_group or result_profile):
 		publication_rows = frappe.get_all(
 			PUBLICATION_DOCTYPE,
-			filters={
-				"school_branch": resolved_branch,
-				"student_group": student_group,
-				"academic_year": academic_year,
-				"academic_term": academic_term or "",
-				"assessment_group": assessment_group or "",
-			},
+			filters=_publication_scope_filters(
+				school_branch=resolved_branch,
+				student_group=student_group,
+				academic_year=academic_year,
+				academic_term=academic_term,
+				assessment_group=assessment_group,
+				result_profile=result_profile,
+				result_mode=result_mode,
+			),
 			fields=[
 				"name",
 				"title",
@@ -263,13 +292,15 @@ def ensure_result_publication(
 		frappe.throw(_("Select a Result Profile or Assessment Group."), frappe.ValidationError)
 	if (result_mode or "Terminal") == "Annual":
 		academic_term = None
-	filters = {
-		"school_branch": branch,
-		"student_group": student_group,
-		"academic_year": academic_year,
-		"academic_term": academic_term or "",
-		"assessment_group": assessment_group,
-	}
+	filters = _publication_scope_filters(
+		school_branch=branch,
+		student_group=student_group,
+		academic_year=academic_year,
+		academic_term=academic_term,
+		assessment_group=assessment_group,
+		result_profile=result_profile,
+		result_mode=result_mode or "Terminal",
+	)
 	existing_rows = frappe.get_all(
 		PUBLICATION_DOCTYPE,
 		filters=filters,
@@ -303,7 +334,11 @@ def ensure_result_publication(
 	doc = frappe.get_doc(
 		{
 			"doctype": PUBLICATION_DOCTYPE,
-			**filters,
+			"school_branch": branch,
+			"student_group": student_group,
+			"academic_year": academic_year,
+			"academic_term": academic_term,
+			"assessment_group": assessment_group,
 			"result_profile": result_profile,
 			"result_mode": result_mode or "Terminal",
 			"publication_version": 1,
@@ -442,19 +477,30 @@ def create_result_publication_revision(publication: str) -> dict:
 	if source.status != "Published":
 		frappe.throw(_("Only a Published Result Publication can be revised."), frappe.ValidationError)
 
-	filters = {
-		"school_branch": source.school_branch,
-		"student_group": source.student_group,
-		"academic_year": source.academic_year,
-		"academic_term": source.academic_term or "",
-		"assessment_group": source.assessment_group or "",
-	}
+	filters = _publication_scope_filters(
+		school_branch=source.school_branch,
+		student_group=source.student_group,
+		academic_year=source.academic_year,
+		academic_term=source.academic_term,
+		assessment_group=source.assessment_group,
+		result_profile=source.result_profile,
+		result_mode=source.result_mode or "Terminal",
+	)
 	frappe.db.sql(
 		"select name from `tabEduEdge Result Publication` "
 		"where school_branch=%(school_branch)s and student_group=%(student_group)s "
 		"and academic_year=%(academic_year)s and coalesce(academic_term, '')=%(academic_term)s "
-		"and assessment_group=%(assessment_group)s for update",
-		filters,
+		"and coalesce(assessment_group, '')=%(assessment_group)s "
+		"and coalesce(result_profile, '')=%(result_profile)s and result_mode=%(result_mode)s for update",
+		{
+			"school_branch": source.school_branch,
+			"student_group": source.student_group,
+			"academic_year": source.academic_year,
+			"academic_term": source.academic_term or "",
+			"assessment_group": source.assessment_group or "",
+			"result_profile": source.result_profile or "",
+			"result_mode": source.result_mode or "Terminal",
+		},
 	)
 	existing = frappe.get_all(
 		PUBLICATION_DOCTYPE,
@@ -469,7 +515,11 @@ def create_result_publication_revision(publication: str) -> dict:
 	doc = frappe.get_doc(
 		{
 			"doctype": PUBLICATION_DOCTYPE,
-			**filters,
+			"school_branch": source.school_branch,
+			"student_group": source.student_group,
+			"academic_year": source.academic_year,
+			"academic_term": source.academic_term,
+			"assessment_group": source.assessment_group,
 			"result_profile": source.result_profile,
 			"result_mode": source.result_mode or "Terminal",
 			"publication_version": next_version,
