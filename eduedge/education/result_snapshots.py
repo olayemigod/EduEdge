@@ -208,6 +208,7 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 				"result_profile": publication_doc.result_profile,
 			},
 			"profile": config,
+			"grading_legend": _grading_legend(config),
 			"student": {
 				"name": student,
 				"student_name": identity.get("student_name"),
@@ -338,6 +339,29 @@ def _requires_ytd_metrics(config: dict) -> bool:
 		and str(metric.get("calculation_basis") or "").startswith("Year-to-Date")
 		for metric in config.get("metrics") or []
 	)
+
+
+def _grading_legend(config: dict) -> list[dict]:
+	grading_scale = config.get("grading_scale")
+	if not grading_scale:
+		return []
+	fields = ["grade_code", "threshold"]
+	if frappe.get_meta("Grading Scale Interval").has_field("eduedge_report_remark"):
+		fields.append("eduedge_report_remark")
+	rows = frappe.get_all(
+		"Grading Scale Interval",
+		filters={"parent": grading_scale},
+		fields=fields,
+		order_by="threshold desc, idx asc",
+	)
+	return [
+		{
+			"grade_code": row.grade_code,
+			"threshold": flt(row.threshold),
+			"remark": row.get("eduedge_report_remark") or "",
+		}
+		for row in rows
+	]
 
 
 def _course_name_map(composed_by_student: dict[str, dict]) -> dict[str, str]:
