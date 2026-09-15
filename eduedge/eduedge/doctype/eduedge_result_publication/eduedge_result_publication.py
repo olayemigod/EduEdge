@@ -69,7 +69,9 @@ class EduEdgeResultPublication(Document):
 			"student_group": self.student_group,
 			"academic_year": self.academic_year,
 			"academic_term": self.academic_term or "",
-			"assessment_group": self.assessment_group or "",
+			"assessment_group": self.assessment_group if self.assessment_group else ["is", "not set"],
+			"result_profile": self.result_profile if self.result_profile else ["is", "not set"],
+			"result_mode": self.result_mode or "Terminal",
 			"publication_version": self.publication_version or 1,
 		}
 		duplicate = frappe.db.exists("EduEdge Result Publication", filters)
