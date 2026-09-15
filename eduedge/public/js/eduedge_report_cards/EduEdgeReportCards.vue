@@ -179,6 +179,34 @@
 								</div>
 							</div>
 
+							<div v-if="history.issues.length || history.publications.length" class="eduedge-history-panel">
+								<div class="eduedge-result-preview-heading">
+									<div>
+										<p class="edge-eyebrow">Audit trail</p>
+										<h3>Publication and issue history</h3>
+									</div>
+									<span v-if="historyLoading" class="eduedge-snapshot-note">Loading…</span>
+								</div>
+								<div class="eduedge-history-grid">
+									<div>
+										<strong>Issued report cards</strong>
+										<div v-if="!history.issues.length" class="eduedge-history-empty">No official issue yet.</div>
+										<div v-for="row in history.issues" :key="row.name" class="eduedge-history-row">
+											<span>Issue v{{ row.issue_version }} · Publication v{{ row.publication_version || 1 }}</span>
+											<small>{{ formatWhen(row.issued_on) }} · {{ row.fingerprint }}</small>
+										</div>
+									</div>
+									<div>
+										<strong>Published result revisions</strong>
+										<div v-if="!history.publications.length" class="eduedge-history-empty">No publication history found.</div>
+										<div v-for="row in history.publications" :key="row.name" class="eduedge-history-row">
+											<span>Publication v{{ row.publication_version || 1 }}</span>
+											<small>{{ formatWhen(row.published_on) }} · {{ row.name }}</small>
+										</div>
+									</div>
+								</div>
+							</div>
+
 							<div v-if="!selectedStudent.review" class="eduedge-scope-note">Prepare report-card reviews before entering comments or progression recommendations.</div>
 							<template v-else>
 								<label class="eduedge-field"><span>Class Teacher Comment</span><textarea v-model="editor.class_teacher_comment" class="form-control" rows="4" :disabled="!isDraft"></textarea></label>
@@ -231,6 +259,8 @@ export default {
 			context: { user: {}, current_branch: null, allowed_branches: [], publications: [], publication: null, students: [], counts: {}, can_approve: false },
 			selectedStudent: null,
 			editor: { class_teacher_comment: "", principal_comment: "", progression_recommendation: "Pending Review" },
+			history: { issues: [], publications: [] },
+			historyLoading: false,
 		};
 	},
 	computed: {
@@ -248,6 +278,10 @@ export default {
 	methods: {
 		openRoute: openEduEdgeRoute,
 		formatPercent(value) { return `${Number(value || 0).toFixed(1)}%`; },
+		formatWhen(value) {
+			if (!value) return "-";
+			try { return frappe.datetime.str_to_user(value); } catch (error) { return value; }
+		},
 		terminalComponentScore(course, key) {
 			const component = (course?.display_components || []).find((row) => row.component_key === key);
 			if (!component) return "-";
@@ -311,11 +345,28 @@ export default {
 		selectStudent(row) {
 			this.selectedStudent = row;
 			this.filters.student = row?.student || "";
+			this.history = { issues: [], publications: [] };
 			this.editor = {
 				class_teacher_comment: row?.review?.class_teacher_comment || "",
 				principal_comment: row?.review?.principal_comment || "",
 				progression_recommendation: row?.review?.progression_recommendation || row?.suggested_progression || "Pending Review",
 			};
+			if (row?.student && this.filters.publication) this.loadHistory();
+		},
+		async loadHistory() {
+			if (!this.selectedStudent?.student || !this.filters.publication) return;
+			this.historyLoading = true;
+			try {
+				const response = await frappe.call("eduedge.api.report_cards.get_report_card_history", {
+					publication: this.filters.publication,
+					student: this.selectedStudent.student,
+				});
+				this.history = response.message || { issues: [], publications: [] };
+			} catch (error) {
+				this.history = { issues: [], publications: [] };
+			} finally {
+				this.historyLoading = false;
+			}
 		},
 		async callAction(method, args = {}) {
 			this.working = true;
@@ -411,10 +462,17 @@ export default {
 .eduedge-result-table tr:last-child td { border-bottom: 0; }
 .eduedge-result-table .is-subject { font-weight: 600; white-space: normal; min-width: 10rem; }
 .eduedge-result-table .is-number { text-align: right; font-variant-numeric: tabular-nums; }
+.eduedge-history-panel { margin: 1rem 0; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
+.eduedge-history-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.eduedge-history-grid > div { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--control-bg); }
+.eduedge-history-row { display: grid; gap: 0.12rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border-color); }
+.eduedge-history-row:last-child { border-bottom: 0; }
+.eduedge-history-row small, .eduedge-history-empty { color: var(--text-muted); overflow-wrap: anywhere; }
+.eduedge-history-empty { padding-top: 0.5rem; }
 .eduedge-field { margin-top: 0.85rem; }
 .eduedge-review-meta { display: flex; align-items: center; gap: 0.65rem; margin-top: 1rem; color: var(--text-muted); }
 .eduedge-review-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
 .eduedge-scope-note { padding: 0.85rem; border-radius: 10px; background: var(--control-bg); }
 @media (max-width: 900px) { .eduedge-report-grid { grid-template-columns: 1fr; } .eduedge-report-filters { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .eduedge-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .eduedge-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .eduedge-history-grid { grid-template-columns: 1fr; } }
 </style>
