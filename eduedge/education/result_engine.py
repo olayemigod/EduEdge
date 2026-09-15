@@ -201,6 +201,8 @@ def compose_terminal_subject_results(profile: str | dict, result_rows: list) -> 
 		for component in subject["components"]:
 			component["score"] = round(component["score"], precision)
 			component["maximum_score"] = round(component["maximum_score"], precision)
+			component["status"] = _component_status(component)
+			component["status_code"] = _component_status_code(component["status"])
 
 	sorted_subjects = sorted(subjects.values(), key=lambda row: row["course"])
 	return {
@@ -483,6 +485,32 @@ def get_grade_remark(grading_scale: str, percentage: float) -> str:
 		if flt(percentage) >= flt(interval.threshold):
 			return interval.eduedge_report_remark or ""
 	return ""
+
+
+def _component_status(component: dict) -> str:
+	states = [state for state in (component.get("states") or []) if state]
+	if component.get("assessment_count"):
+		if states and all(state == "Absent" for state in states):
+			return "Absent"
+		if any(state == "Scored" for state in states) and any(state == "Absent" for state in states):
+			return "Partially Absent"
+		return "Scored"
+	if component.get("excluded_count"):
+		unique_states = set(states)
+		if len(unique_states) == 1:
+			return next(iter(unique_states))
+		return "Excluded"
+	return "Missing"
+
+
+def _component_status_code(status: str) -> str:
+	return {
+		"Absent": "ABS",
+		"Exempt": "EX",
+		"Not Offered": "N/O",
+		"Missing": "-",
+		"Excluded": "-",
+	}.get(status, "")
 
 
 def _value(row, fieldname: str):
