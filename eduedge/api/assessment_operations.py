@@ -238,6 +238,11 @@ def get_assessment_context(
 			limit=1,
 		)
 		publication = publication_rows[0] if publication_rows else None
+		publication_profile_config = (
+			_readiness_profile_config(publication)
+			if publication and publication.get("result_profile")
+			else None
+		)
 		readiness = get_publication_readiness(
 			school_branch=resolved_branch,
 			student_group=student_group,
@@ -246,12 +251,11 @@ def get_assessment_context(
 			assessment_group=assessment_group,
 			result_profile=(publication or {}).get("result_profile") or result_profile,
 			result_mode=(publication or {}).get("result_mode") or result_mode,
-			profile_config_override=(
-				get_publication_result_profile_config(publication)
-				if publication and publication.get("result_profile")
-				else None
-			),
+			profile_config_override=publication_profile_config,
 		)
+		if publication:
+			publication.pop("result_profile_config_json", None)
+			publication.pop("result_profile_config_hash", None)
 
 	current_branch = get_current_school_branch()
 	full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
@@ -618,6 +622,17 @@ def _get_publication(name: str, *, for_update: bool = False):
 	return doc
 
 
+
+def _readiness_profile_config(publication) -> dict | None:
+	if not publication or not publication.get("result_profile"):
+		return None
+	if (
+		publication.get("status") in {"Draft", "Rejected"}
+		and not publication.get("supersedes_publication")
+	):
+		return get_result_profile_config(publication.get("result_profile"))
+	return get_publication_result_profile_config(publication)
+
 def _refresh_readiness(doc) -> dict:
 	readiness = get_publication_readiness(
 		school_branch=doc.school_branch,
@@ -628,7 +643,7 @@ def _refresh_readiness(doc) -> dict:
 		result_profile=doc.get("result_profile"),
 		result_mode=doc.get("result_mode") or "Terminal",
 		profile_config_override=(
-			get_publication_result_profile_config(doc)
+			_readiness_profile_config(doc)
 			if doc.get("result_profile")
 			else None
 		),
