@@ -1,5 +1,6 @@
 {% set profiled = publication.result_profile %}
 {% set mode = summary.result_mode or publication.result_mode or "Terminal" %}
+{% set issued = issue or issue_record %}
 <style>
 	{% if profiled and mode == "Annual" %}
 	@page { size: A4 landscape; margin: 8mm; }
@@ -101,9 +102,22 @@
 	.institution-footer { margin-top: 12px; padding-top: 7px; border-top: 1px solid #bbb; text-align: center; }
 	.footer-note { margin-top: 7px; font-size: 7.5pt; color: #555; }
 	.version-tag { font-weight: 700; }
+	.issue-banner {
+		margin: 0 0 10px;
+		padding: 7px 10px;
+		border: 1px solid #999;
+		text-align: center;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+	}
 </style>
 
 <div class="page-break">
+	{% if review.progression_status != "Approved" %}
+		<div class="issue-banner">{{ _("DRAFT / UNISSUED REPORT CARD") }}</div>
+	{% elif issued %}
+		<div class="issue-banner">{{ _("OFFICIAL ISSUED REPORT CARD") }} · {{ _("Issue") }} {{ issued.issue_version or 1 }}</div>
+	{% endif %}
 	{% if letterhead %}
 		<div>{{ letterhead }}</div>
 	{% else %}
@@ -372,7 +386,10 @@
 		{% if profiled %}
 			{{ _("This official report card is rendered from immutable Published Result Snapshot version") }}
 			{{ summary.publication_version or publication.publication_version or 1 }}.
-			{{ _("Corrections require a new publication version; this published version is not rewritten.") }}
+			{% if issued %}
+				{{ _("Issued report-card version") }} {{ issued.issue_version or 1 }}.
+			{% endif %}
+			{{ _("Corrections require a governed new version; prior issued versions remain unchanged.") }}
 		{% else %}
 			{{ _("This report card was generated from submitted Assessment Results under published result scope") }}
 			{{ publication.name }}. {{ _("Corrections require the standard cancellation and amendment workflow.") }}
