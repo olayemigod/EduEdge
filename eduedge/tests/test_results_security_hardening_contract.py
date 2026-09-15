@@ -32,6 +32,11 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("Full report-card access is limited to the effective Class Teacher", service)
 		self.assertNotIn("if write and not roles.intersection(OPERATIONAL_ROLES)", service)
 
+	def test_generic_student_read_does_not_grant_report_card_access(self):
+		service = (APP / "education" / "report_cards.py").read_text()
+		self.assertIn("You are not permitted to access governed report cards.", service)
+		self.assertNotIn('student_doc.check_permission("read")', service)
+
 	def test_subject_teacher_cannot_acquire_class_teacher_review_authority(self):
 		teaching = (APP / "education" / "teaching_assignments.py").read_text()
 		permissions = (APP / "education" / "permissions.py").read_text()
