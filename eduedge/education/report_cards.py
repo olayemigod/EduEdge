@@ -230,6 +230,16 @@ def get_publication_student_summaries(publication_name: str) -> list[dict]:
 		page_length=0,
 	)
 	review_by_student = {row.student: row for row in reviews}
+	legacy_issues = frappe.get_all(
+		"EduEdge Report Card Issue",
+		filters={"result_publication": publication.name, "student": ["in", student_names]},
+		fields=["name", "student", "issue_version", "issued_on", "payload_hash"],
+		order_by="student asc, issue_version desc, creation desc",
+		page_length=0,
+	)
+	issue_by_student = {}
+	for row in legacy_issues:
+		issue_by_student.setdefault(row.student, row)
 
 	results_by_student: dict[str, list] = defaultdict(list)
 	for row in result_rows:
@@ -251,6 +261,8 @@ def get_publication_student_summaries(publication_name: str) -> list[dict]:
 		else:
 			summary["review"] = None
 		summary["group_roll_number"] = student.group_roll_number
+		issue = issue_by_student.get(student.student)
+		summary["issue"] = dict(issue) if issue else None
 		summaries.append(summary)
 	return summaries
 
