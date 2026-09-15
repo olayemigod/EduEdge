@@ -54,7 +54,20 @@ def has_result_profile_permission(doc, user=None, permission_type=None) -> bool:
 		return False
 	if doc.get("school_branch"):
 		return doc.get("school_branch") in branches
-	return doc.get("institution") in _institutions_for_branches(branches)
+	institution = doc.get("institution")
+	if institution not in _institutions_for_branches(branches):
+		return False
+	if permission_type in {"create", "write", "delete", "share"}:
+		institution_branches = set(
+			frappe.get_all(
+				"EduEdge School Branch",
+				filters={"institution": institution, "enabled": 1},
+				pluck="name",
+				limit_page_length=0,
+			)
+		)
+		return bool(institution_branches) and institution_branches.issubset(branches)
+	return True
 
 
 def _allowed_branches(user: str) -> set[str]:
