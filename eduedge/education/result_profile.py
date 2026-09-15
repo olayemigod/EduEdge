@@ -41,6 +41,7 @@ ABSENCE_POLICIES = {"Block Publication", "Exclude from Denominator", "Treat as Z
 def validate_result_profile(doc) -> None:
 	assert_result_profile_mutable(doc)
 	_validate_scope(doc)
+	_validate_profile_name_scope(doc)
 	_validate_calculation_settings(doc)
 	_validate_components(doc)
 	_validate_sources(doc)
@@ -51,11 +52,6 @@ def validate_result_profile(doc) -> None:
 def assert_result_profile_mutable(doc) -> None:
 	if doc.is_new():
 		return
-	if not doc.has_value_changed("modified"):
-		# Document.validate runs for all saves; explicit field changes are checked below
-		# by looking for governed publications rather than trying to infer every child-row
-		# delta from the parent modified timestamp.
-		pass
 	locked = frappe.db.exists(
 		"EduEdge Result Publication",
 		{
@@ -198,6 +194,27 @@ def get_component_source_index(profile: str | dict) -> dict[str, str]:
 				)
 			index[leaf] = source["component_key"]
 	return index
+
+
+def _validate_profile_name_scope(doc) -> None:
+	profile_name = (doc.profile_name or "").strip()
+	if not profile_name:
+		frappe.throw(_("Result Profile Name is required."), frappe.ValidationError)
+	doc.profile_name = profile_name
+	filters = {
+		"name": ["!=", doc.name],
+		"profile_name": profile_name,
+		"institution": doc.institution,
+		"school_branch": doc.school_branch if doc.school_branch else ["is", "not set"],
+	}
+	duplicate = frappe.db.exists("EduEdge Result Profile", filters)
+	if duplicate:
+		frappe.throw(
+			_("Result Profile {0} already uses this name in the same Institution and Branch scope.").format(
+				duplicate
+			),
+			frappe.DuplicateEntryError,
+		)
 
 
 def _validate_scope(doc) -> None:
