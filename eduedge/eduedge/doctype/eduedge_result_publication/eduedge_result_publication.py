@@ -13,7 +13,7 @@ class EduEdgeResultPublication(Document):
 		if not self.publication_version:
 			self.publication_version = 1
 		if not self.title:
-			parts = [self.student_group, self.assessment_group, self.academic_term or self.academic_year]
+			parts = [self.student_group, self.assessment_group or self.result_profile, self.academic_term or self.academic_year]
 			base_title = " · ".join(part for part in parts if part)
 			self.title = f"{base_title} · v{self.publication_version}" if self.publication_version > 1 else base_title
 
@@ -69,7 +69,7 @@ class EduEdgeResultPublication(Document):
 			"student_group": self.student_group,
 			"academic_year": self.academic_year,
 			"academic_term": self.academic_term or "",
-			"assessment_group": self.assessment_group,
+			"assessment_group": self.assessment_group or "",
 			"publication_version": self.publication_version or 1,
 		}
 		duplicate = frappe.db.exists("EduEdge Result Publication", filters)
