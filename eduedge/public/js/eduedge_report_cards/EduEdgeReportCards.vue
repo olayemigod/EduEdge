@@ -45,7 +45,7 @@
 							<select v-model="filters.publication" class="form-control" @change="changePublication">
 								<option value="">Select published result scope</option>
 								<option v-for="publication in context.publications" :key="publication.name" :value="publication.name">
-									{{ publication.title || publication.name }}
+									{{ publication.title || publication.name }} · {{ publication.result_mode || 'Terminal' }} · v{{ publication.publication_version || 1 }}
 								</option>
 							</select>
 						</label>
@@ -101,7 +101,15 @@
 						<EdgeEmptyState v-if="!selectedStudent" title="Select a student" description="Choose a student to review performance, comments, progression, and print the report card." />
 						<template v-else>
 							<div class="eduedge-panel-heading">
-								<div><p class="edge-eyebrow">Student report card</p><h2>{{ selectedStudent.student_name }}</h2><p>{{ selectedStudent.student }}</p></div>
+								<div>
+									<p class="edge-eyebrow">{{ selectedStudent.result_mode || context.publication?.result_mode || 'Published result' }}</p>
+									<h2>{{ selectedStudent.student_name }}</h2>
+									<p>
+										{{ selectedStudent.student }}
+										<span v-if="selectedStudent.group_roll_number"> · Roll {{ selectedStudent.group_roll_number }}</span>
+										<span v-if="selectedStudent.publication_version"> · Version {{ selectedStudent.publication_version }}</span>
+									</p>
+								</div>
 								<button type="button" class="edge-button" @click="printReportCard">Print PDF</button>
 							</div>
 
@@ -110,6 +118,60 @@
 								<div><span>Grade</span><strong>{{ selectedStudent.overall_grade || '-' }}</strong></div>
 								<div><span>Attendance</span><strong>{{ formatPercent(selectedStudent.attendance_percent) }}</strong></div>
 								<div><span>Suggested</span><strong>{{ selectedStudent.suggested_progression || 'Pending Review' }}</strong></div>
+								<div v-if="selectedStudent.attendance_school_opened !== undefined"><span>School Opened</span><strong>{{ selectedStudent.attendance_school_opened || 0 }}</strong></div>
+								<div v-if="selectedStudent.overall_remark"><span>Overall Remark</span><strong>{{ selectedStudent.overall_remark }}</strong></div>
+							</div>
+
+							<div v-if="selectedStudent.courses?.length" class="eduedge-result-preview">
+								<div class="eduedge-result-preview-heading">
+									<div>
+										<p class="edge-eyebrow">Published academic snapshot</p>
+										<h3>{{ selectedStudent.result_mode === 'Annual' ? 'Annual / cumulative performance' : 'Terminal performance' }}</h3>
+									</div>
+									<span v-if="selectedStudent.result_profile" class="eduedge-snapshot-note">Immutable published version</span>
+								</div>
+								<div class="eduedge-result-table-wrap">
+									<table class="eduedge-result-table">
+										<thead>
+											<tr>
+												<th>Subject</th>
+												<template v-if="selectedStudent.result_mode === 'Annual'">
+													<th v-for="period in selectedStudent.periods || []" :key="period.academic_term">{{ period.display_label }}</th>
+												</template>
+												<template v-else>
+													<th v-for="component in selectedStudent.display_components || []" :key="component.component_key">{{ component.component_label }}</th>
+												</template>
+												<th>Total</th>
+												<th>%</th>
+												<th>Grade</th>
+												<th>Remark</th>
+												<th v-for="metric in selectedStudent.display_metrics || []" :key="`${metric.metric_key}-${metric.calculation_basis}-${metric.display_label}`">{{ metric.display_label }}</th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr v-for="course in selectedStudent.courses" :key="course.course">
+												<td class="is-subject">{{ course.course_name || course.course }}</td>
+												<template v-if="selectedStudent.result_mode === 'Annual'">
+													<td v-for="period in selectedStudent.periods || []" :key="period.academic_term" class="is-number">
+														{{ annualPeriodScore(course, period.academic_term) }}
+													</td>
+												</template>
+												<template v-else>
+													<td v-for="component in selectedStudent.display_components || []" :key="component.component_key" class="is-number">
+														{{ terminalComponentScore(course, component.component_key) }}
+													</td>
+												</template>
+												<td class="is-number">{{ resultTotal(course) }}</td>
+												<td class="is-number">{{ formatPercent(resultPercent(course)) }}</td>
+												<td>{{ course.grade || '-' }}</td>
+												<td>{{ course.remark || '-' }}</td>
+												<td v-for="(metric, index) in selectedStudent.display_metrics || []" :key="`${metric.display_label}-${index}`" class="is-number">
+													{{ course.metrics?.[index]?.display_value ?? '-' }}
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
 							</div>
 
 							<div v-if="!selectedStudent.review" class="eduedge-scope-note">Prepare report-card reviews before entering comments or progression recommendations.</div>
@@ -165,6 +227,23 @@ export default {
 	methods: {
 		openRoute: openEduEdgeRoute,
 		formatPercent(value) { return `${Number(value || 0).toFixed(1)}%`; },
+		terminalComponentScore(course, key) {
+			const component = (course?.display_components || []).find((row) => row.component_key === key);
+			if (!component || !Number(component.maximum_score || 0)) return "-";
+			return Number(component.score || 0).toFixed(2).replace(/\.00$/, "");
+		},
+		annualPeriodScore(course, term) {
+			const period = course?.period_map?.[term];
+			if (!period || !period.eligible) return "-";
+			return Number(period.total_score || 0).toFixed(2).replace(/\.00$/, "");
+		},
+		resultTotal(course) {
+			const value = this.selectedStudent?.result_mode === "Annual" ? course?.cumulative_score : course?.total_score;
+			return Number(value || 0).toFixed(2).replace(/\.00$/, "");
+		},
+		resultPercent(course) {
+			return this.selectedStudent?.result_mode === "Annual" ? course?.annual_percentage : course?.percentage;
+		},
 		reviewTone(status) {
 			if (status === "Approved") return "success";
 			if (status === "Recommended") return "warning";
@@ -281,10 +360,21 @@ export default {
 .eduedge-student-row.is-active { outline: 2px solid var(--primary); }
 .eduedge-student-row div { display: grid; gap: 0.2rem; }
 .eduedge-student-row span { color: var(--text-muted); }
-.eduedge-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem; margin-bottom: 1rem; }
+.eduedge-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.65rem; margin-bottom: 1rem; }
 .eduedge-summary-grid div { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; }
 .eduedge-summary-grid span { display: block; color: var(--text-muted); }
 .eduedge-summary-grid strong { display: block; margin-top: 0.2rem; font-size: 1.1rem; }
+.eduedge-result-preview { margin: 1rem 0; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
+.eduedge-result-preview-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.65rem; }
+.eduedge-result-preview-heading h3 { margin: 0.15rem 0 0; font-size: 1rem; }
+.eduedge-snapshot-note { color: var(--text-muted); font-size: 0.8rem; }
+.eduedge-result-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 10px; }
+.eduedge-result-table { width: 100%; min-width: 42rem; border-collapse: collapse; }
+.eduedge-result-table th, .eduedge-result-table td { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; text-align: left; }
+.eduedge-result-table th { background: var(--control-bg); font-size: 0.78rem; }
+.eduedge-result-table tr:last-child td { border-bottom: 0; }
+.eduedge-result-table .is-subject { font-weight: 600; white-space: normal; min-width: 10rem; }
+.eduedge-result-table .is-number { text-align: right; font-variant-numeric: tabular-nums; }
 .eduedge-field { margin-top: 0.85rem; }
 .eduedge-review-meta { display: flex; align-items: center; gap: 0.65rem; margin-top: 1rem; color: var(--text-muted); }
 .eduedge-review-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
