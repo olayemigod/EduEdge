@@ -21,30 +21,170 @@
   "result_profile",
   "payload_section",
   "payload_hash",
+  "verification_token",
   "issued_by",
   "issued_on",
   "payload_json"
  ],
  "fields": [
-  {"fieldname":"result_publication","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Result Publication","options":"EduEdge Result Publication","read_only":1,"reqd":1},
-  {"default":"1","fieldname":"publication_version","fieldtype":"Int","in_list_view":1,"label":"Publication Version","read_only":1,"reqd":1},
-  {"fieldname":"report_card_review","fieldtype":"Link","in_standard_filter":1,"label":"Report Card Review","options":"EduEdge Report Card Review","read_only":1,"reqd":1},
-  {"default":"1","fieldname":"issue_version","fieldtype":"Int","in_list_view":1,"label":"Issue Version","read_only":1,"reqd":1},
-  {"fieldname":"supersedes_issue","fieldtype":"Link","label":"Supersedes Issue","options":"EduEdge Report Card Issue","read_only":1},
-  {"fieldname":"student","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Student","options":"Student","read_only":1,"reqd":1},
-  {"fieldname":"student_name","fieldtype":"Data","in_list_view":1,"label":"Student Name","read_only":1},
-  {"fieldname":"school_branch","fieldtype":"Link","in_standard_filter":1,"label":"School Branch / Campus","options":"EduEdge School Branch","read_only":1,"reqd":1},
-  {"fieldname":"student_group","fieldtype":"Link","in_standard_filter":1,"label":"Student Group / Class","options":"Student Group","read_only":1,"reqd":1},
-  {"fieldname":"column_break_scope","fieldtype":"Column Break"},
-  {"fieldname":"academic_year","fieldtype":"Link","in_standard_filter":1,"label":"Academic Year","options":"Academic Year","read_only":1,"reqd":1},
-  {"fieldname":"academic_term","fieldtype":"Link","in_standard_filter":1,"label":"Academic Term","options":"Academic Term","read_only":1},
-  {"fieldname":"result_mode","fieldtype":"Select","label":"Result Mode","options":"Terminal\nAnnual","read_only":1,"reqd":1},
-  {"fieldname":"result_profile","fieldtype":"Link","label":"Result Profile","options":"EduEdge Result Profile","read_only":1},
-  {"fieldname":"payload_section","fieldtype":"Section Break","label":"Immutable Issued Report Card"},
-  {"fieldname":"payload_hash","fieldtype":"Data","in_list_view":1,"label":"Payload SHA-256","read_only":1,"reqd":1},
-  {"fieldname":"issued_by","fieldtype":"Link","label":"Issued By","options":"User","read_only":1},
-  {"fieldname":"issued_on","fieldtype":"Datetime","in_list_view":1,"label":"Issued On","read_only":1},
-  {"fieldname":"payload_json","fieldtype":"Long Text","label":"Issued Payload","read_only":1,"reqd":1}
+  {
+   "fieldname": "result_publication",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Result Publication",
+   "options": "EduEdge Result Publication",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "publication_version",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Publication Version",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "report_card_review",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Report Card Review",
+   "options": "EduEdge Report Card Review",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "issue_version",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Issue Version",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "supersedes_issue",
+   "fieldtype": "Link",
+   "label": "Supersedes Issue",
+   "options": "EduEdge Report Card Issue",
+   "read_only": 1
+  },
+  {
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Student",
+   "options": "Student",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "student_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Student Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "school_branch",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "School Branch / Campus",
+   "options": "EduEdge School Branch",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "student_group",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Student Group / Class",
+   "options": "Student Group",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_scope",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "academic_year",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Academic Year",
+   "options": "Academic Year",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "academic_term",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Academic Term",
+   "options": "Academic Term",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_mode",
+   "fieldtype": "Select",
+   "label": "Result Mode",
+   "options": "Terminal\nAnnual",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "result_profile",
+   "fieldtype": "Link",
+   "label": "Result Profile",
+   "options": "EduEdge Result Profile",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payload_section",
+   "fieldtype": "Section Break",
+   "label": "Immutable Issued Report Card"
+  },
+  {
+   "fieldname": "payload_hash",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Payload SHA-256",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "verification_token",
+   "fieldtype": "Data",
+   "label": "Verification Token",
+   "read_only": 1,
+   "hidden": 1,
+   "unique": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "issued_by",
+   "fieldtype": "Link",
+   "label": "Issued By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "issued_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Issued On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payload_json",
+   "fieldtype": "Long Text",
+   "label": "Issued Payload",
+   "read_only": 1,
+   "reqd": 1
+  }
  ],
  "links": [],
  "modified": "2026-09-15 00:00:00.000000",
@@ -53,13 +193,41 @@
  "name": "EduEdge Report Card Issue",
  "owner": "Administrator",
  "permissions": [
-  {"read":1,"report":1,"export":1,"print":1,"role":"System Manager"},
-  {"read":1,"report":1,"export":1,"print":1,"role":"EduEdge Administrator"},
-  {"read":1,"report":1,"export":1,"print":1,"role":"School Administrator"},
-  {"read":1,"report":1,"export":1,"print":1,"role":"Academic Administrator"},
-  {"read":1,"report":1,"role":"Teacher"}
+  {
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "EduEdge Administrator"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "School Administrator"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "role": "Academic Administrator"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Teacher"
+  }
  ],
- "sort_field":"issued_on",
- "sort_order":"DESC",
- "track_changes":0
+ "sort_field": "issued_on",
+ "sort_order": "DESC",
+ "track_changes": 0
 }
