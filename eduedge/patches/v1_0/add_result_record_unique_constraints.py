@@ -24,7 +24,8 @@ def execute() -> None:
 		if not frappe.db.exists("DocType", doctype):
 			continue
 		_assert_no_duplicates(doctype, fields)
-		frappe.db.add_unique(doctype, fields, constraint_name=constraint_name)
+		if not _constraint_exists(doctype, constraint_name):
+			frappe.db.add_unique(doctype, fields, constraint_name=constraint_name)
 
 
 def _assert_no_duplicates(doctype: str, fields: list[str]) -> None:
@@ -47,3 +48,12 @@ def _assert_no_duplicates(doctype: str, fields: list[str]) -> None:
 		).format(doctype, identity),
 		frappe.ValidationError,
 	)
+
+def _constraint_exists(doctype: str, constraint_name: str) -> bool:
+	table = f"tab{doctype}"
+	rows = frappe.db.sql(
+		f"show index from `{table}` where Key_name = %s",
+		(constraint_name,),
+		as_dict=True,
+	)
+	return bool(rows)
