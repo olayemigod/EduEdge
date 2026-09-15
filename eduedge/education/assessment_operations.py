@@ -14,6 +14,7 @@ from eduedge.education.instructor_assignment_capabilities import require_instruc
 from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.result_engine import (
+	build_component_plan_maximum_blockers,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 	get_result_periods,
@@ -283,6 +284,11 @@ def get_publication_readiness(
 		],
 		order_by="schedule_date asc, course asc",
 	)
+	if profile_config:
+		profile_blockers.extend(
+			build_component_plan_maximum_blockers(profile_config, plans)
+		)
+
 	students = frappe.get_all(
 		"Student Group Student",
 		filters={"parent": student_group, "active": 1},
