@@ -62,6 +62,13 @@ class TestResultProfileFreezeContract(unittest.TestCase):
 		self.assertIn('publication.pop("result_profile_config_json", None)', api)
 		self.assertIn('publication.pop("result_profile_config_hash", None)', api)
 
+	def test_published_profile_cannot_move_institution_or_branch_scope(self):
+		service = (APP / "education" / "result_profile.py").read_text()
+		self.assertIn("def _validate_historical_scope_identity", service)
+		self.assertIn('("institution", "school_branch")', service)
+		self.assertIn('{"result_profile": doc.name, "status": "Published"}', service)
+		self.assertIn("Create a new Result Profile for the new scope.", service)
+
 
 if __name__ == "__main__":
 	unittest.main()
