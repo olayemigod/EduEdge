@@ -64,5 +64,32 @@ def install_frappe_v16_test_dependency_compat() -> None:
 				return []
 			raise
 
+	original_try_create = generators._try_create
+
+	def guarded_try_create(record, reset=False, commit=False):
+		"""Let upstream test fixtures keep their native institution-neutral shape.
+
+		EduEdge intentionally requires Institution ownership on new academic masters,
+		but Frappe Education/ERPNext legacy test fixtures are created before EduEdge
+		tests run and do not know about EduEdge custom fields. Relax only the
+		"required on insert" part while Frappe's test-record generator is creating a
+		fixture. Direct EduEdge test inserts still exercise the production validator.
+		"""
+		from eduedge.education import academic_validation
+
+		original_validate = academic_validation.validate_master_institution
+
+		def fixture_validate_master_institution(doc, *, required=False):
+			if required and doc.meta.has_field("eduedge_institution") and not doc.get("eduedge_institution"):
+				return original_validate(doc, required=False)
+			return original_validate(doc, required=required)
+
+		academic_validation.validate_master_institution = fixture_validate_master_institution
+		try:
+			return original_try_create(record, reset=reset, commit=commit)
+		finally:
+			academic_validation.validate_master_institution = original_validate
+
 	generators.get_missing_records_doctypes = guarded_get_missing_records_doctypes
+	generators._try_create = guarded_try_create
 	generators._eduedge_optional_doctype_guard_installed = True
