@@ -21,7 +21,25 @@ from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.report_card_issues import create_report_card_issue, get_report_card_issue_history
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+from eduedge.services.institution_branding import get_report_identity
 
+
+
+def _attach_report_identity(payload: dict) -> dict:
+	if (
+		(payload.get("issue") or payload.get("issue_record"))
+		and payload.get("branding")
+		and payload.get("terminology")
+	):
+		return payload
+	branch_name = (payload.get("branch") or {}).get("name")
+	identity = get_report_identity(branch=branch_name)
+	payload["institution"] = identity["institution"]
+	payload["branding"] = identity["branding"]
+	payload["terminology"] = identity["terminology"]
+	if identity.get("address"):
+		payload["address"] = identity["address"]
+	return payload
 
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
@@ -349,13 +367,17 @@ def get_report_card_history(publication: str, student: str) -> dict:
 @frappe.whitelist()
 def get_report_card(publication: str, student: str) -> dict:
 	_require_login()
-	return get_student_report_card_payload(publication, student)
+	return _attach_report_identity(
+		get_student_report_card_payload(publication, student)
+	)
 
 
 @frappe.whitelist()
 def preview_report_card(publication: str, student: str) -> None:
 	_require_login()
-	payload = get_student_report_card_payload(publication, student)
+	payload = _attach_report_identity(
+		get_student_report_card_payload(publication, student)
+	)
 	assert_report_card_access(frappe._dict(payload["publication"]), student)
 	settings = frappe.get_single("EduEdge Settings")
 	letterhead = None
