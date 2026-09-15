@@ -1,0 +1,27 @@
+{% extends "templates/web.html" %}
+
+{% block title %}My Results{% endblock %}
+
+{% block head_include %}
+{{ super() }}
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="/assets/eduedge/css/eduedge_results_portal.css?v=1">
+{% endblock %}
+
+{% block page_content %}
+<div id="eduedge-results-portal" class="eduedge-results-portal">
+	<header class="results-hero">
+		<div>
+			<p class="results-eyebrow">EduEdge</p>
+			<h1>My Results</h1>
+			<p>Approved school results and official issued report cards for your verified account.</p>
+		</div>
+	</header>
+
+	<div id="results-status" class="results-status">Loading approved results…</div>
+	<div id="results-content" hidden></div>
+	<section id="results-detail" class="results-detail" hidden aria-live="polite"></section>
+</div>
+<script src="/assets/eduedge/js/eduedge_results_portal.js?v=1"></script>
+{% endblock %}
