@@ -1,16 +1,30 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
+from io import BytesIO
 from urllib.parse import urlencode
 
 import frappe
 from frappe import _
 from frappe.utils import get_url
-from frappe.utils.print_format_generator import get_qr_code
 
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
+
+
+def _get_qr_code_data_uri(value: str) -> str:
+	"""Generate an SVG QR data URI using Frappe v16's PyQRCode dependency."""
+	from pyqrcode import create as qrcreate
+
+	stream = BytesIO()
+	try:
+		qrcreate(value).svg(stream, scale=3, background="#ffffff", module_color="#111111")
+		encoded = base64.b64encode(stream.getvalue()).decode("ascii")
+		return f"data:image/svg+xml;base64,{encoded}"
+	finally:
+		stream.close()
 
 
 def build_issue_verification(issue_name: str, token: str | None) -> dict:
@@ -21,7 +35,7 @@ def build_issue_verification(issue_name: str, token: str | None) -> dict:
 	return {
 		"issue": issue_name,
 		"url": url,
-		"qr_data_uri": get_qr_code(url),
+		"qr_data_uri": _get_qr_code_data_uri(url),
 	}
 
 
