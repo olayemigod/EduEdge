@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_UP
 from statistics import mean
 
 import frappe
@@ -13,6 +14,14 @@ from eduedge.education.result_profile import get_component_source_index, get_res
 from eduedge.services.academic_calendar import get_enabled_institution_calendar
 
 SCORE_STATES = {"Scored", "Absent", "Exempt", "Not Offered"}
+
+
+def round_result_value(value, precision: int = 2) -> float:
+	"""Round academic result values using conventional decimal half-up rules."""
+	resolved_precision = max(0, min(cint(precision), 6))
+	quantizer = Decimal("1").scaleb(-resolved_precision)
+	return float(Decimal(str(flt(value))).quantize(quantizer, rounding=ROUND_HALF_UP))
+
 
 BASIS_VALUE_FIELDS = {
 	"Current Term Raw Score": "total_score",
@@ -180,11 +189,11 @@ def compose_terminal_subject_results(profile: str | dict, result_rows: list) -> 
 					}
 				)
 
-		subject["total_score"] = round(subject["total_score"], precision)
-		subject["maximum_score"] = round(subject["maximum_score"], precision)
+		subject["total_score"] = round_result_value(subject["total_score"], precision)
+		subject["maximum_score"] = round_result_value(subject["maximum_score"], precision)
 		subject["eligible"] = bool(subject["maximum_score"])
 		subject["percentage"] = (
-			round(subject["total_score"] / subject["maximum_score"] * 100, precision)
+			round_result_value(subject["total_score"] / subject["maximum_score"] * 100, precision)
 			if subject["maximum_score"]
 			else 0.0
 		)
@@ -199,8 +208,8 @@ def compose_terminal_subject_results(profile: str | dict, result_rows: list) -> 
 			key=lambda row: (row["sequence"], row["component_key"]),
 		)
 		for component in subject["components"]:
-			component["score"] = round(component["score"], precision)
-			component["maximum_score"] = round(component["maximum_score"], precision)
+			component["score"] = round_result_value(component["score"], precision)
+			component["maximum_score"] = round_result_value(component["maximum_score"], precision)
 			component["status"] = _component_status(component)
 			component["status_code"] = _component_status_code(component["status"])
 
@@ -303,10 +312,10 @@ def compose_cumulative_subject_results(
 					"minimum_eligible_periods": cint(config["minimum_eligible_periods"]),
 				}
 			)
-		subject["cumulative_score"] = round(subject["cumulative_score"], precision)
-		subject["cumulative_maximum_score"] = round(subject["cumulative_maximum_score"], precision)
+		subject["cumulative_score"] = round_result_value(subject["cumulative_score"], precision)
+		subject["cumulative_maximum_score"] = round_result_value(subject["cumulative_maximum_score"], precision)
 		subject["cumulative_percentage"] = (
-			round(
+			round_result_value(
 				subject["cumulative_score"] / subject["cumulative_maximum_score"] * 100,
 				precision,
 			)
@@ -343,7 +352,7 @@ def compose_cumulative_subject_results(
 		else:
 			frappe.throw(_("Unsupported annual aggregation method."), frappe.ValidationError)
 
-		subject["annual_percentage"] = round(annual_percentage, precision)
+		subject["annual_percentage"] = round_result_value(annual_percentage, precision)
 		subject["annual_average_percentage"] = subject["annual_percentage"]
 		subject["eligible"] = bool(eligible_periods)
 		grading_scale = config.get("grading_scale") or subject.get("grading_scale")
@@ -392,10 +401,10 @@ def calculate_overall_summary(
 	overall_remark = get_grade_remark(grading_scale, overall_percentage) if grading_scale and eligible else ""
 	return {
 		"subject_count": len(eligible),
-		"total_score": round(total_score, precision),
-		"maximum_score": round(maximum_score, precision),
-		"sum_subject_percentages": round(sum_subject_percentages, precision),
-		"overall_percentage": round(overall_percentage, precision),
+		"total_score": round_result_value(total_score, precision),
+		"maximum_score": round_result_value(maximum_score, precision),
+		"sum_subject_percentages": round_result_value(sum_subject_percentages, precision),
+		"overall_percentage": round_result_value(overall_percentage, precision),
 		"overall_grade": overall_grade,
 		"overall_remark": overall_remark,
 	}
@@ -465,11 +474,12 @@ def format_metric_value(value, display_as: str, decimal_places: int = 2):
 	if value is None:
 		return None
 	precision = max(0, min(cint(decimal_places), 6))
+	rounded = round_result_value(value, precision)
 	if display_as == "Percentage":
-		return f"{flt(value):.{precision}f}%"
+		return f"{rounded:.{precision}f}%"
 	if display_as == "Number":
-		return str(int(round(flt(value))))
-	return f"{flt(value):.{precision}f}"
+		return str(int(Decimal(str(flt(value))).quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+	return f"{rounded:.{precision}f}"
 
 
 def get_grade_remark(grading_scale: str, percentage: float) -> str:
