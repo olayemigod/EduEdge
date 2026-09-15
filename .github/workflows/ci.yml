@@ -30,6 +30,7 @@ jobs:
           node --check eduedge/public/js/education/student_attendance.js
           node --check eduedge/public/js/education/assessment_plan.js
           node --check eduedge/public/js/education/assessment_result.js
+          node --check eduedge/public/js/education/assessment_result_tool.js
           node --check eduedge/eduedge/doctype/eduedge_school_branch/eduedge_school_branch.js
           node --check eduedge/eduedge/doctype/eduedge_user_branch_access/eduedge_user_branch_access.js
           node --check eduedge/eduedge/doctype/eduedge_program_offering/eduedge_program_offering.js
@@ -84,6 +85,9 @@ jobs:
           node --check eduedge/public/js/eduedge_question_batch.bundle.js
           node --check eduedge/public/js/eduedge_assessment_operations.bundle.js
           node --check eduedge/public/js/eduedge_report_cards.bundle.js
+          node --check eduedge/public/js/eduedge_results_portal.js
+          node --check eduedge/public/js/eduedge_result_intelligence.bundle.js
+          node --check eduedge/public/js/eduedge_result_broadsheet.bundle.js
           node --check eduedge/public/js/eduedge_branch_governance.bundle.js
           node --check eduedge/eduedge/page/eduedge_home/eduedge_home.js
           node --check eduedge/eduedge/page/eduedge_setup_center/eduedge_setup_center.js
@@ -112,6 +116,8 @@ jobs:
           node --check eduedge/eduedge/page/eduedge_question_batch/eduedge_question_batch.js
           node --check eduedge/eduedge/page/eduedge_assessment_operations/eduedge_assessment_operations.js
           node --check eduedge/eduedge/page/eduedge_report_cards/eduedge_report_cards.js
+          node --check eduedge/eduedge/page/eduedge_result_intelligence/eduedge_result_intelligence.js
+          node --check eduedge/eduedge/page/eduedge_result_broadsheet/eduedge_result_broadsheet.js
           node --check eduedge/eduedge/page/eduedge_branch_governance/eduedge_branch_governance.js
           node --check eduedge/eduedge/page/eduedge_settings_center/eduedge_settings_center.js
           node --check eduedge/eduedge/page/eduedge_institution_structure/eduedge_institution_structure.js
