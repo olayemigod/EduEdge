@@ -42,6 +42,7 @@ ABSENCE_POLICIES = {"Block Publication", "Exclude from Denominator", "Treat as Z
 
 def validate_result_profile(doc) -> None:
 	assert_result_profile_mutable(doc)
+	_validate_historical_scope_identity(doc)
 	_validate_scope(doc)
 	_validate_profile_name_scope(doc)
 	_validate_calculation_settings(doc)
@@ -50,6 +51,25 @@ def validate_result_profile(doc) -> None:
 	_validate_metrics(doc)
 	_validate_default(doc)
 
+
+
+def _validate_historical_scope_identity(doc) -> None:
+	"""Keep the Institution/Branch identity stable after a profile has published history."""
+	if doc.is_new():
+		return
+	if not any(doc.has_value_changed(fieldname) for fieldname in ("institution", "school_branch")):
+		return
+	published = frappe.db.exists(
+		"EduEdge Result Publication",
+		{"result_profile": doc.name, "status": "Published"},
+	)
+	if published:
+		frappe.throw(
+			_(
+				"Result Profile Institution/Branch scope cannot change after published results exist. Create a new Result Profile for the new scope."
+			),
+			frappe.ValidationError,
+		)
 
 def assert_result_profile_mutable(doc) -> None:
 	if doc.is_new():
