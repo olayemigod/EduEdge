@@ -22,7 +22,8 @@
 					<label><span>Academic Year</span><select v-model="filters.academic_year" class="form-control" @change="load"><option value="">Select year</option><option v-for="value in report.options.academic_years" :key="value" :value="value">{{ value }}</option></select></label>
 					<label><span>Result Type</span><select v-model="filters.result_mode" class="form-control" @change="modeChanged"><option value="Terminal">Terminal</option><option value="Annual">Annual</option></select></label>
 					<label v-if="filters.result_mode !== 'Annual'"><span>Term / Semester</span><select v-model="filters.academic_term" class="form-control" @change="load"><option value="">Select term</option><option v-for="value in report.options.academic_terms" :key="value" :value="value">{{ value }}</option></select></label>
-					<label><span>Class / Group</span><select v-model="filters.student_group" class="form-control" @change="load"><option value="">Select class</option><option v-for="value in report.options.student_groups" :key="value" :value="value">{{ value }}</option></select></label>
+					<label><span>Class / Group</span><select v-model="filters.student_group" class="form-control" @change="scopeChanged"><option value="">Select class</option><option v-for="value in report.options.student_groups" :key="value" :value="value">{{ value }}</option></select></label>
+					<label v-if="report.publication_choices.length > 1"><span>Published Result</span><select v-model="filters.publication" class="form-control" @change="load"><option value="">Select exact publication</option><option v-for="row in report.publication_choices" :key="row.name" :value="row.name">{{ publicationLabel(row) }}</option></select></label>
 				</div>
 				<template #actions>
 					<button type="button" class="edge-button" :disabled="loading" @click="load">Refresh</button>
@@ -86,6 +87,7 @@ const blankReport = () => ({
 	allowed_branches: [],
 	options: { academic_years: [], academic_terms: [], student_groups: [], result_modes: [] },
 	publication: null,
+	publication_choices: [],
 	subjects: [],
 	rows: [],
 	student_count: 0,
@@ -99,7 +101,7 @@ export default {
 		return {
 			menuItems: EDUEDGE_MENU_ITEMS,
 			report: blankReport(),
-			filters: { school_branch: "", academic_year: "", academic_term: "", student_group: "", result_mode: "Terminal" },
+			filters: { school_branch: "", academic_year: "", academic_term: "", student_group: "", result_mode: "Terminal", publication: "" },
 			loading: true,
 			loaded: false,
 			error: "",
@@ -117,6 +119,10 @@ export default {
 	methods: {
 		openRoute: openEduEdgeRoute,
 		score(value) { const number = Number(value); return value === null || value === undefined || !Number.isFinite(number) ? "-" : number.toFixed(2); },
+		publicationLabel(row) {
+			const profile = row.result_profile || row.assessment_group || "Published Result";
+			return `${profile} · v${row.publication_version || 1}`;
+		},
 		async load() {
 			this.loading = true; this.error = "";
 			try {
@@ -126,6 +132,7 @@ export default {
 					academic_term: this.filters.result_mode === "Annual" ? undefined : (this.filters.academic_term || undefined),
 					student_group: this.filters.student_group || undefined,
 					result_mode: this.filters.result_mode || "Terminal",
+					publication: this.filters.publication || undefined,
 				});
 				this.report = response.message || blankReport();
 				this.filters = { ...this.filters, ...(this.report.filters || {}) };
@@ -135,11 +142,16 @@ export default {
 			} finally { this.loading = false; }
 		},
 		branchChanged() {
-			this.filters.academic_year = ""; this.filters.academic_term = ""; this.filters.student_group = "";
+			this.filters.academic_year = ""; this.filters.academic_term = ""; this.filters.student_group = ""; this.filters.publication = "";
 			this.load();
 		},
 		modeChanged() {
 			if (this.filters.result_mode === "Annual") this.filters.academic_term = "";
+			this.filters.publication = "";
+			this.load();
+		},
+		scopeChanged() {
+			this.filters.publication = "";
 			this.load();
 		},
 	},
