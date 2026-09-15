@@ -210,13 +210,18 @@ def get_publication_readiness(
 	academic_term: str | None = None,
 	result_profile: str | None = None,
 	result_mode: str = "Terminal",
+	profile_config_override: dict | None = None,
 ) -> dict:
 	assert_branch_access(school_branch)
 	group = _get_student_group(student_group)
 	if group.get(BRANCH_FIELD) != school_branch:
 		frappe.throw(_("Student Group belongs to another branch."), frappe.PermissionError)
 
-	profile_config = get_result_profile_config(result_profile) if result_profile else None
+	profile_config = (
+		profile_config_override
+		if profile_config_override is not None
+		else (get_result_profile_config(result_profile) if result_profile else None)
+	)
 	profile_blockers: list[dict] = []
 	assessment_groups = None
 	periods: list[dict] = []
