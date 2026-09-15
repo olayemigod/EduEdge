@@ -31,7 +31,7 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 	def test_public_verification_page_is_noindex_and_privacy_safe(self):
 		page = (APP / "www" / "eduedge-result-verify.html").read_text()
 		self.assertIn("noindex,nofollow,noarchive", page)
-		self.assertIn("does not expose marks", page)
+		self.assertIn("Marks, comments and attendance are not exposed", page)
 		self.assertNotIn("Continuous Assessment", page)
 		self.assertNotIn("Principal Comment", page)
 
