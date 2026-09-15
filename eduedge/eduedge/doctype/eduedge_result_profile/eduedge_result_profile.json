@@ -88,11 +88,12 @@
    "label": "Grading and Annual Aggregation"
   },
   {
-   "description": "Optional profile-level grading scale. When blank, the result engine may fall back to the submitted Assessment Result grading scale where unambiguous.",
+   "description": "Required official grading scale used for subject grades, overall grade and the immutable report-card grading legend.",
    "fieldname": "grading_scale",
    "fieldtype": "Link",
    "label": "Grading Scale",
-   "options": "Grading Scale"
+   "options": "Grading Scale",
+   "reqd": 1
   },
   {
    "default": "2",
