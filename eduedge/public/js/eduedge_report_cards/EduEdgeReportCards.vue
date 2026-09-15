@@ -245,7 +245,9 @@ export default {
 		formatPercent(value) { return `${Number(value || 0).toFixed(1)}%`; },
 		terminalComponentScore(course, key) {
 			const component = (course?.display_components || []).find((row) => row.component_key === key);
-			if (!component || !Number(component.maximum_score || 0)) return "-";
+			if (!component) return "-";
+			if (component.display_value !== undefined && component.display_value !== null) return component.display_value;
+			if (!Number(component.maximum_score || 0)) return "-";
 			return Number(component.score || 0).toFixed(2).replace(/\.00$/, "");
 		},
 		annualPeriodScore(course, term) {
