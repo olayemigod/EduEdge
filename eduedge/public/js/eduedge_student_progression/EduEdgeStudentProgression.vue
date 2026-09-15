@@ -226,6 +226,7 @@ export default {
 			preparing: false, finalizing: false, destinationLoading: false, data: blankData(), destination: blankDestination(),
 			filters: { branch: "", source_academic_year: "", program: "", student_group: "", search: "", start: 0 },
 			selected: [], planner: blankPlanner(), preview: null, prepareResult: null, finalizeResult: null,
+			resultHandoff: null,
 		};
 	},
 	computed: {
@@ -249,7 +250,33 @@ export default {
 		this.filters.source_academic_year = params.get("academic_year") || "";
 		this.filters.program = params.get("program") || "";
 		this.filters.student_group = params.get("student_group") || "";
+		const handoffStudent = params.get("student") || "";
+		const handoffOutcome = params.get("outcome") || "";
+		const handoffPublication = params.get("result_publication") || "";
+		if (handoffStudent) this.filters.search = handoffStudent;
 		await this.load(true);
+		if (handoffStudent) {
+			const row = (this.data.rows || []).find((item) => item.student === handoffStudent);
+			if (row) {
+				this.selected = [row.name];
+				if (["Promote", "Repeat", "Transfer", "Graduate"].includes(handoffOutcome)) {
+					this.planner.outcome = handoffOutcome;
+				}
+				if (handoffPublication) {
+					this.planner.reason = `Approved annual result publication ${handoffPublication}.`;
+				}
+				this.resultHandoff = {
+					student: handoffStudent,
+					source_enrollment: row.name,
+					outcome: this.planner.outcome,
+					result_publication: handoffPublication,
+				};
+				frappe.show_alert({
+					message: __("Approved annual result loaded for progression review"),
+					indicator: "blue",
+				});
+			}
+		}
 	},
 	methods: {
 		openRoute: openEduEdgeRoute,
