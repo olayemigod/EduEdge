@@ -30,6 +30,7 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 		self.assertIn("Review Reopened", service)
 		self.assertNotIn('"overall_percentage"', service)
 		self.assertNotIn('"total_score"', service)
+		self.assertNotIn('"student_id"', service)
 
 	def test_existing_issued_reports_receive_verification_token_without_hash_mutation(self):
 		patch = (APP / "patches" / "v1_0" / "backfill_report_card_verification_tokens.py").read_text()
@@ -41,6 +42,7 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 	def test_public_verification_page_is_noindex_and_privacy_safe(self):
 		page = (APP / "www" / "eduedge-result-verify.html").read_text()
 		self.assertIn("noindex,nofollow,noarchive", page)
+		self.assertIn('name="referrer" content="no-referrer"', page)
 		self.assertIn("Marks, comments and attendance are not exposed", page)
 		self.assertNotIn("Continuous Assessment", page)
 		self.assertNotIn("Principal Comment", page)
