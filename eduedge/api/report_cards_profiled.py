@@ -14,6 +14,9 @@ def _require_login() -> None:
 
 
 def _attach_institution_identity(payload: dict) -> dict:
+	if payload.get("issue") and payload.get("branding"):
+		# Issued Report Cards freeze the Institution identity used at approval time.
+		return payload
 	branch = payload.get("branch") or {}
 	branch_name = branch.get("name")
 	institution_name = None
