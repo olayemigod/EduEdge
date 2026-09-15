@@ -37,6 +37,9 @@
   "show_progression",
   "show_grading_legend",
   "show_next_period_date",
+  "show_report_signatory",
+  "show_official_stamp",
+  "show_verification_qr",
   "notes_section",
   "notes"
  ],
@@ -247,6 +250,25 @@
    "fieldname": "show_next_period_date",
    "fieldtype": "Check",
    "label": "Show Next Academic Period Date"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_report_signatory",
+   "fieldtype": "Check",
+   "label": "Show Report Signatory"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_official_stamp",
+   "fieldtype": "Check",
+   "label": "Show Official Stamp / Seal"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_verification_qr",
+   "fieldtype": "Check",
+   "label": "Show Verification QR Code",
+   "description": "Issued report cards can show a privacy-safe QR code that verifies authenticity without exposing marks publicly."
   },
   {
    "fieldname": "notes_section",
