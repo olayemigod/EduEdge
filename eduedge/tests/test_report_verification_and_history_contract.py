@@ -16,7 +16,8 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 		self.assertTrue(fields["verification_token"].get("read_only"))
 		self.assertTrue(fields["verification_token"].get("unique"))
 		issues = (APP / "education" / "report_card_issues.py").read_text()
-		self.assertIn('"verification_token": frappe.generate_hash(length=32)', issues)
+		self.assertIn("def generate_verification_token()", issues)
+		self.assertIn('"verification_token": generate_verification_token()', issues)
 
 	def test_public_verification_is_token_and_hash_checked_without_marks(self):
 		service = (APP / "education" / "result_verification.py").read_text()
@@ -29,6 +30,13 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 		self.assertIn("Review Reopened", service)
 		self.assertNotIn('"overall_percentage"', service)
 		self.assertNotIn('"total_score"', service)
+
+	def test_existing_issued_reports_receive_verification_token_without_hash_mutation(self):
+		patch = (APP / "patches" / "v1_0" / "backfill_report_card_verification_tokens.py").read_text()
+		self.assertIn("generate_verification_token", patch)
+		self.assertIn('"verification_token"', patch)
+		self.assertNotIn("payload_json", patch)
+		self.assertNotIn("payload_hash", patch)
 
 	def test_public_verification_page_is_noindex_and_privacy_safe(self):
 		page = (APP / "www" / "eduedge-result-verify.html").read_text()
