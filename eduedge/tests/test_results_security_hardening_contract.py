@@ -64,6 +64,8 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn('"EduEdge Report Card Issue"', patch)
 		self.assertIn('["result_publication", "student", "issue_version"]', patch)
 		self.assertIn("frappe.db.add_unique", patch)
+		self.assertIn("def _constraint_exists", patch)
+		self.assertIn("if not _constraint_exists(doctype, constraint_name)", patch)
 		self.assertIn("Resolve the duplicate records before migration.", patch)
 
 
