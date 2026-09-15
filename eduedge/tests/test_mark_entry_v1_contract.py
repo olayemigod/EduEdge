@@ -51,6 +51,12 @@ class TestMarkEntryV1Contract(unittest.TestCase):
 		self.assertIn("clearBrowserRow(saved.student)", js)
 		self.assertIn("localStorage.removeItem", js)
 
+	def test_partial_rows_wait_for_completion_instead_of_failing_autosave(self):
+		js = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text()
+		self.assertIn("const rowReadyForAutosave", js)
+		self.assertIn("Complete row to autosave", js)
+		self.assertIn("readyRows", js)
+
 	def test_mark_entry_does_not_auto_submit(self):
 		js = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text()
 		self.assertNotIn("submit_mark_entry_batch", js)
