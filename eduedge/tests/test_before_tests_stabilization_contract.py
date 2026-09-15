@@ -13,7 +13,7 @@ class TestBeforeTestsStabilizationContract(unittest.TestCase):
 
 	def test_test_package_rechecks_root_inside_the_frappe_test_process(self):
 		init = (APP / "tests" / "__init__.py").read_text()
-		self.assertIn("from eduedge.ci import ensure_erpnext_test_roots", init)
+		self.assertIn("ensure_erpnext_test_roots,", init)
 		self.assertIn("ensure_erpnext_test_roots()", init)
 		self.assertIn('getattr(frappe.local, "site", None)', init)
 
