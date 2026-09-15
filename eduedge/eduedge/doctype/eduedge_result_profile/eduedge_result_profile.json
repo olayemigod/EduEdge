@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_import": 1,
- "autoname": "field:profile_name",
+ "autoname": "EDU-RPF-.YYYY.-.#####",
  "creation": "2026-09-15 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -32,45 +32,236 @@
   "notes"
  ],
  "fields": [
-  {"fieldname":"identity_section","fieldtype":"Section Break","label":"Result Profile Identity"},
-  {"fieldname":"profile_name","fieldtype":"Data","in_list_view":1,"in_standard_filter":1,"label":"Profile Name","reqd":1,"unique":1},
-  {"fieldname":"institution","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"Institution","options":"EduEdge Institution","reqd":1},
-  {"description":"Optional. Leave blank for an Institution-wide profile; select a Branch / Campus only when the result policy differs by Branch.","fieldname":"school_branch","fieldtype":"Link","in_list_view":1,"in_standard_filter":1,"label":"School Branch / Campus","options":"EduEdge School Branch"},
-  {"fieldname":"column_break_identity","fieldtype":"Column Break"},
-  {"default":"1","fieldname":"is_active","fieldtype":"Check","in_list_view":1,"label":"Active"},
-  {"default":"0","description":"Only one active default profile is allowed for the same Institution and Branch scope.","fieldname":"is_default","fieldtype":"Check","in_list_view":1,"label":"Default Result Profile"},
-  {"fieldname":"grading_section","fieldtype":"Section Break","label":"Grading and Annual Aggregation"},
-  {"description":"Optional profile-level grading scale. When blank, the result engine may fall back to the submitted Assessment Result grading scale where unambiguous.","fieldname":"grading_scale","fieldtype":"Link","label":"Grading Scale","options":"Grading Scale"},
-  {"default":"2","description":"Decimal places used for calculated result values before presentation.","fieldname":"score_precision","fieldtype":"Int","label":"Score Precision","reqd":1},
-  {"default":"Average of Subject Percentages","description":"Controls the overall result percentage after individual subject results have been calculated.","fieldname":"overall_calculation_method","fieldtype":"Select","label":"Overall Result Calculation","options":"Average of Subject Percentages\nAggregate Score Percentage","reqd":1},
-  {"fieldname":"column_break_grading","fieldtype":"Column Break"},
-  {"default":"Equal Average of Eligible Terms","fieldname":"annual_aggregation_method","fieldtype":"Select","label":"Annual Aggregation Method","options":"Equal Average of Eligible Terms\nWeighted Average\nRaw Cumulative","reqd":1},
-  {"default":"1","description":"Minimum number of eligible Academic Terms / periods required for each subject before an annual result can be produced.","fieldname":"minimum_eligible_periods","fieldtype":"Int","label":"Minimum Eligible Periods","reqd":1},
-  {"default":"Block Publication","fieldname":"missing_result_policy","fieldtype":"Select","label":"Missing Result Policy","options":"Block Publication\nExclude from Denominator","reqd":1},
-  {"default":"Block Publication","fieldname":"absence_policy","fieldtype":"Select","label":"Absence Policy","options":"Block Publication\nExclude from Denominator\nTreat as Zero","reqd":1},
-  {"fieldname":"component_section","fieldtype":"Section Break","label":"Report Components"},
-  {"description":"Defines report-level components such as Continuous Assessment, Examination, Practical, Project, or any Institution-specific component.","fieldname":"components","fieldtype":"Table","label":"Result Components","options":"EduEdge Result Component","reqd":1},
-  {"fieldname":"component_source_section","fieldtype":"Section Break","label":"Assessment Sources"},
-  {"description":"Maps native Frappe Education Assessment Groups into configured report components. Assessment Groups may be parent groups; EduEdge resolves their leaf descendants.","fieldname":"component_sources","fieldtype":"Table","label":"Component Sources","options":"EduEdge Result Component Source","reqd":1},
-  {"fieldname":"statistics_section","fieldtype":"Section Break","label":"Configurable Report Statistics"},
-  {"description":"Choose which calculated statistics are shown, their labels, calculation basis and representation. CHS/CLS/CAS are presets, not hardcoded report columns.","fieldname":"metrics","fieldtype":"Table","label":"Report Metrics","options":"EduEdge Result Metric"},
-  {"fieldname":"notes_section","fieldtype":"Section Break","label":"Notes","collapsible":1},
-  {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
+  {
+   "fieldname": "identity_section",
+   "fieldtype": "Section Break",
+   "label": "Result Profile Identity"
+  },
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Profile Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "institution",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Institution",
+   "options": "EduEdge Institution",
+   "reqd": 1
+  },
+  {
+   "description": "Optional. Leave blank for an Institution-wide profile; select a Branch / Campus only when the result policy differs by Branch.",
+   "fieldname": "school_branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "School Branch / Campus",
+   "options": "EduEdge School Branch"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Active"
+  },
+  {
+   "default": "0",
+   "description": "Only one active default profile is allowed for the same Institution and Branch scope.",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Default Result Profile"
+  },
+  {
+   "fieldname": "grading_section",
+   "fieldtype": "Section Break",
+   "label": "Grading and Annual Aggregation"
+  },
+  {
+   "description": "Optional profile-level grading scale. When blank, the result engine may fall back to the submitted Assessment Result grading scale where unambiguous.",
+   "fieldname": "grading_scale",
+   "fieldtype": "Link",
+   "label": "Grading Scale",
+   "options": "Grading Scale"
+  },
+  {
+   "default": "2",
+   "description": "Decimal places used for calculated result values before presentation.",
+   "fieldname": "score_precision",
+   "fieldtype": "Int",
+   "label": "Score Precision",
+   "reqd": 1
+  },
+  {
+   "default": "Average of Subject Percentages",
+   "description": "Controls the overall result percentage after individual subject results have been calculated.",
+   "fieldname": "overall_calculation_method",
+   "fieldtype": "Select",
+   "label": "Overall Result Calculation",
+   "options": "Average of Subject Percentages\nAggregate Score Percentage",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_grading",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Equal Average of Eligible Terms",
+   "fieldname": "annual_aggregation_method",
+   "fieldtype": "Select",
+   "label": "Annual Aggregation Method",
+   "options": "Equal Average of Eligible Terms\nWeighted Average\nRaw Cumulative",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "description": "Minimum number of eligible Academic Terms / periods required for each subject before an annual result can be produced.",
+   "fieldname": "minimum_eligible_periods",
+   "fieldtype": "Int",
+   "label": "Minimum Eligible Periods",
+   "reqd": 1
+  },
+  {
+   "default": "Block Publication",
+   "fieldname": "missing_result_policy",
+   "fieldtype": "Select",
+   "label": "Missing Result Policy",
+   "options": "Block Publication\nExclude from Denominator",
+   "reqd": 1
+  },
+  {
+   "default": "Block Publication",
+   "fieldname": "absence_policy",
+   "fieldtype": "Select",
+   "label": "Absence Policy",
+   "options": "Block Publication\nExclude from Denominator\nTreat as Zero",
+   "reqd": 1
+  },
+  {
+   "fieldname": "component_section",
+   "fieldtype": "Section Break",
+   "label": "Report Components"
+  },
+  {
+   "description": "Defines report-level components such as Continuous Assessment, Examination, Practical, Project, or any Institution-specific component.",
+   "fieldname": "components",
+   "fieldtype": "Table",
+   "label": "Result Components",
+   "options": "EduEdge Result Component",
+   "reqd": 1
+  },
+  {
+   "fieldname": "component_source_section",
+   "fieldtype": "Section Break",
+   "label": "Assessment Sources"
+  },
+  {
+   "description": "Maps native Frappe Education Assessment Groups into configured report components. Assessment Groups may be parent groups; EduEdge resolves their leaf descendants.",
+   "fieldname": "component_sources",
+   "fieldtype": "Table",
+   "label": "Component Sources",
+   "options": "EduEdge Result Component Source",
+   "reqd": 1
+  },
+  {
+   "fieldname": "statistics_section",
+   "fieldtype": "Section Break",
+   "label": "Configurable Report Statistics"
+  },
+  {
+   "description": "Choose which calculated statistics are shown, their labels, calculation basis and representation. CHS/CLS/CAS are presets, not hardcoded report columns.",
+   "fieldname": "metrics",
+   "fieldtype": "Table",
+   "label": "Report Metrics",
+   "options": "EduEdge Result Metric"
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
  ],
  "links": [],
  "modified": "2026-09-15 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "EduEdge",
  "name": "EduEdge Result Profile",
- "naming_rule": "By fieldname",
+ "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
-  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
-  {"create":1,"delete":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"EduEdge Administrator","share":1,"write":1},
-  {"create":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"School Administrator","write":1},
-  {"create":1,"email":1,"export":1,"import":1,"print":1,"read":1,"report":1,"role":"Academic Administrator","write":1},
-  {"read":1,"report":1,"role":"Academics User"},
-  {"read":1,"role":"Teacher"}
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "EduEdge Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "School Administrator",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Academic Administrator",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Academics User"
+  },
+  {
+   "read": 1,
+   "role": "Teacher"
+  }
  ],
  "search_fields": "profile_name,institution,school_branch",
  "sort_field": "modified",
