@@ -171,6 +171,11 @@ def validate_publication_scope(doc) -> None:
 			_("Result Publication Academic Term must match the Student Group."),
 			frappe.ValidationError,
 		)
+	if not doc.get("result_profile") and not doc.assessment_group:
+		frappe.throw(
+			_("Select either a Result Profile or an Assessment Group for result publication."),
+			frappe.ValidationError,
+		)
 	if doc.academic_term:
 		actual_year = frappe.db.get_value("Academic Term", doc.academic_term, "academic_year")
 		if actual_year != doc.academic_year:
@@ -196,7 +201,7 @@ def get_publication_readiness(
 	school_branch: str,
 	student_group: str,
 	academic_year: str,
-	assessment_group: str,
+	assessment_group: str | None = None,
 	academic_term: str | None = None,
 	result_profile: str | None = None,
 	result_mode: str = "Terminal",
@@ -248,7 +253,11 @@ def get_publication_readiness(
 	if profile_config:
 		plan_filters["assessment_group"] = ["in", assessment_groups or ["__none__"]]
 	else:
-		plan_filters["assessment_group"] = assessment_group
+		if not assessment_group:
+			profile_blockers.append(
+				{"reason": "Select an Assessment Group or Result Profile.", "code": "RESULT_SCOPE_REQUIRED"}
+			)
+		plan_filters["assessment_group"] = assessment_group or "__none__"
 	if result_mode == "Annual":
 		plan_filters["academic_term"] = [
 			"in",
