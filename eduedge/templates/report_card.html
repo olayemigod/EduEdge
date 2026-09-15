@@ -1,6 +1,7 @@
 {% set profiled = publication.result_profile %}
 {% set mode = summary.result_mode or publication.result_mode or "Terminal" %}
 {% set issued = issue or issue_record %}
+{% set presentation = summary.profile.presentation if summary.profile and summary.profile.presentation else {} %}
 <style>
 	{% if profiled and mode == "Annual" %}
 	@page { size: A4 landscape; margin: 8mm; }
@@ -139,9 +140,9 @@
 			<div class="report-title">
 				<h1>
 					{% if profiled and mode == "Annual" %}
-						{{ _("Annual Result") }}
+						{{ presentation.annual_report_title or _("Annual Result") }}
 					{% elif profiled %}
-						{{ _("Terminal Report") }}
+						{{ presentation.terminal_report_title or _("Terminal Report") }}
 					{% else %}
 						{{ _("Student Report Card") }}
 					{% endif %}
@@ -153,10 +154,12 @@
 	{% endif %}
 
 	<div class="student-strip">
-		{% if student.image %}
-			<img class="student-photo" src="{{ student.image }}">
-		{% else %}
-			<div class="student-photo-placeholder">{{ _("Student Photo") }}</div>
+		{% if not profiled or presentation.show_student_photo != false %}
+			{% if student.image %}
+				<img class="student-photo" src="{{ student.image }}">
+			{% else %}
+				<div class="student-photo-placeholder">{{ _("Student Photo") }}</div>
+			{% endif %}
 		{% endif %}
 		<div class="meta-grid">
 			<div class="meta-row"><strong>{{ _("Student ID") }}</strong><span>{{ student.name }}</span></div>
@@ -328,6 +331,7 @@
 		</div>
 	{% endif %}
 
+	{% if not profiled or presentation.show_attendance != false %}
 	<table>
 		<thead>
 			<tr>
@@ -350,24 +354,29 @@
 			</tr>
 		</tbody>
 	</table>
+	{% endif %}
 
+	{% if not profiled or presentation.show_comments != false %}
 	<div class="comments">
 		<div class="comment-box"><h4>{{ _("Class Teacher Comment") }}</h4><p>{{ review.class_teacher_comment or "-" }}</p></div>
 		<div class="comment-box"><h4>{{ _("Principal Comment") }}</h4><p>{{ review.principal_comment or "-" }}</p></div>
 	</div>
+	{% endif %}
+	{% if not profiled or presentation.show_progression != false %}
 	<div class="comments">
 		<div class="comment-box"><h4>{{ _("Progression Recommendation") }}</h4><p>{{ review.progression_recommendation or summary.suggested_progression or _("Pending Review") }}</p></div>
 		<div class="comment-box"><h4>{{ _("Progression Review Status") }}</h4><p>{{ review.progression_status or _("Draft") }}</p></div>
 	</div>
+	{% endif %}
 
-	{% if profiled and summary.next_term_start_date %}
+	{% if profiled and presentation.show_next_period_date != false and summary.next_term_start_date %}
 		<div class="comments">
 			<div class="comment-box"><h4>{{ _("Next Academic Period Begins") }}</h4><p>{{ summary.next_term_start_date }}</p></div>
 			<div class="comment-box"><h4>{{ _("Publication Version") }}</h4><p>{{ summary.publication_version or 1 }}</p></div>
 		</div>
 	{% endif %}
 
-	{% if profiled and summary.grading_legend %}
+	{% if profiled and presentation.show_grading_legend != false and summary.grading_legend %}
 		<div class="grade-legend">
 			<h4>{{ _("Grading Interpretation") }}</h4>
 			<table>
