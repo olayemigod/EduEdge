@@ -146,6 +146,8 @@ def get_assessment_context(
 			[
 				"name",
 				"title",
+				"result_profile",
+				"result_mode",
 				"status",
 				"expected_results",
 				"submitted_results",
@@ -225,6 +227,25 @@ def ensure_result_publication(
 	}
 	name = frappe.db.exists(PUBLICATION_DOCTYPE, filters)
 	if name:
+		doc = frappe.get_doc(PUBLICATION_DOCTYPE, name)
+		requested_mode = result_mode or "Terminal"
+		if result_profile and doc.result_profile != result_profile:
+			if doc.status not in {"Draft", "Rejected"}:
+				frappe.throw(
+					_("Result Profile cannot change after approval begins."),
+					frappe.ValidationError,
+				)
+			doc.result_profile = result_profile
+		if result_mode and doc.result_mode != requested_mode:
+			if doc.status not in {"Draft", "Rejected"}:
+				frappe.throw(
+					_("Result Mode cannot change after approval begins."),
+					frappe.ValidationError,
+				)
+			doc.result_mode = requested_mode
+		if doc.has_value_changed("result_profile") or doc.has_value_changed("result_mode"):
+			doc.save()
+			_refresh_readiness(doc)
 		return _publication_payload(name)
 
 	doc = frappe.get_doc(
