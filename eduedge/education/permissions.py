@@ -9,6 +9,7 @@ from eduedge.education.instructor_scope import (
 	instructor_owns_schedule,
 	is_limited_instructor_user,
 )
+from eduedge.education.teaching_assignments import has_class_responsibility_assignment
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
 	is_branch_access_enforced,
@@ -393,7 +394,36 @@ def has_published_result_snapshot_permission(doc, user=None, permission_type=Non
 
 
 def has_report_card_review_permission(doc, user=None, permission_type=None) -> bool:
-	return _has_governed_result_permission(doc, user, permission_type)
+	resolved_user = user or frappe.session.user
+	if not _has_governed_result_permission(doc, resolved_user, permission_type):
+		return False
+	if permission_type not in {"create", "write", "delete", "share"}:
+		return True
+	if not is_limited_instructor_user(resolved_user):
+		return True
+	if not doc:
+		return False
+
+	student_group = doc.get("student_group")
+	academic_year = doc.get("academic_year")
+	academic_term = doc.get("academic_term")
+	if doc.get("result_publication") and (not student_group or not academic_year):
+		publication = frappe.db.get_value(
+			"EduEdge Result Publication",
+			doc.get("result_publication"),
+			["student_group", "academic_year", "academic_term"],
+			as_dict=True,
+		)
+		if publication:
+			student_group = student_group or publication.student_group
+			academic_year = academic_year or publication.academic_year
+			academic_term = academic_term or publication.academic_term
+	return has_class_responsibility_assignment(
+		student_group,
+		user=resolved_user,
+		academic_term=academic_term,
+		academic_year=academic_year,
+	)
 
 
 def has_report_card_issue_permission(doc, user=None, permission_type=None) -> bool:
