@@ -9,14 +9,17 @@ APP = ROOT / "eduedge"
 class TestIssuedReportCardPresentationContract(unittest.TestCase):
 	def test_issued_payload_freezes_institution_identity(self):
 		service = (APP / "education" / "report_card_issues.py").read_text()
-		self.assertIn("get_institution_branding", service)
+		self.assertIn("get_report_identity", service)
 		self.assertIn("def _freeze_institution_identity", service)
-		self.assertIn('payload["institution"] = institution', service)
-		self.assertIn('payload["branding"] = branding', service)
+		self.assertIn('payload["institution"] = identity["institution"]', service)
+		self.assertIn('payload["branding"] = identity["branding"]', service)
+		self.assertIn('payload["terminology"] = identity["terminology"]', service)
 
 	def test_profiled_api_does_not_replace_frozen_branding(self):
 		api = (APP / "api" / "report_cards_profiled.py").read_text()
-		self.assertIn('if payload.get("issue") and payload.get("branding"):', api)
+		self.assertIn('(payload.get("issue") or payload.get("issue_record"))', api)
+		self.assertIn('and payload.get("branding")', api)
+		self.assertIn('and payload.get("terminology")', api)
 		self.assertIn("return payload", api)
 
 	def test_unapproved_report_card_preview_is_visibly_draft(self):
