@@ -28,6 +28,15 @@
   "component_sources",
   "statistics_section",
   "metrics",
+  "presentation_section",
+  "terminal_report_title",
+  "annual_report_title",
+  "show_student_photo",
+  "show_attendance",
+  "show_comments",
+  "show_progression",
+  "show_grading_legend",
+  "show_next_period_date",
   "notes_section",
   "notes"
  ],
@@ -185,6 +194,59 @@
    "fieldtype": "Table",
    "label": "Report Metrics",
    "options": "EduEdge Result Metric"
+  },
+  {
+   "fieldname": "presentation_section",
+   "fieldtype": "Section Break",
+   "label": "Report Presentation"
+  },
+  {
+   "default": "Terminal Report",
+   "fieldname": "terminal_report_title",
+   "fieldtype": "Data",
+   "label": "Terminal Report Title"
+  },
+  {
+   "default": "Annual Result",
+   "fieldname": "annual_report_title",
+   "fieldtype": "Data",
+   "label": "Annual Report Title"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_student_photo",
+   "fieldtype": "Check",
+   "label": "Show Student Photo"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_attendance",
+   "fieldtype": "Check",
+   "label": "Show Attendance"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_comments",
+   "fieldtype": "Check",
+   "label": "Show Teacher / Principal Comments"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_progression",
+   "fieldtype": "Check",
+   "label": "Show Progression Decision"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_grading_legend",
+   "fieldtype": "Check",
+   "label": "Show Grading Legend"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_next_period_date",
+   "fieldtype": "Check",
+   "label": "Show Next Academic Period Date"
   },
   {
    "fieldname": "notes_section",
