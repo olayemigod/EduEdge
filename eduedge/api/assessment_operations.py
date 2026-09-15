@@ -370,7 +370,7 @@ def refresh_result_publication(publication: str) -> dict:
 @guard_eduedge_action("assessment", action="request_result_approval")
 def request_result_approval(publication: str) -> dict:
 	_require_operator()
-	doc = _get_publication(publication)
+	doc = _get_publication(publication, for_update=True)
 	if doc.status not in {"Draft", "Rejected"}:
 		frappe.throw(_("Only Draft or Rejected publications can be submitted for approval."))
 	readiness = _refresh_readiness(doc)
@@ -402,7 +402,7 @@ def request_result_approval(publication: str) -> dict:
 @guard_eduedge_action("assessment", action="approve_results")
 def approve_results(publication: str) -> dict:
 	_require_approver()
-	doc = _get_publication(publication)
+	doc = _get_publication(publication, for_update=True)
 	if doc.status != "Pending Approval":
 		frappe.throw(_("Only publications pending approval can be approved."))
 	readiness = _refresh_readiness(doc)
@@ -421,7 +421,7 @@ def approve_results(publication: str) -> dict:
 @guard_eduedge_action("assessment", action="reject_results")
 def reject_results(publication: str, reason: str) -> dict:
 	_require_approver()
-	doc = _get_publication(publication)
+	doc = _get_publication(publication, for_update=True)
 	if doc.status not in {"Pending Approval", "Approved"}:
 		frappe.throw(_("Only Pending Approval or Approved publications can be rejected."))
 	reason = (reason or "").strip()
@@ -447,7 +447,7 @@ def reject_results(publication: str, reason: str) -> dict:
 @guard_eduedge_action("assessment", action="publish_results")
 def publish_results(publication: str) -> dict:
 	_require_approver()
-	doc = _get_publication(publication)
+	doc = _get_publication(publication, for_update=True)
 	if doc.status != "Approved":
 		frappe.throw(_("Results must be approved before publication."))
 	readiness = _refresh_readiness(doc)
@@ -473,7 +473,7 @@ def publish_results(publication: str) -> dict:
 @guard_eduedge_action("assessment", action="create_result_publication_revision")
 def create_result_publication_revision(publication: str) -> dict:
 	_require_approver()
-	source = _get_publication(publication)
+	source = _get_publication(publication, for_update=True)
 	if source.status != "Published":
 		frappe.throw(_("Only a Published Result Publication can be revised."), frappe.ValidationError)
 
@@ -509,9 +509,16 @@ def create_result_publication_revision(publication: str) -> dict:
 		order_by="publication_version desc, creation desc",
 		limit=1,
 	)
-	if existing and existing[0].name != source.name and existing[0].status != "Published":
-		return _publication_payload(existing[0].name)
-	next_version = max([int(row.publication_version or 1) for row in existing] + [int(source.publication_version or 1)]) + 1
+	if existing and existing[0].name != source.name:
+		if existing[0].status != "Published":
+			return _publication_payload(existing[0].name)
+		frappe.throw(
+			_("A newer published result version exists. Create the correction from {0}.").format(
+				existing[0].name
+			),
+			frappe.ValidationError,
+		)
+	next_version = int(source.publication_version or 1) + 1
 	doc = frappe.get_doc(
 		{
 			"doctype": PUBLICATION_DOCTYPE,
@@ -570,7 +577,14 @@ def get_report_card_readiness(
 	}
 
 
-def _get_publication(name: str):
+def _get_publication(name: str, *, for_update: bool = False):
+	if for_update:
+		rows = frappe.db.sql(
+			"select name from `tabEduEdge Result Publication` where name=%s for update",
+			(name,),
+		)
+		if not rows:
+			frappe.throw(_("Result Publication does not exist."), frappe.DoesNotExistError)
 	doc = frappe.get_doc(PUBLICATION_DOCTYPE, name)
 	doc.check_permission("write")
 	assert_branch_access(doc.school_branch)
