@@ -288,6 +288,9 @@ def get_publication_readiness(
 		profile_blockers.extend(
 			build_component_plan_maximum_blockers(profile_config, plans)
 		)
+		profile_blockers.extend(
+			_build_required_course_plan_blockers(group, plans)
+		)
 
 	students = frappe.get_all(
 		"Student Group Student",
@@ -402,6 +405,48 @@ def get_publication_readiness(
 	}
 
 
+def _build_required_course_plan_blockers(group, plan_rows: list) -> list[dict]:
+	"""Block official profile publication when a mandatory native Course has no plan.
+
+	Course-based Student Groups are single-subject contexts. Program/class groups use
+	the native Program Course.required flag so optional/elective subjects remain optional.
+	"""
+	expected: list[dict] = []
+	if group.get("group_based_on") == "Course" and group.get("course"):
+		expected = [{"course": group.course, "course_name": group.course}]
+	elif group.get("program"):
+		expected = frappe.get_all(
+			"Program Course",
+			filters={
+				"parent": group.program,
+				"parenttype": "Program",
+				"required": 1,
+			},
+			fields=["course", "course_name"],
+			order_by="idx asc",
+			limit_page_length=0,
+		)
+
+	if not expected:
+		return []
+
+	planned_courses = {
+		str(row.get("course") if hasattr(row, "get") else getattr(row, "course", "") or "")
+		for row in (plan_rows or [])
+	}
+	return [
+		{
+			"code": "REQUIRED_PROGRAM_COURSE_MISSING",
+			"reason": _(
+				"Required subject {0} has no submitted Assessment Plan in this result scope."
+			).format(row.get("course_name") or row.get("course")),
+			"course": row.get("course"),
+		}
+		for row in expected
+		if row.get("course") and row.get("course") not in planned_courses
+	]
+
+
 def append_publication_log(
 	publication: str,
 	*,
@@ -483,7 +528,7 @@ def _resolve_group_offering(group) -> str | None:
 
 
 def _get_student_group(name: str):
-	fields = ["name", "academic_year", "academic_term", "program", "course", BRANCH_FIELD]
+	fields = ["name", "academic_year", "academic_term", "program", "course", "group_based_on", BRANCH_FIELD]
 	if frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
 		fields.append(OFFERING_FIELD)
 	row = frappe.db.get_value("Student Group", name, fields, as_dict=True)
