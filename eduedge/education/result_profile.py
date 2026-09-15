@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 
 import frappe
@@ -40,6 +42,7 @@ ABSENCE_POLICIES = {"Block Publication", "Exclude from Denominator", "Treat as Z
 
 def validate_result_profile(doc) -> None:
 	assert_result_profile_mutable(doc)
+	_validate_historical_scope_identity(doc)
 	_validate_scope(doc)
 	_validate_profile_name_scope(doc)
 	_validate_calculation_settings(doc)
@@ -48,6 +51,25 @@ def validate_result_profile(doc) -> None:
 	_validate_metrics(doc)
 	_validate_default(doc)
 
+
+
+def _validate_historical_scope_identity(doc) -> None:
+	"""Keep the Institution/Branch identity stable after a profile has published history."""
+	if doc.is_new():
+		return
+	if not any(doc.has_value_changed(fieldname) for fieldname in ("institution", "school_branch")):
+		return
+	published = frappe.db.exists(
+		"EduEdge Result Publication",
+		{"result_profile": doc.name, "status": "Published"},
+	)
+	if published:
+		frappe.throw(
+			_(
+				"Result Profile Institution/Branch scope cannot change after published results exist. Create a new Result Profile for the new scope."
+			),
+			frappe.ValidationError,
+		)
 
 def assert_result_profile_mutable(doc) -> None:
 	if doc.is_new():
@@ -82,7 +104,7 @@ def validate_publication_profile(doc) -> None:
 		return
 
 	profile = frappe.get_doc("EduEdge Result Profile", doc.result_profile)
-	if not profile.is_active:
+	if not profile.is_active and not doc.get("supersedes_publication"):
 		frappe.throw(_("Select an active Result Profile."), frappe.ValidationError)
 
 	branch = frappe.db.get_value(
@@ -178,6 +200,84 @@ def get_result_profile_config(name: str) -> dict:
 		],
 	}
 
+
+
+def serialize_result_profile_config(config: dict) -> str:
+	return json.dumps(config, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def set_publication_result_profile_config(publication, config: dict | None) -> dict | None:
+	if not config:
+		publication.set("result_profile_config_json", None)
+		publication.set("result_profile_config_hash", None)
+		return None
+	payload = serialize_result_profile_config(config)
+	publication.set("result_profile_config_json", payload)
+	publication.set(
+		"result_profile_config_hash",
+		hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+	)
+	return config
+
+
+def get_publication_result_profile_config(publication) -> dict | None:
+	"""Return the exact calculation profile assigned to one publication.
+
+	New governed publications persist the approved profile configuration on the
+	publication. Historical publications created before that field existed recover
+	the profile from an immutable Published Result Snapshot when available.
+	"""
+	if not publication or not publication.get("result_profile"):
+		return None
+	raw = publication.get("result_profile_config_json")
+	if raw:
+		expected_hash = str(publication.get("result_profile_config_hash") or "").strip()
+		actual_hash = hashlib.sha256(str(raw).encode("utf-8")).hexdigest()
+		if expected_hash and expected_hash != actual_hash:
+			frappe.throw(
+				_("Result Publication profile configuration integrity check failed."),
+				frappe.ValidationError,
+			)
+		try:
+			return json.loads(raw)
+		except (TypeError, ValueError):
+			frappe.throw(
+				_("Result Publication profile configuration is invalid."),
+				frappe.ValidationError,
+			)
+
+	if publication.get("name") and frappe.db.exists("DocType", "EduEdge Published Result Snapshot"):
+		snapshot_json = frappe.db.get_value(
+			"EduEdge Published Result Snapshot",
+			{"result_publication": publication.get("name")},
+			"payload_json",
+		)
+		if snapshot_json:
+			try:
+				profile = (json.loads(snapshot_json) or {}).get("profile")
+			except (TypeError, ValueError):
+				profile = None
+			if profile:
+				return profile
+
+	return get_result_profile_config(publication.get("result_profile"))
+
+
+def freeze_publication_result_profile_config(publication, *, force_current: bool = False) -> dict | None:
+	if not publication.get("result_profile"):
+		return set_publication_result_profile_config(publication, None)
+	if not force_current and publication.get("result_profile_config_json"):
+		return get_publication_result_profile_config(publication)
+	if publication.get("supersedes_publication") and not force_current:
+		source = frappe.get_doc("EduEdge Result Publication", publication.supersedes_publication)
+		return set_publication_result_profile_config(
+			publication,
+			get_publication_result_profile_config(source),
+		)
+	return set_publication_result_profile_config(
+		publication,
+		get_result_profile_config(publication.result_profile),
+	)
 
 def resolve_assessment_group_leaves(assessment_group: str) -> list[str]:
 	"""Resolve all leaf Assessment Groups recursively."""

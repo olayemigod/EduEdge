@@ -41,12 +41,14 @@ class TestPublishedResultSnapshotContract(unittest.TestCase):
 
 	def test_snapshot_supports_ytd_metrics_and_correct_opened_day_semantics(self):
 		service = (APP / "education" / "result_snapshots.py").read_text()
+		attendance = (APP / "education" / "result_attendance.py").read_text()
 		self.assertIn("_requires_ytd_metrics", service)
 		self.assertIn("_periods_through_term", service)
 		self.assertIn("cumulative_score", service)
-		self.assertIn("opened_dates", service)
-		self.assertIn('"school_opened": school_opened', service)
-		self.assertIn("present / school_opened", service)
+		self.assertIn("build_result_attendance_summary", service)
+		self.assertIn("opened_dates", attendance)
+		self.assertIn('"school_opened": school_opened', attendance)
+		self.assertIn("present / school_opened", attendance)
 
 	def test_publication_revisions_preserve_old_published_versions(self):
 		publication_path = APP / "eduedge" / "doctype" / "eduedge_result_publication" / "eduedge_result_publication.json"

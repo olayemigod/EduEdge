@@ -122,7 +122,6 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 		or "",
 		"branch_name": branding.get("branch_name") or "",
 		"student_name": student.get("student_name") or row.student_name or "",
-		"student_id": student.get("name") or row.student or "",
 		"student_group": publication.get("student_group") or row.student_group or "",
 		"academic_year": publication.get("academic_year") or row.academic_year or "",
 		"academic_term": summary.get("academic_term_label")

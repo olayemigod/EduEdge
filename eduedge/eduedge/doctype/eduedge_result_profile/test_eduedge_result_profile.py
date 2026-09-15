@@ -3,6 +3,7 @@ from __future__ import annotations
 from frappe.tests.utils import FrappeTestCase
 
 from eduedge.education.result_engine import (
+	build_component_plan_maximum_blockers,
 	build_configured_class_metrics,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
@@ -70,6 +71,30 @@ def _row(term: str, group: str, score: float, maximum: float, *, course: str = "
 
 
 class TestEduEdgeResultEngine(FrappeTestCase):
+	def test_component_target_maximum_blocks_mismatched_native_plans(self):
+		valid = build_component_plan_maximum_blockers(
+			_profile(),
+			[
+				{"academic_term": "Alpha", "assessment_group": "CA", "course": "CRS", "maximum_assessment_score": 20},
+				{"academic_term": "Alpha", "assessment_group": "CA", "course": "CRS", "maximum_assessment_score": 20},
+				{"academic_term": "Alpha", "assessment_group": "EXAM", "course": "CRS", "maximum_assessment_score": 60},
+			],
+		)
+		self.assertEqual(valid, [])
+
+		blocked = build_component_plan_maximum_blockers(
+			_profile(),
+			[
+				{"academic_term": "Alpha", "assessment_group": "CA", "course": "CRS", "maximum_assessment_score": 50},
+				{"academic_term": "Alpha", "assessment_group": "EXAM", "course": "CRS", "maximum_assessment_score": 60},
+			],
+		)
+		self.assertEqual(len(blocked), 1)
+		self.assertEqual(blocked[0]["code"], "COMPONENT_MAXIMUM_MISMATCH")
+		self.assertEqual(blocked[0]["component_key"], "ca")
+		self.assertEqual(blocked[0]["expected_maximum"], 40)
+		self.assertEqual(blocked[0]["configured_maximum"], 50)
+
 	def test_terminal_composition_uses_native_component_rows(self):
 		payload = compose_terminal_subject_results(
 			_profile(),

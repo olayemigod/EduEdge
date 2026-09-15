@@ -29,7 +29,7 @@ class TestResultVerificationContract(unittest.TestCase):
 	def test_public_verification_does_not_expose_marks_comments_or_attendance(self):
 		service = (APP / "education" / "result_verification.py").read_text()
 		page = (APP / "www" / "eduedge-result-verify.html").read_text()
-		for forbidden in ("courses", "total_score", "class_teacher_comment", "principal_comment", "attendance_percent"):
+		for forbidden in ("courses", "total_score", "class_teacher_comment", "principal_comment", "attendance_percent", "student_id"):
 			self.assertNotIn(f'"{forbidden}"', service)
 		self.assertNotIn(forbidden, page)
 		self.assertIn("Marks, comments and attendance are not exposed", page)
@@ -55,6 +55,8 @@ class TestResultVerificationContract(unittest.TestCase):
 		page_html = (APP / "www" / "eduedge-result-verify.html").read_text()
 		self.assertIn("verify_issued_report_card", page_py)
 		self.assertIn("noindex,nofollow,noarchive", page_html)
+		self.assertIn('name="referrer" content="no-referrer"', page_html)
+		self.assertIn("frappe.local.no_cache = 1", page_py)
 		self.assertNotIn("frappe.whitelist", page_py)
 
 

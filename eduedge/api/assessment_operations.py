@@ -12,7 +12,12 @@ from eduedge.education.assessment_operations import (
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.result_snapshots import create_publication_snapshots
-from eduedge.education.result_profile import get_result_profile_config
+from eduedge.education.result_profile import (
+	freeze_publication_result_profile_config,
+	get_publication_result_profile_config,
+	get_result_profile_config,
+	set_publication_result_profile_config,
+)
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -210,6 +215,8 @@ def get_assessment_context(
 				"name",
 				"title",
 				"result_profile",
+				"result_profile_config_hash",
+				"result_profile_config_json",
 				"result_mode",
 				"publication_version",
 				"supersedes_publication",
@@ -231,6 +238,11 @@ def get_assessment_context(
 			limit=1,
 		)
 		publication = publication_rows[0] if publication_rows else None
+		publication_profile_config = (
+			_readiness_profile_config(publication)
+			if publication and publication.get("result_profile")
+			else None
+		)
 		readiness = get_publication_readiness(
 			school_branch=resolved_branch,
 			student_group=student_group,
@@ -239,7 +251,11 @@ def get_assessment_context(
 			assessment_group=assessment_group,
 			result_profile=(publication or {}).get("result_profile") or result_profile,
 			result_mode=(publication or {}).get("result_mode") or result_mode,
+			profile_config_override=publication_profile_config,
 		)
+		if publication:
+			publication.pop("result_profile_config_json", None)
+			publication.pop("result_profile_config_hash", None)
 
 	current_branch = get_current_school_branch()
 	full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
@@ -333,6 +349,8 @@ def ensure_result_publication(
 				)
 			doc.result_mode = requested_mode
 		if doc.has_value_changed("result_profile") or doc.has_value_changed("result_mode"):
+			if not doc.supersedes_publication:
+				set_publication_result_profile_config(doc, None)
 			doc.save()
 			_refresh_readiness(doc)
 		return _publication_payload(name)
@@ -379,6 +397,10 @@ def request_result_approval(publication: str) -> dict:
 	doc = _get_publication(publication, for_update=True)
 	if doc.status not in {"Draft", "Rejected"}:
 		frappe.throw(_("Only Draft or Rejected publications can be submitted for approval."))
+	freeze_publication_result_profile_config(
+		doc,
+		force_current=not bool(doc.supersedes_publication),
+	)
 	readiness = _refresh_readiness(doc)
 	if not readiness["ready"]:
 		frappe.throw(
@@ -525,6 +547,7 @@ def create_result_publication_revision(publication: str) -> dict:
 			frappe.ValidationError,
 		)
 	next_version = int(source.publication_version or 1) + 1
+	source_profile_config = get_publication_result_profile_config(source)
 	doc = frappe.get_doc(
 		{
 			"doctype": PUBLICATION_DOCTYPE,
@@ -540,6 +563,8 @@ def create_result_publication_revision(publication: str) -> dict:
 			"status": "Draft",
 		}
 	)
+	if source_profile_config:
+		set_publication_result_profile_config(doc, source_profile_config)
 	doc.insert()
 	append_publication_log(
 		doc.name,
@@ -597,6 +622,17 @@ def _get_publication(name: str, *, for_update: bool = False):
 	return doc
 
 
+
+def _readiness_profile_config(publication) -> dict | None:
+	if not publication or not publication.get("result_profile"):
+		return None
+	if (
+		publication.get("status") in {"Draft", "Rejected"}
+		and not publication.get("supersedes_publication")
+	):
+		return get_result_profile_config(publication.get("result_profile"))
+	return get_publication_result_profile_config(publication)
+
 def _refresh_readiness(doc) -> dict:
 	readiness = get_publication_readiness(
 		school_branch=doc.school_branch,
@@ -606,6 +642,11 @@ def _refresh_readiness(doc) -> dict:
 		assessment_group=doc.assessment_group,
 		result_profile=doc.get("result_profile"),
 		result_mode=doc.get("result_mode") or "Terminal",
+		profile_config_override=(
+			_readiness_profile_config(doc)
+			if doc.get("result_profile")
+			else None
+		),
 	)
 	updates = {
 		"expected_results": readiness["expected_results"],

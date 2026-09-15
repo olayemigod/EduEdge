@@ -11,12 +11,17 @@ from frappe.utils import flt, now_datetime
 from eduedge.education.assessment_operations import get_publication_readiness
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.result_engine import (
+	build_component_plan_maximum_blockers,
 	build_configured_class_metrics,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 	get_result_periods,
 )
-from eduedge.education.result_profile import get_result_profile_config
+from eduedge.education.result_attendance import (
+	assert_official_attendance_complete,
+	build_result_attendance_summary,
+)
+from eduedge.education.result_profile import get_publication_result_profile_config
 
 SNAPSHOT_DOCTYPE = "EduEdge Published Result Snapshot"
 
@@ -73,6 +78,7 @@ def create_publication_snapshots(publication: str) -> list[str]:
 
 
 def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
+	config = get_publication_result_profile_config(publication_doc)
 	readiness = get_publication_readiness(
 		school_branch=publication_doc.school_branch,
 		student_group=publication_doc.student_group,
@@ -81,6 +87,7 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 		assessment_group=publication_doc.assessment_group,
 		result_profile=publication_doc.result_profile,
 		result_mode=publication_doc.result_mode or "Terminal",
+		profile_config_override=config,
 	)
 	if not readiness["ready"]:
 		frappe.throw(
@@ -88,7 +95,6 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 			frappe.ValidationError,
 		)
 
-	config = get_result_profile_config(publication_doc.result_profile)
 	students = readiness["students"]
 	student_names = [row.student for row in students]
 	plan_names = [row.name for row in readiness["plans"]]
@@ -172,11 +178,17 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 				result_mode=publication_doc.result_mode or "Terminal",
 			)
 
-	attendance = _attendance_summary(
-		publication_doc,
-		student_names,
+	attendance, attendance_meta = build_result_attendance_summary(
+		school_branch=publication_doc.school_branch,
+		student_group=publication_doc.student_group,
+		academic_year=publication_doc.academic_year,
+		academic_term=publication_doc.academic_term,
+		result_mode=publication_doc.result_mode or "Terminal",
+		students=student_names,
 		periods=readiness.get("periods") or periods,
 	)
+	if (config.get("presentation") or {}).get("show_attendance"):
+		assert_official_attendance_complete(attendance_meta)
 	source_names_by_student: dict[str, set[str]] = defaultdict(set)
 	for row in source_rows:
 		source_names_by_student[row.student].add(row.name)
@@ -306,9 +318,18 @@ def _get_complete_period_result_rows(publication_doc, config: dict, students: li
 			"assessment_group": ["in", assessment_groups or ["__none__"]],
 			"docstatus": 1,
 		},
-		fields=["name"],
+		fields=["name", "assessment_group", "course", "academic_term", "maximum_assessment_score"],
 		page_length=0,
 	)
+	maximum_blockers = build_component_plan_maximum_blockers(config, plans)
+	if maximum_blockers:
+		first = maximum_blockers[0]
+		frappe.throw(
+			_(
+				"Prior-period Assessment Plan maximum for {0} / {1} does not match the Result Profile target."
+			).format(first.get("course"), first.get("component_key")),
+			frappe.ValidationError,
+		)
 	plan_names = [row.name for row in plans]
 	rows = _get_submitted_result_rows(publication_doc.school_branch, plan_names, students)
 	expected = len(plan_names) * len(students)
@@ -387,85 +408,6 @@ def _course_name_map(composed_by_student: dict[str, dict]) -> dict[str, str]:
 			fields=["name", "course_name"],
 		)
 	}
-
-
-def _attendance_summary(publication_doc, students: list[str], *, periods: list[dict]) -> dict[str, dict]:
-	if not students:
-		return {}
-	if (publication_doc.result_mode or "Terminal") == "Annual" and periods:
-		from_date = periods[0]["start_date"]
-		to_date = periods[-1]["end_date"]
-	elif publication_doc.academic_term:
-		from_date, to_date = frappe.db.get_value(
-			"Academic Term",
-			publication_doc.academic_term,
-			["term_start_date", "term_end_date"],
-		)
-	else:
-		from_date, to_date = frappe.db.get_value(
-			"Academic Year",
-			publication_doc.academic_year,
-			["year_start_date", "year_end_date"],
-		)
-	if not from_date or not to_date:
-		return {}
-	rows = frappe.get_all(
-		"Student Attendance",
-		filters={
-			BRANCH_FIELD: publication_doc.school_branch,
-			"student_group": publication_doc.student_group,
-			"student": ["in", students],
-			"docstatus": 1,
-			"date": ["between", [from_date, to_date]],
-		},
-		fields=["student", "date", "status", "course_schedule"],
-		page_length=0,
-	)
-	opened_dates = {str(row.date) for row in rows if row.date}
-	school_opened = len(opened_dates)
-
-	# A school-day report must not count every Subject/Course Schedule attendance
-	# row as another day present. Prefer the single Student Group daily record
-	# where it exists; otherwise collapse course-level attendance into one status
-	# per Student/date.
-	by_student_date: dict[tuple[str, str], list] = defaultdict(list)
-	for row in rows:
-		if not row.date:
-			continue
-		by_student_date[(row.student, str(row.date))].append(row)
-
-	counts: dict[str, dict] = defaultdict(lambda: {"Present": 0, "Absent": 0, "Leave": 0})
-	for (student, _date), day_rows in by_student_date.items():
-		daily_rows = [row for row in day_rows if not row.course_schedule]
-		if daily_rows:
-			day_status = daily_rows[0].status or ""
-		else:
-			statuses = {row.status or "" for row in day_rows}
-			if "Present" in statuses:
-				day_status = "Present"
-			elif "Leave" in statuses:
-				day_status = "Leave"
-			elif "Absent" in statuses:
-				day_status = "Absent"
-			else:
-				day_status = ""
-		if day_status:
-			counts[student][day_status] = counts[student].get(day_status, 0) + 1
-
-	output = {}
-	for student in students:
-		student_counts = counts[student]
-		present = int(student_counts.get("Present", 0))
-		output[student] = {
-			"present": present,
-			"absent": int(student_counts.get("Absent", 0)),
-			"leave": int(student_counts.get("Leave", 0)),
-			"school_opened": school_opened,
-			"attendance_percentage": round(present / school_opened * 100, 2) if school_opened else 0.0,
-			"from_date": str(from_date),
-			"to_date": str(to_date),
-		}
-	return output
 
 
 def _academic_term_report_label(publication_doc, config: dict):

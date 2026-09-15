@@ -97,6 +97,54 @@ def get_result_periods(profile: str | dict, academic_year: str) -> list[dict]:
 	return output
 
 
+
+def build_component_plan_maximum_blockers(profile: str | dict, plan_rows: list) -> list[dict]:
+	"""Validate native Assessment Plan maxima against configured Result Component targets.
+
+	Targets are governance checks only. EduEdge never rescales submitted Assessment
+	Results; schools must configure native Assessment Plans to match the Result Profile.
+	A target <= 0 leaves the component unconstrained for backward compatibility.
+	"""
+	config = get_result_profile_config(profile) if isinstance(profile, str) else profile
+	source_index = get_component_source_index(config)
+	targets = {
+		row["component_key"]: flt(row.get("target_maximum_score"))
+		for row in config.get("components") or []
+		if flt(row.get("target_maximum_score")) > 0
+	}
+	if not targets:
+		return []
+
+	grouped: dict[tuple[str, str, str], float] = defaultdict(float)
+	for row in plan_rows or []:
+		component_key = source_index.get(_value(row, "assessment_group"))
+		if component_key not in targets:
+			continue
+		key = (
+			str(_value(row, "academic_term") or ""),
+			str(_value(row, "course") or _("Unspecified Course")),
+			component_key,
+		)
+		grouped[key] += flt(_value(row, "maximum_assessment_score"))
+
+	blockers = []
+	for (academic_term, course, component_key), configured_maximum in sorted(grouped.items()):
+		target = targets[component_key]
+		if abs(configured_maximum - target) <= 0.000001:
+			continue
+		blockers.append(
+			{
+				"code": "COMPONENT_MAXIMUM_MISMATCH",
+				"reason": _("Assessment Plan maximum does not match the Result Profile component target."),
+				"academic_term": academic_term or None,
+				"course": course,
+				"component_key": component_key,
+				"expected_maximum": target,
+				"configured_maximum": round_result_value(configured_maximum, 6),
+			}
+		)
+	return blockers
+
 def compose_terminal_subject_results(profile: str | dict, result_rows: list) -> dict:
 	"""Compose submitted native Assessment Results into report-level subject components."""
 	config = get_result_profile_config(profile) if isinstance(profile, str) else profile

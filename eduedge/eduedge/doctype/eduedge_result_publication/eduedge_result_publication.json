@@ -11,6 +11,8 @@
   "student_group",
   "assessment_group",
   "result_profile",
+  "result_profile_config_hash",
+  "result_profile_config_json",
   "result_mode",
   "publication_version",
   "supersedes_publication",
@@ -79,6 +81,22 @@
    "options": "EduEdge Result Profile",
    "in_standard_filter": 1,
    "description": "Optional V1 result composition profile. Historical publications without a profile remain valid."
+  },
+  {
+   "fieldname": "result_profile_config_hash",
+   "fieldtype": "Data",
+   "label": "Approved Result Profile Hash",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "result_profile_config_json",
+   "fieldtype": "Long Text",
+   "label": "Approved Result Profile Configuration",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
   },
   {
    "default": "Terminal",

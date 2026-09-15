@@ -39,6 +39,18 @@ class TestResultProfileReadinessContract(unittest.TestCase):
 		self.assertIn('"result_mode": result_mode or "Terminal"', text)
 		self.assertIn('result_profile=doc.get("result_profile")', text)
 
+	def test_profile_readiness_enforces_component_maxima_and_required_courses(self):
+		readiness = (APP / "education" / "assessment_operations.py").read_text()
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn("build_component_plan_maximum_blockers", readiness)
+		self.assertIn("COMPONENT_MAXIMUM_MISMATCH", engine)
+		self.assertIn("target_maximum_score", engine)
+		self.assertIn("def _build_required_course_plan_blockers", readiness)
+		self.assertIn('"parenttype": "Program"', readiness)
+		self.assertIn('"required": 1', readiness)
+		self.assertIn("REQUIRED_PROGRAM_COURSE_MISSING", readiness)
+		self.assertIn('group.get("group_based_on") == "Course"', readiness)
+
 
 if __name__ == "__main__":
 	unittest.main()
