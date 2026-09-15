@@ -6,7 +6,7 @@ app_email = "support@processedge.com.ng"
 app_license = "mit"
 
 required_apps = ["erpnext", "education", "edgesuite_ui"]
-app_include_css = []
+app_include_css = ["/assets/eduedge/css/eduedge_mark_entry.css"]
 app_include_js = [
 	"/assets/eduedge/js/eduedge_keyboard_shortcuts.js",
 	"eduedge_terminology.bundle.js",
@@ -84,6 +84,7 @@ doctype_js = {
 	"Student Attendance": "public/js/education/student_attendance.js",
 	"Assessment Plan": "public/js/education/assessment_plan.js",
 	"Assessment Result": "public/js/education/assessment_result.js",
+	"Assessment Result Tool": "public/js/education/assessment_result_tool.js",
 	"EduEdge Institution Academic Calendar": "eduedge/doctype/eduedge_institution_academic_calendar/eduedge_institution_academic_calendar.js",
 }
 
