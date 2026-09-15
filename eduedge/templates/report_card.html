@@ -1,52 +1,142 @@
+{% set profiled = publication.result_profile %}
+{% set mode = summary.result_mode or publication.result_mode or "Terminal" %}
+{% set issued = issue or issue_record %}
+{% set presentation = summary.profile.presentation if summary.profile and summary.profile.presentation else {} %}
 <style>
+	{% if profiled and mode == "Annual" %}
+	@page { size: A4 landscape; margin: 8mm; }
+	{% else %}
+	@page { size: A4 portrait; margin: 10mm; }
+	{% endif %}
 	.print-format {
-		font-size: 9pt;
+		font-size: {% if profiled and mode == "Annual" %}7.5pt{% else %}9pt{% endif %};
 		font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-		padding: 0.45in;
+		padding: 0;
+		color: #222;
 	}
 	.report-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 18px;
-		padding-bottom: 14px;
-		margin-bottom: 16px;
+		padding-bottom: 10px;
+		margin-bottom: 12px;
 		border-bottom: 2px solid #222;
 	}
-	.report-header img { max-height: 72px; max-width: 120px; }
-	.report-school { display: flex; align-items: center; gap: 12px; }
-	.report-school h2 { margin: 0; }
+	.report-school { display: flex; align-items: center; gap: 12px; min-width: 0; }
+	.report-school img { max-height: 72px; max-width: 120px; }
+	.report-school h2 { margin: 0; font-size: 18px; }
 	.report-school p, .report-title p { margin: 3px 0 0; }
 	.report-contact { font-size: 8pt; color: #555; }
-	.report-title { text-align: right; }
-	.report-title h1 { margin: 0; font-size: 22px; }
+	.report-title { text-align: right; min-width: 180px; }
+	.report-title h1 { margin: 0; font-size: 20px; }
+	.student-strip {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 12px;
+		align-items: start;
+		margin-bottom: 12px;
+	}
+	.student-photo {
+		width: 74px;
+		height: 84px;
+		border: 1px solid #bbb;
+		object-fit: cover;
+	}
+	.student-photo-placeholder {
+		width: 74px;
+		height: 84px;
+		border: 1px solid #bbb;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 7pt;
+		color: #777;
+	}
 	.meta-grid {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 6px 18px;
-		margin-bottom: 14px;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 5px 16px;
 	}
-	.meta-row { display: flex; gap: 8px; }
-	.meta-row strong { min-width: 118px; }
+	.meta-row { display: flex; gap: 7px; min-width: 0; }
+	.meta-row strong { min-width: 108px; }
+	.meta-row span { overflow-wrap: anywhere; }
 	.summary-grid {
 		display: grid;
 		grid-template-columns: repeat(4, 1fr);
-		gap: 8px;
-		margin: 14px 0;
+		gap: 7px;
+		margin: 10px 0;
 	}
-	.summary-card { border: 1px solid #ccc; padding: 8px; text-align: center; }
-	.summary-card strong { display: block; font-size: 15px; }
-	table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-	th, td { border: 1px solid #bbb; padding: 6px; }
-	th { background: #eee; }
-	.comments { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
-	.comment-box { border: 1px solid #bbb; min-height: 80px; padding: 8px; }
-	.comment-box h4 { margin: 0 0 6px; }
-	.institution-footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #bbb; text-align: center; }
-	.footer-note { margin-top: 8px; font-size: 8pt; color: #555; }
+	.summary-card { border: 1px solid #ccc; padding: 7px; text-align: center; }
+	.summary-card span { display: block; color: #555; font-size: 7.5pt; }
+	.summary-card strong { display: block; margin-top: 2px; font-size: 13px; }
+	.result-totals-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+		gap: 7px;
+		margin: 8px 0 10px;
+	}
+	.result-total-card { border: 1px solid #bbb; padding: 6px; text-align: center; }
+	.result-total-card span { display: block; color: #555; font-size: 7.5pt; }
+	.result-total-card strong { display: block; margin-top: 2px; font-size: 11px; }
+	.table-wrap { width: 100%; overflow: hidden; }
+	table { width: 100%; border-collapse: collapse; margin: 9px 0; table-layout: fixed; }
+	th, td { border: 1px solid #aaa; padding: 4px; vertical-align: middle; }
+	th { background: #f0f0f0; text-align: center; font-weight: 700; }
+	td.numeric { text-align: right; white-space: nowrap; }
+	td.center { text-align: center; white-space: nowrap; }
+	td.subject { text-align: left; font-weight: 600; overflow-wrap: anywhere; }
+	.annual-result-table th,
+	.annual-result-table td { padding: 3px 2px; font-size: 7pt; }
+	.annual-result-table .subject-col { width: 15%; }
+	.terminal-result-table .subject-col { width: 24%; }
+	.comments {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+		margin-top: 10px;
+	}
+	.comment-box { border: 1px solid #bbb; min-height: 62px; padding: 7px; }
+	.comment-box h4 { margin: 0 0 5px; font-size: 9pt; }
+	.grade-legend { margin-top: 10px; }
+	.grade-legend table { width: auto; min-width: 55%; }
+	.institution-footer { margin-top: 12px; padding-top: 7px; border-top: 1px solid #bbb; text-align: center; }
+	.footer-note { margin-top: 7px; font-size: 7.5pt; color: #555; }
+	.version-tag { font-weight: 700; }
+	.report-auth-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 10px;
+		align-items: end;
+		margin-top: 12px;
+	}
+	.report-auth-card {
+		min-height: 90px;
+		padding: 8px;
+		border: 1px solid #bbb;
+		text-align: center;
+	}
+	.report-auth-card img.signature-image { max-height: 42px; max-width: 150px; margin: 0 auto 4px; }
+	.report-auth-card img.stamp-image { max-height: 70px; max-width: 110px; margin: 0 auto; }
+	.report-auth-card img.verify-qr { width: 72px; height: 72px; margin: 0 auto 4px; }
+	.report-auth-card strong { display: block; }
+	.report-auth-card small { display: block; margin-top: 2px; color: #555; overflow-wrap: anywhere; }
+	.issue-banner {
+		margin: 0 0 10px;
+		padding: 7px 10px;
+		border: 1px solid #999;
+		text-align: center;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+	}
 </style>
 
 <div class="page-break">
+	{% if review.progression_status != "Approved" %}
+		<div class="issue-banner">{{ _("DRAFT / UNISSUED REPORT CARD") }}</div>
+	{% elif issued %}
+		<div class="issue-banner">{{ _("OFFICIAL ISSUED REPORT CARD") }} · {{ _("Issue") }} {{ issued.issue_version or 1 }}</div>
+	{% endif %}
 	{% if letterhead %}
 		<div>{{ letterhead }}</div>
 	{% else %}
@@ -66,57 +156,301 @@
 				</div>
 			</div>
 			<div class="report-title">
-				<h1>{{ _("Student Report Card") }}</h1>
-				<p>{{ publication.academic_term or publication.academic_year }}</p>
+				<h1>
+					{% if profiled and mode == "Annual" %}
+						{{ presentation.annual_report_title or _("Annual Result") }}
+					{% elif profiled %}
+						{{ presentation.terminal_report_title or _("Terminal Report") }}
+					{% else %}
+						{{ _("Student Report Card") }}
+					{% endif %}
+				</h1>
+				<p>{{ summary.academic_term_label or publication.academic_term or publication.academic_year }}</p>
+				{% if profiled %}<p class="version-tag">{{ _("Published Version") }} {{ summary.publication_version or publication.publication_version or 1 }}</p>{% endif %}
 			</div>
 		</div>
 	{% endif %}
 
-	<div class="meta-grid">
-		<div class="meta-row"><strong>{{ _("Student ID") }}</strong><span>{{ student.name }}</span></div>
-		<div class="meta-row"><strong>{{ _("Student Name") }}</strong><span>{{ student.student_name }}</span></div>
-		<div class="meta-row"><strong>{{ _("Class") }}</strong><span>{{ publication.student_group }}</span></div>
-		<div class="meta-row"><strong>{{ _("Assessment Group") }}</strong><span>{{ publication.assessment_group }}</span></div>
-		<div class="meta-row"><strong>{{ _("Academic Year") }}</strong><span>{{ publication.academic_year }}</span></div>
-		<div class="meta-row"><strong>{{ _("Academic Term") }}</strong><span>{{ publication.academic_term or "-" }}</span></div>
-		<div class="meta-row"><strong>{{ _("Branch / Campus") }}</strong><span>{{ branch.branch_name or branch.name }}</span></div>
-		<div class="meta-row"><strong>{{ _("Publication") }}</strong><span>{{ publication.name }}</span></div>
+	<div class="student-strip">
+		{% if not profiled or presentation.show_student_photo != false %}
+			{% if student.image %}
+				<img class="student-photo" src="{{ student.image }}">
+			{% else %}
+				<div class="student-photo-placeholder">{{ _("Student Photo") }}</div>
+			{% endif %}
+		{% endif %}
+		<div class="meta-grid">
+			<div class="meta-row"><strong>{{ _("Student ID") }}</strong><span>{{ student.name }}</span></div>
+			<div class="meta-row"><strong>{{ _("Student Name") }}</strong><span>{{ student.student_name }}</span></div>
+			<div class="meta-row"><strong>{{ _("Class") }}</strong><span>{{ publication.student_group }}</span></div>
+			<div class="meta-row"><strong>{{ _("Roll Number") }}</strong><span>{{ summary.group_roll_number or "-" }}</span></div>
+			<div class="meta-row"><strong>{{ _("Academic Year") }}</strong><span>{{ publication.academic_year }}</span></div>
+			<div class="meta-row"><strong>{{ _("Academic Term") }}</strong><span>{{ summary.academic_term_label or publication.academic_term or "-" }}</span></div>
+			<div class="meta-row"><strong>{{ _("Branch / Campus") }}</strong><span>{{ branch.branch_name or branch.name }}</span></div>
+			<div class="meta-row"><strong>{{ _("Publication") }}</strong><span>{{ publication.name }}</span></div>
+		</div>
 	</div>
 
 	<div class="summary-grid">
-		<div class="summary-card"><span>{{ _("Average") }}</span><strong>{{ "%.1f"|format(summary.average_percent or 0) }}%</strong></div>
+		<div class="summary-card"><span>{{ _("Overall Percentage") }}</span><strong>{{ "%.2f"|format(summary.average_percent or 0) }}%</strong></div>
 		<div class="summary-card"><span>{{ _("Overall Grade") }}</span><strong>{{ summary.overall_grade or "-" }}</strong></div>
-		<div class="summary-card"><span>{{ _("Courses") }}</span><strong>{{ summary.course_count or 0 }}</strong></div>
-		<div class="summary-card"><span>{{ _("Attendance") }}</span><strong>{{ "%.1f"|format(summary.attendance_percent or 0) }}%</strong></div>
+		<div class="summary-card"><span>{{ _("Attendance") }}</span><strong>{{ "%.2f"|format(summary.attendance_percent or 0) }}%</strong></div>
+		<div class="summary-card"><span>{{ _("Subjects") }}</span><strong>{{ summary.course_count or 0 }}</strong></div>
 	</div>
 
-	<table>
-		<thead><tr><th>{{ _("Course") }}</th>{% if show_marks %}<th>{{ _("Score") }}</th><th>{{ _("Maximum") }}</th>{% endif %}<th>{{ _("Average") }}</th><th>{{ _("Grade") }}</th></tr></thead>
-		<tbody>
-			{% for course in summary.courses %}
+	{% if profiled and mode == "Annual" %}
+		<div class="table-wrap">
+			<table class="annual-result-table">
+				<thead>
+					<tr>
+						<th rowspan="2" class="subject-col">{{ _("Subject") }}</th>
+						{% for period in summary.periods %}
+							<th colspan="{{ summary.display_components|length }}">{{ period.display_label }}</th>
+						{% endfor %}
+						<th rowspan="2">{{ _("Total") }}</th>
+						<th rowspan="2">{{ _("Average %") }}</th>
+						<th rowspan="2">{{ _("Grade") }}</th>
+						<th rowspan="2">{{ _("Remark") }}</th>
+						{% for metric in summary.display_metrics %}
+							<th rowspan="2">{{ metric.display_label }}</th>
+						{% endfor %}
+					</tr>
+					<tr>
+						{% for period in summary.periods %}
+							{% for component in summary.display_components %}
+								<th>{{ component.component_label }}</th>
+							{% endfor %}
+						{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for course in summary.courses %}
+						<tr>
+							<td class="subject">{{ course.course_name }}</td>
+							{% for period in summary.periods %}
+								{% set period_row = course.period_map.get(period.academic_term) %}
+								{% if period_row %}
+									{% for component in period_row.display_components %}
+										<td class="numeric">{{ component.display_value or "-" }}</td>
+									{% endfor %}
+								{% else %}
+									{% for component in summary.display_components %}<td class="center">-</td>{% endfor %}
+								{% endif %}
+							{% endfor %}
+							<td class="numeric">{{ course.cumulative_score or 0 }}</td>
+							<td class="numeric">{{ "%.2f"|format(course.annual_percentage or 0) }}</td>
+							<td class="center">{{ course.grade or "-" }}</td>
+							<td>{{ course.remark or "-" }}</td>
+							{% for metric in course.metrics or [] %}
+								<td class="numeric">{{ metric.display_value if metric.display_value is not none else "-" }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+				<tfoot>
+					<tr>
+						<th>{{ _("Totals") }}</th>
+						{% for period in summary.periods %}
+							{% for component in summary.display_components %}<th></th>{% endfor %}
+						{% endfor %}
+						<th>{{ summary.total_score or 0 }}</th>
+						<th>{{ "%.2f"|format(summary.average_percent or 0) }}</th>
+						<th>{{ summary.overall_grade or "-" }}</th>
+						<th>{{ summary.overall_remark or "-" }}</th>
+						{% for metric in summary.display_metrics %}<th></th>{% endfor %}
+					</tr>
+				</tfoot>
+			</table>
+		</div>
+	{% elif profiled %}
+		<div class="table-wrap">
+			<table class="terminal-result-table">
+				<thead>
+					<tr>
+						<th class="subject-col">{{ _("Subject") }}</th>
+						{% for component in summary.display_components %}
+							<th>{{ component.component_label }}</th>
+						{% endfor %}
+						<th>{{ _("Total") }}</th>
+						<th>{{ _("%") }}</th>
+						<th>{{ _("Grade") }}</th>
+						<th>{{ _("Remark") }}</th>
+						{% for metric in summary.display_metrics %}
+							<th>{{ metric.display_label }}</th>
+						{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for course in summary.courses %}
+						<tr>
+							<td class="subject">{{ course.course_name }}</td>
+							{% for component in course.display_components %}
+								<td class="numeric">{{ component.display_value or "-" }}</td>
+							{% endfor %}
+							<td class="numeric">{{ course.total_score or 0 }}</td>
+							<td class="numeric">{{ "%.2f"|format(course.percentage or 0) }}</td>
+							<td class="center">{{ course.grade or "-" }}</td>
+							<td>{{ course.remark or "-" }}</td>
+							{% for metric in course.metrics or [] %}
+								<td class="numeric">{{ metric.display_value if metric.display_value is not none else "-" }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+				<tfoot>
+					<tr>
+						<th>{{ _("Totals") }}</th>
+						{% for component in summary.display_components %}<th></th>{% endfor %}
+						<th>{{ summary.total_score or 0 }}</th>
+						<th>{{ "%.2f"|format(summary.average_percent or 0) }}</th>
+						<th>{{ summary.overall_grade or "-" }}</th>
+						<th>{{ summary.overall_remark or "-" }}</th>
+						{% for metric in summary.display_metrics %}<th></th>{% endfor %}
+					</tr>
+				</tfoot>
+			</table>
+		</div>
+	{% else %}
+		<table>
+			<thead>
 				<tr>
-					<td>{{ course.course_name }}</td>
-					{% if show_marks %}<td>{{ "%.1f"|format(course.total_score or 0) }}</td><td>{{ "%.1f"|format(course.maximum_score or 0) }}</td>{% endif %}
-					<td>{{ "%.1f"|format(course.average_percent or 0) }}%</td>
-					<td>{{ course.grade or "-" }}</td>
+					<th>{{ _("Subject") }}</th>
+					{% if show_marks %}<th>{{ _("Score") }}</th><th>{{ _("Maximum") }}</th>{% endif %}
+					<th>{{ _("Average") }}</th>
+					<th>{{ _("Grade") }}</th>
 				</tr>
-			{% endfor %}
+			</thead>
+			<tbody>
+				{% for course in summary.courses %}
+					<tr>
+						<td>{{ course.course_name }}</td>
+						{% if show_marks %}<td class="numeric">{{ course.total_score }}</td><td class="numeric">{{ course.maximum_score }}</td>{% endif %}
+						<td class="numeric">{{ "%.2f"|format(course.average_percent or 0) }}%</td>
+						<td class="center">{{ course.grade or "-" }}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	{% endif %}
+
+	{% if profiled %}
+		<div class="result-totals-grid">
+			{% if mode == "Annual" %}
+				<div class="result-total-card"><span>{{ _("Total Mark") }}</span><strong>{{ summary.total_score or 0 }}</strong></div>
+				<div class="result-total-card"><span>{{ _("Total Average Mark") }}</span><strong>{{ "%.2f"|format(summary.sum_subject_percentages or 0) }}</strong></div>
+				<div class="result-total-card"><span>{{ _("Percentage") }}</span><strong>{{ "%.2f"|format(summary.average_percent or 0) }}%</strong></div>
+			{% else %}
+				{% for component in summary.component_totals %}
+					<div class="result-total-card"><span>{{ component.component_label }} {{ _("Total") }}</span><strong>{{ component.score }}</strong></div>
+				{% endfor %}
+				<div class="result-total-card"><span>{{ _("Grand Total") }}</span><strong>{{ summary.total_score or 0 }}</strong></div>
+				<div class="result-total-card"><span>{{ _("Percentage") }}</span><strong>{{ "%.2f"|format(summary.average_percent or 0) }}%</strong></div>
+			{% endif %}
+		</div>
+	{% endif %}
+
+	{% if not profiled or presentation.show_attendance != false %}
+	<table>
+		<thead>
+			<tr>
+				<th>{{ _("Attendance") }}</th>
+				<th>{{ _("Present") }}</th>
+				<th>{{ _("Absent") }}</th>
+				<th>{{ _("Leave") }}</th>
+				<th>{{ _("School Opened") }}</th>
+				<th>{{ _("Attendance %") }}</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td>{{ mode == "Annual" and _("Academic Year") or _("Academic Term") }}</td>
+				<td class="center">{{ summary.attendance_present or 0 }}</td>
+				<td class="center">{{ summary.attendance_absent or 0 }}</td>
+				<td class="center">{{ summary.attendance_leave or 0 }}</td>
+				<td class="center">{{ summary.attendance_school_opened or summary.attendance_total or 0 }}</td>
+				<td class="center">{{ "%.2f"|format(summary.attendance_percent or 0) }}%</td>
+			</tr>
 		</tbody>
 	</table>
+	{% endif %}
 
-	<table>
-		<thead><tr><th>{{ _("Attendance") }}</th><th>{{ _("Present") }}</th><th>{{ _("Absent") }}</th><th>{{ _("Leave") }}</th><th>{{ _("Total") }}</th></tr></thead>
-		<tbody><tr><td>{{ _("Recorded days") }}</td><td>{{ summary.attendance_present or 0 }}</td><td>{{ summary.attendance_absent or 0 }}</td><td>{{ summary.attendance_leave or 0 }}</td><td>{{ summary.attendance_total or 0 }}</td></tr></tbody>
-	</table>
-
+	{% if not profiled or presentation.show_comments != false %}
 	<div class="comments">
 		<div class="comment-box"><h4>{{ _("Class Teacher Comment") }}</h4><p>{{ review.class_teacher_comment or "-" }}</p></div>
 		<div class="comment-box"><h4>{{ _("Principal Comment") }}</h4><p>{{ review.principal_comment or "-" }}</p></div>
 	</div>
+	{% endif %}
+	{% if not profiled or presentation.show_progression != false %}
 	<div class="comments">
 		<div class="comment-box"><h4>{{ _("Progression Recommendation") }}</h4><p>{{ review.progression_recommendation or summary.suggested_progression or _("Pending Review") }}</p></div>
 		<div class="comment-box"><h4>{{ _("Progression Review Status") }}</h4><p>{{ review.progression_status or _("Draft") }}</p></div>
 	</div>
+	{% endif %}
+
+	{% if profiled and presentation.show_next_period_date != false and summary.next_term_start_date %}
+		<div class="comments">
+			<div class="comment-box"><h4>{{ _("Next Academic Period Begins") }}</h4><p>{{ summary.next_term_start_date }}</p></div>
+			<div class="comment-box"><h4>{{ _("Publication Version") }}</h4><p>{{ summary.publication_version or 1 }}</p></div>
+		</div>
+	{% endif %}
+
+	{% if profiled and presentation.show_grading_legend != false and summary.grading_legend %}
+		<div class="grade-legend">
+			<h4>{{ _("Grading Interpretation") }}</h4>
+			<table>
+				<thead><tr><th>{{ _("Grade") }}</th><th>{{ _("Minimum %") }}</th><th>{{ _("Remark") }}</th></tr></thead>
+				<tbody>
+					{% for item in summary.grading_legend %}
+						<tr><td class="center">{{ item.grade_code }}</td><td class="numeric">{{ item.threshold }}</td><td>{{ item.remark or "-" }}</td></tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	{% endif %}
+
+	{% if profiled %}
+		{% set show_signatory = presentation.show_report_signatory != false and (branding.report_signatory_name or branding.report_signatory_title or branding.report_signatory_signature) %}
+		{% set show_stamp = presentation.show_official_stamp != false and branding.official_stamp_image %}
+		{% set show_verification = presentation.show_verification_qr != false and issued and verification and verification.qr_data_uri %}
+		{% if show_signatory or show_stamp or show_verification %}
+			<div class="report-auth-grid">
+				{% if show_signatory %}
+					<div class="report-auth-card">
+						{% if branding.report_signatory_signature %}<img class="signature-image" src="{{ branding.report_signatory_signature }}">{% endif %}
+						<strong>{{ branding.report_signatory_name or _("Authorized Signatory") }}</strong>
+						<small>{{ branding.report_signatory_title or _("Authorized Signatory") }}</small>
+					</div>
+				{% endif %}
+				{% if show_stamp %}
+					<div class="report-auth-card">
+						<img class="stamp-image" src="{{ branding.official_stamp_image }}">
+						<small>{{ _("Official Stamp / Seal") }}</small>
+					</div>
+				{% endif %}
+				{% if show_verification %}
+					<div class="report-auth-card">
+						<img class="verify-qr" src="{{ verification.qr_data_uri }}">
+						<strong>{{ _("Verify this report") }}</strong>
+						<small>{{ _("Scan the QR code. Public verification does not expose marks or comments.") }}</small>
+						{% if issued.payload_hash %}<small>{{ _("Fingerprint") }}: {{ issued.payload_hash[:16] }}</small>{% endif %}
+					</div>
+				{% endif %}
+			</div>
+		{% endif %}
+	{% endif %}
+
 	{% if branding.report_footer %}<div class="institution-footer">{{ branding.report_footer }}</div>{% endif %}
-	<div class="footer-note">{{ _("This report card was generated from submitted Assessment Results under published result scope") }} {{ publication.name }}. {{ _("Corrections require the standard cancellation and amendment workflow.") }}</div>
+	<div class="footer-note">
+		{% if profiled %}
+			{{ _("This official report card is rendered from immutable Published Result Snapshot version") }}
+			{{ summary.publication_version or publication.publication_version or 1 }}.
+			{% if issued %}
+				{{ _("Issued report-card version") }} {{ issued.issue_version or 1 }}.
+			{% endif %}
+			{{ _("Corrections require a governed new version; prior issued versions remain unchanged.") }}
+		{% else %}
+			{{ _("This report card was generated from submitted Assessment Results under published result scope") }}
+			{{ publication.name }}. {{ _("Corrections require the standard cancellation and amendment workflow.") }}
+		{% endif %}
+	</div>
 </div>

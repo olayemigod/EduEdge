@@ -27,7 +27,9 @@ BRANCH_AWARE_DOCTYPES = (
 	"Assessment Plan",
 	"Assessment Result",
 	"EduEdge Result Publication",
+	"EduEdge Published Result Snapshot",
 	"EduEdge Report Card Review",
+	"EduEdge Report Card Issue",
 	"EduEdge Program Offering",
 	"EduEdge Instructor Branch Assignment",
 )
@@ -145,6 +147,14 @@ def result_publication_query(user: str | None = None) -> str:
 	return _branch_condition("EduEdge Result Publication", user, fieldname="school_branch")
 
 
+def published_result_snapshot_query(user: str | None = None) -> str:
+	return _branch_condition(
+		"EduEdge Published Result Snapshot",
+		user,
+		fieldname="school_branch",
+	)
+
+
 def result_publication_log_query(user: str | None = None) -> str:
 	resolved_user = user or frappe.session.user
 	if not _should_apply_branch_scope(resolved_user):
@@ -165,6 +175,10 @@ def result_publication_log_query(user: str | None = None) -> str:
 
 def report_card_review_query(user: str | None = None) -> str:
 	return _branch_condition("EduEdge Report Card Review", user, fieldname="school_branch")
+
+
+def report_card_issue_query(user: str | None = None) -> str:
+	return _branch_condition("EduEdge Report Card Issue", user, fieldname="school_branch")
 
 
 def program_offering_query(user: str | None = None) -> str:
@@ -358,6 +372,14 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 		return True
 	allowed = _allowed_branch_names(resolved_user)
 	return doc.get("school_branch") in allowed
+
+
+def has_published_result_snapshot_permission(doc, user=None, permission_type=None) -> bool:
+	return has_school_branch_permission(doc, user, permission_type)
+
+
+def has_report_card_issue_permission(doc, user=None, permission_type=None) -> bool:
+	return has_school_branch_permission(doc, user, permission_type)
 
 
 def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool:

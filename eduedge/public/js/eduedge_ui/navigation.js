@@ -172,6 +172,8 @@ export function buildEduEdgeMenuItems() {
 		menuGroup("assessment-results", __("Assessments & Results"), "clipboard", [
 			menuItem(__(`${assessments} & Results`), "/app/eduedge-assessment-operations", "assessment", __(`Plan, approve, and publish ${assessments.toLowerCase()}`)),
 			menuItem(__("Report Cards"), "/app/eduedge-report-cards", "report", __("Comments, progression, and printing")),
+			menuItem(__("Result Broadsheet"), "/app/eduedge-result-broadsheet", "table", __("Published class result matrix and CSV export")),
+			menuItem(__("Result Intelligence"), "/app/eduedge-result-intelligence", "chart", __("Published class, subject, student, and trend intelligence")),
 		]),
 		menuGroup("cbt-delivery", __("CBT Delivery"), "monitor", [
 			menuItem(__("CBT Operations"), "/app/eduedge-cbt-operations", "assessment", __("Centres, templates, and readiness")),

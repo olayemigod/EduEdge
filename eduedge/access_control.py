@@ -156,6 +156,8 @@ ROUTE_REQUIREMENTS = {
 		("report_card_review", "read"),
 		("assessment_result", "read"),
 	),
+	"/app/eduedge-result-broadsheet": (("result_publication", "read"),),
+	"/app/eduedge-result-intelligence": (("result_publication", "read"),),
 	"/app/eduedge-institution-profile": (("institution", "read"),),
 	"/app/eduedge-institution-structure": (
 		("institution", "read"),
