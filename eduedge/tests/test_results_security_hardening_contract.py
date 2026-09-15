@@ -32,6 +32,30 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("Full report-card access is limited to the effective Class Teacher", service)
 		self.assertNotIn("if write and not roles.intersection(OPERATIONAL_ROLES)", service)
 
+	def test_raw_snapshot_and_issue_hooks_require_class_responsibility_even_with_extra_roles(self):
+		permissions = (APP / "education" / "permissions.py").read_text()
+		self.assertIn(
+			'return _class_responsibility_result_query("EduEdge Published Result Snapshot", user)',
+			permissions,
+		)
+		self.assertIn(
+			'return _class_responsibility_result_query("EduEdge Report Card Issue", user)',
+			permissions,
+		)
+		self.assertIn("def _has_class_responsibility_result_permission", permissions)
+		self.assertIn(
+			"def has_published_result_snapshot_permission(doc, user=None, permission_type=None)",
+			permissions,
+		)
+		self.assertIn(
+			"def has_report_card_issue_permission(doc, user=None, permission_type=None)",
+			permissions,
+		)
+		self.assertGreaterEqual(
+			permissions.count("return _has_class_responsibility_result_permission(doc, user, permission_type)"),
+			3,
+		)
+
 	def test_generic_student_read_does_not_grant_report_card_access(self):
 		service = (APP / "education" / "report_cards.py").read_text()
 		self.assertIn("You are not permitted to access governed report cards.", service)
