@@ -11,6 +11,7 @@ from frappe.utils import flt, now_datetime
 from eduedge.education.assessment_operations import get_publication_readiness
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.result_engine import (
+	build_component_plan_maximum_blockers,
 	build_configured_class_metrics,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
@@ -316,9 +317,18 @@ def _get_complete_period_result_rows(publication_doc, config: dict, students: li
 			"assessment_group": ["in", assessment_groups or ["__none__"]],
 			"docstatus": 1,
 		},
-		fields=["name"],
+		fields=["name", "assessment_group", "course", "academic_term", "maximum_assessment_score"],
 		page_length=0,
 	)
+	maximum_blockers = build_component_plan_maximum_blockers(config, plans)
+	if maximum_blockers:
+		first = maximum_blockers[0]
+		frappe.throw(
+			_(
+				"Prior-period Assessment Plan maximum for {0} / {1} does not match the Result Profile target."
+			).format(first.get("course"), first.get("component_key")),
+			frappe.ValidationError,
+		)
 	plan_names = [row.name for row in plans]
 	rows = _get_submitted_result_rows(publication_doc.school_branch, plan_names, students)
 	expected = len(plan_names) * len(students)
