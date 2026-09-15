@@ -27,9 +27,9 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 	def test_report_card_service_rejects_unassigned_teacher_class(self):
 		service = (APP / "education" / "report_cards.py").read_text()
 		self.assertIn("is_limited_instructor_user", service)
-		self.assertIn("get_user_instructor_names", service)
+		self.assertIn("has_class_responsibility_assignment", service)
 		self.assertIn("def _assert_publication_operator_scope", service)
-		self.assertIn("You are not assigned to this Student Group / Class.", service)
+		self.assertIn("Full report-card access is limited to the effective Class Teacher", service)
 		self.assertNotIn("if write and not roles.intersection(OPERATIONAL_ROLES)", service)
 
 	def test_subject_teacher_cannot_acquire_class_teacher_review_authority(self):
@@ -42,12 +42,14 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("CLASS_RESPONSIBILITY_TYPES", teaching)
 		self.assertIn("term_end_date", teaching)
 		self.assertIn("year_end_date", teaching)
-		self.assertIn('permission_type not in {"create", "write", "delete", "share"}', permissions)
+		self.assertIn("def _class_responsibility_result_query", permissions)
+		self.assertIn('return _class_responsibility_result_query("EduEdge Report Card Review", user)', permissions)
 		self.assertIn("has_class_responsibility_assignment", permissions)
 		self.assertIn("def can_manage_report_card_reviews", service)
 		self.assertIn("def assert_report_card_review_management", service)
 		self.assertIn("assert_report_card_review_management", api)
 		self.assertIn('"can_review"', api)
+		self.assertIn("can_manage_report_card_reviews(row)", api)
 		self.assertIn("context.can_review", vue)
 		self.assertIn("Published results are read-only here.", vue)
 
