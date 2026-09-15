@@ -51,14 +51,14 @@ def _publication_options(branch: str) -> dict:
 	}
 
 
-def _latest_publication(
+def _matching_publications(
 	branch: str,
 	*,
 	academic_year: str,
 	student_group: str,
 	result_mode: str,
 	academic_term: str | None,
-):
+) -> list[dict]:
 	filters = {
 		"school_branch": branch,
 		"status": "Published",
@@ -78,19 +78,26 @@ def _latest_publication(
 		filters=filters,
 		fields=[
 			"name",
+			"title",
 			"school_branch",
 			"student_group",
 			"academic_year",
 			"academic_term",
+			"assessment_group",
 			"result_mode",
 			"result_profile",
 			"publication_version",
 			"published_on",
 		],
 		order_by="publication_version desc, published_on desc, creation desc",
-		limit=1,
+		page_length=0,
 	)
-	return dict(rows[0]) if rows else None
+	latest: dict[tuple[str, str], dict] = {}
+	for row in rows:
+		key = (row.result_profile or "", row.assessment_group or "")
+		if key not in latest:
+			latest[key] = dict(row)
+	return list(latest.values())
 
 
 def _snapshot_payloads(publication: str) -> list[dict]:
@@ -177,6 +184,7 @@ def get_broadsheet_context(
 	academic_term: str | None = None,
 	student_group: str | None = None,
 	result_mode: str | None = None,
+	publication: str | None = None,
 ) -> dict:
 	_require_access()
 	branch = _resolve_branch(school_branch)
@@ -196,6 +204,7 @@ def get_broadsheet_context(
 		"allowed_branches": get_allowed_school_branches(),
 		"options": options,
 		"publication": None,
+		"publication_choices": [],
 		"subjects": [],
 		"rows": [],
 		"student_count": 0,
@@ -205,16 +214,26 @@ def get_broadsheet_context(
 	if not academic_year or not student_group:
 		return response
 
-	publication = _latest_publication(
+	choices = _matching_publications(
 		branch,
 		academic_year=academic_year,
 		student_group=student_group,
 		result_mode=mode,
 		academic_term=academic_term,
 	)
-	if not publication:
+	response["publication_choices"] = choices
+	selected = None
+	if publication:
+		selected = next((row for row in choices if row["name"] == publication), None)
+		if not selected:
+			frappe.throw(_("Selected Result Publication is outside this broadsheet scope."), frappe.PermissionError)
+	elif len(choices) == 1:
+		selected = choices[0]
+	if not selected:
+		if len(choices) > 1:
+			response["note"] = _("More than one published Result Profile exists for this class and period. Select the exact Published Result before opening the broadsheet.")
 		return response
-	response.update(_build_broadsheet(publication))
+	response.update(_build_broadsheet(selected))
 	return response
 
 
