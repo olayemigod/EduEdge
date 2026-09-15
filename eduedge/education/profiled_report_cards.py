@@ -121,6 +121,7 @@ def summary_from_snapshot_payload(payload: dict) -> dict:
 		"result_mode": mode,
 		"result_profile": publication.get("result_profile"),
 		"student_group": publication.get("student_group"),
+		"source_program": student.get("program"),
 		"academic_year": publication.get("academic_year"),
 		"academic_term": publication.get("academic_term"),
 		"academic_term_label": publication.get("academic_term_label") or publication.get("academic_term"),
