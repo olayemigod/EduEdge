@@ -1,15 +1,56 @@
 from __future__ import annotations
 
+import base64
+import io
 import hashlib
 import json
+import secrets
+from urllib.parse import urlencode
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import get_url, now_datetime
 
 from eduedge.services.institution_branding import get_institution_branding
 
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
+
+
+def generate_verification_code() -> str:
+	"""Return an opaque, non-sequential code suitable for a public verification link."""
+	while True:
+		code = secrets.token_urlsafe(18)
+		if not frappe.db.exists(ISSUE_DOCTYPE, {"verification_code": code}):
+			return code
+
+
+def ensure_issue_verification_code(issue_name: str, current_code: str | None = None) -> str:
+	"""Backfill verification metadata without changing the immutable report payload/hash."""
+	if current_code:
+		return current_code
+	code = generate_verification_code()
+	frappe.db.set_value(
+		ISSUE_DOCTYPE,
+		issue_name,
+		"verification_code",
+		code,
+		update_modified=False,
+	)
+	return code
+
+
+def build_verification_url(code: str) -> str:
+	base = get_url().rstrip("/")
+	return f"{base}/verify-result?{urlencode({'code': code})}"
+
+
+def build_verification_qr_data_uri(url: str) -> str:
+	from pyqrcode import create as qrcreate
+
+	stream = io.BytesIO()
+	qrcreate(url).svg(stream, scale=3, quiet_zone=1)
+	encoded = base64.b64encode(stream.getvalue()).decode("ascii")
+	return f"data:image/svg+xml;base64,{encoded}"
 
 
 def create_report_card_issue(review: str) -> str:
@@ -57,6 +98,7 @@ def create_report_card_issue(review: str) -> str:
 			"payload_hash": payload_hash,
 			"issued_by": frappe.session.user,
 			"issued_on": now_datetime(),
+			"verification_code": generate_verification_code(),
 			"payload_json": payload_json,
 		}
 	)
@@ -80,10 +122,15 @@ def get_effective_issued_payload(publication: str, student: str) -> dict | None:
 	if actual_hash != row.payload_hash:
 		frappe.throw(_("Issued Report Card integrity check failed."), frappe.ValidationError)
 	payload = json.loads(row.payload_json)
+	verification_code = ensure_issue_verification_code(row.name, row.get("verification_code"))
+	verification_url = build_verification_url(verification_code)
 	payload["issue_record"] = {
 		"name": row.name,
 		"issue_version": int(row.issue_version or 1),
 		"payload_hash": row.payload_hash,
+		"verification_code": verification_code,
+		"verification_url": verification_url,
+		"verification_qr_data_uri": build_verification_qr_data_uri(verification_url),
 	}
 	return payload
 
@@ -126,7 +173,7 @@ def _latest_issue_row(publication: str, student: str):
 	rows = frappe.get_all(
 		ISSUE_DOCTYPE,
 		filters={"result_publication": publication, "student": student},
-		fields=["name", "issue_version", "payload_hash", "payload_json"],
+		fields=["name", "issue_version", "payload_hash", "payload_json", "verification_code"],
 		order_by="issue_version desc, creation desc",
 		limit=1,
 	)

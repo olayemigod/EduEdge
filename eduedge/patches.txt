@@ -20,3 +20,4 @@ eduedge.patches.v0_9.add_department_hierarchy_permissions
 eduedge.patches.v0_9.normalize_instructor_assignment_titles
 eduedge.patches.v0_9.rename_scheme_of_work_page_route
 eduedge.patches.v0_9.harden_school_event_permissions
+eduedge.patches.v1_0.backfill_report_card_verification_codes
