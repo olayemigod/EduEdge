@@ -15,7 +15,7 @@
 					eyebrow="Published Results"
 					title="Report Cards and Progression"
 					subtitle="Prepare student report cards, add comments, review progression recommendations, and print only published results."
-					action-label="Prepare Report Cards"
+					:action-label="context.can_review ? 'Prepare Report Cards' : ''"
 					@action="prepareReviews"
 				/>
 			</template>
@@ -55,7 +55,7 @@
 						<button
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="working || !filters.publication"
+							:disabled="working || !filters.publication || !context.can_review"
 							@click="prepareReviews"
 						>
 							Prepare reviews
@@ -209,11 +209,12 @@
 
 							<div v-if="!selectedStudent.review" class="eduedge-scope-note">Prepare report-card reviews before entering comments or progression recommendations.</div>
 							<template v-else>
-								<label class="eduedge-field"><span>Class Teacher Comment</span><textarea v-model="editor.class_teacher_comment" class="form-control" rows="4" :disabled="!isDraft"></textarea></label>
+								<div v-if="!context.can_review" class="eduedge-scope-note">Published results are read-only here. Report-card review editing is limited to the effective Class Teacher, Form Teacher, Head of Class / Level, or an authorized academic administrator.</div>
+								<label class="eduedge-field"><span>Class Teacher Comment</span><textarea v-model="editor.class_teacher_comment" class="form-control" rows="4" :disabled="!isDraft || !context.can_review"></textarea></label>
 								<label class="eduedge-field"><span>Principal Comment</span><textarea v-model="editor.principal_comment" class="form-control" rows="4" :disabled="!isDraft || !context.can_approve"></textarea></label>
 								<label class="eduedge-field">
 									<span>Progression Recommendation</span>
-									<select v-model="editor.progression_recommendation" class="form-control" :disabled="!isDraft">
+									<select v-model="editor.progression_recommendation" class="form-control" :disabled="!isDraft || !context.can_review">
 										<option>Pending Review</option><option>Promote</option><option>Repeat</option><option>Graduate</option><option>Transfer</option><option>Not Applicable</option>
 									</select>
 								</label>
@@ -222,8 +223,8 @@
 									<span v-if="selectedStudent.review.last_review_note">{{ selectedStudent.review.last_review_note }}</span>
 								</div>
 								<div class="eduedge-review-actions">
-									<button v-if="isDraft" type="button" class="edge-button" :disabled="working" @click="saveReview">Save draft</button>
-									<button v-if="isDraft" type="button" class="edge-button edge-button--primary" :disabled="working || editor.progression_recommendation === 'Pending Review'" @click="recommendProgression">Recommend</button>
+									<button v-if="context.can_review && isDraft" type="button" class="edge-button" :disabled="working" @click="saveReview">Save draft</button>
+									<button v-if="context.can_review && isDraft" type="button" class="edge-button edge-button--primary" :disabled="working || editor.progression_recommendation === 'Pending Review'" @click="recommendProgression">Recommend</button>
 									<button v-if="context.can_approve && selectedStudent.review.progression_status === 'Recommended'" type="button" class="edge-button edge-button--primary" :disabled="working" @click="approveProgression">Approve</button>
 									<button v-if="context.can_approve && ['Recommended', 'Approved'].includes(selectedStudent.review.progression_status)" type="button" class="edge-button" :disabled="working" @click="reopenReview">Reopen</button>
 									<button
@@ -256,7 +257,7 @@ export default {
 			error: "",
 			menuItems: EDUEDGE_MENU_ITEMS,
 			filters: { branch: "", publication: "", student: "" },
-			context: { user: {}, current_branch: null, allowed_branches: [], publications: [], publication: null, students: [], counts: {}, can_approve: false },
+			context: { user: {}, current_branch: null, allowed_branches: [], publications: [], publication: null, students: [], counts: {}, can_approve: false, can_review: false },
 			selectedStudent: null,
 			editor: { class_teacher_comment: "", principal_comment: "", progression_recommendation: "Pending Review" },
 			history: { issues: [], publications: [] },
