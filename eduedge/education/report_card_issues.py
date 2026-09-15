@@ -7,6 +7,8 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from eduedge.services.institution_branding import get_institution_branding
+
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
 
 
@@ -22,6 +24,7 @@ def create_report_card_issue(review: str) -> str:
 		review_doc.student,
 		_prefer_issued=False,
 	)
+	payload = _freeze_institution_identity(payload)
 	publication = payload.get("publication") or {}
 	payload["issue"] = {
 		"issue_version": _next_issue_version(review_doc.result_publication, review_doc.student),
@@ -82,6 +85,40 @@ def get_effective_issued_payload(publication: str, student: str) -> dict | None:
 		"issue_version": int(row.issue_version or 1),
 		"payload_hash": row.payload_hash,
 	}
+	return payload
+
+
+def _freeze_institution_identity(payload: dict) -> dict:
+	branch = payload.get("branch") or {}
+	branch_name = branch.get("name")
+	institution_name = (
+		frappe.db.get_value("EduEdge School Branch", branch_name, "institution")
+		if branch_name
+		else None
+	)
+	branding = get_institution_branding(institution_name, branch=branch_name)
+	institution = {}
+	if institution_name:
+		institution = dict(
+			frappe.db.get_value(
+				"EduEdge Institution",
+				institution_name,
+				[
+					"name",
+					"institution_name",
+					"official_name",
+					"short_name",
+					"institution_code",
+					"institution_type",
+				],
+				as_dict=True,
+			)
+			or {}
+		)
+	payload["institution"] = institution
+	payload["branding"] = branding
+	if branding.get("address"):
+		payload["address"] = branding["address"]
 	return payload
 
 
