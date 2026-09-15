@@ -11,6 +11,7 @@ from eduedge.education.assessment_operations import (
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access, get_context_branch
+from eduedge.education.result_snapshots import create_publication_snapshots
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -134,20 +135,22 @@ def get_assessment_context(
 	publication = None
 	readiness = None
 	if student_group and assessment_group and academic_year:
-		publication = frappe.db.get_value(
+		publication_rows = frappe.get_all(
 			PUBLICATION_DOCTYPE,
-			{
+			filters={
 				"school_branch": resolved_branch,
 				"student_group": student_group,
 				"academic_year": academic_year,
 				"academic_term": academic_term or "",
 				"assessment_group": assessment_group,
 			},
-			[
+			fields=[
 				"name",
 				"title",
 				"result_profile",
 				"result_mode",
+				"publication_version",
+				"supersedes_publication",
 				"status",
 				"expected_results",
 				"submitted_results",
@@ -162,8 +165,10 @@ def get_assessment_context(
 				"published_on",
 				"rejection_reason",
 			],
-			as_dict=True,
+			order_by="publication_version desc, creation desc",
+			limit=1,
 		)
+		publication = publication_rows[0] if publication_rows else None
 		readiness = get_publication_readiness(
 			school_branch=resolved_branch,
 			student_group=student_group,
@@ -225,7 +230,14 @@ def ensure_result_publication(
 		"academic_term": academic_term or "",
 		"assessment_group": assessment_group,
 	}
-	name = frappe.db.exists(PUBLICATION_DOCTYPE, filters)
+	existing_rows = frappe.get_all(
+		PUBLICATION_DOCTYPE,
+		filters=filters,
+		fields=["name", "publication_version"],
+		order_by="publication_version desc, creation desc",
+		limit=1,
+	)
+	name = existing_rows[0].name if existing_rows else None
 	if name:
 		doc = frappe.get_doc(PUBLICATION_DOCTYPE, name)
 		requested_mode = result_mode or "Terminal"
@@ -254,6 +266,7 @@ def ensure_result_publication(
 			**filters,
 			"result_profile": result_profile,
 			"result_mode": result_mode or "Terminal",
+			"publication_version": 1,
 			"status": "Draft",
 		}
 	)
@@ -375,6 +388,64 @@ def publish_results(publication: str) -> dict:
 			"report_card_ready": 1,
 		},
 	)
+	snapshot_names = create_publication_snapshots(doc.name)
+	payload = _publication_payload(doc.name)
+	payload["snapshot_count"] = len(snapshot_names)
+	return payload
+
+
+@frappe.whitelist()
+@guard_eduedge_action("assessment", action="create_result_publication_revision")
+def create_result_publication_revision(publication: str) -> dict:
+	_require_approver()
+	source = _get_publication(publication)
+	if source.status != "Published":
+		frappe.throw(_("Only a Published Result Publication can be revised."), frappe.ValidationError)
+
+	filters = {
+		"school_branch": source.school_branch,
+		"student_group": source.student_group,
+		"academic_year": source.academic_year,
+		"academic_term": source.academic_term or "",
+		"assessment_group": source.assessment_group,
+	}
+	frappe.db.sql(
+		"select name from `tabEduEdge Result Publication` "
+		"where school_branch=%(school_branch)s and student_group=%(student_group)s "
+		"and academic_year=%(academic_year)s and coalesce(academic_term, '')=%(academic_term)s "
+		"and assessment_group=%(assessment_group)s for update",
+		filters,
+	)
+	existing = frappe.get_all(
+		PUBLICATION_DOCTYPE,
+		filters=filters,
+		fields=["name", "publication_version", "status", "supersedes_publication"],
+		order_by="publication_version desc, creation desc",
+		limit=1,
+	)
+	if existing and existing[0].name != source.name and existing[0].status != "Published":
+		return _publication_payload(existing[0].name)
+	next_version = max([int(row.publication_version or 1) for row in existing] + [int(source.publication_version or 1)]) + 1
+	doc = frappe.get_doc(
+		{
+			"doctype": PUBLICATION_DOCTYPE,
+			**filters,
+			"result_profile": source.result_profile,
+			"result_mode": source.result_mode or "Terminal",
+			"publication_version": next_version,
+			"supersedes_publication": source.name,
+			"status": "Draft",
+		}
+	)
+	doc.insert()
+	append_publication_log(
+		doc.name,
+		action="Revision Created",
+		from_status=None,
+		to_status="Draft",
+		remarks=_("Created as revision {0} of {1}.").format(next_version, source.name),
+	)
+	_refresh_readiness(doc)
 	return _publication_payload(doc.name)
 
 
@@ -388,18 +459,20 @@ def get_report_card_readiness(
 	_require_login()
 	branch = frappe.db.get_value("Student Group", student_group, BRANCH_FIELD)
 	assert_branch_access(branch)
-	publication = frappe.db.get_value(
+	publication_rows = frappe.get_all(
 		PUBLICATION_DOCTYPE,
-		{
+		filters={
 			"school_branch": branch,
 			"student_group": student_group,
 			"academic_year": academic_year,
 			"academic_term": academic_term or "",
 			"assessment_group": assessment_group,
 		},
-		["name", "status", "report_card_ready", "published_on"],
-		as_dict=True,
+		fields=["name", "status", "report_card_ready", "published_on", "publication_version"],
+		order_by="publication_version desc, creation desc",
+		limit=1,
 	)
+	publication = publication_rows[0] if publication_rows else None
 	return {
 		"ready": bool(publication and publication.status == "Published" and publication.report_card_ready),
 		"publication": publication,
@@ -477,6 +550,8 @@ def _publication_payload(name: str) -> dict:
 			"assessment_group",
 			"result_profile",
 			"result_mode",
+			"publication_version",
+			"supersedes_publication",
 			"status",
 			"expected_results",
 			"submitted_results",

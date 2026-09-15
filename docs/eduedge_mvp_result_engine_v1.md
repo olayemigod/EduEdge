@@ -37,3 +37,11 @@ Historical Result Publications do not require a Result Profile. Existing Assessm
 3. Generic cohort statistics materialisation.
 4. Immutable publication snapshots.
 5. Report Cards V2 and Terminal/Annual print presets.
+
+## Publication immutability and revisions
+
+Result Profile publications now produce one immutable `EduEdge Published Result Snapshot` per Student when publication succeeds. The snapshot stores a canonical JSON payload plus SHA-256 hash, source Assessment Result names, configured component/metric output, attendance summary and the exact result calculation payload. Published snapshots cannot be edited or deleted.
+
+Corrections do not rewrite an old publication. `create_result_publication_revision` creates a new Draft Result Publication with an incremented `publication_version` and `supersedes_publication` link. The previous publication and its snapshots remain intact.
+
+Terminal profiles that display Year-to-Date statistics calculate those metrics from the same sessional Student Group across configured Institution Academic Calendar periods. Publication fails closed if earlier source results needed for the YTD metric are incomplete.

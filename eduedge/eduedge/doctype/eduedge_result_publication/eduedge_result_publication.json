@@ -12,6 +12,8 @@
   "assessment_group",
   "result_profile",
   "result_mode",
+  "publication_version",
+  "supersedes_publication",
   "column_break_scope",
   "academic_year",
   "academic_term",
@@ -87,6 +89,22 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "publication_version",
+   "fieldtype": "Int",
+   "label": "Publication Version",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "supersedes_publication",
+   "fieldtype": "Link",
+   "label": "Supersedes Publication",
+   "options": "EduEdge Result Publication",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_scope",
