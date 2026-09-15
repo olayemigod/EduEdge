@@ -156,6 +156,9 @@ ROUTE_REQUIREMENTS = {
 		("report_card_review", "read"),
 		("assessment_result", "read"),
 	),
+	# Result Intelligence is read-only and the API additionally enforces
+	# management/academic roles plus exact Branch access.
+	"/app/eduedge-result-intelligence": (("result_publication", "read"),),
 	"/app/eduedge-institution-profile": (("institution", "read"),),
 	"/app/eduedge-institution-structure": (
 		("institution", "read"),
