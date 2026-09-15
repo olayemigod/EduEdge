@@ -220,11 +220,6 @@
    "export": 1,
    "print": 1,
    "role": "Academic Administrator"
-  },
-  {
-   "read": 1,
-   "report": 1,
-   "role": "Teacher"
   }
  ],
  "sort_field": "issued_on",
