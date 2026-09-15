@@ -68,6 +68,15 @@
 	.summary-card { border: 1px solid #ccc; padding: 7px; text-align: center; }
 	.summary-card span { display: block; color: #555; font-size: 7.5pt; }
 	.summary-card strong { display: block; margin-top: 2px; font-size: 13px; }
+	.result-totals-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+		gap: 7px;
+		margin: 8px 0 10px;
+	}
+	.result-total-card { border: 1px solid #bbb; padding: 6px; text-align: center; }
+	.result-total-card span { display: block; color: #555; font-size: 7.5pt; }
+	.result-total-card strong { display: block; margin-top: 2px; font-size: 11px; }
 	.table-wrap { width: 100%; overflow: hidden; }
 	table { width: 100%; border-collapse: collapse; margin: 9px 0; table-layout: fixed; }
 	th, td { border: 1px solid #aaa; padding: 4px; vertical-align: middle; }
@@ -299,6 +308,22 @@
 				{% endfor %}
 			</tbody>
 		</table>
+	{% endif %}
+
+	{% if profiled %}
+		<div class="result-totals-grid">
+			{% if mode == "Annual" %}
+				<div class="result-total-card"><span>{{ _("Total Mark") }}</span><strong>{{ summary.total_score or 0 }}</strong></div>
+				<div class="result-total-card"><span>{{ _("Total Average Mark") }}</span><strong>{{ "%.2f"|format(summary.sum_subject_percentages or 0) }}</strong></div>
+				<div class="result-total-card"><span>{{ _("Percentage") }}</span><strong>{{ "%.2f"|format(summary.average_percent or 0) }}%</strong></div>
+			{% else %}
+				{% for component in summary.component_totals %}
+					<div class="result-total-card"><span>{{ component.component_label }} {{ _("Total") }}</span><strong>{{ component.score }}</strong></div>
+				{% endfor %}
+				<div class="result-total-card"><span>{{ _("Grand Total") }}</span><strong>{{ summary.total_score or 0 }}</strong></div>
+				<div class="result-total-card"><span>{{ _("Percentage") }}</span><strong>{{ "%.2f"|format(summary.average_percent or 0) }}%</strong></div>
+			{% endif %}
+		</div>
 	{% endif %}
 
 	<table>
