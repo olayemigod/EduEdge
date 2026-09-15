@@ -1,6 +1,6 @@
 {% set profiled = publication.result_profile %}
 {% set mode = summary.result_mode or publication.result_mode or "Terminal" %}
-{% set issued = issue or issue_record %}
+{% set issued = issue_record or issue %}
 {% set presentation = summary.profile.presentation if summary.profile and summary.profile.presentation else {} %}
 <style>
 	{% if profiled and mode == "Annual" %}
@@ -111,6 +111,19 @@
 		font-weight: 700;
 		letter-spacing: 0.04em;
 	}
+	.verification-block {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-top: 10px;
+		padding: 7px;
+		border: 1px solid #bbb;
+	}
+	.verification-block img { width: 66px; height: 66px; }
+	.verification-copy { flex: 1; }
+	.verification-copy p { margin: 2px 0; font-size: 7.5pt; }
+	.verification-code { font-family: monospace; font-weight: 700; overflow-wrap: anywhere; }
 </style>
 
 <div class="page-break">
@@ -390,6 +403,16 @@
 		</div>
 	{% endif %}
 
+	{% if issued and issued.verification_qr_data_uri and issued.verification_url %}
+		<div class="verification-block">
+			<div class="verification-copy">
+				<p><strong>{{ _("Verify this issued report card") }}</strong></p>
+				<p>{{ _("Scan the QR code or use the verification code on the EduEdge verification page.") }}</p>
+				<p class="verification-code">{{ issued.verification_code }}</p>
+			</div>
+			<img src="{{ issued.verification_qr_data_uri }}" alt="{{ _("Report card verification QR code") }}">
+		</div>
+	{% endif %}
 	{% if branding.report_footer %}<div class="institution-footer">{{ branding.report_footer }}</div>{% endif %}
 	<div class="footer-note">
 		{% if profiled %}
