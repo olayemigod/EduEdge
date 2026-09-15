@@ -16,6 +16,8 @@ BYPASS_ROLES = {
 
 def result_profile_query(user: str | None = None) -> str:
 	resolved_user = user or frappe.session.user
+	if resolved_user == "Guest":
+		return "1=0"
 	if not _should_scope(resolved_user):
 		return ""
 
@@ -41,6 +43,8 @@ def result_profile_query(user: str | None = None) -> str:
 
 def has_result_profile_permission(doc, user=None, permission_type=None) -> bool:
 	resolved_user = user or frappe.session.user
+	if resolved_user == "Guest":
+		return False
 	if not _should_scope(resolved_user):
 		return True
 	if not doc:

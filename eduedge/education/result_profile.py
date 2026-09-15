@@ -307,7 +307,7 @@ def _validate_default(doc) -> None:
 	filters = {
 		"name": ["!=", doc.name],
 		"institution": doc.institution,
-		"school_branch": doc.school_branch or "",
+		"school_branch": doc.school_branch if doc.school_branch else ["is", "not set"],
 		"is_default": 1,
 		"is_active": 1,
 	}

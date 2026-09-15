@@ -73,6 +73,7 @@ def after_migrate() -> None:
 	ensure_roles()
 	ensure_education_custom_fields()
 	ensure_result_sync_custom_fields()
+	ensure_result_engine_custom_fields()
 	ensure_native_academic_context_foundation()
 	ensure_class_arm_foundation()
 	_ensure_academic_progression()
