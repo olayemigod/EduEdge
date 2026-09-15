@@ -13,6 +13,10 @@ from education.education.report.course_wise_assessment_report.course_wise_assess
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.profiled_report_cards import (
+	get_profiled_publication_student_summaries,
+	get_profiled_student_report_card_payload,
+)
 
 PUBLICATION_DOCTYPE = "EduEdge Result Publication"
 REVIEW_DOCTYPE = "EduEdge Report Card Review"
@@ -55,6 +59,10 @@ def get_published_publication(name: str):
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
+			"publication_version",
+			"supersedes_publication",
 			"status",
 			"report_card_ready",
 			"published_on",
@@ -89,7 +97,16 @@ def validate_report_card_review(doc) -> None:
 		doc.set(fieldname, value)
 
 	assert_branch_access(publication.school_branch)
-	if not frappe.db.exists(
+	if publication.result_profile:
+		if not frappe.db.exists(
+			"EduEdge Published Result Snapshot",
+			{"result_publication": publication.name, "student": doc.student},
+		):
+			frappe.throw(
+				_("Student {0} is outside this published result snapshot.").format(doc.student),
+				frappe.ValidationError,
+			)
+	elif not frappe.db.exists(
 		"Student Group Student",
 		{"parent": publication.student_group, "student": doc.student, "active": 1},
 	):
@@ -158,16 +175,25 @@ def assert_report_card_access(publication, student: str, *, write: bool = False)
 		if write:
 			frappe.throw(_("Published report cards are read-only."), frappe.PermissionError)
 
-	if not frappe.db.exists(
-		"Student Group Student",
-		{"parent": publication.student_group, "student": student, "active": 1},
-	):
+	if publication.result_profile:
+		in_scope = frappe.db.exists(
+			"EduEdge Published Result Snapshot",
+			{"result_publication": publication.name, "student": student},
+		)
+	else:
+		in_scope = frappe.db.exists(
+			"Student Group Student",
+			{"parent": publication.student_group, "student": student, "active": 1},
+		)
+	if not in_scope:
 		frappe.throw(_("Student is outside the published class scope."), frappe.PermissionError)
 
 
 def get_publication_student_summaries(publication_name: str) -> list[dict]:
 	publication = get_published_publication(publication_name)
 	assert_branch_access(publication.school_branch)
+	if publication.result_profile:
+		return get_profiled_publication_student_summaries(publication, REVIEW_DOCTYPE)
 
 	students = frappe.get_all(
 		"Student Group Student",
@@ -231,6 +257,8 @@ def get_publication_student_summaries(publication_name: str) -> list[dict]:
 def get_student_report_card_payload(publication_name: str, student: str) -> dict:
 	publication = get_published_publication(publication_name)
 	assert_report_card_access(publication, student)
+	if publication.result_profile:
+		return get_profiled_student_report_card_payload(publication, student, REVIEW_DOCTYPE)
 	student_row = frappe.db.get_value(
 		"Student",
 		student,
