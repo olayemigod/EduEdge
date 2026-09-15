@@ -25,6 +25,7 @@ from eduedge.education.enrollment_progression_fields import (
 	PROGRESSION_TARGET_GROUP_FIELD,
 )
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.result_snapshots import get_snapshot_payload
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -367,6 +368,13 @@ def _approved_annual_result_evidence(
 			_("The Student has no immutable Published Result Snapshot for this Annual Result Publication."),
 			frappe.ValidationError,
 		)
+	snapshot_payload = get_snapshot_payload(publication.name, source.student)
+	if not snapshot_payload:
+		frappe.throw(
+			_("The Student's Published Result Snapshot could not be verified."),
+			frappe.ValidationError,
+		)
+	result_summary = (snapshot_payload.get("result") or {}).get("summary") or {}
 
 	review = frappe.db.get_value(
 		"EduEdge Report Card Review",
@@ -401,6 +409,8 @@ def _approved_annual_result_evidence(
 		"result_mode": publication.result_mode,
 		"published_snapshot": snapshot.name,
 		"snapshot_hash": snapshot.payload_hash,
+		"overall_percentage": result_summary.get("overall_percentage"),
+		"overall_grade": result_summary.get("overall_grade"),
 		"approved_review": review.name,
 		"approved_recommendation": review.progression_recommendation,
 		"approved_by": review.approved_by,
