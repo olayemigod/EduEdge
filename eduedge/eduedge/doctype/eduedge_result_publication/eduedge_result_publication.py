@@ -36,6 +36,8 @@ class EduEdgeResultPublication(Document):
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
 		):
 			if self.has_value_changed(fieldname):
 				frappe.throw(
