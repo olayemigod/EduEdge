@@ -18,7 +18,7 @@ class TestResultAttendanceDayContract(unittest.TestCase):
 		self.assertIn("Attendance switches between daily class attendance and course-level attendance", text)
 
 	def test_official_attendance_fails_closed_on_incomplete_or_conflicting_days(self):
-		text = (APP / "education" / "result_snapshots.py").read_text()
+		text = (APP / "education" / "result_attendance.py").read_text()
 		self.assertIn("def assert_official_attendance_complete", text)
 		self.assertIn("missing_student_days", text)
 		self.assertIn("conflicting_student_days", text)
