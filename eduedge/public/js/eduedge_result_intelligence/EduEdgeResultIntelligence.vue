@@ -97,7 +97,7 @@
 					</div>
 				</section>
 
-				<section class="intel-notes"><p>{{ report.notes.source }}</p><p>{{ report.notes.pass_rate }}</p></section>
+				<section class="intel-notes"><p>{{ report.notes.source }}</p><p>{{ report.notes.pass_policy }}</p></section>
 			</template>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -117,7 +117,7 @@ const blankReport = () => ({
 	weak_subjects: [],
 	grade_distribution: [],
 	publication_trend: [],
-	notes: { pass_rate: "", source: "" },
+	notes: { pass_policy: "", source: "" },
 });
 
 export default {
