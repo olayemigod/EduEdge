@@ -67,7 +67,17 @@ def assert_result_profile_mutable(doc) -> None:
 
 
 def validate_publication_profile(doc) -> None:
-	"""Validate optional result-profile context without breaking historical publications."""
+	"""Validate profile-driven scope while preserving legacy Assessment Group publications."""
+	if doc.get("result_profile") and doc.get("assessment_group"):
+		frappe.throw(
+			_("Select either a Result Profile or an Assessment Group, not both."),
+			frappe.ValidationError,
+		)
+	if not doc.get("result_profile") and not doc.get("assessment_group"):
+		frappe.throw(
+			_("Select a Result Profile or Assessment Group."),
+			frappe.ValidationError,
+		)
 	if not doc.get("result_profile"):
 		return
 
