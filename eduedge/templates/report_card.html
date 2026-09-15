@@ -196,13 +196,7 @@
 								{% set period_row = course.period_map.get(period.academic_term) %}
 								{% if period_row %}
 									{% for component in period_row.display_components %}
-										<td class="numeric">
-											{% if component.maximum_score %}
-												{{ component.score }}
-											{% else %}
-												-
-											{% endif %}
-										</td>
+										<td class="numeric">{{ component.display_value or "-" }}</td>
 									{% endfor %}
 								{% else %}
 									{% for component in summary.display_components %}<td class="center">-</td>{% endfor %}
@@ -256,13 +250,7 @@
 						<tr>
 							<td class="subject">{{ course.course_name }}</td>
 							{% for component in course.display_components %}
-								<td class="numeric">
-									{% if component.maximum_score %}
-										{{ component.score }}
-									{% else %}
-										-
-									{% endif %}
-								</td>
+								<td class="numeric">{{ component.display_value or "-" }}</td>
 							{% endfor %}
 							<td class="numeric">{{ course.total_score or 0 }}</td>
 							<td class="numeric">{{ "%.2f"|format(course.percentage or 0) }}</td>
