@@ -204,6 +204,10 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 				"student_group": publication_doc.student_group,
 				"academic_year": publication_doc.academic_year,
 				"academic_term": publication_doc.academic_term,
+				"academic_term_label": _academic_term_report_label(
+					publication_doc,
+					config,
+				),
 				"assessment_group": publication_doc.assessment_group,
 				"result_profile": publication_doc.result_profile,
 			},
@@ -436,6 +440,15 @@ def _attendance_summary(publication_doc, students: list[str], *, periods: list[d
 			"to_date": str(to_date),
 		}
 	return output
+
+
+def _academic_term_report_label(publication_doc, config: dict):
+	if not publication_doc.academic_term:
+		return None
+	for period in get_result_periods(config, publication_doc.academic_year):
+		if period["academic_term"] == publication_doc.academic_term:
+			return period.get("display_label") or publication_doc.academic_term
+	return publication_doc.academic_term
 
 
 def _next_term_start(publication_doc, periods: list[dict]):
