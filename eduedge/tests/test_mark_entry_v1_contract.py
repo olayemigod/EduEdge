@@ -53,9 +53,9 @@ class TestMarkEntryV1Contract(unittest.TestCase):
 
 	def test_partial_rows_wait_for_completion_instead_of_failing_autosave(self):
 		js = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text()
-		self.assertIn("const rowReadyForAutosave", js)
-		self.assertIn("Complete row to autosave", js)
-		self.assertIn("readyRows", js)
+		self.assertIn("const rowReadyForServer", js)
+		self.assertIn("Browser draft saved · complete the row to sync", js)
+		self.assertIn("editable.filter(rowReadyForServer)", js)
 
 	def test_mark_entry_does_not_auto_submit(self):
 		js = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text()
