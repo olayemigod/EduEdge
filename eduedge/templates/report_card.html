@@ -103,6 +103,24 @@
 	.institution-footer { margin-top: 12px; padding-top: 7px; border-top: 1px solid #bbb; text-align: center; }
 	.footer-note { margin-top: 7px; font-size: 7.5pt; color: #555; }
 	.version-tag { font-weight: 700; }
+	.report-auth-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 10px;
+		align-items: end;
+		margin-top: 12px;
+	}
+	.report-auth-card {
+		min-height: 90px;
+		padding: 8px;
+		border: 1px solid #bbb;
+		text-align: center;
+	}
+	.report-auth-card img.signature-image { max-height: 42px; max-width: 150px; margin: 0 auto 4px; }
+	.report-auth-card img.stamp-image { max-height: 70px; max-width: 110px; margin: 0 auto; }
+	.report-auth-card img.verify-qr { width: 72px; height: 72px; margin: 0 auto 4px; }
+	.report-auth-card strong { display: block; }
+	.report-auth-card small { display: block; margin-top: 2px; color: #555; overflow-wrap: anywhere; }
 	.issue-banner {
 		margin: 0 0 10px;
 		padding: 7px 10px;
@@ -388,6 +406,37 @@
 				</tbody>
 			</table>
 		</div>
+	{% endif %}
+
+	{% if profiled %}
+		{% set show_signatory = presentation.show_report_signatory != false and (branding.report_signatory_name or branding.report_signatory_title or branding.report_signatory_signature) %}
+		{% set show_stamp = presentation.show_official_stamp != false and branding.official_stamp_image %}
+		{% set show_verification = presentation.show_verification_qr != false and issued and verification and verification.qr_data_uri %}
+		{% if show_signatory or show_stamp or show_verification %}
+			<div class="report-auth-grid">
+				{% if show_signatory %}
+					<div class="report-auth-card">
+						{% if branding.report_signatory_signature %}<img class="signature-image" src="{{ branding.report_signatory_signature }}">{% endif %}
+						<strong>{{ branding.report_signatory_name or _("Authorized Signatory") }}</strong>
+						<small>{{ branding.report_signatory_title or _("Authorized Signatory") }}</small>
+					</div>
+				{% endif %}
+				{% if show_stamp %}
+					<div class="report-auth-card">
+						<img class="stamp-image" src="{{ branding.official_stamp_image }}">
+						<small>{{ _("Official Stamp / Seal") }}</small>
+					</div>
+				{% endif %}
+				{% if show_verification %}
+					<div class="report-auth-card">
+						<img class="verify-qr" src="{{ verification.qr_data_uri }}">
+						<strong>{{ _("Verify this report") }}</strong>
+						<small>{{ _("Scan the QR code. Public verification does not expose marks or comments.") }}</small>
+						{% if issued.payload_hash %}<small>{{ _("Fingerprint") }}: {{ issued.payload_hash[:16] }}</small>{% endif %}
+					</div>
+				{% endif %}
+			</div>
+		{% endif %}
 	{% endif %}
 
 	{% if branding.report_footer %}<div class="institution-footer">{{ branding.report_footer }}</div>{% endif %}
