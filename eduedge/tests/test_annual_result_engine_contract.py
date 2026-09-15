@@ -75,7 +75,7 @@ class TestAnnualResultEngineContract(unittest.TestCase):
 		self.assertIn('result_mode == "Annual"', service)
 		self.assertIn("TERM_BOUND_ANNUAL_COHORT", service)
 		self.assertIn("get_result_periods", service)
-		self.assertIn('"academic_term": [', service)
+		self.assertIn('plan_filters["academic_term"] = [', service)
 		self.assertIn("compose_cumulative_subject_results", service)
 		self.assertNotIn("ANNUAL_COHORT_PENDING", service)
 
