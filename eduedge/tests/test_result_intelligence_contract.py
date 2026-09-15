@@ -21,7 +21,7 @@ class TestResultIntelligenceContract(unittest.TestCase):
 
 	def test_dashboard_has_actionable_subject_student_and_trend_views(self):
 		api = (APP / "api" / "result_intelligence.py").read_text()
-		for key in ("subject_performance", "student_performance", "weak_subjects", "grade_distribution", "publication_trend"):
+		for key in ("subject_performance", "student_performance", "weak_subjects", "strong_subjects", "grade_distribution", "publication_trend"):
 			self.assertIn(f'"{key}"', api)
 
 	def test_pass_rate_is_not_inferred_without_explicit_policy(self):
@@ -38,6 +38,8 @@ class TestResultIntelligenceContract(unittest.TestCase):
 	def test_page_is_edgesuite_action_oriented(self):
 		vue = (APP / "public" / "js" / "eduedge_result_intelligence" / "EduEdgeResultIntelligence.vue").read_text()
 		self.assertIn("Weakest Subjects by Published Average", vue)
+		self.assertIn("Strongest Subjects by Published Average", vue)
+		self.assertIn("Published Grade Distribution", vue)
 		self.assertIn("Below Cohort Average", vue)
 		self.assertIn("Subject Performance", vue)
 		self.assertIn("Published Student Performance", vue)
