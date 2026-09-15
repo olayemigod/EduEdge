@@ -11,6 +11,8 @@ class EduEdgeReportCardIssue(Document):
 	def validate(self) -> None:
 		if not self.is_new():
 			frappe.throw(_("Issued Report Cards are immutable."), frappe.ValidationError)
+		if not self.verification_token:
+			frappe.throw(_("Issued Report Cards require a verification token."), frappe.ValidationError)
 		expected_hash = hashlib.sha256((self.payload_json or "").encode("utf-8")).hexdigest()
 		if self.payload_hash != expected_hash:
 			frappe.throw(_("Issued Report Card payload hash is invalid."), frappe.ValidationError)
