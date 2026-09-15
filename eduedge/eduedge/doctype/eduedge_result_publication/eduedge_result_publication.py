@@ -5,6 +5,7 @@ from frappe import _
 from frappe.model.document import Document
 
 from eduedge.education.assessment_operations import validate_publication_scope
+from eduedge.education.result_profile import validate_publication_profile
 
 
 class EduEdgeResultPublication(Document):
@@ -15,6 +16,7 @@ class EduEdgeResultPublication(Document):
 
 	def validate(self) -> None:
 		validate_publication_scope(self)
+		validate_publication_profile(self)
 		self._validate_scope_change()
 		self._validate_duplicate_scope()
 
