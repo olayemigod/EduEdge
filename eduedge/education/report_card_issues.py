@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 
 import frappe
 from frappe import _
@@ -10,6 +11,14 @@ from frappe.utils import now_datetime
 from eduedge.services.institution_branding import get_institution_branding
 
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
+
+
+def generate_verification_code() -> str:
+	"""Return an opaque, non-sequential code suitable for a public verification link."""
+	while True:
+		code = secrets.token_urlsafe(18)
+		if not frappe.db.exists(ISSUE_DOCTYPE, {"verification_code": code}):
+			return code
 
 
 def create_report_card_issue(review: str) -> str:
@@ -57,6 +66,7 @@ def create_report_card_issue(review: str) -> str:
 			"payload_hash": payload_hash,
 			"issued_by": frappe.session.user,
 			"issued_on": now_datetime(),
+			"verification_code": generate_verification_code(),
 			"payload_json": payload_json,
 		}
 	)
@@ -84,6 +94,7 @@ def get_effective_issued_payload(publication: str, student: str) -> dict | None:
 		"name": row.name,
 		"issue_version": int(row.issue_version or 1),
 		"payload_hash": row.payload_hash,
+		"verification_code": row.get("verification_code"),
 	}
 	return payload
 
@@ -126,7 +137,7 @@ def _latest_issue_row(publication: str, student: str):
 	rows = frappe.get_all(
 		ISSUE_DOCTYPE,
 		filters={"result_publication": publication, "student": student},
-		fields=["name", "issue_version", "payload_hash", "payload_json"],
+		fields=["name", "issue_version", "payload_hash", "payload_json", "verification_code"],
 		order_by="issue_version desc, creation desc",
 		limit=1,
 	)
