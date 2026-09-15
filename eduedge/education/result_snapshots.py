@@ -172,11 +172,13 @@ def build_publication_student_payloads(publication_doc) -> dict[str, dict]:
 				result_mode=publication_doc.result_mode or "Terminal",
 			)
 
-	attendance = _attendance_summary(
+	attendance, attendance_meta = _attendance_summary(
 		publication_doc,
 		student_names,
 		periods=readiness.get("periods") or periods,
 	)
+	if (config.get("presentation") or {}).get("show_attendance"):
+		_assert_official_attendance_complete(attendance_meta)
 	source_names_by_student: dict[str, set[str]] = defaultdict(set)
 	for row in source_rows:
 		source_names_by_student[row.student].add(row.name)
@@ -389,9 +391,21 @@ def _course_name_map(composed_by_student: dict[str, dict]) -> dict[str, str]:
 	}
 
 
-def _attendance_summary(publication_doc, students: list[str], *, periods: list[dict]) -> dict[str, dict]:
+def _attendance_summary(
+	publication_doc,
+	students: list[str],
+	*,
+	periods: list[dict],
+) -> tuple[dict[str, dict], dict]:
+	meta = {
+		"source_mode": "None",
+		"school_opened": 0,
+		"missing_student_days": 0,
+		"conflicting_student_days": 0,
+		"duplicate_daily_student_days": 0,
+	}
 	if not students:
-		return {}
+		return {}, meta
 	if (publication_doc.result_mode or "Terminal") == "Annual" and periods:
 		from_date = periods[0]["start_date"]
 		to_date = periods[-1]["end_date"]
@@ -408,7 +422,8 @@ def _attendance_summary(publication_doc, students: list[str], *, periods: list[d
 			["year_start_date", "year_end_date"],
 		)
 	if not from_date or not to_date:
-		return {}
+		return {}, meta
+
 	rows = frappe.get_all(
 		"Student Attendance",
 		filters={
@@ -421,37 +436,47 @@ def _attendance_summary(publication_doc, students: list[str], *, periods: list[d
 		fields=["student", "date", "status", "course_schedule"],
 		page_length=0,
 	)
-	opened_dates = {str(row.date) for row in rows if row.date}
+
+	# Daily Student Group attendance is authoritative whenever it exists in the
+	# result period. Course Schedule attendance is retained only as a controlled
+	# fallback for schools that have no daily class-attendance rows in the period.
+	daily_rows = [row for row in rows if not row.course_schedule]
+	source_rows = daily_rows if daily_rows else rows
+	source_mode = "Daily Student Group" if daily_rows else ("Course Schedule Fallback" if rows else "None")
+	opened_dates = sorted({str(row.date) for row in source_rows if row.date})
 	school_opened = len(opened_dates)
 
-	# A school-day report must not count every Subject/Course Schedule attendance
-	# row as another day present. Prefer the single Student Group daily record
-	# where it exists; otherwise collapse course-level attendance into one status
-	# per Student/date.
 	by_student_date: dict[tuple[str, str], list] = defaultdict(list)
-	for row in rows:
+	for row in source_rows:
 		if not row.date:
 			continue
 		by_student_date[(row.student, str(row.date))].append(row)
 
+	missing_student_days = sum(
+		1
+		for date in opened_dates
+		for student in students
+		if (student, date) not in by_student_date
+	)
+	duplicate_daily_student_days = (
+		sum(1 for day_rows in by_student_date.values() if len(day_rows) > 1)
+		if daily_rows
+		else 0
+	)
+	conflicting_student_days = 0
 	counts: dict[str, dict] = defaultdict(lambda: {"Present": 0, "Absent": 0, "Leave": 0})
 	for (student, _date), day_rows in by_student_date.items():
-		daily_rows = [row for row in day_rows if not row.course_schedule]
-		if daily_rows:
-			day_status = daily_rows[0].status or ""
-		else:
-			statuses = {row.status or "" for row in day_rows}
-			if "Present" in statuses:
-				day_status = "Present"
-			elif "Leave" in statuses:
-				day_status = "Leave"
-			elif "Absent" in statuses:
-				day_status = "Absent"
-			else:
-				day_status = ""
+		statuses = {str(row.status or "").strip() for row in day_rows if str(row.status or "").strip()}
+		if len(statuses) > 1:
+			conflicting_student_days += 1
+			continue
+		day_status = next(iter(statuses), "")
 		if day_status:
 			counts[student][day_status] = counts[student].get(day_status, 0) + 1
 
+	coverage_complete = not (
+		missing_student_days or conflicting_student_days or duplicate_daily_student_days
+	)
 	output = {}
 	for student in students:
 		student_counts = counts[student]
@@ -464,8 +489,42 @@ def _attendance_summary(publication_doc, students: list[str], *, periods: list[d
 			"attendance_percentage": round(present / school_opened * 100, 2) if school_opened else 0.0,
 			"from_date": str(from_date),
 			"to_date": str(to_date),
+			"source_mode": source_mode,
+			"coverage_complete": coverage_complete,
 		}
-	return output
+	meta = {
+		"source_mode": source_mode,
+		"school_opened": school_opened,
+		"missing_student_days": missing_student_days,
+		"conflicting_student_days": conflicting_student_days,
+		"duplicate_daily_student_days": duplicate_daily_student_days,
+	}
+	return output, meta
+
+
+def _assert_official_attendance_complete(meta: dict) -> None:
+	if not meta.get("school_opened"):
+		frappe.throw(
+			_("Attendance is enabled on this Result Profile, but no submitted attendance exists for the result period."),
+			frappe.ValidationError,
+		)
+	if meta.get("duplicate_daily_student_days"):
+		frappe.throw(
+			_("Daily class attendance contains duplicate Student/day records. Resolve them before publishing official results."),
+			frappe.ValidationError,
+		)
+	if meta.get("conflicting_student_days"):
+		frappe.throw(
+			_("Attendance contains conflicting statuses for the same Student/day. Resolve them before publishing official results."),
+			frappe.ValidationError,
+		)
+	if meta.get("missing_student_days"):
+		frappe.throw(
+			_(
+				"Attendance is incomplete for {0} Student/day combinations. Complete the attendance register before publishing official results."
+			).format(meta["missing_student_days"]),
+			frappe.ValidationError,
+		)
 
 
 def _academic_term_report_label(publication_doc, config: dict):
