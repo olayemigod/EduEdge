@@ -157,6 +157,7 @@ def _prepare_courses(subjects: list[dict], profile: dict, mode: str) -> list[dic
 		row["metrics"] = list(row.get("metrics") or [])
 		if mode == "Annual":
 			prepared_periods = []
+			period_map = {}
 			for period in row.get("periods") or []:
 				period_row = dict(period)
 				period_row["display_components"] = [
@@ -165,7 +166,9 @@ def _prepare_courses(subjects: list[dict], profile: dict, mode: str) -> list[dic
 					if component.get("component_key") in visible_keys
 				]
 				prepared_periods.append(period_row)
+				period_map[period_row.get("academic_term")] = period_row
 			row["periods"] = prepared_periods
+			row["period_map"] = period_map
 		else:
 			row["display_components"] = [
 				component
