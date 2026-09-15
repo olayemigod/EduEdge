@@ -12,6 +12,10 @@ except ImportError:  # pure contract-test environment
 	frappe = None
 
 if frappe is not None and getattr(frappe.local, "site", None) and frappe.db:
-	from eduedge.ci import ensure_erpnext_test_roots
+	from eduedge.ci import (
+		ensure_erpnext_test_roots,
+		install_frappe_v16_test_dependency_compat,
+	)
 
 	ensure_erpnext_test_roots()
+	install_frappe_v16_test_dependency_compat()
