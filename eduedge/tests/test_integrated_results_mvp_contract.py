@@ -74,10 +74,14 @@ class TestIntegratedResultsMVPContract(unittest.TestCase):
 			self.assertNotIn(fixed, metric)
 		self.assertIn("summary.display_metrics", template)
 
-	def test_progression_is_a_governed_handoff_not_result_engine_mutation(self):
+	def test_progression_is_a_governed_annual_result_handoff(self):
 		report_cards = (APP / "education" / "report_cards.py").read_text()
-		progression = (APP / "education" / "progression.py").read_text()
-		self.assertIn("progression", progression.lower())
+		progression = (APP / "api" / "student_progression.py").read_text()
+		self.assertIn("def _approved_annual_result_evidence", progression)
+		self.assertIn("Published Result Snapshot", progression)
+		self.assertIn('publication.result_mode != "Annual"', progression)
+		self.assertIn('review.progression_status != "Approved"', progression)
+		self.assertIn("get_snapshot_payload", progression)
 		self.assertNotIn('db_set("Program Enrollment"', report_cards)
 		self.assertNotIn('set_value("Program Enrollment"', report_cards)
 
