@@ -16,6 +16,7 @@ from eduedge.education.report_cards import (
 	refresh_review_metrics,
 )
 from eduedge.education.offerings import assert_branch_access, get_context_branch
+from eduedge.education.report_card_issues import create_report_card_issue, get_report_card_issue_history
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -70,6 +71,10 @@ def get_report_card_context(
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
+			"publication_version",
+			"supersedes_publication",
 			"published_on",
 		],
 		order_by="published_on desc, modified desc",
@@ -123,6 +128,7 @@ def get_report_card_context(
 				for row in students
 				if (row.get("review") or {}).get("progression_status") == "Approved"
 			),
+			"issued": sum(1 for row in students if row.get("issue")),
 		},
 	}
 
@@ -251,7 +257,10 @@ def approve_progression(review: str) -> dict:
 			"approved_on": now_datetime(),
 		},
 	)
-	return _review_payload(doc.name)
+	issue_name = create_report_card_issue(doc.name)
+	payload = _review_payload(doc.name)
+	payload["report_card_issue"] = issue_name
+	return payload
 
 
 @frappe.whitelist()
@@ -277,6 +286,48 @@ def reopen_progression_review(review: str, reason: str) -> dict:
 		},
 	)
 	return _review_payload(doc.name)
+
+
+@frappe.whitelist()
+def get_report_card_history(publication: str, student: str) -> dict:
+	_require_operator()
+	publication_row = get_published_publication(publication)
+	assert_report_card_access(publication_row, student)
+	issue_history = get_report_card_issue_history(publication, student)
+
+	filters = {
+		"school_branch": publication_row.school_branch,
+		"student_group": publication_row.student_group,
+		"academic_year": publication_row.academic_year,
+		"result_mode": publication_row.result_mode or "Terminal",
+		"status": "Published",
+	}
+	if publication_row.academic_term:
+		filters["academic_term"] = publication_row.academic_term
+	else:
+		filters["academic_term"] = ["is", "not set"]
+	if publication_row.result_profile:
+		filters["result_profile"] = publication_row.result_profile
+	elif publication_row.assessment_group:
+		filters["assessment_group"] = publication_row.assessment_group
+
+	publications = frappe.get_all(
+		"EduEdge Result Publication",
+		filters=filters,
+		fields=[
+			"name",
+			"title",
+			"publication_version",
+			"supersedes_publication",
+			"published_on",
+		],
+		order_by="publication_version desc, published_on desc",
+		page_length=0,
+	)
+	return {
+		"issues": issue_history,
+		"publications": [dict(row) for row in publications],
+	}
 
 
 @frappe.whitelist()
