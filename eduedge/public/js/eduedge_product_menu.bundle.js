@@ -150,6 +150,7 @@ function buildEduEdgeProductMenu() {
 				items: [
 					item(`${assessments} & Results`, `Plan, review, approve, and publish ${assessments.toLowerCase()}`, "assessment", "/app/eduedge-assessment-operations", { keywords: ["exam", "assessment", "result", "publication"], quick_action: true }),
 					item("Report Cards", "Comments, progression, approval, and printing", "report", "/app/eduedge-report-cards", { keywords: ["report card", "progression", "promotion", "pdf"] }),
+					item("Result Intelligence", "Published class, subject, student, and trend intelligence", "chart", "/app/eduedge-result-intelligence", { keywords: ["results", "analytics", "intelligence", "performance", "subject", "trend"], quick_action: true }),
 				],
 			},
 			{
