@@ -12,7 +12,12 @@ from eduedge.education.assessment_operations import (
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.result_snapshots import create_publication_snapshots
-from eduedge.education.result_profile import get_result_profile_config
+from eduedge.education.result_profile import (
+	freeze_publication_result_profile_config,
+	get_publication_result_profile_config,
+	get_result_profile_config,
+	set_publication_result_profile_config,
+)
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
@@ -379,6 +384,10 @@ def request_result_approval(publication: str) -> dict:
 	doc = _get_publication(publication, for_update=True)
 	if doc.status not in {"Draft", "Rejected"}:
 		frappe.throw(_("Only Draft or Rejected publications can be submitted for approval."))
+	freeze_publication_result_profile_config(
+		doc,
+		force_current=not bool(doc.supersedes_publication),
+	)
 	readiness = _refresh_readiness(doc)
 	if not readiness["ready"]:
 		frappe.throw(
@@ -525,6 +534,7 @@ def create_result_publication_revision(publication: str) -> dict:
 			frappe.ValidationError,
 		)
 	next_version = int(source.publication_version or 1) + 1
+	source_profile_config = get_publication_result_profile_config(source)
 	doc = frappe.get_doc(
 		{
 			"doctype": PUBLICATION_DOCTYPE,
@@ -540,6 +550,8 @@ def create_result_publication_revision(publication: str) -> dict:
 			"status": "Draft",
 		}
 	)
+	if source_profile_config:
+		set_publication_result_profile_config(doc, source_profile_config)
 	doc.insert()
 	append_publication_log(
 		doc.name,
@@ -606,6 +618,11 @@ def _refresh_readiness(doc) -> dict:
 		assessment_group=doc.assessment_group,
 		result_profile=doc.get("result_profile"),
 		result_mode=doc.get("result_mode") or "Terminal",
+		profile_config_override=(
+			get_publication_result_profile_config(doc)
+			if doc.get("result_profile")
+			else None
+		),
 	)
 	updates = {
 		"expected_results": readiness["expected_results"],
