@@ -31,6 +31,7 @@ class TestReportCardV2Contract(unittest.TestCase):
 		self.assertIn("annual_percentage", profiled)
 		self.assertIn("attendance_school_opened", profiled)
 		self.assertIn("academic_term_label", profiled)
+		self.assertIn("component_totals", profiled)
 
 	def test_terminal_progression_suggestion_is_not_auto_promoted(self):
 		profiled = (APP / "education" / "profiled_report_cards.py").read_text()
@@ -46,6 +47,9 @@ class TestReportCardV2Contract(unittest.TestCase):
 		self.assertIn("course.cumulative_score", template)
 		self.assertIn("course.annual_percentage", template)
 		self.assertIn("School Opened", template)
+		self.assertIn("Total Average Mark", template)
+		self.assertIn("Grand Total", template)
+		self.assertIn("summary.component_totals", template)
 		self.assertIn("immutable Published Result Snapshot", template)
 
 	def test_report_card_page_exposes_mode_version_and_snapshot_table(self):
