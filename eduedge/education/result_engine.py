@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
-from statistics import mean
 
 import frappe
 from frappe import _
@@ -20,7 +19,15 @@ def round_result_value(value, precision: int = 2) -> float:
 	"""Round academic result values using conventional decimal half-up rules."""
 	resolved_precision = max(0, min(cint(precision), 6))
 	quantizer = Decimal("1").scaleb(-resolved_precision)
-	return float(Decimal(str(flt(value))).quantize(quantizer, rounding=ROUND_HALF_UP))
+	return float(Decimal(str(value or 0)).quantize(quantizer, rounding=ROUND_HALF_UP))
+
+
+def average_result_values(values) -> float:
+	"""Average already-calculated academic values without binary float drift."""
+	decimals = [Decimal(str(value)) for value in values if value is not None]
+	if not decimals:
+		return 0.0
+	return float(sum(decimals, Decimal("0")) / Decimal(len(decimals)))
 
 
 BASIS_VALUE_FIELDS = {
@@ -325,7 +332,7 @@ def compose_cumulative_subject_results(
 
 		method = config["annual_aggregation_method"]
 		if method == "Equal Average of Eligible Terms":
-			annual_percentage = mean([row["percentage"] for row in eligible_periods]) if eligible_periods else 0
+			annual_percentage = average_result_values([row["percentage"] for row in eligible_periods])
 		elif method == "Weighted Average":
 			missing_weights = [
 				row["academic_term"] for row in eligible_periods if flt(row.get("weight")) <= 0
@@ -389,13 +396,12 @@ def calculate_overall_summary(
 	eligible = [row for row in subjects if row.get("eligible")]
 	total_score = sum(flt(row.get(score_field)) for row in eligible)
 	maximum_score = sum(flt(row.get(maximum_field)) for row in eligible)
-	sum_subject_percentages = sum(flt(row.get(percentage_field)) for row in eligible)
+	percentage_values = [flt(row.get(percentage_field)) for row in eligible]
+	sum_subject_percentages = sum(percentage_values)
 	if config.get("overall_calculation_method") == "Aggregate Score Percentage":
 		overall_percentage = total_score / maximum_score * 100 if maximum_score else 0
 	else:
-		overall_percentage = (
-			sum_subject_percentages / len(eligible) if eligible else 0
-		)
+		overall_percentage = average_result_values(percentage_values)
 	grading_scale = config.get("grading_scale")
 	overall_grade = get_grade(grading_scale, overall_percentage) if grading_scale and eligible else ""
 	overall_remark = get_grade_remark(grading_scale, overall_percentage) if grading_scale and eligible else ""
@@ -416,7 +422,7 @@ def calculate_class_statistics(subject_rows: list[dict], calculation_basis: str)
 	if not fieldname:
 		frappe.throw(_("Unsupported statistics calculation basis."), frappe.ValidationError)
 	values = [
-		flt(row.get(fieldname))
+		Decimal(str(row.get(fieldname)))
 		for row in subject_rows
 		if row.get(fieldname) is not None and row.get("eligible", True)
 	]
@@ -424,9 +430,9 @@ def calculate_class_statistics(subject_rows: list[dict], calculation_basis: str)
 		return {"count": 0, "highest": None, "lowest": None, "average": None}
 	return {
 		"count": len(values),
-		"highest": max(values),
-		"lowest": min(values),
-		"average": mean(values),
+		"highest": float(max(values)),
+		"lowest": float(min(values)),
+		"average": float(sum(values, Decimal("0")) / Decimal(len(values))),
 	}
 
 
