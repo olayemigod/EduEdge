@@ -403,6 +403,8 @@ def _attendance_summary(
 		"missing_student_days": 0,
 		"conflicting_student_days": 0,
 		"duplicate_daily_student_days": 0,
+		"invalid_status_days": 0,
+		"course_only_dates": [],
 	}
 	if not students:
 		return {}, meta
@@ -441,6 +443,9 @@ def _attendance_summary(
 	# result period. Course Schedule attendance is retained only as a controlled
 	# fallback for schools that have no daily class-attendance rows in the period.
 	daily_rows = [row for row in rows if not row.course_schedule]
+	all_dates = {str(row.date) for row in rows if row.date}
+	daily_dates = {str(row.date) for row in daily_rows if row.date}
+	course_only_dates = sorted(all_dates - daily_dates) if daily_rows else []
 	source_rows = daily_rows if daily_rows else rows
 	source_mode = "Daily Student Group" if daily_rows else ("Course Schedule Fallback" if rows else "None")
 	opened_dates = sorted({str(row.date) for row in source_rows if row.date})
@@ -464,6 +469,8 @@ def _attendance_summary(
 		else 0
 	)
 	conflicting_student_days = 0
+	invalid_status_days = 0
+	valid_statuses = {"Present", "Absent", "Leave"}
 	counts: dict[str, dict] = defaultdict(lambda: {"Present": 0, "Absent": 0, "Leave": 0})
 	for (student, _date), day_rows in by_student_date.items():
 		statuses = {str(row.status or "").strip() for row in day_rows if str(row.status or "").strip()}
@@ -471,11 +478,18 @@ def _attendance_summary(
 			conflicting_student_days += 1
 			continue
 		day_status = next(iter(statuses), "")
+		if day_status and day_status not in valid_statuses:
+			invalid_status_days += 1
+			continue
 		if day_status:
 			counts[student][day_status] = counts[student].get(day_status, 0) + 1
 
 	coverage_complete = not (
-		missing_student_days or conflicting_student_days or duplicate_daily_student_days
+		missing_student_days
+		or conflicting_student_days
+		or duplicate_daily_student_days
+		or invalid_status_days
+		or course_only_dates
 	)
 	output = {}
 	for student in students:
@@ -498,6 +512,8 @@ def _attendance_summary(
 		"missing_student_days": missing_student_days,
 		"conflicting_student_days": conflicting_student_days,
 		"duplicate_daily_student_days": duplicate_daily_student_days,
+		"invalid_status_days": invalid_status_days,
+		"course_only_dates": course_only_dates,
 	}
 	return output, meta
 
@@ -508,6 +524,13 @@ def _assert_official_attendance_complete(meta: dict) -> None:
 			_("Attendance is enabled on this Result Profile, but no submitted attendance exists for the result period."),
 			frappe.ValidationError,
 		)
+	if meta.get("course_only_dates"):
+		frappe.throw(
+			_(
+				"Attendance switches between daily class attendance and course-level attendance within the result period. Complete daily attendance for all opened dates before publishing official results."
+			),
+			frappe.ValidationError,
+		)
 	if meta.get("duplicate_daily_student_days"):
 		frappe.throw(
 			_("Daily class attendance contains duplicate Student/day records. Resolve them before publishing official results."),
@@ -516,6 +539,11 @@ def _assert_official_attendance_complete(meta: dict) -> None:
 	if meta.get("conflicting_student_days"):
 		frappe.throw(
 			_("Attendance contains conflicting statuses for the same Student/day. Resolve them before publishing official results."),
+			frappe.ValidationError,
+		)
+	if meta.get("invalid_status_days"):
+		frappe.throw(
+			_("Attendance contains unsupported statuses. Use Present, Absent or Leave before publishing official results."),
 			frappe.ValidationError,
 		)
 	if meta.get("missing_student_days"):
