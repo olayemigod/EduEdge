@@ -213,8 +213,7 @@ def save_report_card_review(
 @guard_eduedge_action("assessment", action="recommend_progression")
 def recommend_progression(review: str) -> dict:
 	_require_operator()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status != "Draft":
 		frappe.throw(_("Only Draft reviews can be recommended."), frappe.ValidationError)
 	if doc.progression_recommendation == "Pending Review":
@@ -241,8 +240,7 @@ def recommend_progression(review: str) -> dict:
 @guard_eduedge_action("assessment", action="approve_progression")
 def approve_progression(review: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status != "Recommended":
 		frappe.throw(_("Only Recommended reviews can be approved."), frappe.ValidationError)
 	settings = frappe.get_single("EduEdge Settings")
@@ -267,8 +265,7 @@ def approve_progression(review: str) -> dict:
 @guard_eduedge_action("assessment", action="reopen_progression_review")
 def reopen_progression_review(review: str, reason: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status not in {"Recommended", "Approved"}:
 		frappe.throw(_("Only Recommended or Approved reviews can be reopened."))
 	reason = (reason or "").strip()
@@ -363,6 +360,19 @@ def preview_report_card(publication: str, student: str) -> None:
 	frappe.response.filename = f"Report Card {student}.pdf"
 	frappe.response.filecontent = get_pdf(final_html)
 	frappe.response.type = "pdf"
+
+
+def _get_review_for_update(name: str):
+	rows = frappe.db.sql(
+		"select name from `tabEduEdge Report Card Review` where name=%s for update",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Report Card Review does not exist."), frappe.DoesNotExistError)
+	doc = frappe.get_doc(REVIEW_DOCTYPE, name)
+	doc.check_permission("write")
+	assert_branch_access(doc.school_branch)
+	return doc
 
 
 def _transition(doc, to_status: str, *, updates: dict | None = None) -> None:
