@@ -1,0 +1,52 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Verify Result{% endblock %}
+
+{% block head_include %}
+{{ super() }}
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+.result-verify-page{max-width:760px;margin:0 auto;padding:2rem 1rem}.verify-card{border:1px solid var(--border-color,#e5e7eb);border-radius:16px;padding:1.25rem;background:var(--card-bg,#fff)}.verify-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.verify-status{display:inline-flex;padding:.3rem .55rem;border-radius:999px;border:1px solid var(--border-color,#d0d5dd);font-weight:700}.verify-status.current{color:#067647}.verify-status.superseded,.verify-status.under-review{color:#b54708}.verify-status.invalid,.verify-status.not-found,.verify-status.integrity-check-failed{color:#b42318}.verify-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;margin-top:1rem}.verify-grid div{padding:.7rem;border:1px solid var(--border-color,#e5e7eb);border-radius:10px}.verify-grid span{display:block;font-size:.78rem;color:var(--text-muted,#667085)}.verify-grid strong{display:block;margin-top:.15rem}.verify-form{display:flex;gap:.5rem;margin-top:1rem}.verify-form input{flex:1}.verify-note{color:var(--text-muted,#667085);margin-top:.75rem}@media(max-width:620px){.verify-grid{grid-template-columns:1fr}.verify-form{flex-direction:column}}
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="result-verify-page">
+	<div class="verify-card">
+		<div class="verify-head">
+			<div>
+				<p class="text-muted small text-uppercase mb-1">EduEdge</p>
+				<h1 class="h3 mb-1">Verify Result</h1>
+				<p class="text-muted mb-0">Confirm whether an issued school report card is authentic and current.</p>
+			</div>
+			{% if verification %}
+				<span class="verify-status {{ verification.status|lower|replace(' ','-') }}">{{ verification.status }}</span>
+			{% endif %}
+		</div>
+
+		<form class="verify-form" method="get" action="/verify-result">
+			<input class="form-control" type="text" name="code" value="{{ code or '' }}" placeholder="Enter verification code" autocomplete="off" required>
+			<button class="btn btn-primary" type="submit">Verify</button>
+		</form>
+
+		{% if verification %}
+			<p class="verify-note">{{ verification.message }}</p>
+			{% if verification.found and verification.authentic %}
+				<div class="verify-grid">
+					<div><span>Student</span><strong>{{ verification.report_card.student_name }}</strong></div>
+					<div><span>Student ID</span><strong>{{ verification.report_card.student_id }}</strong></div>
+					<div><span>Institution</span><strong>{{ verification.report_card.institution_name or '-' }}</strong></div>
+					<div><span>Branch / Campus</span><strong>{{ verification.report_card.branch_name or '-' }}</strong></div>
+					<div><span>Class</span><strong>{{ verification.report_card.student_group or '-' }}</strong></div>
+					<div><span>Academic Year</span><strong>{{ verification.report_card.academic_year or '-' }}</strong></div>
+					<div><span>Academic Term</span><strong>{{ verification.report_card.academic_term or '-' }}</strong></div>
+					<div><span>Result Type</span><strong>{{ verification.report_card.result_mode or '-' }}</strong></div>
+					<div><span>Issue Version</span><strong>{{ verification.report_card.issue_version }}</strong></div>
+					<div><span>Issued On</span><strong>{{ verification.report_card.issued_on or '-' }}</strong></div>
+				</div>
+			{% endif %}
+		{% endif %}
+	</div>
+</div>
+{% endblock %}
