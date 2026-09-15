@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
-from statistics import mean
 
 import frappe
 from frappe import _
