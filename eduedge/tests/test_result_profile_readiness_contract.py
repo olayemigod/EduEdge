@@ -22,10 +22,13 @@ class TestResultProfileReadinessContract(unittest.TestCase):
 		self.assertIn('"result_profile": result_profile', text)
 		self.assertIn('"result_mode": result_mode', text)
 
-	def test_annual_mode_fails_closed_until_cumulative_cohort_resolver_exists(self):
+	def test_annual_mode_uses_sessional_cohort_and_calendar_period_resolver(self):
 		text = (APP / "education" / "assessment_operations.py").read_text()
 		self.assertIn('result_mode == "Annual"', text)
-		self.assertIn("ANNUAL_COHORT_PENDING", text)
+		self.assertIn("TERM_BOUND_ANNUAL_COHORT", text)
+		self.assertIn("get_result_periods", text)
+		self.assertIn("compose_cumulative_subject_results", text)
+		self.assertNotIn("ANNUAL_COHORT_PENDING", text)
 		self.assertIn("not all_blockers", text)
 
 	def test_publication_api_accepts_profile_and_mode_but_keeps_defaults(self):
