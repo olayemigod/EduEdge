@@ -11,7 +11,11 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import require_instructor_assignment_capability
 from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import assert_branch_access
-from eduedge.education.result_engine import compose_terminal_subject_results
+from eduedge.education.result_engine import (
+	compose_cumulative_subject_results,
+	compose_terminal_subject_results,
+	get_result_periods,
+)
 from eduedge.education.result_profile import get_result_profile_config
 from eduedge.education.teaching_assignments import require_course_assignment
 
@@ -59,7 +63,6 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 
 
 def _validate_examiner_and_supervisor(doc) -> None:
-	"""Keep Subject examination responsibility separate from Branch supervision."""
 	reference_date = doc.schedule_date or nowdate()
 	if doc.get("examiner"):
 		try:
@@ -87,8 +90,6 @@ def _validate_examiner_and_supervisor(doc) -> None:
 
 	if doc.get("supervisor"):
 		try:
-			# A Supervisor/Invigilator does not need to teach the assessed Subject. The
-			# operational requirement here is valid Branch eligibility on the date.
 			assert_instructor_assignment(
 				doc.supervisor,
 				doc.get(BRANCH_FIELD),
@@ -131,9 +132,6 @@ def before_validate_assessment_result(doc, method=None) -> None:
 	if is_teacher_user():
 		group = _get_student_group(plan.student_group)
 		program_offering = group.get(OFFERING_FIELD) or _resolve_group_offering(group)
-		# Mark entry is an operational permission evaluated at the time of entry, not
-		# merely on the historic assessment date. Former Instructors therefore do not
-		# retain mark-entry access after their exact responsibility has ended.
 		require_instructor_assignment_capability(
 			"can_enter_marks",
 			user=frappe.session.user,
@@ -204,6 +202,7 @@ def get_publication_readiness(
 	profile_config = get_result_profile_config(result_profile) if result_profile else None
 	profile_blockers: list[dict] = []
 	assessment_groups = None
+	periods: list[dict] = []
 	if profile_config:
 		assessment_groups = sorted(
 			{
@@ -214,15 +213,24 @@ def get_publication_readiness(
 		)
 		if not assessment_groups:
 			profile_blockers.append({"reason": "Result Profile has no resolved Assessment Groups."})
-		if result_mode == "Annual":
-			# Annual cohort resolution can span term-specific Student Groups. Do not
-			# silently treat one term-bound group as a complete yearly cohort.
+	if result_mode == "Annual":
+		if not profile_config:
+			profile_blockers.append(
+				{"reason": "Annual Result Publication requires a Result Profile.", "code": "RESULT_PROFILE_REQUIRED"}
+			)
+		elif group.academic_term:
 			profile_blockers.append(
 				{
-					"reason": "Annual cohort aggregation is not enabled until the cumulative cohort resolver is configured.",
-					"code": "ANNUAL_COHORT_PENDING",
+					"reason": "Annual results require a sessional Student Group/Class Arm. Legacy term-bound groups must be migrated or reviewed before annual publication.",
+					"code": "TERM_BOUND_ANNUAL_COHORT",
 				}
 			)
+		else:
+			periods = get_result_periods(profile_config, academic_year)
+			if not periods:
+				profile_blockers.append(
+					{"reason": "No Academic Calendar periods are enabled for result aggregation.", "code": "NO_RESULT_PERIODS"}
+				)
 
 	plan_filters: dict = {
 		BRANCH_FIELD: school_branch,
@@ -234,8 +242,14 @@ def get_publication_readiness(
 		plan_filters["assessment_group"] = ["in", assessment_groups or ["__none__"]]
 	else:
 		plan_filters["assessment_group"] = assessment_group
-	if academic_term:
+	if result_mode == "Annual":
+		plan_filters["academic_term"] = [
+			"in",
+			[row["academic_term"] for row in periods] or ["__none__"],
+		]
+	elif academic_term:
 		plan_filters["academic_term"] = academic_term
+
 	plans = frappe.get_all(
 		"Assessment Plan",
 		filters=plan_filters,
@@ -244,6 +258,7 @@ def get_publication_readiness(
 			"assessment_name",
 			"assessment_group",
 			"course",
+			"academic_term",
 			"maximum_assessment_score",
 		],
 		order_by="schedule_date asc, course asc",
@@ -264,6 +279,7 @@ def get_publication_readiness(
 			"assessment_group",
 			"student",
 			"course",
+			"academic_term",
 			"docstatus",
 			"maximum_score",
 			"total_score",
@@ -291,17 +307,23 @@ def get_publication_readiness(
 
 	composition_blockers: list[dict] = []
 	unmapped_assessment_groups: set[str] = set()
-	if profile_config and result_mode == "Terminal":
-		results_by_student: dict[str, list] = {}
+	if profile_config:
+		results_by_student: dict[str, list] = defaultdict(list)
 		for row in results:
-			if row.docstatus != 1:
-				continue
-			results_by_student.setdefault(row.student, []).append(row)
+			if row.docstatus == 1:
+				results_by_student[row.student].append(row)
 		for student in student_names:
-			composed = compose_terminal_subject_results(
-				profile_config,
-				results_by_student.get(student, []),
-			)
+			if result_mode == "Annual":
+				composed = compose_cumulative_subject_results(
+					profile_config,
+					results_by_student.get(student, []),
+					periods,
+				)
+			else:
+				composed = compose_terminal_subject_results(
+					profile_config,
+					results_by_student.get(student, []),
+				)
 			for blocker in composed.get("blockers") or []:
 				composition_blockers.append({"student": student, **blocker})
 			unmapped_assessment_groups.update(composed.get("unmapped_assessment_groups") or [])
@@ -325,6 +347,7 @@ def get_publication_readiness(
 		"assessment_group": assessment_group,
 		"result_profile": result_profile,
 		"result_mode": result_mode,
+		"periods": periods,
 		"expected_results": expected,
 		"submitted_results": submitted,
 		"draft_results": drafts,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
 
 import frappe
 from frappe import _
@@ -9,27 +8,31 @@ from frappe.utils import cint, flt
 
 COMPONENT_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
-METRIC_KEYS = {
-	"Class Highest",
-	"Class Lowest",
-	"Class Average",
-	"Pass Rate",
-	"Subject Position",
-	"Percentile",
-	"Student Percentage",
-}
+METRIC_KEYS = {"Class Highest", "Class Lowest", "Class Average"}
 METRIC_BASES = {
 	"Current Term Raw Score",
 	"Current Term Percentage",
 	"Year-to-Date Cumulative Raw Score",
+	"Year-to-Date Cumulative Percentage",
 	"Annual Cumulative Raw Score",
+	"Annual Cumulative Percentage",
 	"Annual Average Percentage",
 }
-METRIC_DISPLAY_TYPES = {"Raw Score", "Percentage", "Number", "Grade"}
+PERCENTAGE_BASES = {
+	"Current Term Percentage",
+	"Year-to-Date Cumulative Percentage",
+	"Annual Cumulative Percentage",
+	"Annual Average Percentage",
+}
+METRIC_DISPLAY_TYPES = {"Raw Score", "Percentage", "Number"}
 ANNUAL_AGGREGATION_METHODS = {
 	"Equal Average of Eligible Terms",
 	"Weighted Average",
 	"Raw Cumulative",
+}
+OVERALL_CALCULATION_METHODS = {
+	"Average of Subject Percentages",
+	"Aggregate Score Percentage",
 }
 MISSING_RESULT_POLICIES = {"Block Publication", "Exclude from Denominator"}
 ABSENCE_POLICIES = {"Block Publication", "Exclude from Denominator", "Treat as Zero"}
@@ -45,7 +48,7 @@ def validate_result_profile(doc) -> None:
 
 
 def validate_publication_profile(doc) -> None:
-	"""Validate optional V1 result-profile context without breaking historical publications."""
+	"""Validate optional result-profile context without breaking historical publications."""
 	if not doc.get("result_profile"):
 		return
 
@@ -78,6 +81,8 @@ def validate_publication_profile(doc) -> None:
 			_("Annual Result Publications must use the Academic Year scope without a single Academic Term."),
 			frappe.ValidationError,
 		)
+	if result_mode == "Annual" and not doc.result_profile:
+		frappe.throw(_("Annual Result Publications require a Result Profile."), frappe.ValidationError)
 
 
 def get_result_profile_config(name: str) -> dict:
@@ -90,6 +95,7 @@ def get_result_profile_config(name: str) -> dict:
 		"school_branch": doc.school_branch,
 		"grading_scale": doc.grading_scale,
 		"score_precision": cint(doc.score_precision),
+		"overall_calculation_method": doc.overall_calculation_method,
 		"annual_aggregation_method": doc.annual_aggregation_method,
 		"minimum_eligible_periods": cint(doc.minimum_eligible_periods),
 		"missing_result_policy": doc.missing_result_policy,
@@ -99,6 +105,7 @@ def get_result_profile_config(name: str) -> dict:
 				"component_key": row.component_key,
 				"component_label": row.component_label,
 				"target_maximum_score": flt(row.target_maximum_score),
+				"required": bool(row.required),
 				"sequence": cint(row.sequence),
 				"show_on_terminal": bool(row.show_on_terminal),
 				"show_on_annual": bool(row.show_on_annual),
@@ -131,12 +138,7 @@ def get_result_profile_config(name: str) -> dict:
 
 
 def resolve_assessment_group_leaves(assessment_group: str) -> list[str]:
-	"""Resolve all leaf Assessment Groups recursively.
-
-	Frappe Education's report helper is intentionally not used here because the
-	EduEdge result engine must support nested Assessment Group trees of arbitrary
-	depth without forcing schools to flatten their assessment structures.
-	"""
+	"""Resolve all leaf Assessment Groups recursively."""
 	if not assessment_group:
 		return []
 	group = frappe.db.get_value(
@@ -152,14 +154,9 @@ def resolve_assessment_group_leaves(assessment_group: str) -> list[str]:
 		)
 	if not group.is_group:
 		return [group.name]
-
 	return frappe.get_all(
 		"Assessment Group",
-		filters={
-			"lft": [">", group.lft],
-			"rgt": ["<", group.rgt],
-			"is_group": 0,
-		},
+		filters={"lft": [">", group.lft], "rgt": ["<", group.rgt], "is_group": 0},
 		pluck="name",
 		order_by="lft asc",
 	)
@@ -182,14 +179,10 @@ def get_component_source_index(profile: str | dict) -> dict[str, str]:
 
 def _validate_scope(doc) -> None:
 	institution = frappe.db.get_value(
-		"EduEdge Institution",
-		doc.institution,
-		["name", "enabled"],
-		as_dict=True,
+		"EduEdge Institution", doc.institution, ["name", "enabled"], as_dict=True
 	)
 	if not institution or not institution.enabled:
 		frappe.throw(_("Select an enabled Institution."), frappe.ValidationError)
-
 	if doc.school_branch:
 		branch = frappe.db.get_value(
 			"EduEdge School Branch",
@@ -207,6 +200,8 @@ def _validate_scope(doc) -> None:
 
 
 def _validate_calculation_settings(doc) -> None:
+	if doc.overall_calculation_method not in OVERALL_CALCULATION_METHODS:
+		frappe.throw(_("Invalid overall result calculation method."), frappe.ValidationError)
 	if doc.annual_aggregation_method not in ANNUAL_AGGREGATION_METHODS:
 		frappe.throw(_("Invalid annual aggregation method."), frappe.ValidationError)
 	if doc.missing_result_policy not in MISSING_RESULT_POLICIES:
@@ -222,7 +217,6 @@ def _validate_calculation_settings(doc) -> None:
 def _validate_components(doc) -> None:
 	if not doc.components:
 		frappe.throw(_("Add at least one Result Component."), frappe.ValidationError)
-
 	keys: set[str] = set()
 	for row in doc.components:
 		key = (row.component_key or "").strip().lower()
@@ -235,10 +229,7 @@ def _validate_components(doc) -> None:
 			)
 		row.component_key = key
 		if key in keys:
-			frappe.throw(
-				_("Result Component {0} appears more than once.").format(key),
-				frappe.ValidationError,
-			)
+			frappe.throw(_("Result Component {0} appears more than once.").format(key), frappe.ValidationError)
 		keys.add(key)
 		if flt(row.target_maximum_score) < 0:
 			frappe.throw(_("Target Maximum Score cannot be negative."), frappe.ValidationError)
@@ -249,7 +240,6 @@ def _validate_sources(doc) -> None:
 	seen_groups: set[str] = set()
 	if not doc.component_sources:
 		frappe.throw(_("Map at least one Assessment Group to a Result Component."), frappe.ValidationError)
-
 	for row in doc.component_sources:
 		row.component_key = (row.component_key or "").strip().lower()
 		if row.component_key not in component_keys:
@@ -292,6 +282,11 @@ def _validate_metrics(doc) -> None:
 			frappe.throw(_("Every enabled report statistic needs a Display Label."), frappe.ValidationError)
 		if not 0 <= cint(row.decimal_places) <= 6:
 			frappe.throw(_("Metric decimal places must be between 0 and 6."), frappe.ValidationError)
+		if row.display_as == "Percentage" and row.calculation_basis not in PERCENTAGE_BASES:
+			frappe.throw(
+				_("Percentage display requires a percentage calculation basis."),
+				frappe.ValidationError,
+			)
 		key = (row.metric_key, row.calculation_basis)
 		if key in seen:
 			frappe.throw(

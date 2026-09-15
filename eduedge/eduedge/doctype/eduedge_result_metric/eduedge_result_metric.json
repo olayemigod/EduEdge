@@ -6,10 +6,10 @@
  "engine": "InnoDB",
  "field_order": ["metric_key","display_label","calculation_basis","display_as","decimal_places","sequence","show_on_terminal","show_on_annual"],
  "fields": [
-  {"columns":2,"fieldname":"metric_key","fieldtype":"Select","in_list_view":1,"label":"Metric","options":"Class Highest\nClass Lowest\nClass Average\nPass Rate\nSubject Position\nPercentile\nStudent Percentage","reqd":1},
+  {"columns":2,"fieldname":"metric_key","fieldtype":"Select","in_list_view":1,"label":"Metric","options":"Class Highest\nClass Lowest\nClass Average","reqd":1},
   {"columns":2,"description":"Examples: CHS, Highest %, Class Average, CAS. The label is Institution-controlled.","fieldname":"display_label","fieldtype":"Data","in_list_view":1,"label":"Display Label","reqd":1},
-  {"columns":3,"fieldname":"calculation_basis","fieldtype":"Select","in_list_view":1,"label":"Calculation Basis","options":"Current Term Raw Score\nCurrent Term Percentage\nYear-to-Date Cumulative Raw Score\nAnnual Cumulative Raw Score\nAnnual Average Percentage","reqd":1},
-  {"columns":2,"fieldname":"display_as","fieldtype":"Select","in_list_view":1,"label":"Display As","options":"Raw Score\nPercentage\nNumber\nGrade","reqd":1},
+  {"columns":3,"fieldname":"calculation_basis","fieldtype":"Select","in_list_view":1,"label":"Calculation Basis","options":"Current Term Raw Score\nCurrent Term Percentage\nYear-to-Date Cumulative Raw Score\nYear-to-Date Cumulative Percentage\nAnnual Cumulative Raw Score\nAnnual Cumulative Percentage\nAnnual Average Percentage","reqd":1},
+  {"columns":2,"fieldname":"display_as","fieldtype":"Select","in_list_view":1,"label":"Display As","options":"Raw Score\nPercentage\nNumber","reqd":1},
   {"columns":1,"default":"2","fieldname":"decimal_places","fieldtype":"Int","label":"Decimals","reqd":1},
   {"columns":1,"default":"10","fieldname":"sequence","fieldtype":"Int","label":"Sequence","reqd":1},
   {"columns":1,"default":"1","fieldname":"show_on_terminal","fieldtype":"Check","label":"Terminal"},
