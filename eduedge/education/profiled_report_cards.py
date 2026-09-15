@@ -156,6 +156,10 @@ def _prepare_courses(subjects: list[dict], profile: dict, mode: str) -> list[dic
 		row["course_name"] = row.get("course_name") or row.get("course")
 		row["metrics"] = list(row.get("metrics") or [])
 		if mode == "Annual":
+			row["cumulative_score"] = flt(row.get("cumulative_score"))
+			row["cumulative_maximum_score"] = flt(row.get("cumulative_maximum_score"))
+			row["cumulative_percentage"] = flt(row.get("cumulative_percentage"))
+			row["annual_percentage"] = flt(row.get("annual_percentage") or row.get("annual_average_percentage"))
 			prepared_periods = []
 			period_map = {}
 			for period in row.get("periods") or []:
