@@ -108,6 +108,7 @@ def summary_from_snapshot_payload(payload: dict) -> dict:
 	attendance = payload.get("attendance") or {}
 	mode = publication.get("result_mode") or "Terminal"
 	courses = _prepare_courses(result.get("subjects") or [], profile, mode)
+	visible_components = _visible_components(profile, mode)
 	average_percent = flt(result_summary.get("overall_percentage"))
 	suggested = _suggested_progression(mode, average_percent, bool(courses))
 	school_opened = int(attendance.get("school_opened") or 0)
@@ -141,8 +142,9 @@ def summary_from_snapshot_payload(payload: dict) -> dict:
 		"next_term_start_date": payload.get("next_term_start_date"),
 		"suggested_progression": suggested,
 		"profile": profile,
-		"display_components": _visible_components(profile, mode),
+		"display_components": visible_components,
 		"display_metrics": _visible_metrics(profile, mode),
+		"component_totals": _component_totals(courses, visible_components) if mode == "Terminal" else [],
 		"periods": result.get("periods") or [],
 		"grading_legend": payload.get("grading_legend") or [],
 	}
@@ -181,6 +183,32 @@ def _prepare_courses(subjects: list[dict], profile: dict, mode: str) -> list[dic
 			]
 		output.append(row)
 	return sorted(output, key=lambda row: (row.get("course_name") or "").casefold())
+
+
+def _component_totals(courses: list[dict], components: list[dict]) -> list[dict]:
+	output = []
+	for component in components:
+		key = component.get("component_key")
+		score = 0.0
+		maximum_score = 0.0
+		for course in courses:
+			row = next(
+				(item for item in (course.get("display_components") or []) if item.get("component_key") == key),
+				None,
+			)
+			if not row:
+				continue
+			score += flt(row.get("score"))
+			maximum_score += flt(row.get("maximum_score"))
+		output.append(
+			{
+				"component_key": key,
+				"component_label": component.get("component_label") or key,
+				"score": score,
+				"maximum_score": maximum_score,
+			}
+		)
+	return output
 
 
 def _visible_components(profile: dict, mode: str) -> list[dict]:
