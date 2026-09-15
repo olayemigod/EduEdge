@@ -10,6 +10,8 @@ from eduedge.education.report_cards import (
 	OPERATIONAL_ROLES,
 	REVIEW_DOCTYPE,
 	assert_report_card_access,
+	assert_report_card_review_management,
+	can_manage_report_card_reviews,
 	get_publication_student_summaries,
 	get_published_publication,
 	get_student_report_card_payload,
@@ -106,6 +108,9 @@ def get_report_card_context(
 		"current_branch": current_branch,
 		"allowed_branches": get_allowed_school_branches(),
 		"can_approve": bool(APPROVER_ROLES.intersection(roles)),
+		"can_review": bool(
+			selected_publication and can_manage_report_card_reviews(selected_publication)
+		),
 		"filters": {
 			"branch": resolved_branch,
 			"publication": publication,
@@ -139,6 +144,7 @@ def prepare_report_cards(publication: str) -> dict:
 	_require_operator()
 	publication_row = get_published_publication(publication)
 	assert_branch_access(publication_row.school_branch)
+	assert_report_card_review_management(publication_row)
 	summaries = get_publication_student_summaries(publication)
 	created = 0
 	updated = 0
@@ -182,6 +188,7 @@ def save_report_card_review(
 	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
 	doc.check_permission("write")
 	assert_branch_access(doc.school_branch)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(
 			_("Only Draft report-card reviews can be edited. Reopen the review first."),
@@ -214,6 +221,7 @@ def save_report_card_review(
 def recommend_progression(review: str) -> dict:
 	_require_operator()
 	doc = _get_review_for_update(review)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(_("Only Draft reviews can be recommended."), frappe.ValidationError)
 	if doc.progression_recommendation == "Pending Review":
