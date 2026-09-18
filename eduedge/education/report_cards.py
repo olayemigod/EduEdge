@@ -13,6 +13,13 @@ from education.education.report.course_wise_assessment_report.course_wise_assess
 
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
+from eduedge.education.instructor_scope import is_limited_instructor_user
+from eduedge.education.teaching_assignments import has_class_responsibility_assignment
+from eduedge.education.report_card_issues import get_effective_issued_payload
+from eduedge.education.profiled_report_cards import (
+	get_profiled_publication_student_summaries,
+	get_profiled_student_report_card_payload,
+)
 
 PUBLICATION_DOCTYPE = "EduEdge Result Publication"
 REVIEW_DOCTYPE = "EduEdge Report Card Review"
@@ -55,6 +62,10 @@ def get_published_publication(name: str):
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
+			"publication_version",
+			"supersedes_publication",
 			"status",
 			"report_card_ready",
 			"published_on",
@@ -88,8 +99,17 @@ def validate_report_card_review(doc) -> None:
 			)
 		doc.set(fieldname, value)
 
-	assert_branch_access(publication.school_branch)
-	if not frappe.db.exists(
+	_assert_publication_operator_scope(publication)
+	if publication.result_profile:
+		if not frappe.db.exists(
+			"EduEdge Published Result Snapshot",
+			{"result_publication": publication.name, "student": doc.student},
+		):
+			frappe.throw(
+				_("Student {0} is outside this published result snapshot.").format(doc.student),
+				frappe.ValidationError,
+			)
+	elif not frappe.db.exists(
 		"Student Group Student",
 		{"parent": publication.student_group, "student": doc.student, "active": 1},
 	):
@@ -147,27 +167,78 @@ def assert_report_card_access(publication, student: str, *, write: bool = False)
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required."), frappe.PermissionError)
 
-	student_doc = frappe.get_doc("Student", student)
 	roles = set(frappe.get_roles(frappe.session.user))
-	if roles.intersection(OPERATIONAL_ROLES):
-		assert_branch_access(publication.school_branch)
-		if write and not roles.intersection(OPERATIONAL_ROLES):
-			frappe.throw(_("You are not permitted to update report cards."), frappe.PermissionError)
-	else:
-		student_doc.check_permission("read")
-		if write:
-			frappe.throw(_("Published report cards are read-only."), frappe.PermissionError)
+	if not roles.intersection(OPERATIONAL_ROLES):
+		frappe.throw(
+			_("You are not permitted to access governed report cards."),
+			frappe.PermissionError,
+		)
+	_assert_publication_operator_scope(publication)
 
-	if not frappe.db.exists(
-		"Student Group Student",
-		{"parent": publication.student_group, "student": student, "active": 1},
-	):
+	if publication.result_profile:
+		in_scope = frappe.db.exists(
+			"EduEdge Published Result Snapshot",
+			{"result_publication": publication.name, "student": student},
+		)
+	else:
+		in_scope = frappe.db.exists(
+			"Student Group Student",
+			{"parent": publication.student_group, "student": student, "active": 1},
+		)
+	if not in_scope:
 		frappe.throw(_("Student is outside the published class scope."), frappe.PermissionError)
+
+
+def can_manage_report_card_reviews(publication, user: str | None = None) -> bool:
+	resolved_user = user or frappe.session.user
+	roles = set(frappe.get_roles(resolved_user))
+	if not OPERATIONAL_ROLES.intersection(roles):
+		return False
+	if not is_limited_instructor_user(resolved_user):
+		return True
+	return has_class_responsibility_assignment(
+		publication.student_group,
+		user=resolved_user,
+		academic_term=publication.academic_term,
+		academic_year=publication.academic_year,
+	)
+
+
+def assert_report_card_review_management(publication, user: str | None = None) -> None:
+	if can_manage_report_card_reviews(publication, user):
+		return
+	frappe.throw(
+		_(
+			"Only the effective Class Teacher, Form Teacher, Head of Class / Level, or an authorized academic administrator can manage this report-card review."
+		),
+		frappe.PermissionError,
+	)
+
+
+def _assert_publication_operator_scope(publication) -> None:
+	assert_branch_access(publication.school_branch)
+	user = frappe.session.user
+	if not is_limited_instructor_user(user):
+		return
+	if not has_class_responsibility_assignment(
+		publication.student_group,
+		user=user,
+		academic_term=publication.academic_term,
+		academic_year=publication.academic_year,
+	):
+		frappe.throw(
+			_(
+				"Full report-card access is limited to the effective Class Teacher, Form Teacher, Head of Class / Level, or an authorized academic administrator."
+			),
+			frappe.PermissionError,
+		)
 
 
 def get_publication_student_summaries(publication_name: str) -> list[dict]:
 	publication = get_published_publication(publication_name)
-	assert_branch_access(publication.school_branch)
+	_assert_publication_operator_scope(publication)
+	if publication.result_profile:
+		return get_profiled_publication_student_summaries(publication, REVIEW_DOCTYPE)
 
 	students = frappe.get_all(
 		"Student Group Student",
@@ -203,6 +274,16 @@ def get_publication_student_summaries(publication_name: str) -> list[dict]:
 		page_length=0,
 	)
 	review_by_student = {row.student: row for row in reviews}
+	legacy_issues = frappe.get_all(
+		"EduEdge Report Card Issue",
+		filters={"result_publication": publication.name, "student": ["in", student_names]},
+		fields=["name", "student", "issue_version", "issued_on", "payload_hash"],
+		order_by="student asc, issue_version desc, creation desc",
+		page_length=0,
+	)
+	issue_by_student = {}
+	for row in legacy_issues:
+		issue_by_student.setdefault(row.student, row)
 
 	results_by_student: dict[str, list] = defaultdict(list)
 	for row in result_rows:
@@ -224,13 +305,26 @@ def get_publication_student_summaries(publication_name: str) -> list[dict]:
 		else:
 			summary["review"] = None
 		summary["group_roll_number"] = student.group_roll_number
+		issue = issue_by_student.get(student.student)
+		summary["issue"] = dict(issue) if issue else None
 		summaries.append(summary)
 	return summaries
 
 
-def get_student_report_card_payload(publication_name: str, student: str) -> dict:
+def get_student_report_card_payload(
+	publication_name: str,
+	student: str,
+	*,
+	_prefer_issued: bool = True,
+) -> dict:
 	publication = get_published_publication(publication_name)
 	assert_report_card_access(publication, student)
+	if _prefer_issued:
+		issued = get_effective_issued_payload(publication_name, student)
+		if issued:
+			return issued
+	if publication.result_profile:
+		return get_profiled_student_report_card_payload(publication, student, REVIEW_DOCTYPE)
 	student_row = frappe.db.get_value(
 		"Student",
 		student,

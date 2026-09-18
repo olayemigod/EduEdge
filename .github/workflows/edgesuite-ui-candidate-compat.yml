@@ -121,6 +121,11 @@ jobs:
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
           test -f apps/edgesuite_ui/edgesuite_ui/search_ranking.py
 
+      - name: Stabilize upstream ERPNext test roots
+        working-directory: frappe-bench
+        run: |
+          bench --site eduedge-ci.localhost execute eduedge.ci.ensure_erpnext_test_roots
+
       - name: Run full EduEdge database-backed tests
         working-directory: frappe-bench
         shell: bash
