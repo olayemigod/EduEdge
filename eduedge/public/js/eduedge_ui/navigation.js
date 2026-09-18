@@ -170,8 +170,14 @@ export function buildEduEdgeMenuItems() {
 			menuItem(__("Lesson Plans"), "/app/eduedge-lesson-plans", "book", __("Prepare, submit, review, and approve lessons from the approved Scheme of Work")),
 		]),
 		menuGroup("assessment-results", __("Assessments & Results"), "clipboard", [
-			menuItem(__(`${assessments} & Results`), "/app/eduedge-assessment-operations", "assessment", __(`Plan, approve, and publish ${assessments.toLowerCase()}`)),
-			menuItem(__("Report Cards"), "/app/eduedge-report-cards", "report", __("Comments, progression, and printing")),
+			menuItem(__("Assessment Operations"), "/app/eduedge-assessment-operations", "assessment", __(`Plan, review, approve, and publish ${assessments.toLowerCase()}`)),
+			menuItem(__("Assessment Plans"), "/app/assessment-plan", "calendar", __("Create and manage governed assessment plans")),
+			menuItem(__("Marks Entry"), "/app/assessment-result-tool", "edit", __("Enter marks from submitted assessment plans")),
+			menuItem(__("Assessment Results"), "/app/assessment-result", "list", __("Review draft and submitted assessment result records")),
+			menuItem(__("Result Profiles"), "/app/eduedge-result-profile", "settings", __("Configure grading, components, annual aggregation, and report presentation")),
+			menuItem(__("Report Cards"), "/app/eduedge-report-cards", "report", __("Terminal and annual report-card review, comments, progression, and printing")),
+			menuItem(__("Result Analytics"), "/app/assessment-result/view/report", "chart", __("Analyse assessment results using governed report access")),
+			menuItem(__("Results Audit"), "/app/eduedge-result-publication-log", "shield", __("Review governed result publication and approval history")),
 		]),
 		menuGroup("cbt-delivery", __("CBT Delivery"), "monitor", [
 			menuItem(__("CBT Operations"), "/app/eduedge-cbt-operations", "assessment", __("Centres, templates, and readiness")),
