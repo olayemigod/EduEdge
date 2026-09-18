@@ -14,6 +14,12 @@ from eduedge.services.branch_context import get_allowed_school_branches, get_cur
 
 MAX_ANALYTICS_ROWS = 100
 MAX_ANALYTICS_SUMMARY = 2000
+RESULT_ANALYTICS_ROLES = {
+	"System Manager",
+	"EduEdge Administrator",
+	"School Administrator",
+	"Academic Administrator",
+}
 
 
 def _require_login() -> None:
@@ -301,6 +307,8 @@ def get_result_analytics(
 	status: str | None = None,
 ) -> dict:
 	_require_login()
+	if frappe.session.user != "Administrator" and not RESULT_ANALYTICS_ROLES.intersection(frappe.get_roles(frappe.session.user)):
+		frappe.throw(_("You are not permitted to view Result Analytics."), frappe.PermissionError)
 	if not frappe.has_permission("Assessment Result", "read"):
 		frappe.throw(_("You are not permitted to view Assessment Results."), frappe.PermissionError)
 	resolved_branch = _resolve_branch(branch)
