@@ -213,7 +213,7 @@ export default {
 		},
 		activeBranchLabel() {
 			const branchFilter = this.page.filters.find((field) => field.type === "Branch");
-			const selected = this.filterValues.branch;
+			const selected = branchFilter ? this.filterValues[branchFilter.fieldname] : "";
 			const option = this.normalizedOptions(branchFilter?.options).find((item) => item.value === selected);
 			return option?.label || "All permitted branches";
 		},
