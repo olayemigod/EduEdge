@@ -28,9 +28,9 @@ RESULT_GOVERNANCE_ROLES = {
 }
 
 RESULT_GOVERNANCE_ROUTES = {
-	"/app/eduedge-result-profile",
-	"/app/assessment-result/view/report",
-	"/app/eduedge-result-publication-log",
+	"/app/eduedge-result-profiles",
+	"/app/eduedge-result-analytics",
+	"/app/eduedge-results-audit",
 }
 
 RESOURCE_DOCTYPES = {
@@ -167,15 +167,15 @@ ROUTE_REQUIREMENTS = {
 		("assessment_result", "create"),
 		("assessment_result", "write"),
 	),
-	"/app/assessment-plan": (("assessment_plan", "read"),),
-	"/app/assessment-result-tool": (
-		("assessment_result_tool", "read"),
-		("assessment_result_tool", "write"),
+	"/app/eduedge-assessment-plans": (("assessment_plan", "read"),),
+	"/app/eduedge-marks-entry": (
+		("assessment_result", "create"),
+		("assessment_result", "write"),
 	),
-	"/app/assessment-result": (("assessment_result", "read"),),
-	"/app/eduedge-result-profile": (("result_profile", "write"),),
-	"/app/assessment-result/view/report": (("assessment_result", "report"),),
-	"/app/eduedge-result-publication-log": (("result_publication_log", "read"),),
+	"/app/eduedge-assessment-results": (("assessment_result", "read"),),
+	"/app/eduedge-result-profiles": (("result_profile", "write"),),
+	"/app/eduedge-result-analytics": (("assessment_result", "report"),),
+	"/app/eduedge-results-audit": (("result_publication_log", "read"),),
 	"/app/eduedge-report-cards": (
 		("result_publication", "read"),
 		("report_card_review", "read"),
