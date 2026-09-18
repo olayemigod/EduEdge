@@ -14,7 +14,7 @@
 					:eyebrow="page.eyebrow || 'EduEdge'"
 					:title="page.title || 'Records'"
 					:subtitle="page.subtitle || ''"
-					:action-label="page.permissions.can_create ? `Add ${singularTitle}` : ''"
+					:action-label="page.permissions.can_create ? (page.create_label || `Add ${singularTitle}`) : ''"
 					@action="openCreate"
 				/>
 			</template>
@@ -91,7 +91,7 @@
 							class="edge-button edge-button--primary"
 							@click="openCreate"
 						>
-							Add {{ singularTitle }}
+							{{ page.create_label || `Add ${singularTitle}` }}
 						</button>
 					</div>
 
@@ -122,6 +122,12 @@
 											:label="row[column.fieldname] || 'Not set'"
 											:status="row[column.fieldname] || 'not-set'"
 											:tone="statusTone(row[column.fieldname])"
+										/>
+										<EdgeStatusBadge
+											v-else-if="column.type === 'DocStatus'"
+											:label="docStatusLabel(row[column.fieldname])"
+											:status="docStatusLabel(row[column.fieldname])"
+											:tone="docStatusTone(row[column.fieldname])"
 										/>
 										<span v-else>{{ displayValue(row[column.fieldname]) }}</span>
 									</td>
@@ -190,6 +196,10 @@ export default {
 				start: 0,
 				page_length: 20,
 				has_more: false,
+				quick_create: true,
+				quick_edit: true,
+				create_route: "",
+				create_label: "",
 				permissions: { can_create: false, can_write: false, can_delete: false },
 			},
 		};
@@ -234,6 +244,14 @@ export default {
 			if (["Rejected", "Disabled", "Cancelled"].includes(status)) return "danger";
 			if (["Applied", "Pending", "Draft"].includes(status)) return "warning";
 			return "neutral";
+		},
+		docStatusLabel(value) {
+			const status = Number(value);
+			return status === 1 ? "Submitted" : status === 2 ? "Cancelled" : "Draft";
+		},
+		docStatusTone(value) {
+			const status = Number(value);
+			return status === 1 ? "success" : status === 2 ? "danger" : "warning";
 		},
 		async loadPage(resetStart = false) {
 			if (resetStart) this.page.start = 0;
@@ -284,6 +302,10 @@ export default {
 			return context;
 		},
 		async openCreate() {
+			if (!this.page.quick_create && this.page.create_route) {
+				window.location.href = this.page.create_route;
+				return;
+			}
 			await openNativeResourceDialog({
 				resource: this.resourceKey,
 				context: this.modalContext(),
@@ -294,6 +316,10 @@ export default {
 			});
 		},
 		async openEdit(row) {
+			if (!this.page.quick_edit) {
+				this.openFullForm(row);
+				return;
+			}
 			await openNativeResourceDialog({
 				resource: this.resourceKey,
 				name: row.name,
