@@ -232,7 +232,7 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 			{"fieldname": "application_end_date", "label": _("Application End Date"), "type": "Date"},
 			{"fieldname": "notes", "label": _("Notes"), "type": "Small Text"},
 		],
-	},,
+	},
 	"assessment_plans": {
 		"doctype": "Assessment Plan",
 		"title": _("Assessment Plans"),
