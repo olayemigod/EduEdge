@@ -316,7 +316,6 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 		"quick_create": False,
 		"quick_edit": False,
 		"title_field": "profile_name",
-		"branch_field": "school_branch",
 		"search_fields": ["name", "profile_name", "institution", "school_branch", "grading_scale"],
 		"columns": [
 			{"fieldname": "profile_name", "label": _("Profile")},
@@ -327,7 +326,7 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 			{"fieldname": "is_active", "label": _("Active"), "type": "Check"},
 		],
 		"filters": [
-			{"fieldname": "branch", "label": _("Branch / Campus"), "type": "Branch"},
+			{"fieldname": "school_branch", "label": _("Branch / Campus"), "type": "Branch"},
 			{"fieldname": "institution", "label": _("Institution"), "type": "Link", "options_doctype": "EduEdge Institution"},
 			{"fieldname": "is_active", "label": _("Active"), "type": "Select", "options": ["", "1", "0"]},
 			{"fieldname": "is_default", "label": _("Default"), "type": "Select", "options": ["", "1", "0"]},
