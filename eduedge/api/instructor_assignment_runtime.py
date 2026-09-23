@@ -18,7 +18,11 @@ def _selected_instructor(name: str | None) -> dict | None:
 	if not resolved:
 		return None
 	filters = {"name": resolved, "status": "Active"}
-	if not core._can_manage_assignments():
+	if core._can_manage_assignments():
+		visible = core._manager_visible_instructor_names(include_history=True)
+		if resolved not in visible:
+			frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
+	else:
 		own = current_user_instructors()
 		if resolved not in own:
 			frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
