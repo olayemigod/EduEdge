@@ -23,6 +23,7 @@ from eduedge.platform.access import require_eduedge_access
 from eduedge.services.instructor_branch_governance import (
 	assert_instructor_branch_eligibility,
 	assignment_eligibility_covers_period,
+	assignment_eligibility_overlap_periods,
 	assignment_eligibility_overlaps_period,
 	eligible_branch_names,
 	get_instructor_branch_eligibility_rows,
@@ -260,6 +261,12 @@ def _filter_planner_options_by_instructor(
 		):
 			continue
 		row["branch_eligibility_full_period"] = assignment_eligibility_covers_period(
+			resolved_instructor,
+			branch,
+			period_start,
+			period_end,
+		)
+		row["branch_eligibility_periods"] = assignment_eligibility_overlap_periods(
 			resolved_instructor,
 			branch,
 			period_start,
