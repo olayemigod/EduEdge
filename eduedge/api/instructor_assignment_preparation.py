@@ -6,7 +6,8 @@ from frappe.utils import cint, getdate
 
 from eduedge.api.instructor_assignment_replacement import (
     _branch_access_preview,
-    _ensure_incoming_branch_access,
+    _branch_governance_conflict,
+    _require_incoming_branch_access,
     _same_date,
     _type_variants,
 )
@@ -338,6 +339,9 @@ def _preparation_plan(
             "branch_name": destination["branch_name"],
         }
     )
+    branch_conflict = _branch_governance_conflict(branch_access)
+    if branch_conflict:
+        conflicts.append(branch_conflict)
     return {
         "source": {
             "name": source.name,
@@ -441,11 +445,12 @@ def prepare_instructor_assignment_for_next_period(
         destination = plan["destination"]
         start = getdate(destination["valid_from"])
         end = getdate(destination["valid_to"])
-        branch_result = _ensure_incoming_branch_access(
+        branch_result = _require_incoming_branch_access(
             source.instructor,
             destination["school_branch"],
             start,
             end,
+            label=_("Prepared Instructor Assignment"),
         )
 
         prepared = frappe.new_doc("EduEdge Instructor Assignment")
