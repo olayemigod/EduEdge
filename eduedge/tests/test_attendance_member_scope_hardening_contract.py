@@ -81,5 +81,27 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         )
 
 
+    def test_attendance_summary_uses_permission_aware_list_query(self):
+        source = API.read_text(encoding="utf-8")
+        block = source.split("def _get_attendance_summary", 1)[1].split(
+            "@frappe.whitelist()\ndef get_attendance_register",
+            1,
+        )[0]
+        self.assertIn('rows = frappe.get_list(', block)
+        self.assertIn('"Student Attendance"', block)
+        self.assertIn("limit_page_length=0", block)
+        self.assertNotIn("frappe.get_all(", block)
+
+    def test_register_write_does_not_ignore_doctype_permissions(self):
+        source = API.read_text(encoding="utf-8")
+        block = source.split("def save_attendance_register", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef student_group_query",
+            1,
+        )[0]
+        self.assertIn("doc.save()", block)
+        self.assertIn("doc.submit()", block)
+        self.assertNotIn("ignore_permissions", block)
+
+
 if __name__ == "__main__":
     unittest.main()
