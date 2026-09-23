@@ -296,6 +296,7 @@ def _assert_governed_branch(instructor: str, branch: str) -> dict:
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def instructor_assignment_instructor_query(doctype, txt, searchfield, start, page_len, filters):
+	assignments._require_assignment_manager()
 	"""Native-form Instructor choices that can actually receive governed responsibilities."""
 	core._require_read()
 	allowed = _allowed_branch_map()
@@ -358,6 +359,7 @@ def instructor_assignment_instructor_query(doctype, txt, searchfield, start, pag
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def instructor_assignment_branch_query(doctype, txt, searchfield, start, page_len, filters):
+	assignments._require_assignment_manager()
 	core._require_read()
 	values = _standard_filters(filters)
 	instructor = str(values.get("instructor") or "").strip()
@@ -396,6 +398,7 @@ def instructor_assignment_branch_query(doctype, txt, searchfield, start, page_le
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def instructor_assignment_offering_query(doctype, txt, searchfield, start, page_len, filters):
+	assignments._require_assignment_manager()
 	core._require_read()
 	values = _standard_filters(filters)
 	instructor = str(values.get("instructor") or "").strip()
@@ -424,6 +427,7 @@ def instructor_assignment_offering_query(doctype, txt, searchfield, start, page_
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def instructor_assignment_class_arm_query(doctype, txt, searchfield, start, page_len, filters):
+	assignments._require_assignment_manager()
 	core._require_read()
 	values = _standard_filters(filters)
 	instructor = str(values.get("instructor") or "").strip()
@@ -453,6 +457,7 @@ def instructor_assignment_class_arm_query(doctype, txt, searchfield, start, page
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def instructor_assignment_course_query(doctype, txt, searchfield, start, page_len, filters):
+	assignments._require_assignment_manager()
 	"""Native form exposes only curriculum courses; planner-only curriculum additions stay on EdgeSuite."""
 	core._require_read()
 	values = _standard_filters(filters)
