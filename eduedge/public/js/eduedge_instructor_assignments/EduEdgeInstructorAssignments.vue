@@ -391,11 +391,13 @@ export default {
 		invalidatePreview() { this.preview = null; this.saveError = ""; },
 		async instructorSelected(option) {
 			this.instructor = option?.value || "";
+			this.rows = [newRow()];
 			this.invalidatePreview();
 			await this.load();
 		},
 		async instructorCleared() {
 			this.instructor = "";
+			this.rows = [newRow()];
 			this.invalidatePreview();
 			await this.load();
 		},
@@ -452,14 +454,20 @@ export default {
 			if (this.routePresetApplied || !this.loaded || !this.canManage) return;
 			this.routePresetApplied = true;
 			if (!preset.branch && !preset.program_offering && !preset.student_group && !preset.course) return;
+			const eligible = new Set((this.data.allowed_branches || []).map((row) => row.name));
+			const governedBranch = preset.branch && eligible.has(preset.branch) ? preset.branch : "";
 			this.rows = [newRow({
-				branch: preset.branch,
-				program_offering: preset.program_offering,
+				branch: governedBranch,
+				program_offering: governedBranch ? preset.program_offering : "",
 				assignment_scope: preset.student_group ? CLASS_ARM_SCOPE : CLASS_SCOPE,
-				student_groups: preset.student_group ? [preset.student_group] : [],
-				courses: preset.course ? [preset.course] : [],
+				student_groups: governedBranch && preset.student_group ? [preset.student_group] : [],
+				courses: governedBranch && preset.course ? [preset.course] : [],
 			})];
-			this.invalidatePreview();
+			if (preset.branch && !governedBranch) {
+				this.saveError = __("The requested Branch is not covered by this Instructor's Branch Governance eligibility.");
+			} else {
+				this.invalidatePreview();
+			}
 		},
 		branchRecord(name) { return [...(this.data.allowed_branches || []), ...(this.data.permitted_branches || [])].find((row) => row.name === name); },
 		branchLabel(name) { return this.branchRecord(name)?.branch_name || name || "Branch"; },
