@@ -309,6 +309,7 @@ def _instructor_detail(name: str, branch_names: set[str] | None = None) -> dict:
 	result["branch_eligibility"] = _summarise_branch_eligibility(periods)
 	return result
 
+
 def _departments(institution: str) -> list[dict]:
 	if not institution or institution == ALL_INSTITUTIONS_KEY or not frappe.has_permission("Department", "read"):
 		return []
@@ -404,6 +405,8 @@ def get_instructors_page(
 	for row in rows:
 		home = institution_map.get(row.get(INSTITUTION_FIELD)) or {}
 		governed_primary = primary_branch(row.name)
+		if detail_branch_names is not None and governed_primary not in detail_branch_names:
+			governed_primary = ""
 		primary = branch_map.get(governed_primary) or {}
 		row[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary
 		row["institution_name"] = home.get("institution_name") or row.get(INSTITUTION_FIELD)
