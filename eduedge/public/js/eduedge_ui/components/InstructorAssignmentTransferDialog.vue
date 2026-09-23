@@ -152,7 +152,7 @@
 							<small>{{ previewPlan.destination?.valid_from }} → {{ previewPlan.destination?.valid_to || 'Open ended' }}</small>
 						</div>
 						<div class="eduedge-transfer-plan-card eduedge-transfer-plan-grid__wide">
-							<strong class="eduedge-transfer-plan-label">Branch Eligibility impact</strong>
+							<strong class="eduedge-transfer-plan-label">Branch Eligibility check</strong>
 							<span>{{ branchImpactLabel(previewPlan.destination_branch_eligibility) }}</span>
 							<small>{{ branchEligibilitySummary(previewPlan.destination_branch_eligibility) }}</small>
 							<small>The source Branch Eligibility is not shortened or deleted by Transfer.</small>
