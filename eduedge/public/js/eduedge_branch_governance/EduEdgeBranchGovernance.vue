@@ -510,6 +510,71 @@ export default {
 			});
 			window.location.href = `/app/eduedge-instructor-assignments?${query.toString()}`;
 		},
+		async reviewInstructorEligibility(eligibility) {
+			this.eligibilityReview = {
+				...emptyEligibilityReview(),
+				open: true,
+				loading: true,
+				instructor: eligibility.instructor || "",
+				instructorName: eligibility.instructor_name || eligibility.instructor || "",
+				subtitle: `Review all governed Branch periods for ${eligibility.instructor_name || eligibility.instructor || "this Instructor"}.`,
+			};
+			await this.reloadEligibilityReview();
+		},
+		async reloadEligibilityReview() {
+			if (!this.eligibilityReview.instructor) return;
+			this.eligibilityReview.loading = true;
+			this.eligibilityReview.error = "";
+			try {
+				const response = await frappe.call("eduedge.api.instructor_branch_eligibility.get_instructor_branch_eligibility_review", {
+					instructor: this.eligibilityReview.instructor,
+				});
+				const review = response.message || {};
+				this.eligibilityReview.rows = review.rows || [];
+				this.eligibilityReview.reviewRequiredCount = review.review_required_count || 0;
+				this.eligibilityReview.selectedName = "";
+				this.eligibilityReview.reason = "";
+			} catch (error) {
+				this.eligibilityReview.error = error?.message || __("Instructor Branch Eligibility review could not be loaded.");
+			} finally {
+				this.eligibilityReview.loading = false;
+			}
+		},
+		closeEligibilityReview() {
+			if (this.eligibilityReview.busy) return;
+			this.eligibilityReview = emptyEligibilityReview();
+		},
+		prepareEligibilityCleanup(row) {
+			if (!row?.review_required || row?.is_primary || !this.context.permissions.can_manage_instructor_eligibility) return;
+			this.eligibilityReview.selectedName = row.name;
+			this.eligibilityReview.reason = "";
+		},
+		cancelEligibilityCleanup() {
+			if (this.eligibilityReview.busy) return;
+			this.eligibilityReview.selectedName = "";
+			this.eligibilityReview.reason = "";
+		},
+		async disableReviewedEligibility() {
+			if (!this.eligibilityReview.selectedName || !this.eligibilityReview.reason || this.eligibilityReview.busy) return;
+			this.eligibilityReview.busy = true;
+			try {
+				await frappe.call({
+					method: "eduedge.api.instructor_branch_eligibility.disable_unused_instructor_branch_eligibility",
+					type: "POST",
+					args: {
+						name: this.eligibilityReview.selectedName,
+						reason: this.eligibilityReview.reason,
+					},
+				});
+				frappe.show_alert({ message: __("Unused Instructor Branch Eligibility disabled and retained in history"), indicator: "green" });
+				await this.loadContext();
+				await this.reloadEligibilityReview();
+			} catch (error) {
+				frappe.show_alert({ message: error?.message || __("Eligibility cleanup could not be completed."), indicator: "red" });
+			} finally {
+				this.eligibilityReview.busy = false;
+			}
+		},
 		async openQuickEditor(resource, name = "", extraContext = {}) {
 			await openRecordModal(this.recordModal, {
 				resource,
