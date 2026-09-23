@@ -35,6 +35,15 @@ def _eligible_instructor_rows(params: dict, query: str) -> list[dict]:
 			and instructor.status = 'Active'
 			and (assignment.valid_from is null or assignment.valid_from <= %(reference_date)s)
 			and (assignment.valid_to is null or assignment.valid_to >= %(reference_date)s)
+			and exists (
+				select 1
+				from `tabEduEdge Instructor Branch Assignment` eligibility
+				where eligibility.instructor = assignment.instructor
+					and eligibility.school_branch = assignment.school_branch
+					and eligibility.enabled = 1
+					and (eligibility.valid_from is null or eligibility.valid_from <= %(reference_date)s)
+					and (eligibility.valid_to is null or eligibility.valid_to >= %(reference_date)s)
+			)
 			and (
 				assignment.assignment_scope = %(class_scope)s
 				or (
