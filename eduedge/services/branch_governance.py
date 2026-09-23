@@ -382,7 +382,9 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 			status = "Needs Home Institution"
 		elif home_institution not in enabled_home_institutions:
 			status = "Home Institution Disabled"
-		elif row_branch_institution and home_institution != row_branch_institution:
+		elif not row_branch_institution:
+			status = "Branch Missing Institution"
+		elif home_institution != row_branch_institution:
 			status = "Institution Mismatch"
 		elif row.get("valid_from") and getdate(row["valid_from"]) > today:
 			status = "Scheduled"
@@ -396,6 +398,8 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 			governance_note = "Update the Instructor Home Institution before creating new academic responsibilities."
 		elif status == "Home Institution Disabled":
 			governance_note = "The Instructor Home Institution is disabled. Correct the Instructor profile or re-enable the Institution before creating new academic responsibilities."
+		elif status == "Branch Missing Institution":
+			governance_note = "The School Branch / Campus has no Institution linkage. Correct Branch setup before creating new academic responsibilities."
 		elif status == "Institution Mismatch":
 			governance_note = "This eligibility is outside the Instructor Home Institution. Preserve history, then correct the profile or create eligibility in a valid campus."
 
