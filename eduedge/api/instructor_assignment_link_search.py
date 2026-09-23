@@ -31,7 +31,11 @@ def _assert_search_instructor_available(instructor: str) -> str:
 	resolved = str(instructor or "").strip()
 	if not resolved:
 		return ""
-	if not assignments._can_manage_assignments():
+	if assignments._can_manage_assignments():
+		visible = assignments._manager_visible_instructor_names(include_history=False)
+		if resolved not in visible:
+			frappe.throw("The selected Instructor is not available to your user.", frappe.PermissionError)
+	else:
 		own = set(current_user_instructors())
 		if resolved not in own:
 			frappe.throw("The selected Instructor is not available to your user.", frappe.PermissionError)
