@@ -239,6 +239,12 @@ class TestInstructorBranchEligibilityReconciliation(FrappeTestCase):
             )
 
         frappe.set_user(instructor_user.name)
+        self.assertTrue(
+            frappe.has_permission("EduEdge Instructor Branch Assignment", "read")
+        )
+        self.assertFalse(
+            frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
+        )
         with self.assertRaises(frappe.PermissionError):
             get_instructor_branch_eligibility_review(instructor_a.name)
 
