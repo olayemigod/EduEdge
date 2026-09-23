@@ -42,10 +42,16 @@ def branch_matches_instructor_home_institution(
 	home_institution = instructor_home_institution(instructor)
 	if not home_institution:
 		return not require_home
+	if require_home and not frappe.db.exists(
+		"EduEdge Institution",
+		{"name": home_institution, "enabled": 1},
+	):
+		return False
 	branch_institution = str(
 		frappe.db.get_value("EduEdge School Branch", branch, "institution") or ""
 	).strip()
 	return bool(branch_institution and branch_institution == home_institution)
+
 
 def get_instructor_branch_eligibility_rows(
 	instructor: str,
@@ -176,6 +182,17 @@ def assert_instructor_branch_eligibility(
 			).format(f"{label}: " if label else ""),
 			frappe.ValidationError,
 		)
+	if not frappe.db.exists(
+		"EduEdge Institution",
+		{"name": home_institution, "enabled": 1},
+	):
+		frappe.throw(
+			_(
+				"{0}The Instructor Home Institution is disabled or unavailable. "
+				"Correct the Instructor profile before creating a new academic responsibility."
+			).format(f"{label}: " if label else ""),
+			frappe.ValidationError,
+		)
 	if not branch_matches_instructor_home_institution(instructor, branch, require_home=True):
 		frappe.throw(
 			_(
@@ -207,7 +224,10 @@ def eligible_branch_names(
 	within: Iterable[str] | None = None,
 ) -> set[str]:
 	home_institution = instructor_home_institution(instructor)
-	if not home_institution:
+	if not home_institution or not frappe.db.exists(
+		"EduEdge Institution",
+		{"name": home_institution, "enabled": 1},
+	):
 		return set()
 	rows = get_instructor_branch_eligibility_rows(instructor, enabled_only=True)
 	candidate_names = sorted({
