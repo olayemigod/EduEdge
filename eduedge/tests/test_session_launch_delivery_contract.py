@@ -60,6 +60,7 @@ class TestSessionLaunchDeliveryContract(unittest.TestCase):
             'return "Tutor"',
             "CLASS_ARM_SCOPE if context.get(\"student_group\") else CLASS_SCOPE",
             '"courses": []',
+            "readiness._assignment_branch_governance_covers_period",
         ):
             self.assertIn(token, api)
 
