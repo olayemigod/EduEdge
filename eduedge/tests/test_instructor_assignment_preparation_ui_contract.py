@@ -142,7 +142,7 @@ class TestInstructorAssignmentPreparationUIContract(unittest.TestCase):
             "sameArgs(currentArgs, this.previewedArgs)",
             "Preparation details changed after preview",
             "Changing Branch, Class, Class Arm, Subject, dates or reason after preview requires a fresh server preview.",
-            "Branch Eligibility impact",
+            "Branch Eligibility check",
             "The source Branch Eligibility is not shortened or deleted by preparation.",
             "previewPlan.destination?.valid_from",
             "previewPlan.destination?.valid_to",
@@ -176,6 +176,22 @@ class TestInstructorAssignmentPreparationUIContract(unittest.TestCase):
             "{{ previewPlan.destination?.course }}",
             "{{ previewPlan.destination_branch_eligibility?.name }}",
             "prepared_to_assignment",
+        ):
+            self.assertNotIn(forbidden, component)
+
+    def test_lifecycle_dialog_never_promises_branch_eligibility_mutation(self):
+        component = self._component_source()
+        for token in (
+            "Branch Eligibility check",
+            "Covered — Branch Governance already authorizes the full future responsibility period. No Branch Eligibility change will be made.",
+            "Blocked — update Instructor Branch Eligibility in Branch Governance before preparing this future responsibility.",
+            "branch-eligibility-blocked",
+        ):
+            self.assertIn(token, component)
+        for forbidden in (
+            "A Branch Eligibility period will be created for the Instructor in the destination Branch.",
+            "Existing Branch Eligibility will be extended",
+            "disabled Branch Eligibility period will be re-enabled",
         ):
             self.assertNotIn(forbidden, component)
 
