@@ -177,7 +177,7 @@
 							<small>{{ previewPlan.destination?.valid_from }} → {{ previewPlan.destination?.valid_to }}</small>
 						</div>
 						<div class="eduedge-preparation-plan-card eduedge-preparation-plan-grid__wide">
-							<strong class="eduedge-preparation-plan-label">Branch Eligibility impact</strong>
+							<strong class="eduedge-preparation-plan-label">Branch Eligibility check</strong>
 							<span>{{ branchImpactLabel(previewPlan.destination_branch_eligibility) }}</span>
 							<small>{{ branchEligibilitySummary(previewPlan.destination_branch_eligibility) }}</small>
 							<small>The source Branch Eligibility is not shortened or deleted by preparation.</small>
