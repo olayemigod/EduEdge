@@ -45,6 +45,18 @@ class TestInstructorBranchGovernanceInstructorFilteringContract(unittest.TestCas
             source,
         )
 
+    def test_quick_editor_rejects_stale_or_out_of_scope_instructor_preset(self):
+        source = MODAL_API.read_text(encoding="utf-8")
+
+        for token in (
+            'doctype == "EduEdge Instructor Branch Assignment" and values.get("instructor")',
+            "requested_instructor",
+            "_instructor_eligibility_options(",
+            'values["instructor"] = ""',
+            'values["school_branch"] = ""',
+        ):
+            self.assertIn(token, source)
+
     def test_quick_editor_and_native_form_share_same_query_contract(self):
         api = MODAL_API.read_text(encoding="utf-8")
         native = NATIVE_FORM.read_text(encoding="utf-8")
