@@ -505,7 +505,12 @@ def student_group_member_query(doctype, txt, searchfield, start, page_len, filte
 	student_group = filters.get("student_group")
 	if not student_group:
 		return []
-	branch = frappe.db.get_value("Student Group", student_group, BRANCH_FIELD)
+	# Branch access alone is not enough for student-member discovery. The selected
+	# Class / Student Group must itself be readable under EduEdge's exact Instructor
+	# Assignment permission rules before we expose any member identities.
+	group_doc = frappe.get_doc("Student Group", student_group)
+	group_doc.check_permission("read")
+	branch = group_doc.get(BRANCH_FIELD)
 	assert_branch_access(branch)
 	return frappe.db.sql(
 		f"""
