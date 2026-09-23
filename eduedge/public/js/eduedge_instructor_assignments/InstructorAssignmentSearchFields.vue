@@ -68,6 +68,7 @@ export default {
 		instructor: { type: String, default: "" },
 		row: { type: Object, default: null },
 		showInstructor: { type: Boolean, default: false },
+		includeInstructorHistory: { type: Boolean, default: false },
 		classArmScope: { type: String, required: true },
 		requiresSubjects: { type: Boolean, default: false },
 		subjectLabel: { type: String, default: "Subjects / Courses" },
@@ -89,6 +90,7 @@ export default {
 			return call("eduedge.api.instructor_assignment_link_search.search_instructors", {
 				query: query || "",
 				page_length: 20,
+				include_history: this.includeInstructorHistory ? 1 : 0,
 			});
 		},
 		searchOfferings(row, query) {
