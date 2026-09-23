@@ -6,6 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, getdate, nowdate
 
+from eduedge.education.academic_fields import INSTITUTION_FIELD
+
 from eduedge.services.branch_accounting import ACCOUNTING_FIELDS, get_missing_core_defaults
 from eduedge.services.branch_context import (
 	ASSIGNMENT_SCOPE_BRANCH,
@@ -330,13 +332,14 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 		order_by="enabled desc, instructor_name asc, school_branch asc, valid_from asc",
 		limit_page_length=0,
 	)
+	branch_institution = {row["name"]: row.get("institution") for row in branches if row.get("name")}
 	instructor_names = sorted({row.instructor for row in rows if row.instructor})
 	instructors = {
 		row.name: dict(row)
 		for row in frappe.get_all(
 			"Instructor",
 			filters={"name": ["in", instructor_names]},
-			fields=["name", "instructor_name", "status", "employee"],
+			fields=["name", "instructor_name", "status", "employee", INSTITUTION_FIELD],
 			limit_page_length=0,
 		)
 	} if instructor_names else {}
@@ -353,14 +356,20 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 	for source in rows:
 		row = dict(source)
 		instructor = instructors.get(row.get("instructor"), {})
+		home_institution = str(instructor.get(INSTITUTION_FIELD) or "").strip()
+		row_branch_institution = str(branch_institution.get(row.get("school_branch")) or "").strip()
 		if not cint(row.get("enabled")):
 			status = "Disabled"
+		elif instructor and instructor.get("status") != "Active":
+			status = "Instructor Inactive"
+		elif not home_institution:
+			status = "Needs Home Institution"
+		elif row_branch_institution and home_institution != row_branch_institution:
+			status = "Institution Mismatch"
 		elif row.get("valid_from") and getdate(row["valid_from"]) > today:
 			status = "Scheduled"
 		elif row.get("valid_to") and getdate(row["valid_to"]) < today:
 			status = "Expired"
-		elif instructor and instructor.get("status") != "Active":
-			status = "Instructor Inactive"
 		else:
 			status = "Active"
 
@@ -383,6 +392,8 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 				or row.get("instructor"),
 				"instructor_status": instructor.get("status"),
 				"employee": instructor.get("employee"),
+				"home_institution": home_institution,
+				"branch_institution": row_branch_institution,
 				"academic_assignment_count": len(support),
 				"status": status,
 			}
