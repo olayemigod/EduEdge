@@ -118,10 +118,98 @@ def _require_assignment_manager() -> None:
 		)
 
 
-def _instructors() -> list[dict]:
+def _manager_visible_instructor_names(*, include_history: bool = False) -> set[str]:
+	"""Return Instructor names visible to an assignment manager inside permitted Branches.
+
+	New-authoring selectors require enabled Branch Governance that matches the
+	Instructor Home Institution. Register/history selectors additionally retain
+	Instructor names referenced by historical eligibility or academic assignments
+	inside the manager's permitted Branches.
+	"""
+	allowed = core._allowed_branches()
+	branch_map = {
+		str(row.get("name") or "").strip(): dict(row)
+		for row in allowed
+		if str(row.get("name") or "").strip()
+	}
+	branch_names = set(branch_map)
+	if not branch_names:
+		return set()
+
+	if include_history:
+		names: set[str] = set()
+		for doctype in ("EduEdge Instructor Branch Assignment", "EduEdge Instructor Assignment"):
+			if not frappe.db.exists("DocType", doctype):
+				continue
+			names.update(
+				str(value)
+				for value in frappe.get_all(
+					doctype,
+					filters={"school_branch": ["in", sorted(branch_names)]},
+					pluck="instructor",
+					limit_page_length=0,
+				)
+				if value
+			)
+		return names
+
+	if not frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
+		return set()
+	eligibility_rows = frappe.get_all(
+		"EduEdge Instructor Branch Assignment",
+		filters={"school_branch": ["in", sorted(branch_names)], "enabled": 1},
+		fields=["instructor", "school_branch"],
+		limit_page_length=0,
+	)
+	candidate_names = sorted({
+		str(row.instructor or "").strip()
+		for row in eligibility_rows
+		if str(row.instructor or "").strip()
+	})
+	if not candidate_names:
+		return set()
+
+	meta = frappe.get_meta("Instructor")
+	if not meta.has_field(INSTITUTION_FIELD):
+		return set()
+	instructor_rows = frappe.get_all(
+		"Instructor",
+		filters={"name": ["in", candidate_names], "status": "Active"},
+		fields=["name", INSTITUTION_FIELD],
+		limit_page_length=0,
+	)
+	home_by_instructor = {
+		str(row.name): str(row.get(INSTITUTION_FIELD) or "").strip()
+		for row in instructor_rows
+	}
+	home_institutions = sorted({value for value in home_by_instructor.values() if value})
+	enabled_institutions = set(
+		frappe.get_all(
+			"EduEdge Institution",
+			filters={"name": ["in", home_institutions], "enabled": 1},
+			pluck="name",
+			limit_page_length=0,
+		)
+	) if home_institutions else set()
+
+	visible: set[str] = set()
+	for row in eligibility_rows:
+		name = str(row.instructor or "").strip()
+		branch = str(row.school_branch or "").strip()
+		home = home_by_instructor.get(name, "")
+		branch_institution = str((branch_map.get(branch) or {}).get("institution") or "").strip()
+		if name and home and home in enabled_institutions and branch_institution == home:
+			visible.add(name)
+	return visible
+
+
+def _instructors(*, include_history: bool = False) -> list[dict]:
 	meta = frappe.get_meta("Instructor")
 	filters: dict[str, Any] = {"status": "Active"}
-	if not _can_manage_assignments():
+	if _can_manage_assignments():
+		visible = _manager_visible_instructor_names(include_history=include_history)
+		filters["name"] = ["in", sorted(visible)] if visible else ["in", ["__none__"]]
+	else:
 		own = current_user_instructors()
 		filters["name"] = ["in", own] if own else ["in", ["__none__"]]
 	fields = ["name", "instructor_name", "department", "employee", "status"]
