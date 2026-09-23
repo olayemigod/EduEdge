@@ -49,57 +49,46 @@ function governedFilters(frm) {
 }
 
 async function applyOfferingContext(frm) {
-	if (!frm.doc.program_offering) return;
-	const response = await frappe.db.get_value(
-		"EduEdge Program Offering",
-		frm.doc.program_offering,
-		[
-			"institution",
-			"school_branch",
-			"academic_year",
-			"academic_term",
-		],
-	);
+	if (!frm.doc.instructor || !frm.doc.school_branch || !frm.doc.program_offering) return;
+	const response = await frappe.call({
+		method: "eduedge.api.instructor_assignment_link_search.get_assignment_offering_context",
+		args: {
+			instructor: frm.doc.instructor,
+			branch: frm.doc.school_branch,
+			program_offering: frm.doc.program_offering,
+		},
+	});
 	const row = response?.message || {};
 	if (!row.school_branch) return;
 	if (frm.doc.school_branch && frm.doc.school_branch !== row.school_branch) {
 		await frm.set_value("program_offering", null);
 		return;
 	}
-	const updates = {
+	const partial = row.branch_eligibility_full_period === false;
+	frm.set_df_property(
+		"valid_from",
+		"description",
+		partial
+			? __("This Class only partially overlaps Branch Eligibility. Enter dates within the governed period.")
+			: "",
+	);
+	frm.set_df_property(
+		"valid_to",
+		"description",
+		partial
+			? __("This Class only partially overlaps Branch Eligibility. Enter dates within the governed period.")
+			: "",
+	);
+	await frm.set_value({
 		school_branch: row.school_branch,
 		institution: row.institution || null,
 		academic_year: row.academic_year || null,
 		academic_term: row.academic_term || null,
-	};
-	let period = {};
-	if (row.academic_term) {
-		const term = await frappe.db.get_value(
-			"Academic Term",
-			row.academic_term,
-			["term_start_date", "term_end_date"],
-		);
-		period = term?.message || {};
-	}
-	if ((!period.term_start_date && !period.term_end_date) && row.academic_year) {
-		const year = await frappe.db.get_value(
-			"Academic Year",
-			row.academic_year,
-			["year_start_date", "year_end_date"],
-		);
-		period = {
-			term_start_date: year?.message?.year_start_date || "",
-			term_end_date: year?.message?.year_end_date || "",
-		};
-	}
-	if (!frm.doc.valid_from && period.term_start_date) {
-		updates.valid_from = period.term_start_date;
-	}
-	if (!frm.doc.valid_to && period.term_end_date) {
-		updates.valid_to = period.term_end_date;
-	}
-	await frm.set_value(updates);
+		valid_from: partial ? null : (row.period_start_date || null),
+		valid_to: partial ? null : (row.period_end_date || null),
+	});
 }
+
 
 frappe.ui.form.on("EduEdge Instructor Assignment", {
 	setup(frm) {
@@ -144,6 +133,8 @@ frappe.ui.form.on("EduEdge Instructor Assignment", {
 			"institution",
 			"academic_year",
 			"academic_term",
+			"valid_from",
+			"valid_to",
 		]);
 	},
 
@@ -156,12 +147,14 @@ frappe.ui.form.on("EduEdge Instructor Assignment", {
 			"institution",
 			"academic_year",
 			"academic_term",
+			"valid_from",
+			"valid_to",
 		]);
 	},
 
 	async program_offering(frm) {
 		if (!frm.is_new()) return;
-		await clearFields(frm, ["student_group", "course"]);
+		await clearFields(frm, ["student_group", "course", "valid_from", "valid_to"]);
 		await applyOfferingContext(frm);
 	},
 
