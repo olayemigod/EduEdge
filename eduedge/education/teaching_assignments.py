@@ -8,6 +8,7 @@ from frappe.utils import getdate, nowdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 CLASS_SCOPE = "Class / Programme Offering"
 CLASS_ARM_SCOPE = "Class Arm"
@@ -141,7 +142,18 @@ def active_assignment_rows(
         order_by="modified desc",
         limit_page_length=0,
     )
-    result = [row for row in rows if _active_on(row, on_date)]
+    reference_date = getdate(on_date or nowdate())
+    result = [
+        row
+        for row in rows
+        if _active_on(row, reference_date)
+        and eligibility_covers_period(
+            row.get("instructor"),
+            row.get("school_branch"),
+            reference_date,
+            reference_date,
+        )
+    ]
     if student_group:
         result = [
             row
