@@ -59,6 +59,7 @@ class TestInstructorHomeInstitutionGovernanceContract(unittest.TestCase):
             "cint(self.is_primary) > cint(before.is_primary)",
             "Legacy Instructor profiles must be classified before receiving new academic responsibilities",
             "Existing historical eligibility may be shortened or disabled, but cannot be widened",
+            "The School Branch / Campus must belong to an Institution before Instructor Branch Eligibility can be enabled or widened",
         ):
             self.assertIn(token, source)
 
@@ -76,6 +77,7 @@ class TestInstructorHomeInstitutionGovernanceContract(unittest.TestCase):
             "Needs Home Institution",
             "Institution Mismatch",
             "Home Institution Disabled",
+            "Branch Missing Institution",
             "governance_note",
             "instructor_fields",
             "has_field(INSTITUTION_FIELD)",
@@ -87,6 +89,7 @@ class TestInstructorHomeInstitutionGovernanceContract(unittest.TestCase):
             "Needs Home Institution",
             "Institution Mismatch",
             "Home Institution Disabled",
+            "Branch Missing Institution",
         ):
             self.assertIn(token, component)
 
