@@ -158,7 +158,8 @@ export default {
 			return "";
 		},
 		hasChanges() { return !sameCapabilities(this.form, this.original); },
-		canSave() { return Boolean(this.item.capability_version && this.hasChanges && !this.reasonError); },
+		needsExplicitReview() { return !this.item.capabilities_updated_on; },
+		canSave() { return Boolean(this.item.capability_version && (this.hasChanges || this.needsExplicitReview) && !this.reasonError); },
 	},
 	methods: {
 		setCapability(fieldname, checked) {
@@ -192,7 +193,12 @@ export default {
 				});
 				const result = response.message || {};
 				frappe.show_alert({
-					message: result.action === "already-configured" ? "Assignment capabilities already match" : "Assignment capabilities updated",
+					message:
+						result.action === "already-configured"
+							? "Assignment capabilities already match"
+							: result.action === "capabilities-reviewed"
+								? "Assignment capabilities reviewed"
+								: "Assignment capabilities updated",
 					indicator: "green",
 				});
 				await this.onComplete?.(result);
