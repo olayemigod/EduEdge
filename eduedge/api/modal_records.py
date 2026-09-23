@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.services.branch_context import (
 	get_allowed_institutions,
 	get_allowed_school_branches,
@@ -114,7 +115,7 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 		"subtitle": _("Grant or schedule Instructor Branch Eligibility. Academic responsibilities are assigned later from Instructor Assignments."),
 		"full_form_route": "/app/eduedge-instructor-branch-assignment",
 		"fields": [
-			{"fieldname": "instructor", "type": "Link", "label": _("Instructor"), "options_doctype": "Instructor", "required": True},
+			{"fieldname": "instructor", "type": "Link", "label": _("Instructor"), "options_doctype": "Instructor", "required": True, "clear_fields": ["school_branch"]},
 			{"fieldname": "school_branch", "type": "Link", "label": _("School Branch / Campus"), "options_doctype": "EduEdge School Branch", "required": True},
 			{"fieldname": "enabled", "type": "Check", "label": _("Enabled"), "default": 1},
 			{"fieldname": "is_primary", "type": "Check", "label": _("Primary Branch"), "default": 0},
@@ -242,6 +243,11 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 	query = str(txt or "").strip()
 	company = values.get("company") or context.get("company")
 	institution = values.get("institution") or context.get("institution")
+	instructor = values.get("instructor") or context.get("instructor")
+	is_instructor_eligibility = config.get("doctype") == "EduEdge Instructor Branch Assignment"
+
+	if is_instructor_eligibility and instructor and frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
+		institution = frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD) or institution
 
 	if fieldname == "school_branch":
 		rows = get_allowed_school_branches(company=company, institution=institution)
@@ -305,11 +311,21 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		filters = {"academic_year": values.get("academic_year")} if values.get("academic_year") else {}
 		return _link_rows("Academic Term", query, ["name", "term_name"], filters=filters, label_field="term_name")
 	if fieldname == "instructor":
+		filters: dict[str, Any] = {"status": "Active"}
+		if is_instructor_eligibility and company and frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
+			institution_names = [
+				row.get("name")
+				for row in get_allowed_institutions(company=company)
+				if row.get("name")
+			]
+			if not institution_names:
+				return []
+			filters[INSTITUTION_FIELD] = ["in", institution_names]
 		return _link_rows(
 			"Instructor",
 			query,
 			["name", "instructor_name"],
-			filters={"status": "Active"},
+			filters=filters,
 			label_field="instructor_name",
 			order_by="instructor_name asc",
 		)
