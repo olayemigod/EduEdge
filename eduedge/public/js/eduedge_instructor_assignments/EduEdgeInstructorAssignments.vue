@@ -439,6 +439,8 @@ export default {
 			row.program_offering = "";
 			row.student_groups = [];
 			row.courses = [];
+			row.valid_from = "";
+			row.valid_to = "";
 			row.branch_eligibility_full_period = null;
 			this.invalidatePreview();
 		},
@@ -449,9 +451,12 @@ export default {
 			row.branch_eligibility_full_period = option?.branch_eligibility_full_period ?? null;
 			if (option?.value) this.offeringLabels[option.value] = option.label || option.value;
 			if (option?.school_branch) row.branch = option.school_branch;
-			if (row.branch_eligibility_full_period !== false) {
-				if (!row.valid_from && option?.period_start_date) row.valid_from = option.period_start_date;
-				if (!row.valid_to && option?.period_end_date) row.valid_to = option.period_end_date;
+			if (row.branch_eligibility_full_period === false) {
+				row.valid_from = "";
+				row.valid_to = "";
+			} else {
+				row.valid_from = option?.period_start_date || "";
+				row.valid_to = option?.period_end_date || "";
 			}
 			this.invalidatePreview();
 		},
@@ -459,6 +464,8 @@ export default {
 			row.program_offering = "";
 			row.student_groups = [];
 			row.courses = [];
+			row.valid_from = "";
+			row.valid_to = "";
 			row.branch_eligibility_full_period = null;
 			this.invalidatePreview();
 		},
