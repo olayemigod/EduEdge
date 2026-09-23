@@ -7,6 +7,7 @@ APP = ROOT / "eduedge"
 ASSIGNMENTS = APP / "api" / "instructor_assignments.py"
 REGISTER = APP / "api" / "instructor_assignment_register.py"
 LINK_SEARCH = APP / "api" / "instructor_assignment_link_search.py"
+RUNTIME = APP / "api" / "instructor_assignment_runtime.py"
 
 
 class TestInstructorSelectorScopeHardeningContract(unittest.TestCase):
@@ -69,6 +70,34 @@ class TestInstructorSelectorScopeHardeningContract(unittest.TestCase):
         for source in (assignments, search):
             self.assertIn("current_user_instructors()", source)
             self.assertIn('filters["name"] = ["in", own] if own else ["in", ["__none__"]]', source)
+
+    def test_direct_authoring_context_rejects_manager_instructor_outside_current_governed_scope(self):
+        source = LINK_SEARCH.read_text(encoding="utf-8")
+        availability = source.split("def _assert_search_instructor_available", 1)[1].split(
+            "def _offering_available_for_instructor", 1
+        )[0]
+
+        for token in (
+            "assignments._can_manage_assignments()",
+            "assignments._manager_visible_instructor_names(include_history=False)",
+            "if resolved not in visible",
+            "The selected Instructor is not available to your user.",
+        ):
+            self.assertIn(token, availability)
+
+    def test_runtime_history_page_rejects_manager_instructor_outside_permitted_history_scope(self):
+        source = RUNTIME.read_text(encoding="utf-8")
+        selected = source.split("def _selected_instructor", 1)[1].split(
+            "@frappe.whitelist()", 1
+        )[0]
+
+        for token in (
+            "core._can_manage_assignments()",
+            "core._manager_visible_instructor_names(include_history=True)",
+            "if resolved not in visible",
+            "The selected Instructor is not available to your user.",
+        ):
+            self.assertIn(token, selected)
 
     def test_native_instructor_query_keeps_active_governance_revalidation(self):
         source = LINK_SEARCH.read_text(encoding="utf-8")
