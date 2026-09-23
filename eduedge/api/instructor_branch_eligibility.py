@@ -32,6 +32,18 @@ def _require_eligibility_read() -> None:
 		)
 
 
+def _require_eligibility_reconciliation() -> None:
+	_require_eligibility_read()
+	if not (
+		frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
+		or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
+	):
+		frappe.throw(
+			_("Only authorised academic managers can reconcile Instructor Branch Eligibility."),
+			frappe.PermissionError,
+		)
+
+
 def _allowed_eligibility_institutions() -> set[str]:
 	branches = core._allowed_branches()
 	institutions = {
@@ -154,7 +166,7 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 	an enabled row with no supporting assignment is flagged for review rather than
 	being treated as invalid or removed automatically.
 	"""
-	_require_eligibility_read()
+	_require_eligibility_reconciliation()
 	instructor = str(instructor or "").strip()
 	if not instructor:
 		frappe.throw(_("Select an Instructor."), frappe.ValidationError)
@@ -244,7 +256,7 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def disable_unused_instructor_branch_eligibility(name: str, reason: str) -> dict:
 	"""Disable a no-support eligibility row while preserving history and audit trail."""
-	_require_eligibility_read()
+	_require_eligibility_reconciliation()
 	name = str(name or "").strip()
 	reason = str(reason or "").strip()
 	if not name or not reason:
