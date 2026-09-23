@@ -118,6 +118,8 @@ class TestInstructorInactiveHistoryReviewContract(unittest.TestCase):
             "Historical Instructor selected.",
             'v-if="canAuthorSelectedInstructor" class="rows-stack"',
             ':disabled="!canAuthorSelectedInstructor"',
+            "if (!this.canAuthorSelectedInstructor)",
+            'this.saveError = ""',
         ):
             self.assertIn(token, page)
 
