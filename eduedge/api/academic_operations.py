@@ -165,11 +165,14 @@ def _get_group_strength(group_names: list[str]) -> dict[str, int]:
 
 
 def _get_attendance_summary(branch: str, date: str) -> dict:
-	rows = frappe.get_all(
+	# Keep dashboard totals inside the same Student Attendance permission query used
+	# by list views; limited Instructors must not receive Branch-wide attendance totals.
+	rows = frappe.get_list(
 		"Student Attendance",
 		filters={BRANCH_FIELD: branch, "date": date, "docstatus": 1},
 		fields=["status", {"COUNT": "name", "as": "record_count"}],
 		group_by="status",
+		limit_page_length=0,
 	)
 	counts = Counter({row.status: int(row.record_count or 0) for row in rows})
 	return {
@@ -359,7 +362,9 @@ def save_attendance_register(
 			doc.set(BRANCH_FIELD, register["branch"])
 			created += 1
 
-		doc.flags.ignore_permissions = True
+		# Do not bypass Frappe/ERPNext DocType permissions. Exact Student Group and
+		# Course Schedule ownership was already established by get_attendance_register,
+		# and normal create/write/submit permissions remain authoritative here.
 		doc.save()
 		if should_submit and doc.docstatus == 0:
 			doc.submit()
