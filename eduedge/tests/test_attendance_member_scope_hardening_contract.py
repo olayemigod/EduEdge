@@ -43,5 +43,43 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         self.assertIn("student_group: frm.doc.student_group", source)
 
 
+    def test_attendance_register_requires_student_group_and_schedule_read_scope(self):
+        source = API.read_text(encoding="utf-8")
+        block = source.split("def get_attendance_register", 1)[1].split(
+            "@frappe.whitelist()\n@guard_eduedge_action",
+            1,
+        )[0]
+
+        for token in (
+            'group = frappe.get_doc("Student Group", student_group)',
+            'group.check_permission("read")',
+            'is_limited_instructor_user(frappe.session.user)',
+            "Limited Instructor attendance must be anchored to an exact Course Schedule.",
+            'schedule_doc = frappe.get_doc("Course Schedule", course_schedule)',
+            'schedule_doc.check_permission("read")',
+        ):
+            self.assertIn(token, block)
+
+        self.assertNotIn(
+            'frappe.db.get_value(\n\t\t"Student Group"',
+            block,
+        )
+        self.assertNotIn(
+            'frappe.db.get_value(\n\t\t\t"Course Schedule"',
+            block,
+        )
+
+    def test_save_register_reuses_hardened_register_authorization(self):
+        source = API.read_text(encoding="utf-8")
+        block = source.split("def save_attendance_register", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef student_group_query",
+            1,
+        )[0]
+        self.assertIn(
+            "register = get_attendance_register(student_group, date, course_schedule)",
+            block,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
