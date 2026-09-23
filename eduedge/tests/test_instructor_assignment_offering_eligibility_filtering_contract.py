@@ -7,6 +7,21 @@ APP = ROOT / "eduedge"
 LINK_SEARCH = APP / "api" / "instructor_assignment_link_search.py"
 PLANNER_API = APP / "api" / "instructor_assignments.py"
 REGISTER_API = APP / "api" / "instructor_assignment_register.py"
+BRANCH_GOVERNANCE = APP / "services" / "instructor_branch_governance.py"
+ASSIGNMENT_CONTROLLER = (
+    APP
+    / "eduedge"
+    / "doctype"
+    / "eduedge_instructor_assignment"
+    / "eduedge_instructor_assignment.py"
+)
+NATIVE_FORM = (
+    APP
+    / "eduedge"
+    / "doctype"
+    / "eduedge_instructor_assignment"
+    / "eduedge_instructor_assignment.js"
+)
 SEARCH_FIELDS = (
     APP
     / "public"
@@ -131,6 +146,51 @@ class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.Test
         ):
             self.assertIn(token, source)
 
+    def test_partial_period_discovery_exposes_clipped_governed_windows(self):
+        governance = BRANCH_GOVERNANCE.read_text(encoding="utf-8")
+        search = LINK_SEARCH.read_text(encoding="utf-8")
+        planner = PLANNER_API.read_text(encoding="utf-8")
+
+        for token in (
+            "def assignment_eligibility_overlap_periods",
+            "start = max(_start(row.get(\"valid_from\")), target_start)",
+            "end = min(_end(row.get(\"valid_to\")), target_end)",
+            '"valid_from": str(start)',
+            '"valid_to": str(end)',
+        ):
+            self.assertIn(token, governance)
+
+        self.assertIn('"branch_eligibility_periods"', search)
+        self.assertIn("assignment_eligibility_overlap_periods(", search)
+        self.assertIn('"branch_eligibility_periods"', planner)
+        self.assertIn("assignment_eligibility_overlap_periods(", planner)
+
+    def test_partial_period_native_and_planner_forms_use_safe_date_windows(self):
+        controller = ASSIGNMENT_CONTROLLER.read_text(encoding="utf-8")
+        native = NATIVE_FORM.read_text(encoding="utf-8")
+        planner = PLANNER_UI.read_text(encoding="utf-8")
+
+        for token in (
+            "assignment_eligibility_overlap_periods(",
+            "This Class overlaps multiple Branch Eligibility periods",
+            "if len(matching_windows) == 1",
+        ):
+            self.assertIn(token, controller)
+
+        for token in (
+            "branch_eligibility_periods",
+            "eligibilityPeriods.length === 1",
+            "Use a governed window",
+        ):
+            self.assertIn(token, native)
+
+        for token in (
+            "branch_eligibility_periods",
+            "row.branch_eligibility_periods.length === 1",
+            "eligibilityPeriodsLabel(row)",
+        ):
+            self.assertIn(token, planner)
+
     def test_native_form_queries_apply_same_period_governance(self):
         source = LINK_SEARCH.read_text(encoding="utf-8")
 
@@ -146,13 +206,7 @@ class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.Test
         self.assertIn("instructor=instructor", class_arm_query)
         self.assertIn("_assert_offering_period_governance(instructor, branch, offering)", course_query)
 
-        native = (
-            APP
-            / "eduedge"
-            / "doctype"
-            / "eduedge_instructor_assignment"
-            / "eduedge_instructor_assignment.js"
-        ).read_text(encoding="utf-8")
+        native = NATIVE_FORM.read_text(encoding="utf-8")
         self.assertIn("get_assignment_offering_context", native)
         self.assertIn("branch_eligibility_full_period === false", native)
         self.assertIn('await clearFields(frm, ["student_group", "course", "valid_from", "valid_to"])', native)
