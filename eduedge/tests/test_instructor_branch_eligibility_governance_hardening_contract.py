@@ -99,7 +99,9 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             'frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD)',
             'if is_instructor_eligibility and not instructor:',
             'get_allowed_school_branches(company=company, institution=institution)',
-            'filters[INSTITUTION_FIELD] = ["in", institution_names]',
+            "def _instructor_eligibility_options",
+            "get_allowed_institutions(company=company)",
+            'INSTITUTION_FIELD: ["in", sorted(institution_map)]',
             'if name and doctype == "EduEdge Instructor Branch Assignment":',
             'field["read_only"] = True',
         ):
@@ -123,6 +125,8 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
         source = NATIVE_FORM.read_text(encoding="utf-8")
 
         for token in (
+            'frm.set_query("instructor"',
+            'eduedge.api.modal_records.instructor_branch_assignment_instructor_query',
             'frm.set_query("school_branch"',
             'eduedge.api.education.school_branch_query',
             'eduedge_institution',
