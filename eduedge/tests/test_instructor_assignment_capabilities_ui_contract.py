@@ -78,6 +78,8 @@ class TestInstructorAssignmentCapabilitiesUIContract(unittest.TestCase):
             "Give a reason for changing these capabilities.",
             "at least 3 characters",
             "hasChanges",
+            "needsExplicitReview",
+            "Mark Reviewed",
             "Save Capabilities",
         ):
             self.assertIn(token, source)
