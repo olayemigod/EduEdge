@@ -25,6 +25,9 @@ scheduler_events = {
 	"hourly": [
 		"eduedge.platform.runtime_context.refresh_cached_runtime_context",
 	],
+	"daily": [
+		"eduedge.education.people_fields.reconcile_instructor_primary_branches",
+	],
 	"cron": {
 		"*/5 * * * *": [
 			"eduedge.security.feature_gate.run_cbt_expiry_job",
