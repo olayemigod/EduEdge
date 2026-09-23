@@ -9,6 +9,7 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import CAPABILITY_FIELDS
 from eduedge.education.offerings import assert_branch_access
+from eduedge.services.instructor_branch_governance import assert_instructor_branch_eligibility
 from eduedge.education.teaching_assignments import (
     ACADEMIC_ASSIGNMENT_SCOPES,
     CLASS_ARM_SCOPE,
@@ -218,24 +219,13 @@ class EduEdgeInstructorAssignment(Document):
             # re-enable and widening operations remain strict.
             self.instructor_name = instructor.instructor_name
             return
-        has_explicit_access = _has_branch_eligibility(
+        assert_instructor_branch_eligibility(
             self.instructor,
             self.school_branch,
-            self.valid_from or nowdate(),
+            self.valid_from,
             self.valid_to,
+            label=self.assignment_title or self.assignment_type or _("Instructor Assignment"),
         )
-        # Historical guidance: Save through Instructor Assignments or add Branch eligibility first.
-        if not has_explicit_access and not getattr(
-            frappe.flags,
-            "in_eduedge_assignment_matrix_save",
-            False,
-        ):
-            frappe.throw(
-                _(
-                    "Instructor has no explicit Branch Access record. Save through Instructor Assignments, which validates the exact Class responsibility without widening Branch access dates."
-                ),
-                frappe.ValidationError,
-            )
         self.instructor_name = instructor.instructor_name
 
     def _validate_assignment_type_scope(self) -> None:
@@ -544,19 +534,6 @@ def _course_label(course: str | None) -> str:
     if not course:
         return ""
     return frappe.db.get_value("Course", course, "course_name") or course
-
-
-def _has_branch_eligibility(instructor: str, branch: str, start_date, end_date=None) -> bool:
-    rows = frappe.get_all(
-        "EduEdge Instructor Branch Assignment",
-        filters={"instructor": instructor, "school_branch": branch, "enabled": 1},
-        fields=["valid_from", "valid_to"],
-        limit_page_length=0,
-    )
-    return any(
-        _date_ranges_overlap(start_date, end_date, row.valid_from, row.valid_to)
-        for row in rows
-    )
 
 
 def _date_ranges_overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
