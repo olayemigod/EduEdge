@@ -16,6 +16,7 @@ from eduedge.api.instructor_assignments import (
     SUBJECT_REQUIRED_TYPES,
     _all_options,
     _can_manage_assignments,
+    _filter_planner_options_by_instructor,
     _instructors,
 )
 from eduedge.services.instructor_branch_governance import (
@@ -340,6 +341,14 @@ def get_instructor_assignment_register_page(
 
     # Planner data is governed by current Instructor eligibility.
     offering_rows, groups, courses, course_map, configured_course_map = _all_options(governed)
+    offering_rows, groups, courses, course_map, configured_course_map = _filter_planner_options_by_instructor(
+        instructor,
+        offering_rows,
+        groups,
+        courses,
+        course_map,
+        configured_course_map,
+    )
     requested_offerings = core._list_values(offerings)
     offering_names = {_row_name(row) for row in offering_rows if _row_name(row)}
     if requested_offerings and any(name not in offering_names for name in requested_offerings):
