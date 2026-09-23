@@ -62,7 +62,7 @@
 					<EdgeStatCard label="Covered Campuses" :value="`${context.counts.covered_branches}/${context.counts.enabled_branches}`" helper="Direct or company HQ access" />
 					<EdgeStatCard label="Accounting Ready" :value="`${context.counts.accounting_ready_branches}/${context.counts.enabled_branches}`" helper="Core branch defaults completed" />
 					<EdgeStatCard label="Instructor Eligibility" :value="context.counts.active_instructor_eligibility || 0" helper="Active governed Instructor Branch periods" />
-					<EdgeStatCard label="Eligibility Review" :value="context.counts.instructor_eligibility_review_required || 0" helper="Enabled periods with no linked academic responsibility" />
+					<EdgeStatCard v-if="context.permissions.can_manage_instructor_eligibility" label="Eligibility Review" :value="context.counts.instructor_eligibility_review_required || 0" helper="Enabled periods with no linked academic responsibility" />
 					<EdgeStatCard label="Enforcement" :value="context.settings.enforcement_enabled ? 'Active' : 'Not Active'" helper="Backend operational access gate" />
 				</EdgeDashboardLayout>
 
@@ -209,7 +209,7 @@
 											>
 												Edit Eligibility
 											</button>
-											<button type="button" class="edge-button" @click="reviewInstructorEligibility(eligibility)">{{ eligibility.reconciliation_review_required ? 'Review Eligibility' : 'Review' }}</button>
+											<button v-if="context.permissions.can_manage_instructor_eligibility" type="button" class="edge-button" @click="reviewInstructorEligibility(eligibility)">{{ eligibility.reconciliation_review_required ? 'Review Eligibility' : 'Review' }}</button>
 											<button type="button" class="edge-button" @click="openAcademicAssignments(eligibility)">Academic Assignments</button>
 										</div>
 									</td>
