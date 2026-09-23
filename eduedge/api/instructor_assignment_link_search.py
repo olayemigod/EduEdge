@@ -366,6 +366,39 @@ def _assert_governed_branch(instructor: str, branch: str) -> dict:
 
 
 @frappe.whitelist()
+def get_assignment_offering_context(
+	instructor: str,
+	branch: str,
+	program_offering: str,
+) -> dict:
+	"""Return the server-governed Offering context used by the native assignment form."""
+	assignments._require_assignment_manager()
+	resolved_instructor = _assert_search_instructor_available(instructor)
+	_assert_governed_branch(resolved_instructor, branch)
+	offering = _validated_offering(branch, program_offering)
+	_assert_offering_period_governance(resolved_instructor, branch, offering)
+	period_start, period_end = assignments._period_dates(
+		offering.academic_year,
+		offering.academic_term,
+	)
+	return {
+		"name": offering.name,
+		"institution": offering.institution,
+		"school_branch": offering.school_branch,
+		"academic_year": offering.academic_year,
+		"academic_term": offering.academic_term,
+		"period_start_date": str(period_start or ""),
+		"period_end_date": str(period_end or ""),
+		"branch_eligibility_full_period": assignment_eligibility_covers_period(
+			resolved_instructor,
+			branch,
+			period_start,
+			period_end,
+		),
+	}
+
+
+@frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def instructor_assignment_instructor_query(doctype, txt, searchfield, start, page_len, filters):
 	"""Native-form Instructor choices that can actually receive governed responsibilities."""
