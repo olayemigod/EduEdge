@@ -166,6 +166,23 @@ def assert_instructor_branch_eligibility(
 	*,
 	label: str | None = None,
 ) -> None:
+	home_institution = instructor_home_institution(instructor)
+	if not home_institution:
+		frappe.throw(
+			_(
+				"{0}Instructor Home Institution is required before creating a new academic responsibility. "
+				"Update the Instructor profile first, then confirm Branch Eligibility in Branch Governance."
+			).format(f"{label}: " if label else ""),
+			frappe.ValidationError,
+		)
+	if not branch_matches_instructor_home_institution(instructor, branch, require_home=True):
+		frappe.throw(
+			_(
+				"{0}The selected Branch is outside the Instructor Home Institution. "
+				"Correct the Instructor profile or Branch Eligibility before creating this responsibility."
+			).format(f"{label}: " if label else ""),
+			frappe.ValidationError,
+		)
 	if assignment_eligibility_covers_period(instructor, branch, valid_from, valid_to):
 		return
 	branch_label = (
