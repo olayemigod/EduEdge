@@ -248,6 +248,7 @@ export default {
 		conflictLabel(conflict) {
 			if (conflict?.type === "replacement-instructor-overlap") return "Replacement Instructor already has an overlapping academic responsibility.";
 			if (conflict?.type === "primary-responsibility-overlap") return "Another Instructor already owns this primary responsibility during the successor period.";
+			if (conflict?.type === "branch-governance-required") return "Branch Governance must cover the incoming Instructor for the full successor period.";
 			return "Replacement conflict";
 		},
 		setField(fieldname, value) {
@@ -282,9 +283,7 @@ export default {
 		branchImpactLabel(branch) {
 			const action = String(branch?.action || "");
 			if (action === "existing") return "Existing Branch Eligibility already covers the successor period; no Branch change will be made.";
-			if (action === "create") return "A Branch Eligibility period will be created for the incoming Instructor.";
-			if (action === "extend") return "The incoming Instructor's existing Branch Eligibility will be extended only as required for this responsibility.";
-			if (action === "enable") return "An exact disabled Branch Eligibility period will be re-enabled for the incoming Instructor.";
+			if (action === "required") return "Branch Governance must be updated before this replacement can be confirmed. Instructor Assignment will not create, extend or re-enable Branch Eligibility.";
 			return "Branch Eligibility impact is unavailable. Do not confirm until the preview is complete.";
 		},
 		setBusy(value, label) {
