@@ -156,8 +156,8 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 	"""
 	_require_eligibility_read()
 	instructor = str(instructor or "").strip()
-	if not instructor or not frappe.db.exists("Instructor", instructor):
-		frappe.throw(_("Select a valid Instructor."), frappe.ValidationError)
+	if not instructor:
+		frappe.throw(_("Select an Instructor."), frappe.ValidationError)
 
 	allowed = _allowed_branch_names()
 	rows = frappe.get_list(
@@ -226,7 +226,7 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def disable_unused_instructor_branch_eligibility(name: str, reason: str) -> dict:
 	"""Disable a no-support eligibility row while preserving history and audit trail."""
-	core._require_read()
+	_require_eligibility_read()
 	name = str(name or "").strip()
 	reason = str(reason or "").strip()
 	if not name or not reason:
