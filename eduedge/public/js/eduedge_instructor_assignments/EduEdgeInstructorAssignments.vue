@@ -389,16 +389,17 @@ export default {
 			}
 		},
 		invalidatePreview() { this.preview = null; this.saveError = ""; },
-		async instructorSelected(option) {
-			this.instructor = option?.value || "";
+		resetPlannerForInstructor(value) {
+			this.instructor = value || "";
 			this.rows = [newRow()];
 			this.invalidatePreview();
+		},
+		async instructorSelected(option) {
+			this.resetPlannerForInstructor(option?.value || "");
 			await this.load();
 		},
 		async instructorCleared() {
-			this.instructor = "";
-			this.rows = [newRow()];
-			this.invalidatePreview();
+			this.resetPlannerForInstructor("");
 			await this.load();
 		},
 		addAcademicRow() {
