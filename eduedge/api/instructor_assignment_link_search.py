@@ -9,7 +9,10 @@ from eduedge.api.fuzzy_search import get_bounded_candidates, rank_link_rows
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.teaching_assignments import current_user_instructors
-from eduedge.services.instructor_branch_governance import eligible_branch_names
+from eduedge.services.instructor_branch_governance import (
+	assignment_eligibility_covers_period,
+	eligible_branch_names,
+)
 
 MAX_RESULTS = 50
 
@@ -20,6 +23,31 @@ def _limit(value: int | str | None) -> int:
 
 def _allowed_branch_map() -> dict[str, dict]:
 	return {row["name"]: row for row in core._allowed_branches()}
+
+
+def _offering_governed_for_instructor(instructor: str, branch: str, offering) -> bool:
+	resolved_instructor = str(instructor or "").strip()
+	if not resolved_instructor:
+		return True
+	period_start, period_end = assignments._period_dates(
+		offering.get("academic_year"),
+		offering.get("academic_term"),
+	)
+	return assignment_eligibility_covers_period(
+		resolved_instructor,
+		branch,
+		period_start,
+		period_end,
+	)
+
+
+def _assert_offering_period_governance(instructor: str, branch: str, offering) -> None:
+	if _offering_governed_for_instructor(instructor, branch, offering):
+		return
+	frappe.throw(
+		"The selected Class / Programme Offering falls outside this Instructor's Branch Governance eligibility period.",
+		frappe.ValidationError,
+	)
 
 
 def _validated_offering(branch: str, program_offering: str):
@@ -108,6 +136,7 @@ def search_instructors(query: str = "", page_length: int | str = 20) -> list[dic
 @frappe.whitelist()
 def search_assignment_offerings(
 	branch: str,
+	instructor: str | None = None,
 	query: str = "",
 	page_length: int | str = 20,
 ) -> list[dict]:
@@ -139,6 +168,8 @@ def search_assignment_offerings(
 		row["period_start_date"], row["period_end_date"] = assignments._period_dates(
 			row.get("academic_year"), row.get("academic_term")
 		)
+		if instructor and not _offering_governed_for_instructor(instructor, branch, row):
+			continue
 		row["value"] = row.get("name")
 		row["label"] = row.get("offering_title") or row.get("name")
 		row["description"] = " · ".join(
@@ -165,11 +196,14 @@ def search_assignment_offerings(
 def search_assignment_class_arms(
 	branch: str,
 	program_offering: str,
+	instructor: str | None = None,
 	query: str = "",
 	page_length: int | str = 20,
 ) -> list[dict]:
 	core._require_read()
 	offering = _validated_offering(branch, program_offering)
+	if instructor:
+		_assert_offering_period_governance(instructor, branch, offering)
 	filters: dict = {BRANCH_FIELD: branch, "disabled": 0}
 	meta = frappe.get_meta("Student Group")
 	if meta.has_field(OFFERING_FIELD):
@@ -218,11 +252,14 @@ def search_assignment_class_arms(
 def search_assignment_courses(
 	branch: str,
 	program_offering: str,
+	instructor: str | None = None,
 	query: str = "",
 	page_length: int | str = 20,
 ) -> list[dict]:
 	core._require_read()
 	offering = _validated_offering(branch, program_offering)
+	if instructor:
+		_assert_offering_period_governance(instructor, branch, offering)
 	meta = frappe.get_meta("Course")
 	fields = ["name", "course_name"]
 	filters: dict = {}
@@ -403,7 +440,7 @@ def instructor_assignment_offering_query(doctype, txt, searchfield, start, page_
 	if not instructor or not branch:
 		return []
 	_assert_governed_branch(instructor, branch)
-	rows = search_assignment_offerings(branch, txt or "", page_length=MAX_RESULTS)
+	rows = search_assignment_offerings(branch, instructor=instructor, query=txt or "", page_length=MAX_RESULTS)
 	return _slice_query_rows(
 		[
 			[
@@ -432,7 +469,7 @@ def instructor_assignment_class_arm_query(doctype, txt, searchfield, start, page
 	if not instructor or not branch or not offering:
 		return []
 	_assert_governed_branch(instructor, branch)
-	rows = search_assignment_class_arms(branch, offering, txt or "", page_length=MAX_RESULTS)
+	rows = search_assignment_class_arms(branch, offering, instructor=instructor, query=txt or "", page_length=MAX_RESULTS)
 	return _slice_query_rows(
 		[
 			[
@@ -463,6 +500,7 @@ def instructor_assignment_course_query(doctype, txt, searchfield, start, page_le
 		return []
 	_assert_governed_branch(instructor, branch)
 	offering = _validated_offering(branch, program_offering)
+	_assert_offering_period_governance(instructor, branch, offering)
 	configured = core._course_membership({offering.program}).get(offering.program, set())
 	if not configured:
 		return []
