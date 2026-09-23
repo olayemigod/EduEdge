@@ -5,8 +5,6 @@ from frappe import _
 from frappe.utils import cint, getdate
 
 from eduedge.api.instructor_assignment_replacement import (
-    _branch_access_preview,
-    _ensure_incoming_branch_access,
     _same_date,
     _type_variants,
 )
@@ -21,6 +19,10 @@ from eduedge.education.teaching_assignments import (
     COURSE_REQUIRED_TYPES,
 )
 from eduedge.platform.access import require_eduedge_access
+from eduedge.services.instructor_branch_governance import (
+    assert_instructor_branch_eligibility,
+    assignment_eligibility_preview,
+)
 
 
 def _clean_reason(reason: str | None) -> str:
@@ -330,7 +332,12 @@ def _preparation_plan(
     start = getdate(destination["valid_from"])
     end = getdate(destination["valid_to"])
     conflicts = _destination_conflicts(source, destination, start, end)
-    branch_access = _branch_access_preview(source.instructor, destination["school_branch"], start, end)
+    branch_access = assignment_eligibility_preview(source.instructor, destination["school_branch"], start, end)
+    if not branch_access["covered"]:
+        conflicts.append({
+            "type": "branch-eligibility-blocked",
+            "reason": branch_access["message"],
+        })
     branch_access.update(
         {
             "instructor": source.instructor,
@@ -432,16 +439,23 @@ def prepare_instructor_assignment_for_next_period(
         )
         if plan.get("already_prepared"):
             return plan
+
+        destination = plan["destination"]
+        start = getdate(destination["valid_from"])
+        end = getdate(destination["valid_to"])
+        assert_instructor_branch_eligibility(
+            source.instructor,
+            destination["school_branch"],
+            start,
+            end,
+            label=_("Prepared Instructor Assignment"),
+        )
         if plan["conflict_count"]:
             frappe.throw(
                 _("Next-period preparation has {0} conflict(s). Resolve them before saving.").format(plan["conflict_count"]),
                 frappe.ValidationError,
             )
-
-        destination = plan["destination"]
-        start = getdate(destination["valid_from"])
-        end = getdate(destination["valid_to"])
-        branch_result = _ensure_incoming_branch_access(
+        branch_result = assignment_eligibility_preview(
             source.instructor,
             destination["school_branch"],
             start,

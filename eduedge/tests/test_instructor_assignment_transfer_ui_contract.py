@@ -117,7 +117,7 @@ class TestInstructorAssignmentTransferUIContract(unittest.TestCase):
             "sameArgs(currentArgs, this.previewedArgs)",
             "Transfer details changed after preview",
             "Changing any field after preview requires a fresh server preview.",
-            "Branch Eligibility impact",
+            "Branch Eligibility check",
             "The source Branch Eligibility is not shortened or deleted by Transfer.",
             "previewPlan.destination?.valid_from",
             "previewPlan.destination?.valid_to",
@@ -148,6 +148,22 @@ class TestInstructorAssignmentTransferUIContract(unittest.TestCase):
             "{{ previewPlan.destination?.student_group }}",
             "{{ previewPlan.destination?.course }}",
             "{{ previewPlan.destination_branch_eligibility?.name }}",
+        ):
+            self.assertNotIn(forbidden, component)
+
+    def test_lifecycle_dialog_never_promises_branch_eligibility_mutation(self):
+        component = self._component_source()
+        for token in (
+            "Branch Eligibility check",
+            "Covered — Branch Governance already authorizes the full destination period. No Branch Eligibility change will be made.",
+            "Blocked — update Instructor Branch Eligibility in Branch Governance before transferring this responsibility.",
+            "branch-eligibility-blocked",
+        ):
+            self.assertIn(token, component)
+        for forbidden in (
+            "A Branch Eligibility period will be created for the Instructor in the destination Branch.",
+            "Existing Branch Eligibility will be extended",
+            "disabled Branch Eligibility period will be re-enabled",
         ):
             self.assertNotIn(forbidden, component)
 

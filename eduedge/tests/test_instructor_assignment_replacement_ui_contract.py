@@ -112,7 +112,7 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             "sameArgs(currentArgs, this.previewedArgs)",
             "Replacement details changed after preview",
             "Changing any field after preview requires a fresh preview.",
-            "Branch Eligibility impact",
+            "Branch Eligibility check",
             "The outgoing Instructor's Branch Eligibility is not changed",
             "previewPlan.successor?.valid_from",
             "previewPlan.successor?.valid_to",
@@ -180,6 +180,22 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             ".eduedge-instructor-assignments-root .form-control:disabled",
         ):
             self.assertIn(token, visual_styles)
+
+    def test_lifecycle_dialog_never_promises_branch_eligibility_mutation(self):
+        component = self._component_source()
+        for token in (
+            "Branch Eligibility check",
+            "Covered — Branch Governance already authorizes the full successor period. No Branch Eligibility change will be made.",
+            "Blocked — update Instructor Branch Eligibility in Branch Governance before replacing this responsibility.",
+            "branch-eligibility-blocked",
+        ):
+            self.assertIn(token, component)
+        for forbidden in (
+            "A Branch Eligibility period will be created for the incoming Instructor.",
+            "existing Branch Eligibility will be extended",
+            "disabled Branch Eligibility period will be re-enabled",
+        ):
+            self.assertNotIn(forbidden, component)
 
     def test_dialog_does_not_bypass_backend_lifecycle_write_path(self):
         helper = (

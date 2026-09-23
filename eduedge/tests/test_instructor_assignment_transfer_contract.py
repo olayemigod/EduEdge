@@ -132,12 +132,15 @@ class TestInstructorAssignmentTransferContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-    def test_transfer_preserves_source_branch_access_and_only_ensures_destination(self):
+    def test_transfer_preserves_branch_eligibility_and_requires_upstream_coverage(self):
         source = self._api_source()
-        self.assertIn("_ensure_incoming_branch_access", source)
+        self.assertIn("assignment_eligibility_preview(", source)
+        self.assertIn("assert_instructor_branch_eligibility(", source)
+        self.assertIn('"type": "branch-eligibility-blocked"', source)
         self.assertIn('"source_branch_eligibility_changed": False', source)
-        self.assertIn("_branch_access_preview(\n        source.instructor,\n        destination[\"school_branch\"]", source)
-        self.assertNotIn("_save_branch_period(\n        source.instructor,\n        source.school_branch", source)
+        self.assertNotIn("_ensure_incoming_branch_access", source)
+        self.assertNotIn("_branch_access_preview", source)
+        self.assertNotIn("_save_branch_period", source)
 
     def test_controller_protects_transfer_audit_without_blocking_lifecycle_chains(self):
         controller = (

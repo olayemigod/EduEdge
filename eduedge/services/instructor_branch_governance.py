@@ -165,6 +165,49 @@ def assignment_eligibility_covers_period(
 	return eligibility_covers_period(instructor, branch, valid_from, valid_to)
 
 
+def assignment_eligibility_preview(
+	instructor: str,
+	branch: str,
+	valid_from=None,
+	valid_to=None,
+) -> dict:
+	"""Return a read-only Branch Governance preview for new responsibility authoring."""
+	home_institution = instructor_home_institution(instructor)
+	branch_institution = str(
+		frappe.db.get_value("EduEdge School Branch", branch, "institution") or ""
+	).strip() if branch else ""
+	covered = assignment_eligibility_covers_period(
+		instructor,
+		branch,
+		valid_from,
+		valid_to,
+	)
+	if not home_institution:
+		message = _("Set the Instructor Home Institution in the Instructor profile, then configure Branch Eligibility in Branch Governance.")
+	elif not frappe.db.exists("EduEdge Institution", {"name": home_institution, "enabled": 1}):
+		message = _("The Instructor Home Institution is disabled or unavailable. Correct the Instructor profile before continuing.")
+	elif not branch_institution:
+		message = _("The selected Branch / Campus is not linked to an Institution. Correct Branch setup before continuing.")
+	elif branch_institution != home_institution:
+		message = _("The selected Branch / Campus is outside the Instructor Home Institution.")
+	elif not covered:
+		message = _("Branch Governance does not cover the full responsibility period. Update Instructor Branch Eligibility first.")
+	else:
+		message = _("Existing Branch Governance eligibility covers the full responsibility period. No eligibility record will be changed.")
+
+	return {
+		"action": "covered" if covered else "blocked",
+		"covered": bool(covered),
+		"changed": False,
+		"instructor": instructor,
+		"school_branch": branch,
+		"valid_from": str(valid_from or ""),
+		"valid_to": str(valid_to or ""),
+		"message": message,
+		"governance_route": "/app/eduedge-branch-governance",
+	}
+
+
 def assert_instructor_branch_eligibility(
 	instructor: str,
 	branch: str,

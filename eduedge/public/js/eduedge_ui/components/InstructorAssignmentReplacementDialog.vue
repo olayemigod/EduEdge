@@ -103,7 +103,7 @@
 							<small>{{ successorContextLabel(previewPlan.successor) }}</small>
 						</div>
 						<div class="eduedge-replacement-plan-card eduedge-replacement-plan-grid__wide">
-							<strong class="eduedge-replacement-plan-label">Branch Eligibility impact</strong>
+							<strong class="eduedge-replacement-plan-label">Branch Eligibility check</strong>
 							<span>{{ branchImpactLabel(previewPlan.incoming_branch_eligibility) }}</span>
 							<small>{{ branchEligibilitySummary(previewPlan.incoming_branch_eligibility) }}</small>
 							<small>The outgoing Instructor's Branch Eligibility is not changed by Replace / Handover.</small>
@@ -246,6 +246,7 @@ export default {
 			]).join(" · ");
 		},
 		conflictLabel(conflict) {
+			if (conflict?.type === "branch-eligibility-blocked") return conflict?.reason || "Branch Governance does not cover the responsibility period.";
 			if (conflict?.type === "replacement-instructor-overlap") return "Replacement Instructor already has an overlapping academic responsibility.";
 			if (conflict?.type === "primary-responsibility-overlap") return "Another Instructor already owns this primary responsibility during the successor period.";
 			return "Replacement conflict";
@@ -281,11 +282,9 @@ export default {
 		},
 		branchImpactLabel(branch) {
 			const action = String(branch?.action || "");
-			if (action === "existing") return "Existing Branch Eligibility already covers the successor period; no Branch change will be made.";
-			if (action === "create") return "A Branch Eligibility period will be created for the incoming Instructor.";
-			if (action === "extend") return "The incoming Instructor's existing Branch Eligibility will be extended only as required for this responsibility.";
-			if (action === "enable") return "An exact disabled Branch Eligibility period will be re-enabled for the incoming Instructor.";
-			return "Branch Eligibility impact is unavailable. Do not confirm until the preview is complete.";
+			if (action === "covered") return "Covered — Branch Governance already authorizes the full successor period. No Branch Eligibility change will be made.";
+			if (action === "blocked") return "Blocked — update Instructor Branch Eligibility in Branch Governance before replacing this responsibility.";
+			return "Branch Eligibility check is unavailable. Do not confirm until the preview is complete.";
 		},
 		setBusy(value, label) {
 			this.busy = Boolean(value);
