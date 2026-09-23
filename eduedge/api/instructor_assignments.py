@@ -306,10 +306,20 @@ def _filter_planner_options_by_instructor(
 		for values in governed_visible_map.values()
 		for course in values
 	}
-	governed_courses = [
-		row for row in courses
-		if str(row.get("name") or "").strip() in visible_courses
-	]
+	governed_institutions = {
+		str(row.get("institution") or "").strip()
+		for row in governed_offerings
+		if str(row.get("institution") or "").strip()
+	}
+	governed_courses = []
+	for row in courses:
+		name = str(row.get("name") or "").strip()
+		institution = str(row.get(INSTITUTION_FIELD) or "").strip()
+		if name not in visible_courses:
+			continue
+		if institution and institution not in governed_institutions:
+			continue
+		governed_courses.append(row)
 	return (
 		governed_offerings,
 		governed_groups,
