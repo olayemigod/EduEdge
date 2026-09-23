@@ -5,6 +5,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
 LINK_SEARCH = APP / "api" / "instructor_assignment_link_search.py"
+PLANNER_API = APP / "api" / "instructor_assignments.py"
+REGISTER_API = APP / "api" / "instructor_assignment_register.py"
 SEARCH_FIELDS = (
     APP
     / "public"
@@ -83,6 +85,40 @@ class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.Test
             "search_assignment_offerings",
             "search_assignment_class_arms",
             "search_assignment_courses",
+        ):
+            self.assertIn(token, source)
+
+    def test_planner_preload_and_register_use_same_date_bounded_filter(self):
+        planner = PLANNER_API.read_text(encoding="utf-8")
+        register = REGISTER_API.read_text(encoding="utf-8")
+
+        for token in (
+            "def _filter_planner_options_by_instructor",
+            "assignment_eligibility_covers_period(",
+            "governed_offerings",
+            "governed_groups",
+            "governed_institutions",
+            "governed_courses",
+        ):
+            self.assertIn(token, planner)
+
+        self.assertGreaterEqual(
+            planner.count("_filter_planner_options_by_instructor("),
+            2,
+        )
+        self.assertIn("_filter_planner_options_by_instructor", register)
+
+    def test_route_preset_rejects_class_outside_governed_offering_payload(self):
+        source = PLANNER_UI.read_text(encoding="utf-8")
+
+        for token in (
+            "const governedOfferings = new Set(",
+            ".filter((row) => row.school_branch === governedBranch)",
+            "governedOfferings.has(preset.program_offering)",
+            "program_offering: governedOffering",
+            "student_groups: governedOffering && preset.student_group",
+            "courses: governedOffering && preset.course",
+            "falls outside this Instructor's Branch Governance eligibility period",
         ):
             self.assertIn(token, source)
 
