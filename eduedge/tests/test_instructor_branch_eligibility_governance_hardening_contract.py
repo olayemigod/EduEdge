@@ -19,6 +19,7 @@ DOCTYPE_JSON = (
     / "eduedge_instructor_branch_assignment"
     / "eduedge_instructor_branch_assignment.json"
 )
+MODAL_RECORDS = APP / "api" / "modal_records.py"
 
 
 class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCase):
@@ -71,6 +72,18 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             "Instructor Branch Eligibility can be enabled only for an enabled School Branch / Campus",
             "Cross-campus eligibility is allowed within the same Institution; cross-Institution eligibility is not",
             "INSTITUTION_FIELD",
+        ):
+            self.assertIn(token, source)
+
+    def test_quick_editor_cascades_instructor_to_valid_branch_options(self):
+        source = MODAL_RECORDS.read_text(encoding="utf-8")
+
+        for token in (
+            '"clear_fields": ["school_branch"]',
+            'is_instructor_eligibility = config.get("doctype") == "EduEdge Instructor Branch Assignment"',
+            'frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD)',
+            'get_allowed_school_branches(company=company, institution=institution)',
+            'filters[INSTITUTION_FIELD] = ["in", institution_names]',
         ):
             self.assertIn(token, source)
 
