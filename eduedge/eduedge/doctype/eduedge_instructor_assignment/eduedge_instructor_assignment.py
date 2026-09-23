@@ -133,6 +133,28 @@ class EduEdgeInstructorAssignment(Document):
                 self.valid_from = period_start
             if not self.valid_to and period_end:
                 self.valid_to = period_end
+            if self.valid_from and self.valid_to and getdate(self.valid_to) < getdate(self.valid_from):
+                frappe.throw(_("Valid To cannot be earlier than Valid From."), frappe.ValidationError)
+            if period_start and self.valid_from and getdate(self.valid_from) < getdate(period_start):
+                frappe.throw(
+                    _("Valid From cannot be earlier than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
+            if period_end and self.valid_from and getdate(self.valid_from) > getdate(period_end):
+                frappe.throw(
+                    _("Valid From cannot be later than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
+            if period_start and self.valid_to and getdate(self.valid_to) < getdate(period_start):
+                frappe.throw(
+                    _("Valid To cannot be earlier than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
+            if period_end and self.valid_to and getdate(self.valid_to) > getdate(period_end):
+                frappe.throw(
+                    _("Valid To cannot be later than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
         self._offering_program = offering.program
 
     def _validate_group_context(self) -> None:
