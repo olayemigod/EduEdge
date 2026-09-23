@@ -14,6 +14,7 @@ from eduedge.education.offerings import assert_branch_access, resolve_program_of
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 ASSIGNMENT_DOCTYPE = "EduEdge Instructor Assignment"
 SCHEME_DOCTYPE = "EduEdge Scheme of Work"
@@ -172,14 +173,48 @@ def _course_labels(course_names: set[str]) -> dict[str, str]:
 	return {row.name: row.course_name or row.name for row in rows}
 
 
-def _date_overlap(start_a, end_a, start_b, end_b) -> bool:
+def _date_overlap_bounds(start_a, end_a, start_b, end_b):
 	minimum = getdate("1900-01-01")
 	maximum = getdate("2999-12-31")
 	a_start = getdate(start_a) if start_a else minimum
 	a_end = getdate(end_a) if end_a else maximum
 	b_start = getdate(start_b) if start_b else minimum
 	b_end = getdate(end_b) if end_b else maximum
-	return a_start <= b_end and b_start <= a_end
+	start = max(a_start, b_start)
+	end = min(a_end, b_end)
+	return (start, end) if start <= end else None
+
+
+def _date_overlap(start_a, end_a, start_b, end_b) -> bool:
+	return bool(_date_overlap_bounds(start_a, end_a, start_b, end_b))
+
+
+def _assignment_branch_governance_covers_period(
+	row: dict,
+	branch: str,
+	period_start,
+	period_end,
+) -> bool:
+	"""Require Branch Governance over the assignment's effective overlap window.
+
+	Readiness remains read-only and keeps historical runtime semantics. It does
+	not require Branch Eligibility to cover dates when this responsibility is not
+	itself effective, and it never mutates Branch Governance.
+	"""
+	overlap = _date_overlap_bounds(
+		row.get("valid_from"),
+		row.get("valid_to"),
+		period_start,
+		period_end,
+	)
+	if not overlap:
+		return False
+	return eligibility_covers_period(
+		row.get("instructor"),
+		branch,
+		overlap[0],
+		overlap[1],
+	)
 
 
 def _expected_contexts(offerings: list[dict], groups: list[dict]) -> list[dict]:
@@ -242,6 +277,13 @@ def _assignment_matches_context(row: dict, context: dict) -> bool:
 	if not _date_overlap(
 		row.get("valid_from"),
 		row.get("valid_to"),
+		context.get("period_start_date"),
+		context.get("period_end_date"),
+	):
+		return False
+	if not _assignment_branch_governance_covers_period(
+		row,
+		context.get("school_branch"),
 		context.get("period_start_date"),
 		context.get("period_end_date"),
 	):
