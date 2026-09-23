@@ -74,7 +74,8 @@ class TestInstructorProfileScopeHardeningContract(unittest.TestCase):
             "current_institution = str(doc.get(INSTITUTION_FIELD) or \"\").strip()",
             "current_institution not in allowed_institutions",
             "The selected Instructor is outside your available Institution scope.",
-            '_operational_instructor_names("", "", allowed_branch_rows)',
+            "_has_full_institution_branch_scope(current_institution, allowed_branch_rows)",
+            "_instructor_operational_in_branches(name, allowed_branch_names)",
             "The selected Instructor is outside your available academic scope.",
         ):
             self.assertIn(token, source)
@@ -83,6 +84,35 @@ class TestInstructorProfileScopeHardeningContract(unittest.TestCase):
             source.index("current_institution = str(doc.get(INSTITUTION_FIELD) or \"\").strip()"),
             source.index("doc.set(INSTITUTION_FIELD, institution)"),
         )
+
+    def test_branch_only_access_does_not_expand_to_all_home_instructors(self):
+        source = self._source()
+
+        for token in (
+            "def _has_full_institution_branch_scope",
+            '"EduEdge School Branch"',
+            'filters={"institution": resolved, "enabled": 1}',
+            "all_enabled.issubset(allowed)",
+            "and _has_full_institution_branch_scope(institution, branches)",
+        ):
+            self.assertIn(token, source)
+
+        home_scope = source.split("def _operational_instructor_names", 1)[1].split(
+            "def _earliest", 1
+        )[0]
+        self.assertIn("_has_full_institution_branch_scope(institution, branches)", home_scope)
+
+    def test_branch_only_existing_write_requires_operational_branch_tie(self):
+        source = self._source()
+
+        for token in (
+            "def _instructor_operational_in_branches",
+            "primary_branch(name) in branch_names",
+            '"EduEdge Instructor Branch Assignment"',
+            '"EduEdge Instructor Assignment"',
+            "not full_institution_scope and not _instructor_operational_in_branches",
+        ):
+            self.assertIn(token, source)
 
     def test_save_response_is_scoped_to_target_institution_branches(self):
         source = self._source()
