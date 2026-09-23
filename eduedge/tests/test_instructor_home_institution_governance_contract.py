@@ -60,6 +60,7 @@ class TestInstructorHomeInstitutionGovernanceContract(unittest.TestCase):
             "Legacy Instructor profiles must be classified before receiving new academic responsibilities",
             "Existing historical eligibility may be shortened or disabled, but cannot be widened",
             "The School Branch / Campus must belong to an Institution before Instructor Branch Eligibility can be enabled or widened",
+            "The Instructor Home Institution must be enabled before Branch Eligibility can be enabled or widened",
         ):
             self.assertIn(token, source)
 
