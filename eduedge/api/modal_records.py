@@ -320,7 +320,7 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		return _link_rows("Academic Term", query, ["name", "term_name"], filters=filters, label_field="term_name")
 	if fieldname == "instructor":
 		filters: dict[str, Any] = {"status": "Active"}
-		if is_instructor_eligibility and company and frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
+		if is_instructor_eligibility and frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
 			institution_names = [
 				row.get("name")
 				for row in get_allowed_institutions(company=company)
