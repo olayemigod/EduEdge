@@ -44,6 +44,7 @@ def get_branch_governance_context(
 	*,
 	company: str | None = None,
 	include_assignment_details: bool = False,
+	include_instructor_eligibility: bool = False,
 	include_all_branches: bool = False,
 ) -> dict:
 	allowed_branch_names = None
@@ -60,6 +61,14 @@ def get_branch_governance_context(
 		allowed_institutions=allowed_institutions,
 	)
 	active_assignments = [row for row in assignments if row["status"] == "Active"]
+	instructor_eligibility = (
+		_get_instructor_eligibility_rows(branches)
+		if include_instructor_eligibility
+		else []
+	)
+	active_instructor_eligibility = [
+		row for row in instructor_eligibility if row["status"] == "Active"
+	]
 
 	company_scopes = {
 		row["company"]
@@ -141,6 +150,7 @@ def get_branch_governance_context(
 		"selected_company": company,
 		"branches": branches,
 		"assignments": assignments if include_assignment_details else [],
+		"instructor_eligibility": instructor_eligibility,
 		"settings": {
 			"enforcement_enabled": is_branch_access_enforced(),
 			"hq_all_branch_view_enabled": is_hq_all_branch_view_enabled(),
@@ -150,6 +160,10 @@ def get_branch_governance_context(
 			"active_assignments": len(active_assignments),
 			"covered_branches": covered_branch_count,
 			"accounting_ready_branches": accounting_ready_count,
+			"active_instructor_eligibility": len(active_instructor_eligibility),
+			"instructors_with_active_eligibility": len({
+				row["instructor"] for row in active_instructor_eligibility if row.get("instructor")
+			}),
 		},
 		"activation_checks": activation_checks,
 		"can_enable_enforcement": not blocking_failures,
@@ -281,6 +295,101 @@ def _get_branch_rows(
 	for row in rows:
 		row["institution_name"] = institution_names.get(row.get("institution"))
 	return rows
+
+
+def _ranges_overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
+	minimum = getdate("1900-01-01")
+	maximum = getdate("2999-12-31")
+	a_start = getdate(start_a) if start_a else minimum
+	a_end = getdate(end_a) if end_a else maximum
+	b_start = getdate(start_b) if start_b else minimum
+	b_end = getdate(end_b) if end_b else maximum
+	return a_start <= b_end and b_start <= a_end
+
+
+def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
+	branch_names = {row["name"] for row in branches if row.get("name")}
+	if not branch_names or not frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
+		return []
+
+	rows = frappe.get_all(
+		"EduEdge Instructor Branch Assignment",
+		filters={"school_branch": ["in", sorted(branch_names)]},
+		fields=[
+			"name",
+			"instructor",
+			"instructor_name",
+			"school_branch",
+			"branch_name",
+			"enabled",
+			"is_primary",
+			"valid_from",
+			"valid_to",
+			"modified",
+		],
+		order_by="enabled desc, instructor_name asc, school_branch asc, valid_from asc",
+		limit_page_length=0,
+	)
+	instructor_names = sorted({row.instructor for row in rows if row.instructor})
+	instructors = {
+		row.name: dict(row)
+		for row in frappe.get_all(
+			"Instructor",
+			filters={"name": ["in", instructor_names]},
+			fields=["name", "instructor_name", "status", "employee"],
+			limit_page_length=0,
+		)
+	} if instructor_names else {}
+
+	academic_rows = frappe.get_all(
+		"EduEdge Instructor Assignment",
+		filters={"school_branch": ["in", sorted(branch_names)]},
+		fields=["name", "instructor", "school_branch", "enabled", "valid_from", "valid_to", "ended_on"],
+		limit_page_length=0,
+	) if frappe.db.exists("DocType", "EduEdge Instructor Assignment") else []
+
+	today = getdate(nowdate())
+	result = []
+	for source in rows:
+		row = dict(source)
+		instructor = instructors.get(row.get("instructor"), {})
+		if not cint(row.get("enabled")):
+			status = "Disabled"
+		elif row.get("valid_from") and getdate(row["valid_from"]) > today:
+			status = "Scheduled"
+		elif row.get("valid_to") and getdate(row["valid_to"]) < today:
+			status = "Expired"
+		elif instructor and instructor.get("status") != "Active":
+			status = "Instructor Inactive"
+		else:
+			status = "Active"
+
+		support = [
+			assignment
+			for assignment in academic_rows
+			if assignment.instructor == row.get("instructor")
+			and assignment.school_branch == row.get("school_branch")
+			and _ranges_overlap(
+				row.get("valid_from"),
+				row.get("valid_to"),
+				assignment.valid_from,
+				assignment.valid_to,
+			)
+		]
+		row.update(
+			{
+				"instructor_name": row.get("instructor_name")
+				or instructor.get("instructor_name")
+				or row.get("instructor"),
+				"instructor_status": instructor.get("status"),
+				"employee": instructor.get("employee"),
+				"academic_assignment_count": len(support),
+				"status": status,
+			}
+		)
+		result.append(row)
+	return result
+
 
 
 def _get_access_rows(
