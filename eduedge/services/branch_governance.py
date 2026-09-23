@@ -363,12 +363,16 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 		)
 	) if home_institution_names else set()
 
-	academic_rows = frappe.get_all(
+	can_read_academic_assignments = bool(
+		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.has_permission("EduEdge Instructor Assignment", "read")
+	)
+	academic_rows = frappe.get_list(
 		"EduEdge Instructor Assignment",
 		filters={"school_branch": ["in", sorted(branch_names)]},
 		fields=["name", "instructor", "school_branch", "enabled", "valid_from", "valid_to", "ended_on"],
 		limit_page_length=0,
-	) if frappe.db.exists("DocType", "EduEdge Instructor Assignment") else []
+	) if can_read_academic_assignments else []
 
 	today = getdate(nowdate())
 	result = []
@@ -418,7 +422,9 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 				assignment.valid_to,
 			)
 		]
-		reconciliation_review_required = bool(cint(row.get("enabled")) and not support)
+		reconciliation_review_required = bool(
+			can_read_academic_assignments and cint(row.get("enabled")) and not support
+		)
 		if reconciliation_review_required and not governance_note:
 			governance_note = (
 				"No academic assignment currently supports this eligibility period. "
@@ -434,7 +440,8 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 				"employee": instructor.get("employee"),
 				"home_institution": home_institution,
 				"branch_institution": row_branch_institution,
-				"academic_assignment_count": len(support),
+				"academic_assignment_count": len(support) if can_read_academic_assignments else None,
+				"academic_assignment_support_visible": can_read_academic_assignments,
 				"reconciliation_review_required": reconciliation_review_required,
 				"status": status,
 				"governance_note": governance_note,
