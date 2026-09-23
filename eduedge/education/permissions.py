@@ -333,16 +333,21 @@ def has_student_group_permission(doc, user=None, permission_type=None) -> bool:
 		return True
 	if not doc or doc.is_new():
 		return False
-	instructors = get_user_instructor_names(resolved_user)
-	if not instructors:
+	ownership = _schedule_assignment_condition("schedule", resolved_user)
+	if ownership == "1=0":
 		return False
-	schedules = frappe.get_all(
-		"Course Schedule",
-		filters={"student_group": doc.name, "instructor": ["in", instructors]},
-		fields=["name", "instructor", "student_group", "course", "schedule_date", BRANCH_FIELD],
-		limit_page_length=0,
+	return bool(
+		frappe.db.sql(
+			f"""
+			select schedule.name
+			from `tabCourse Schedule` schedule
+			where schedule.student_group = %s
+				and ({ownership})
+			limit 1
+			""",
+			(doc.name,),
+		)
 	)
-	return any(instructor_owns_schedule(schedule, resolved_user) for schedule in schedules)
 
 
 def has_course_schedule_permission(doc, user=None, permission_type=None) -> bool:
