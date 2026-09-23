@@ -11,6 +11,7 @@ from eduedge.education.instructor_scope import (
     is_limited_instructor_user,
 )
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 ASSIGNMENT_DOCTYPE = "EduEdge Instructor Assignment"
 CAPABILITY_FIELDS = (
@@ -136,6 +137,8 @@ def get_matching_instructor_capability_assignments(
         limit_page_length=100,
     )
     resolved_date = getdate(on_date or nowdate())
+    if not eligibility_covers_period(instructor, branch, resolved_date, resolved_date):
+        return "resolved", instructor, []
     matched = [dict(row) for row in rows if _effective(row, resolved_date) and _scope_matches(row, group)]
     return "resolved", instructor, matched
 
