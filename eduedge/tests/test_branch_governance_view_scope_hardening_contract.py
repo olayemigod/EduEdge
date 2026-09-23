@@ -13,7 +13,8 @@ class TestBranchGovernanceViewScopeHardeningContract(unittest.TestCase):
         source = API.read_text(encoding="utf-8")
 
         for token in (
-            "Management permissions enable actions inside that scope; they must never widen it.",
+            "Read scope always comes from the Branch Context service.",
+            "permissions enable actions inside that scope; they must never widen it.",
             "include_all_branches=False",
             "can_manage_instructor_eligibility",
             "can_manage_accounting",
