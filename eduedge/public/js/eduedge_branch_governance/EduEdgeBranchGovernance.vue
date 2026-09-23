@@ -61,6 +61,7 @@
 					<EdgeStatCard label="Active Assignments" :value="context.counts.active_assignments" helper="Enabled and currently valid" />
 					<EdgeStatCard label="Covered Campuses" :value="`${context.counts.covered_branches}/${context.counts.enabled_branches}`" helper="Direct or company HQ access" />
 					<EdgeStatCard label="Accounting Ready" :value="`${context.counts.accounting_ready_branches}/${context.counts.enabled_branches}`" helper="Core branch defaults completed" />
+					<EdgeStatCard label="Instructor Eligibility" :value="context.counts.active_instructor_eligibility || 0" helper="Active governed Instructor Branch periods" />
 					<EdgeStatCard label="Enforcement" :value="context.settings.enforcement_enabled ? 'Active' : 'Not Active'" helper="Backend operational access gate" />
 				</EdgeDashboardLayout>
 
@@ -153,7 +154,7 @@
 								v-if="context.permissions.can_manage_instructor_eligibility"
 								type="button"
 								class="edge-button edge-button--primary"
-								@click="openQuickEditor('instructor_branch_assignment')"
+								@click="openInstructorEligibilityDialog"
 							>
 								Add Instructor Eligibility
 							</button>
@@ -313,6 +314,7 @@ export default {
 			selectedCompany: "",
 			assignmentSearch: "",
 			instructorSearch: "",
+			focusedInstructor: "",
 			menuItems: EDUEDGE_MENU_ITEMS,
 			recordModal: createRecordModalState(),
 			confirmDialog: emptyConfirmDialog(),
@@ -343,7 +345,8 @@ export default {
 	},
 	mounted() {
 		const params = new URLSearchParams(window.location.search || "");
-		this.instructorSearch = params.get("instructor") || "";
+		this.focusedInstructor = params.get("instructor") || "";
+		this.instructorSearch = this.focusedInstructor;
 		this.loadContext();
 	},
 	methods: {
@@ -375,6 +378,11 @@ export default {
 		},
 		openBranch(branch) { this.openRoute(`/app/eduedge-school-branch/${branch.name}`); },
 		openAssignment(assignment) { this.openRoute(`/app/eduedge-user-branch-access/${assignment.name}`); },
+		openInstructorEligibilityDialog() {
+			return this.openQuickEditor("instructor_branch_assignment", "", {
+				instructor: this.focusedInstructor || "",
+			});
+		},
 		openAcademicAssignments(eligibility) {
 			const query = new URLSearchParams({
 				instructor: eligibility.instructor || "",
