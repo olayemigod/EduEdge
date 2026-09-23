@@ -40,6 +40,10 @@ class TestInstructorAssignmentLifecycleContract(unittest.TestCase):
             "doc.ended_by = frappe.session.user",
             "doc.end_reason = resolved_reason",
             "frappe.flags.in_eduedge_assignment_lifecycle = True",
+            'savepoint = "eduedge_instructor_assignment_end"',
+            "frappe.db.savepoint(savepoint)",
+            "for update",
+            "frappe.db.rollback(save_point=savepoint)",
         ):
             self.assertIn(token, lifecycle)
         self.assertNotIn("doc.enabled = 0", lifecycle)
