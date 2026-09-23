@@ -117,28 +117,28 @@ def _backfill_instructor_primary_branches() -> None:
 		and frappe.get_meta("Instructor").has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
 	):
 		return
+
+	from eduedge.services.instructor_branch_governance import primary_branch
+
 	instructor_meta = frappe.get_meta("Instructor")
-	for instructor in frappe.get_all(
-		"Instructor",
-		filters={INSTRUCTOR_PRIMARY_BRANCH_FIELD: ["is", "not set"]},
-		pluck="name",
-		limit_page_length=0,
-	):
-		rows = frappe.get_all(
-			"EduEdge Instructor Branch Assignment",
-			filters={"instructor": instructor, "enabled": 1},
-			fields=["school_branch", "is_primary"],
-			order_by="is_primary desc, modified desc",
-			limit_page_length=1,
-		)
-		if not rows or not rows[0].school_branch:
-			continue
-		values = {INSTRUCTOR_PRIMARY_BRANCH_FIELD: rows[0].school_branch}
-		if instructor_meta.has_field(INSTITUTION_FIELD) and not frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD):
+	for instructor in frappe.get_all("Instructor", pluck="name", limit_page_length=0):
+		governed_primary = primary_branch(instructor)
+		current = frappe.db.get_value("Instructor", instructor, INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+		values = {}
+		if (current or None) != (governed_primary or None):
+			values[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary
+		if (
+			governed_primary
+			and instructor_meta.has_field(INSTITUTION_FIELD)
+			and not frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD)
+		):
 			values[INSTITUTION_FIELD] = frappe.db.get_value(
-				"EduEdge School Branch", rows[0].school_branch, "institution"
+				"EduEdge School Branch",
+				governed_primary,
+				"institution",
 			)
-		frappe.db.set_value("Instructor", instructor, values, update_modified=False)
+		if values:
+			frappe.db.set_value("Instructor", instructor, values, update_modified=False)
 
 
 def ensure_people_operations_foundation() -> None:
