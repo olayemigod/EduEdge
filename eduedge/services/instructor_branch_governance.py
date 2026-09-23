@@ -5,7 +5,7 @@ from typing import Iterable
 
 import frappe
 from frappe import _
-from frappe.utils import getdate
+from frappe.utils import getdate, nowdate
 
 
 ELIGIBILITY_DOCTYPE = "EduEdge Instructor Branch Assignment"
@@ -151,7 +151,7 @@ def eligible_branch_names(
 
 def primary_branch(instructor: str, *, on_date=None) -> str | None:
 	"""Return the effective primary governed Branch for the supplied day."""
-	day = getdate(on_date) if on_date else getdate()
+	day = getdate(on_date or nowdate())
 	rows = get_instructor_branch_eligibility_rows(instructor, enabled_only=True)
 	current = [
 		row
