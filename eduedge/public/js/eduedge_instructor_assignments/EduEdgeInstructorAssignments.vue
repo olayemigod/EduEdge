@@ -33,7 +33,7 @@
 						</div>
 						<div class="assignment-actions">
 							<button type="button" class="edge-button" @click="openBranchGovernance">Branch Governance</button>
-							<button type="button" class="edge-button" @click="addAcademicRow">Add Academic Row</button>
+							<button type="button" class="edge-button" :disabled="!canAuthorSelectedInstructor" @click="addAcademicRow">Add Academic Row</button>
 							<button type="button" class="edge-button" @click="resetPlanner">Reset</button>
 						</div>
 					</div>
@@ -41,12 +41,17 @@
 					<InstructorAssignmentSearchFields
 						:instructor="instructor"
 						:show-instructor="true"
+						:include-instructor-history="true"
 						:class-arm-scope="classArmScope"
 						@update:instructor="instructor = $event"
 						@instructor-select="instructorSelected"
 						@instructor-clear="instructorCleared"
 					/>
 
+					<EdgeActionBar
+						v-if="instructor && !canAuthorSelectedInstructor"
+						label="Historical Instructor selected. Existing assignments and Branch Eligibility remain available below, but new assignment authoring is disabled until the Instructor is Active again."
+					/>
 					<EdgeActionBar :label="workingScopeLabel" />
 					<EdgeActionBar
 						:label="instructor ? 'Branch options come only from this Instructor\'s active Branch Governance eligibility. Instructor Assignments cannot create or widen Branch eligibility.' : 'Select an Instructor first. Branch Governance determines which Branches can be assigned.'"
@@ -58,7 +63,7 @@
 					<EdgeActionBar label="Each row owns one governed Branch and one Class. Multiple Subjects or Class Arms selected inside that row apply only to that row." />
 				</section>
 
-				<section class="rows-stack">
+				<section v-if="canAuthorSelectedInstructor" class="rows-stack">
 					<article v-for="(row, index) in rows" :key="row.row_id" class="assignment-row">
 						<div class="assignment-heading">
 							<div>
@@ -149,7 +154,7 @@
 					</article>
 				</section>
 
-				<section class="assignment-panel">
+				<section v-if="canAuthorSelectedInstructor" class="assignment-panel">
 					<EdgeActionBar label="Preview expands every row into the exact records to be created. Invalid Subject/Class combinations and primary responsibility conflicts block the plan; nothing is silently skipped.">
 						<template #actions>
 							<button type="button" class="edge-button" :disabled="previewing || !canPreview" @click="previewPlan">{{ previewing ? 'Checking...' : 'Preview Exact Plan' }}</button>
@@ -279,7 +284,7 @@ function newRow(preset = {}) {
 }
 
 const blankData = () => ({
-	allowed_branches: [], permitted_branches: [], selected_branches: [], selected_instructor: null,
+	allowed_branches: [], permitted_branches: [], selected_branches: [], selected_instructor: null, authoring_available: true,
 	assignments: [], branch_assignments: [], assignment_types: [], assignment_scopes: [],
 	subject_required_types: [], class_responsibility_types: [], governance: {}, permissions: {},
 });
@@ -308,6 +313,7 @@ export default {
 	},
 	computed: {
 		canManage() { return Boolean(this.data.permissions?.can_manage); },
+		canAuthorSelectedInstructor() { return Boolean(this.canManage && this.data.authoring_available !== false); },
 		pageTitle() { return this.canManage ? "Instructor Assignments" : "My Teaching Assignments"; },
 		pageSubtitle() { return this.canManage ? "Assign Class, Class Arm and Subject responsibilities only within Branches already approved in Branch Governance." : "Review only your own active and historical teaching responsibilities."; },
 		classScope() { return CLASS_SCOPE; },
@@ -341,8 +347,8 @@ export default {
 			if (!this.selectedBranches.length) return "Working scope: no Branch selected yet. The global header remains your default navigation context.";
 			return `Working scope: ${this.selectedInstitutions.length} Institution(s) · ${this.selectedBranches.length} Branch(es) · ${this.rows.length} explicit row(s). The global header remains your default context.`;
 		},
-		canPreview() { return Boolean(this.canManage && this.instructor && this.rows.length); },
-		canSave() { return Boolean(this.canManage && this.preview && !this.preview.conflict_count && (this.preview.create_count || this.preview.existing_count)); },
+		canPreview() { return Boolean(this.canAuthorSelectedInstructor && this.instructor && this.rows.length); },
+		canSave() { return Boolean(this.canAuthorSelectedInstructor && this.preview && !this.preview.conflict_count && (this.preview.create_count || this.preview.existing_count)); },
 	},
 	mounted() {
 		const params = new URLSearchParams(window.location.search || "");
