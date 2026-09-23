@@ -117,10 +117,12 @@ class TestInstructorAssignmentAuthoringHardeningContract(unittest.TestCase):
         self.assertIn("resolved Valid To cannot be earlier than Valid From", batch)
 
         for token in (
-            '"term_start_date", "term_end_date"',
-            '"year_start_date", "year_end_date"',
-            "if (!frm.doc.valid_from && period.term_start_date)",
-            "if (!frm.doc.valid_to && period.term_end_date)",
+            "get_assignment_offering_context",
+            "period_start_date",
+            "period_end_date",
+            "branch_eligibility_full_period === false",
+            "valid_from: partial ? null : (row.period_start_date || null)",
+            "valid_to: partial ? null : (row.period_end_date || null)",
         ):
             self.assertIn(token, native)
 
