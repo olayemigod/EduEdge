@@ -166,6 +166,9 @@ def get_branch_governance_context(
 			"instructors_with_active_eligibility": len({
 				row["instructor"] for row in active_instructor_eligibility if row.get("instructor")
 			}),
+			"instructor_eligibility_review_required": sum(
+				1 for row in instructor_eligibility if row.get("reconciliation_review_required")
+			),
 		},
 		"activation_checks": activation_checks,
 		"can_enable_enforcement": not blocking_failures,
@@ -415,6 +418,13 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 				assignment.valid_to,
 			)
 		]
+		reconciliation_review_required = bool(cint(row.get("enabled")) and not support)
+		if reconciliation_review_required and not governance_note:
+			governance_note = (
+				"No academic assignment currently supports this eligibility period. "
+				"Review whether it is intentional before changing it."
+			)
+
 		row.update(
 			{
 				"instructor_name": row.get("instructor_name")
@@ -425,6 +435,7 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 				"home_institution": home_institution,
 				"branch_institution": row_branch_institution,
 				"academic_assignment_count": len(support),
+				"reconciliation_review_required": reconciliation_review_required,
 				"status": status,
 				"governance_note": governance_note,
 			}
