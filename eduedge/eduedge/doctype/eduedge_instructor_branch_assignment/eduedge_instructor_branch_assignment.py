@@ -5,6 +5,9 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate
 
+from eduedge.education.people_fields import INSTRUCTOR_PRIMARY_BRANCH_FIELD
+from eduedge.services.instructor_branch_governance import primary_branch
+
 
 class EduEdgeInstructorBranchAssignment(Document):
     def validate(self) -> None:
@@ -12,6 +15,12 @@ class EduEdgeInstructorBranchAssignment(Document):
         self._validate_dates()
         self._validate_duplicate()
         self._validate_primary()
+
+    def on_update(self) -> None:
+        _sync_instructor_primary_branch(self.instructor)
+
+    def after_delete(self) -> None:
+        _sync_instructor_primary_branch(self.instructor)
 
     def _validate_branch(self) -> None:
         if not frappe.db.get_value("EduEdge School Branch", self.school_branch, "enabled"):
@@ -66,6 +75,27 @@ class EduEdgeInstructorBranchAssignment(Document):
                     ).format(self.instructor),
                     frappe.ValidationError,
                 )
+
+
+def _sync_instructor_primary_branch(instructor: str | None) -> None:
+    name = str(instructor or "").strip()
+    if not name or not frappe.db.exists("Instructor", name):
+        return
+    meta = frappe.get_meta("Instructor")
+    if not meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD):
+        return
+    governed_primary = primary_branch(name)
+    current = frappe.db.get_value("Instructor", name, INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+    if (current or None) == (governed_primary or None):
+        return
+    frappe.db.set_value(
+        "Instructor",
+        name,
+        INSTRUCTOR_PRIMARY_BRANCH_FIELD,
+        governed_primary,
+        update_modified=False,
+    )
+
 
 
 def _date_ranges_overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
