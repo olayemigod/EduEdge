@@ -346,6 +346,19 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 			limit_page_length=0,
 		)
 	} if instructor_names else {}
+	home_institution_names = sorted({
+		str(row.get(INSTITUTION_FIELD) or "").strip()
+		for row in instructors.values()
+		if str(row.get(INSTITUTION_FIELD) or "").strip()
+	})
+	enabled_home_institutions = set(
+		frappe.get_all(
+			"EduEdge Institution",
+			filters={"name": ["in", home_institution_names], "enabled": 1},
+			pluck="name",
+			limit_page_length=0,
+		)
+	) if home_institution_names else set()
 
 	academic_rows = frappe.get_all(
 		"EduEdge Instructor Assignment",
@@ -367,6 +380,8 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 			status = "Instructor Inactive"
 		elif not home_institution:
 			status = "Needs Home Institution"
+		elif home_institution not in enabled_home_institutions:
+			status = "Home Institution Disabled"
 		elif row_branch_institution and home_institution != row_branch_institution:
 			status = "Institution Mismatch"
 		elif row.get("valid_from") and getdate(row["valid_from"]) > today:
@@ -379,6 +394,8 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 		governance_note = ""
 		if status == "Needs Home Institution":
 			governance_note = "Update the Instructor Home Institution before creating new academic responsibilities."
+		elif status == "Home Institution Disabled":
+			governance_note = "The Instructor Home Institution is disabled. Correct the Instructor profile or re-enable the Institution before creating new academic responsibilities."
 		elif status == "Institution Mismatch":
 			governance_note = "This eligibility is outside the Instructor Home Institution. Preserve history, then correct the profile or create eligibility in a valid campus."
 
