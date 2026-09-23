@@ -82,6 +82,8 @@ class TestInstructorInactiveHistoryReviewContract(unittest.TestCase):
             "manager = core._can_manage_assignments()",
             "_manager_visible_instructor_names(include_history=True)",
             'filters["status"] = "Active"',
+            'frappe.get_doc("Instructor", resolved)',
+            'doc.check_permission("read")',
             '"status"',
         ):
             self.assertIn(token, selected)
