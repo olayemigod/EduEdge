@@ -97,6 +97,14 @@ class EduEdgeInstructorBranchAssignment(Document):
             if getattr(self, "_instructor_row", None)
             else None
         )
+        if cint(self.enabled) and not home_institution:
+            frappe.throw(
+                _(
+                    "Set the Instructor's Home Institution before enabling Branch Eligibility. "
+                    "Legacy Instructor profiles must be classified before receiving new academic responsibilities."
+                ),
+                frappe.ValidationError,
+            )
         if (
             cint(self.enabled)
             and home_institution
