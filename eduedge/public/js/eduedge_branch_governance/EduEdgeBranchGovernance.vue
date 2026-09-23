@@ -290,6 +290,103 @@
 			</button>
 		</template>
 	</EdgeModal>
+
+	<EdgeModal
+		:open="eligibilityReview.open"
+		:title="eligibilityReview.title"
+		:subtitle="eligibilityReview.subtitle"
+		size="lg"
+		:busy="eligibilityReview.busy"
+		@close="closeEligibilityReview"
+	>
+		<EdgeLoadingState v-if="eligibilityReview.loading" message="Reviewing Instructor Branch Eligibility..." :skeleton="true" />
+		<EdgeErrorState
+			v-else-if="eligibilityReview.error"
+			title="Eligibility review could not load"
+			:message="eligibilityReview.error"
+			action-label="Retry"
+			@retry="reloadEligibilityReview"
+		/>
+		<div v-else class="eduedge-eligibility-review">
+			<div class="eduedge-review-summary">
+				<EdgeStatusBadge
+					:label="eligibilityReview.reviewRequiredCount ? `${eligibilityReview.reviewRequiredCount} item${eligibilityReview.reviewRequiredCount === 1 ? '' : 's'} to review` : 'No unsupported enabled periods'"
+					:status="eligibilityReview.reviewRequiredCount ? 'review' : 'clear'"
+					:tone="eligibilityReview.reviewRequiredCount ? 'warning' : 'success'"
+				/>
+				<p>Review is advisory until you explicitly disable a period. Existing history is never deleted automatically.</p>
+			</div>
+			<div class="eduedge-table-wrap">
+				<table class="table table-bordered eduedge-governance-table eduedge-review-table">
+					<thead>
+						<tr><th>Campus</th><th>Validity</th><th>Support</th><th>Provenance</th><th>Action</th></tr>
+					</thead>
+					<tbody>
+						<tr v-for="row in eligibilityReview.rows" :key="row.name">
+							<td>
+								<strong>{{ row.branch_name || row.school_branch }}</strong>
+								<div class="text-muted">{{ row.school_branch }}{{ row.is_primary ? ' · Primary Branch' : '' }}</div>
+							</td>
+							<td>{{ row.valid_from || 'No start restriction' }} → {{ row.valid_to || 'Open ended' }}</td>
+							<td>
+								<EdgeStatusBadge
+									:label="row.review_required ? 'Needs review' : row.supporting_assignment_count ? 'Supported' : 'Historical'"
+									:status="row.support_state"
+									:tone="row.review_required ? 'warning' : row.supporting_assignment_count ? 'success' : 'neutral'"
+								/>
+								<div class="eduedge-missing-list">{{ row.supporting_assignment_count }} supporting academic assignment{{ row.supporting_assignment_count === 1 ? '' : 's' }}</div>
+								<div v-if="row.review_reason" class="eduedge-review-note">{{ row.review_reason }}</div>
+							</td>
+							<td>
+								<div>{{ row.provenance?.created_by || 'Unknown creator' }}</div>
+								<div class="text-muted">{{ row.provenance?.created_on || 'Creation date unavailable' }}</div>
+								<div v-if="row.provenance?.modified_by" class="text-muted">Last changed by {{ row.provenance.modified_by }}</div>
+							</td>
+							<td>
+								<button
+									v-if="row.review_required && !row.is_primary && context.permissions.can_manage_instructor_eligibility"
+									type="button"
+									class="edge-button"
+									:disabled="eligibilityReview.busy"
+									@click="prepareEligibilityCleanup(row)"
+								>
+									Disable unused
+								</button>
+								<span v-else-if="row.review_required && row.is_primary" class="eduedge-review-note">Primary eligibility: review manually before changing.</span>
+								<span v-else class="text-muted">No cleanup action</span>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div v-if="eligibilityReview.selectedName" class="eduedge-cleanup-reason">
+				<label>
+					<span>Reason for disabling this unused eligibility</span>
+					<textarea
+						v-model.trim="eligibilityReview.reason"
+						class="form-control"
+						rows="3"
+						placeholder="Example: Legacy Branch period created during pre-governance setup; no academic responsibility was ever assigned."
+					></textarea>
+				</label>
+				<p class="text-muted">The record will be disabled and retained in history with an audit comment. It will not be deleted.</p>
+			</div>
+		</div>
+		<template #footer>
+			<span class="edge-modal__footer-spacer"></span>
+			<button v-if="eligibilityReview.selectedName" type="button" class="edge-button" :disabled="eligibilityReview.busy" @click="cancelEligibilityCleanup">Cancel cleanup</button>
+			<button
+				v-if="eligibilityReview.selectedName"
+				type="button"
+				class="edge-button edge-button--primary"
+				:disabled="eligibilityReview.busy || !eligibilityReview.reason"
+				@click="disableReviewedEligibility"
+			>
+				{{ eligibilityReview.busy ? 'Disabling…' : 'Confirm disable' }}
+			</button>
+			<button v-else type="button" class="edge-button" :disabled="eligibilityReview.busy" @click="closeEligibilityReview">Close</button>
+		</template>
+	</EdgeModal>
 </template>
 
 <script>
