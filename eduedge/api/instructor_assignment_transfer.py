@@ -5,8 +5,6 @@ from frappe import _
 from frappe.utils import add_days, cint, getdate, nowdate
 
 from eduedge.api.instructor_assignment_replacement import (
-    _branch_access_preview,
-    _ensure_incoming_branch_access,
     _overlap,
     _type_variants,
 )
@@ -23,6 +21,10 @@ from eduedge.education.teaching_assignments import (
     UNIQUE_PRIMARY_ASSIGNMENT_TYPES,
 )
 from eduedge.platform.access import require_eduedge_access
+from eduedge.services.instructor_branch_governance import (
+    assert_instructor_branch_eligibility,
+    assignment_eligibility_preview,
+)
 
 
 def _clean_reason(reason: str | None) -> str:
@@ -375,12 +377,17 @@ def _transfer_plan(
     )
     successor_end = getdate(destination["valid_to"]) if destination["valid_to"] else None
     conflicts = _destination_conflicts(source, destination, successor_start, successor_end)
-    branch_access = _branch_access_preview(
+    branch_access = assignment_eligibility_preview(
         source.instructor,
         destination["school_branch"],
         successor_start,
         successor_end,
     )
+    if not branch_access["covered"]:
+        conflicts.append({
+            "type": "branch-eligibility-blocked",
+            "reason": branch_access["message"],
+        })
     branch_access.update(
         {
             "instructor": source.instructor,
@@ -558,6 +565,14 @@ def transfer_instructor_assignment(
         successor_end = getdate(destination["valid_to"]) if destination["valid_to"] else None
         resolved_reason = plan["reason"]
 
+        assert_instructor_branch_eligibility(
+            source.instructor,
+            destination["school_branch"],
+            successor_start,
+            successor_end,
+            label=_("Transferred Instructor Assignment"),
+        )
+
         source.valid_to = transfer
         source.ended_on = transfer
         source.ended_by = frappe.session.user
@@ -568,7 +583,7 @@ def transfer_instructor_assignment(
         finally:
             frappe.flags.in_eduedge_assignment_lifecycle = False
 
-        branch_result = _ensure_incoming_branch_access(
+        branch_result = assignment_eligibility_preview(
             source.instructor,
             destination["school_branch"],
             successor_start,
