@@ -151,5 +151,22 @@ class TestInstructorBranchGovernanceFlowContract(unittest.TestCase):
                 self.assertNotIn(forbidden, source, f"{relative}: {forbidden}")
 
 
+    def test_native_instructor_primary_branch_is_governance_mirror_only(self):
+        fields = (APP / "education" / "people_fields.py").read_text(encoding="utf-8")
+        governance = (APP / "education" / "people_governance.py").read_text(encoding="utf-8")
+        profiles = (APP / "api" / "instructor_profiles.py").read_text(encoding="utf-8")
+
+        self.assertIn('"read_only": 1', fields)
+        self.assertIn(
+            "Compatibility mirror of the current Primary Instructor Branch Eligibility",
+            fields,
+        )
+        self.assertIn("from eduedge.services.instructor_branch_governance import primary_branch", governance)
+        self.assertIn("governed_primary = primary_branch(doc.name)", governance)
+        self.assertIn("doc.set(INSTRUCTOR_PRIMARY_BRANCH_FIELD, governed_primary)", governance)
+        self.assertIn("Primary Branch is managed by Instructor Branch Eligibility in Branch Governance", profiles)
+        self.assertNotIn("def _ensure_branch_eligibility", profiles)
+
+
 if __name__ == "__main__":
     unittest.main()
