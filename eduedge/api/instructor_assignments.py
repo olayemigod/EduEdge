@@ -373,7 +373,7 @@ def _validate_group(group, offering, label: str) -> None:
 		frappe.throw(_("{0}: Class Arm does not belong to the selected Programme Offering.").format(label), frappe.ValidationError)
 
 
-def _plan(payload: dict) -> tuple[list[PlannedAssignment], list[PlannedBranchAccess], dict]:
+def _plan(payload: dict) -> tuple[list[PlannedAssignment], dict]:
 	instructor = str(payload.get("instructor") or "").strip()
 	if not instructor:
 		frappe.throw(_("Select an Instructor."), frappe.ValidationError)
@@ -392,7 +392,6 @@ def _plan(payload: dict) -> tuple[list[PlannedAssignment], list[PlannedBranchAcc
 	allowed = core._allowed_branches()
 	branch_map, offering_map, group_map, program_courses = _maps(rows, allowed)
 	planned: list[PlannedAssignment] = []
-	branch_access: list[PlannedBranchAccess] = []
 	institutions: set[str] = set()
 	summaries: list[dict] = []
 	curriculum_additions: dict[tuple[str, str], dict] = {}
@@ -413,20 +412,10 @@ def _plan(payload: dict) -> tuple[list[PlannedAssignment], list[PlannedBranchAcc
 		notes = str(row.get("notes") or "").strip()
 		scope = str(row.get("assignment_scope") or CLASS_ARM_SCOPE)
 		if scope == BRANCH_ONLY_SCOPE:
-			branch_access.append(
-				PlannedBranchAccess(
-					row_id,
-					branch_name,
-					institution,
-					start,
-					end,
-					enabled,
-					notes,
-					f"{branch.get('institution_name') or institution} · {branch.get('branch_name') or branch_name}",
-				)
+			frappe.throw(
+				_("{0}: Branch Eligibility is managed only in Branch Governance.").format(label),
+				frappe.ValidationError,
 			)
-			summaries.append({"row_id": row_id, "scope": scope, "record_count": 1})
-			continue
 		offering = offering_map.get(str(row.get("program_offering") or ""))
 		if not offering or offering.school_branch != branch_name or offering.institution != institution:
 			frappe.throw(_("{0}: selected Class belongs to another Branch or Institution.").format(label), frappe.ValidationError)
@@ -437,6 +426,13 @@ def _plan(payload: dict) -> tuple[list[PlannedAssignment], list[PlannedBranchAcc
 			frappe.throw(_("{0}: Valid From cannot be earlier than the selected Class academic period.").format(label), frappe.ValidationError)
 		if period_end and end and getdate(end) > getdate(period_end):
 			frappe.throw(_("{0}: Valid To cannot be later than the selected Class academic period.").format(label), frappe.ValidationError)
+		assert_instructor_branch_eligibility(
+			instructor,
+			branch_name,
+			start,
+			end,
+			label=label,
+		)
 		assignment_type = _normalise_type(row.get("assignment_type") or SUBJECT_INSTRUCTOR)
 		courses = core._list_values(row.get("courses"))
 		_validate_type_scope(assignment_type, scope, courses, label)
@@ -499,8 +495,7 @@ def _plan(payload: dict) -> tuple[list[PlannedAssignment], list[PlannedBranchAcc
 				count += 1
 		summaries.append({"row_id": row_id, "scope": scope, "record_count": count})
 	_validate_batch_duplicates(planned)
-	_validate_branch_access_duplicates(branch_access)
-	return planned, branch_access, {
+	return planned, {
 		"instructor": instructor,
 		"assignment_institutions": sorted(institutions),
 		"row_summaries": summaries,
@@ -529,20 +524,6 @@ def _validate_batch_duplicates(plan: list[PlannedAssignment]) -> None:
 				if core._overlap(row.valid_from, row.valid_to, other.valid_from, other.valid_to):
 					frappe.throw(
 						_("Assignment Rows {0} and {1} produce the same overlapping academic responsibility. Merge or remove one row.").format(row.row_id, other.row_id),
-						frappe.DuplicateEntryError,
-					)
-
-
-def _validate_branch_access_duplicates(rows: list[PlannedBranchAccess]) -> None:
-	grouped: dict[str, list[PlannedBranchAccess]] = {}
-	for row in rows:
-		grouped.setdefault(row.branch, []).append(row)
-	for branch_rows in grouped.values():
-		for index, row in enumerate(branch_rows):
-			for other in branch_rows[index + 1 :]:
-				if row.enabled and other.enabled and core._overlap(row.valid_from, row.valid_to, other.valid_from, other.valid_to):
-					frappe.throw(
-						_("Assignment Rows {0} and {1} create overlapping explicit Branch access for {2}.").format(row.row_id, other.row_id, row.branch),
 						frappe.DuplicateEntryError,
 					)
 
@@ -659,96 +640,6 @@ def _primary_conflicts(plan: list[PlannedAssignment], instructor: str) -> list[d
 	return conflicts
 
 
-def _branch_periods(instructor: str, branch: str) -> list[dict]:
-	return frappe.get_all(
-		"EduEdge Instructor Branch Assignment",
-		filters={"instructor": instructor, "school_branch": branch},
-		fields=["name", "enabled", "is_primary", "valid_from", "valid_to"],
-		order_by="valid_from asc, modified asc",
-		limit_page_length=0,
-	)
-
-
-def _min_date(left, right):
-	if not left or not right:
-		return None
-	return left if getdate(left) <= getdate(right) else right
-
-
-def _max_date(left, right):
-	if not left or not right:
-		return None
-	return left if getdate(left) >= getdate(right) else right
-
-
-def _save_branch_period(
-	instructor: str,
-	branch: str,
-	start,
-	end,
-	*,
-	enabled: int,
-	make_primary: bool,
-) -> dict:
-	periods = _branch_periods(instructor, branch)
-	exact = next(
-		(
-			row
-			for row in periods
-			if core._same_date(row.valid_from, start) and core._same_date(row.valid_to, end)
-		),
-		None,
-	)
-	if exact:
-		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", exact.name)
-		doc.check_permission("write")
-		doc.enabled = cint(enabled)
-		if not doc.enabled:
-			doc.is_primary = 0
-		doc.save()
-		return {"name": doc.name, "branch": branch, "action": "updated", "enabled": doc.enabled}
-	if not enabled:
-		return {"name": None, "branch": branch, "action": "not-found-disabled", "enabled": 0}
-	overlapping = next(
-		(
-			row
-			for row in periods
-			if cint(row.enabled) and core._overlap(start, end, row.valid_from, row.valid_to)
-		),
-		None,
-	)
-	if overlapping:
-		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", overlapping.name)
-		doc.check_permission("write")
-		doc.valid_from = _min_date(doc.valid_from, start)
-		doc.valid_to = _max_date(doc.valid_to, end)
-		doc.enabled = 1
-		doc.save()
-		return {"name": doc.name, "branch": branch, "action": "extended", "enabled": 1}
-	if not frappe.has_permission("EduEdge Instructor Branch Assignment", "create"):
-		frappe.throw(_("You are not permitted to create Branch access for Instructors."), frappe.PermissionError)
-	doc = frappe.new_doc("EduEdge Instructor Branch Assignment")
-	doc.instructor, doc.school_branch = instructor, branch
-	doc.enabled, doc.is_primary = 1, 1 if make_primary else 0
-	doc.valid_from, doc.valid_to = start, end
-	doc.save()
-	return {"name": doc.name, "branch": branch, "action": "created", "enabled": 1}
-
-
-# _ensure_branch_assignment was replaced by exact-period academic eligibility.
-def _ensure_academic_branch_access(instructor: str, row: PlannedAssignment) -> dict | None:
-	if not row.enabled:
-		return None
-	return _save_branch_period(
-		instructor,
-		row.branch,
-		row.valid_from,
-		row.valid_to,
-		enabled=1,
-		make_primary=False,
-	)
-
-
 def _apply_curriculum_additions(additions: list[dict]) -> list[dict]:
 	"""Attach selected Institution Subjects to their exact native Program curriculum."""
 	grouped: dict[str, list[dict]] = {}
@@ -784,23 +675,21 @@ def _apply_curriculum_additions(additions: list[dict]) -> list[dict]:
 @frappe.whitelist(methods=["POST"])
 def preview_instructor_assignment_batch(payload: str | dict) -> dict:
 	_require_assignment_manager()
-	plan, branch_access, meta = _plan(core._parse_payload(payload))
+	plan, meta = _plan(core._parse_payload(payload))
 	create, existing, conflicts = _classify(plan, meta["instructor"])
 	return {
 		"row_count": len(meta["row_summaries"]),
 		"row_summaries": meta["row_summaries"],
 		"institution_count": len(meta["assignment_institutions"]),
 		"academic_record_count": len(plan),
-		"branch_access_record_count": len(branch_access),
 		"curriculum_change_count": len(meta["curriculum_additions"]),
 		"curriculum_changes": meta["curriculum_additions"],
+		"governance_verified_count": len(plan),
 		"create_count": len(create),
 		"existing_count": len(existing),
-		"branch_change_count": len(branch_access),
 		"conflict_count": len(conflicts),
 		"create": [asdict(row) for row in create],
 		"existing": existing,
-		"branch_changes": [asdict(row) for row in branch_access],
 		"conflicts": conflicts,
 	}
 
@@ -811,11 +700,7 @@ def _save_assignment(instructor: str, row: PlannedAssignment) -> dict:
 	doc.enabled, doc.school_branch, doc.program_offering = row.enabled, row.branch, row.program_offering
 	doc.student_group, doc.course = row.student_group, row.course
 	doc.valid_from, doc.valid_to, doc.notes = row.valid_from, row.valid_to, row.notes
-	frappe.flags.in_eduedge_assignment_matrix_save = True
-	try:
-		doc.save()
-	finally:
-		frappe.flags.in_eduedge_assignment_matrix_save = False
+	doc.save()
 	return {"name": doc.name, "row_id": row.row_id, "label": row.label, "enabled": row.enabled}
 
 
@@ -823,7 +708,7 @@ def _save_assignment(instructor: str, row: PlannedAssignment) -> dict:
 def save_instructor_assignment_batch(payload: str | dict) -> dict:
 	_require_assignment_manager()
 	require_eduedge_access(feature_key="academics", action="save_instructor_assignment_batch")
-	plan, branch_access, meta = _plan(core._parse_payload(payload))
+	plan, meta = _plan(core._parse_payload(payload))
 	if plan and not frappe.has_permission("EduEdge Instructor Assignment", "create"):
 		frappe.throw(_("You are not permitted to create Instructor Assignments."), frappe.PermissionError)
 	create, existing, conflicts = _classify(plan, meta["instructor"])
@@ -833,32 +718,6 @@ def save_instructor_assignment_batch(payload: str | dict) -> dict:
 			frappe.ValidationError,
 		)
 	curriculum_results = _apply_curriculum_additions(meta["curriculum_additions"])
-	primary_exists = frappe.db.exists(
-		"EduEdge Instructor Branch Assignment",
-		{"instructor": meta["instructor"], "is_primary": 1, "enabled": 1},
-	)
-	explicit_results = []
-	for row in branch_access:
-		result = _save_branch_period(
-			meta["instructor"],
-			row.branch,
-			row.valid_from,
-			row.valid_to,
-			enabled=row.enabled,
-			make_primary=bool(not primary_exists and row.enabled),
-		)
-		if result.get("name") and result.get("enabled") and not primary_exists:
-			primary_exists = result["name"]
-		explicit_results.append(result)
-	academic_results, seen = [], set()
-	for row in plan:
-		key = (row.branch, row.valid_from or "", row.valid_to or "")
-		if not row.enabled or key in seen:
-			continue
-		seen.add(key)
-		result = _ensure_academic_branch_access(meta["instructor"], row)
-		if result:
-			academic_results.append(result)
 	created = [_save_assignment(meta["instructor"], row) for row in create]
 	updated = []
 	for row in existing:
@@ -869,25 +728,19 @@ def save_instructor_assignment_batch(payload: str | dict) -> dict:
 		doc.enabled = cint(row["requested_enabled"])
 		if row.get("notes"):
 			doc.notes = row["notes"]
-		frappe.flags.in_eduedge_assignment_matrix_save = True
-		try:
-			doc.save()
-		finally:
-			frappe.flags.in_eduedge_assignment_matrix_save = False
+		doc.save()
 		updated.append({"name": doc.name, "row_id": row["row_id"], "enabled": doc.enabled})
 	return {
-		"branch_access": explicit_results,
-		"academic_branch_eligibility": academic_results,
 		"curriculum_changes": curriculum_results,
 		"created": created,
 		"existing": existing,
 		"updated_existing": updated,
+		"governance_verified_count": len(plan),
 		"summary": {
 			"institutions_covered": len(meta["assignment_institutions"]),
 			"rows_processed": len(meta["row_summaries"]),
 			"class_curriculum_subjects_added": len(curriculum_results),
-			"branch_access_changed": len(explicit_results),
-			"academic_branch_periods_ensured": len(academic_results),
+			"governance_verified": len(plan),
 			"assignments_created": len(created),
 			"assignments_existing": len(existing),
 			"assignments_updated": len(updated),
