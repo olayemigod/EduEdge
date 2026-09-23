@@ -1,0 +1,106 @@
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+APP = ROOT / "eduedge"
+LINK_SEARCH = APP / "api" / "instructor_assignment_link_search.py"
+SEARCH_FIELDS = (
+    APP
+    / "public"
+    / "js"
+    / "eduedge_instructor_assignments"
+    / "InstructorAssignmentSearchFields.vue"
+)
+
+
+class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.TestCase):
+    def test_offering_search_filters_by_full_branch_governance_period(self):
+        source = LINK_SEARCH.read_text(encoding="utf-8")
+
+        for token in (
+            "assignment_eligibility_covers_period",
+            "def _offering_governed_for_instructor",
+            "assignments._period_dates(",
+            "if instructor and not _offering_governed_for_instructor",
+            "continue",
+        ):
+            self.assertIn(token, source)
+
+    def test_dependent_searches_reject_offering_outside_governed_period(self):
+        source = LINK_SEARCH.read_text(encoding="utf-8")
+
+        for token in (
+            "def _assert_offering_period_governance",
+            "falls outside this Instructor's Branch Governance eligibility period",
+            "def search_assignment_class_arms",
+            "def search_assignment_courses",
+        ):
+            self.assertIn(token, source)
+
+        class_arm = source.split("def search_assignment_class_arms", 1)[1].split(
+            "@frappe.whitelist()", 1
+        )[0]
+        course = source.split("def search_assignment_courses", 1)[1].split(
+            "def _standard_filters", 1
+        )[0]
+        self.assertIn("_assert_offering_period_governance", class_arm)
+        self.assertIn("_assert_offering_period_governance", course)
+
+    def test_search_instructor_context_is_permission_scoped(self):
+        source = LINK_SEARCH.read_text(encoding="utf-8")
+
+        for token in (
+            "def _assert_search_instructor_available",
+            "current_user_instructors()",
+            'doc.check_permission("read")',
+            'str(doc.status or "") != "Active"',
+            "The selected Instructor is not available to your user.",
+        ):
+            self.assertIn(token, source)
+
+    def test_optional_instructor_parameter_preserves_existing_positional_api_order(self):
+        source = LINK_SEARCH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "def search_assignment_offerings(\n\tbranch: str,\n\tquery: str = \"\",\n\tpage_length: int | str = 20,\n\tinstructor: str | None = None,",
+            source,
+        )
+        self.assertIn(
+            "def search_assignment_class_arms(\n\tbranch: str,\n\tprogram_offering: str,\n\tquery: str = \"\",\n\tpage_length: int | str = 20,\n\tinstructor: str | None = None,",
+            source,
+        )
+        self.assertIn(
+            "def search_assignment_courses(\n\tbranch: str,\n\tprogram_offering: str,\n\tquery: str = \"\",\n\tpage_length: int | str = 20,\n\tinstructor: str | None = None,",
+            source,
+        )
+
+    def test_edgesuite_searches_pass_selected_instructor_context(self):
+        source = SEARCH_FIELDS.read_text(encoding="utf-8")
+
+        self.assertGreaterEqual(source.count('instructor: this.instructor || ""'), 3)
+        for token in (
+            "search_assignment_offerings",
+            "search_assignment_class_arms",
+            "search_assignment_courses",
+        ):
+            self.assertIn(token, source)
+
+    def test_native_form_queries_apply_same_period_governance(self):
+        source = LINK_SEARCH.read_text(encoding="utf-8")
+
+        offering_query = source.split("def instructor_assignment_offering_query", 1)[1].split(
+            "@frappe.whitelist()", 1
+        )[0]
+        class_arm_query = source.split("def instructor_assignment_class_arm_query", 1)[1].split(
+            "@frappe.whitelist()", 1
+        )[0]
+        course_query = source.split("def instructor_assignment_course_query", 1)[1]
+
+        self.assertIn("instructor=instructor", offering_query)
+        self.assertIn("instructor=instructor", class_arm_query)
+        self.assertIn("_assert_offering_period_governance(instructor, branch, offering)", course_query)
+
+
+if __name__ == "__main__":
+    unittest.main()
