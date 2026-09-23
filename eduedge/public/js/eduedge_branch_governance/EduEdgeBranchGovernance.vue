@@ -14,7 +14,7 @@
 				<EdgePageHeader
 					eyebrow="Branch Foundation"
 					title="Branch Governance and Accounting"
-					subtitle="Assign campus access, verify coverage, review accounting readiness, and activate enforcement safely."
+					subtitle="Govern user access, Instructor Branch Eligibility, campus coverage, accounting readiness, and enforcement from one upstream control point."
 				/>
 			</template>
 
@@ -111,7 +111,6 @@
 							<p>Use quick editors for routine identity and assignment changes. Open the full branch form only for accounting defaults and advanced configuration.</p>
 						</div>
 						<div class="eduedge-row-actions" v-if="context.permissions.can_manage_accounting">
-							<button type="button" class="edge-button" @click="openQuickEditor('instructor_branch_assignment')">Assign instructor</button>
 							<button type="button" class="edge-button edge-button--primary" @click="openQuickEditor('school_branch')">Add campus</button>
 						</div>
 					</div>
@@ -134,6 +133,76 @@
 									<td>
 										<button v-if="context.permissions.can_manage_accounting" type="button" class="edge-button" @click="openQuickEditor('school_branch', branch.name, { company: branch.company })">Quick edit</button>
 										<button v-else type="button" class="edge-button" @click="openBranch(branch)">View</button>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</section>
+
+				<section class="eduedge-governance-panel">
+					<div class="eduedge-panel-heading">
+						<div>
+							<p class="edge-eyebrow">Instructor governance</p>
+							<h2>Instructor Branch Eligibility</h2>
+							<p>Branch Governance decides where an Instructor may receive academic responsibilities. Instructor Assignments consume these periods and cannot create or widen them.</p>
+						</div>
+						<div class="eduedge-row-actions">
+							<input v-model.trim="instructorSearch" class="form-control eduedge-inline-search" placeholder="Find instructor or campus" />
+							<button
+								v-if="context.permissions.can_manage_instructor_eligibility"
+								type="button"
+								class="edge-button edge-button--primary"
+								@click="openQuickEditor('instructor_branch_assignment')"
+							>
+								Add Instructor Eligibility
+							</button>
+						</div>
+					</div>
+					<EdgeEmptyState
+						v-if="!context.permissions.can_view_instructor_eligibility"
+						title="Instructor eligibility restricted"
+						description="Your current permissions do not provide access to Instructor Branch Eligibility records."
+					/>
+					<EdgeEmptyState
+						v-else-if="!filteredInstructorEligibility.length"
+						title="No matching Instructor Branch Eligibility"
+						description="Grant an Instructor an eligible Branch period here before creating Class or Subject responsibilities."
+					/>
+					<div v-else class="eduedge-table-wrap">
+						<table class="table table-bordered eduedge-governance-table">
+							<thead>
+								<tr>
+									<th>Instructor</th>
+									<th>Campus</th>
+									<th>Validity</th>
+									<th>Academic Responsibilities</th>
+									<th>Status</th>
+									<th>Action</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-for="eligibility in filteredInstructorEligibility" :key="eligibility.name">
+									<td>
+										<strong>{{ eligibility.instructor_name || eligibility.instructor }}</strong>
+										<div class="text-muted">{{ eligibility.instructor }}{{ eligibility.is_primary ? ' · Primary Branch' : '' }}</div>
+									</td>
+									<td><strong>{{ eligibility.branch_name || eligibility.school_branch }}</strong><div class="text-muted">{{ eligibility.school_branch }}</div></td>
+									<td>{{ eligibility.valid_from || 'No start restriction' }} → {{ eligibility.valid_to || 'Open ended' }}</td>
+									<td>{{ eligibility.academic_assignment_count }} linked assignment{{ eligibility.academic_assignment_count === 1 ? '' : 's' }}</td>
+									<td><EdgeStatusBadge :label="eligibility.status" :status="eligibility.status" :tone="eligibilityTone(eligibility.status)" /></td>
+									<td>
+										<div class="eduedge-row-actions">
+											<button
+												v-if="context.permissions.can_manage_instructor_eligibility"
+												type="button"
+												class="edge-button"
+												@click="openQuickEditor('instructor_branch_assignment', eligibility.name, { school_branch: eligibility.school_branch })"
+											>
+												Edit Eligibility
+											</button>
+											<button type="button" class="edge-button" @click="openAcademicAssignments(eligibility)">Academic Assignments</button>
+										</div>
 									</td>
 								</tr>
 							</tbody>
@@ -243,14 +312,15 @@ export default {
 			error: "",
 			selectedCompany: "",
 			assignmentSearch: "",
+			instructorSearch: "",
 			menuItems: EDUEDGE_MENU_ITEMS,
 			recordModal: createRecordModalState(),
 			confirmDialog: emptyConfirmDialog(),
 			context: {
-				user: {}, companies: [], selected_company: null, branches: [], assignments: [], activation_checks: [],
+				user: {}, companies: [], selected_company: null, branches: [], assignments: [], instructor_eligibility: [], activation_checks: [],
 				settings: { enforcement_enabled: false, hq_all_branch_view_enabled: true },
-				counts: { enabled_branches: 0, active_assignments: 0, covered_branches: 0, accounting_ready_branches: 0 },
-				permissions: { can_manage_access: false, can_view_access_details: false, can_manage_accounting: false, can_manage_enforcement: false },
+				counts: { enabled_branches: 0, active_assignments: 0, covered_branches: 0, accounting_ready_branches: 0, active_instructor_eligibility: 0, instructors_with_active_eligibility: 0 },
+				permissions: { can_manage_access: false, can_view_access_details: false, can_view_instructor_eligibility: false, can_manage_instructor_eligibility: false, can_manage_accounting: false, can_manage_enforcement: false },
 				can_enable_enforcement: false,
 			},
 		};
@@ -263,14 +333,31 @@ export default {
 				row.user, row.user_full_name, row.branch_role, row.company, row.school_branch, row.branch_name, row.status,
 			].some((value) => String(value || "").toLowerCase().includes(needle)));
 		},
+		filteredInstructorEligibility() {
+			const needle = this.instructorSearch.toLowerCase();
+			if (!needle) return this.context.instructor_eligibility || [];
+			return (this.context.instructor_eligibility || []).filter((row) => [
+				row.instructor, row.instructor_name, row.school_branch, row.branch_name, row.status,
+			].some((value) => String(value || "").toLowerCase().includes(needle)));
+		},
 	},
-	mounted() { this.loadContext(); },
+	mounted() {
+		const params = new URLSearchParams(window.location.search || "");
+		this.instructorSearch = params.get("instructor") || "";
+		this.loadContext();
+	},
 	methods: {
 		openRoute: openEduEdgeRoute,
 		assignmentTone(status) {
 			if (status === "Active") return "success";
 			if (["Expired", "User Disabled", "Branch Disabled"].includes(status)) return "danger";
 			if (status === "Not Yet Active") return "warning";
+			return "neutral";
+		},
+		eligibilityTone(status) {
+			if (status === "Active") return "success";
+			if (["Disabled", "Expired", "Instructor Inactive"].includes(status)) return "danger";
+			if (status === "Scheduled") return "warning";
 			return "neutral";
 		},
 		async loadContext() {
@@ -288,6 +375,13 @@ export default {
 		},
 		openBranch(branch) { this.openRoute(`/app/eduedge-school-branch/${branch.name}`); },
 		openAssignment(assignment) { this.openRoute(`/app/eduedge-user-branch-access/${assignment.name}`); },
+		openAcademicAssignments(eligibility) {
+			const query = new URLSearchParams({
+				instructor: eligibility.instructor || "",
+				branch: eligibility.school_branch || "",
+			});
+			window.location.href = `/app/eduedge-instructor-assignments?${query.toString()}`;
+		},
 		async openQuickEditor(resource, name = "", extraContext = {}) {
 			await openRecordModal(this.recordModal, {
 				resource,
@@ -367,6 +461,7 @@ export default {
 </script>
 
 <style scoped>
+.eduedge-inline-search { min-width: 14rem; max-width: 20rem; }
 .eduedge-governance-filters { display: grid; grid-template-columns: repeat(2, minmax(14rem, 1fr)); gap: 1rem; width: min(42rem, 100%); }
 .eduedge-governance-filters label { display: grid; gap: .35rem; }
 .eduedge-governance-panel { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--edge-radius-lg, 12px); margin-top: var(--edge-space-5, 1.25rem); padding: var(--edge-space-5, 1.25rem); }
