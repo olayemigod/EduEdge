@@ -20,9 +20,14 @@ from eduedge.education.teaching_assignments import (
 	current_user_instructors,
 )
 from eduedge.platform.access import require_eduedge_access
+from eduedge.services.instructor_branch_governance import (
+	assert_instructor_branch_eligibility,
+	eligible_branch_names,
+	get_instructor_branch_eligibility_rows,
+)
 
 BRANCH_ONLY_SCOPE = core.BRANCH_ONLY_SCOPE
-BULK_SCOPES = (BRANCH_ONLY_SCOPE, CLASS_SCOPE, CLASS_ARM_SCOPE)
+BULK_SCOPES = (CLASS_SCOPE, CLASS_ARM_SCOPE)
 ASSIGNMENT_TYPES = (
 	"Class Teacher",
 	SUBJECT_INSTRUCTOR,
@@ -59,17 +64,6 @@ class PlannedAssignment:
 	label: str
 
 
-@dataclass(frozen=True)
-class PlannedBranchAccess:
-	row_id: str
-	branch: str
-	institution: str
-	valid_from: str | None
-	valid_to: str | None
-	enabled: int
-	notes: str
-	label: str
-
 
 def _normalise_type(value: str | None) -> str:
 	resolved = str(value or "").strip()
@@ -81,20 +75,22 @@ def _rows(payload: dict) -> list[dict]:
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
 	if isinstance(values, list):
-		return [dict(row or {}) for row in values if isinstance(row, dict)]
+		rows = [dict(row or {}) for row in values if isinstance(row, dict)]
+		if any(str(row.get("assignment_scope") or "").strip() == BRANCH_ONLY_SCOPE for row in rows):
+			frappe.throw(
+				_(
+					"Branch Eligibility is managed only in Branch Governance. Remove the Branch Eligibility row, update Branch Governance first, then create the academic responsibility."
+				),
+				frappe.ValidationError,
+			)
+		return rows
 	if str(payload.get("assignment_scope") or "") == BRANCH_ONLY_SCOPE:
-		return [
-			{
-				"row_id": f"legacy-branch-{index}",
-				"branch": branch,
-				"assignment_scope": BRANCH_ONLY_SCOPE,
-				"valid_from": payload.get("valid_from"),
-				"valid_to": payload.get("valid_to"),
-				"enabled": payload.get("enabled", 1),
-				"notes": payload.get("notes") or "",
-			}
-			for index, branch in enumerate(core._list_values(payload.get("branches")), 1)
-		]
+		frappe.throw(
+			_(
+				"Branch Eligibility is managed only in Branch Governance. Open Branch Governance before creating Instructor Assignments."
+			),
+			frappe.ValidationError,
+		)
 	frappe.throw(
 		_(
 			"The previous global Class × Class Arm × Subject assignment format has been retired because it could create unintended responsibilities. Refresh the page and use explicit Assignment Rows."
