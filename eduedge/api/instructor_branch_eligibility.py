@@ -113,8 +113,16 @@ def instructor_branch_eligibility_instructor_query(doctype, txt, searchfield, st
 	]
 
 
-def _supporting_assignments(instructor: str, school_branch: str, valid_from=None, valid_to=None) -> list[dict]:
-	rows = frappe.get_all(
+def _supporting_assignments(
+	instructor: str,
+	school_branch: str,
+	valid_from=None,
+	valid_to=None,
+	*,
+	permission_aware: bool = False,
+) -> list[dict]:
+	getter = frappe.get_list if permission_aware else frappe.get_all
+	rows = getter(
 		"EduEdge Instructor Assignment",
 		filters={"instructor": instructor, "school_branch": school_branch},
 		fields=[
@@ -146,7 +154,7 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 	an enabled row with no supporting assignment is flagged for review rather than
 	being treated as invalid or removed automatically.
 	"""
-	core._require_read()
+	_require_eligibility_read()
 	instructor = str(instructor or "").strip()
 	if not instructor or not frappe.db.exists("Instructor", instructor):
 		frappe.throw(_("Select a valid Instructor."), frappe.ValidationError)
@@ -164,7 +172,9 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 			"valid_from",
 			"valid_to",
 			"creation",
+			"owner",
 			"modified",
+			"modified_by",
 		],
 		order_by="is_primary desc, school_branch asc, valid_from asc",
 		limit_page_length=0,
@@ -178,6 +188,7 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 			row.school_branch,
 			row.valid_from,
 			row.valid_to,
+			permission_aware=True,
 		)
 		enabled = bool(cint(row.enabled))
 		if enabled:
@@ -189,9 +200,17 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 				"supporting_assignment_count": len(support),
 				"supporting_assignments": support[:20],
 				"review_required": review_required,
+				"support_state": "unsupported" if review_required else ("supported" if support else "disabled-history"),
+				"review_classification": "unsupported-enabled-eligibility" if review_required else "",
 				"review_reason": _(
 					"No academic assignment supports this eligibility period. Confirm that it is intentional explicit eligibility or disable it as legacy/stale history."
 				) if review_required else "",
+				"provenance": {
+					"created_on": row.get("creation"),
+					"created_by": row.get("owner"),
+					"modified_on": row.get("modified"),
+					"modified_by": row.get("modified_by"),
+				},
 			}
 		)
 
