@@ -65,27 +65,34 @@ async function applyOfferingContext(frm) {
 		return;
 	}
 	const partial = row.branch_eligibility_full_period === false;
+	const eligibilityPeriods = Array.isArray(row.branch_eligibility_periods)
+		? row.branch_eligibility_periods
+		: [];
+	const eligibilityText = eligibilityPeriods.length
+		? eligibilityPeriods.map((period) => `${period.valid_from || "?"} to ${period.valid_to || "?"}`).join("; ")
+		: __("check Branch Governance before continuing");
 	frm.set_df_property(
 		"valid_from",
 		"description",
 		partial
-			? __("This Class only partially overlaps Branch Eligibility. Enter dates within the governed period.")
+			? __("This Class only partially overlaps Branch Eligibility. Use a governed window: {0}.", [eligibilityText])
 			: "",
 	);
 	frm.set_df_property(
 		"valid_to",
 		"description",
 		partial
-			? __("This Class only partially overlaps Branch Eligibility. Enter dates within the governed period.")
+			? __("This Class only partially overlaps Branch Eligibility. Use a governed window: {0}.", [eligibilityText])
 			: "",
 	);
+	const singleWindow = partial && eligibilityPeriods.length === 1 ? eligibilityPeriods[0] : null;
 	await frm.set_value({
 		school_branch: row.school_branch,
 		institution: row.institution || null,
 		academic_year: row.academic_year || null,
 		academic_term: row.academic_term || null,
-		valid_from: partial ? null : (row.period_start_date || null),
-		valid_to: partial ? null : (row.period_end_date || null),
+		valid_from: singleWindow ? (singleWindow.valid_from || null) : (partial ? null : (row.period_start_date || null)),
+		valid_to: singleWindow ? (singleWindow.valid_to || null) : (partial ? null : (row.period_end_date || null)),
 	});
 }
 
