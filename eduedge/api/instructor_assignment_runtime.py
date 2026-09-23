@@ -28,15 +28,18 @@ def _selected_instructor(name: str | None) -> dict | None:
 		if resolved not in own:
 			frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
 		filters["status"] = "Active"
-	row = frappe.db.get_value(
-		"Instructor",
-		filters,
-		["name", "instructor_name", "department", "employee", "status", INSTITUTION_FIELD],
-		as_dict=True,
-	)
-	if not row:
+	doc = frappe.get_doc("Instructor", resolved)
+	doc.check_permission("read")
+	if filters.get("status") and str(doc.status or "") != str(filters["status"]):
 		frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
-	return dict(row)
+	return {
+		"name": doc.name,
+		"instructor_name": doc.instructor_name,
+		"department": doc.department,
+		"employee": doc.employee,
+		"status": doc.status,
+		INSTITUTION_FIELD: doc.get(INSTITUTION_FIELD),
+	}
 
 
 @frappe.whitelist()
