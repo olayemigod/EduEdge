@@ -158,6 +158,7 @@ def assignment_eligibility_covers_period(
 		return False
 	return eligibility_covers_period(instructor, branch, valid_from, valid_to)
 
+
 def assert_instructor_branch_eligibility(
 	instructor: str,
 	branch: str,
@@ -205,15 +206,27 @@ def eligible_branch_names(
 	*,
 	within: Iterable[str] | None = None,
 ) -> set[str]:
+	home_institution = instructor_home_institution(instructor)
+	if not home_institution:
+		return set()
 	rows = get_instructor_branch_eligibility_rows(instructor, enabled_only=True)
-	names = {
+	candidate_names = sorted({
 		str(row.get("school_branch") or "").strip()
 		for row in rows
 		if row.get("school_branch")
-		and branch_matches_instructor_home_institution(
-			instructor,
-			row.get("school_branch"),
-			require_home=True,
+	})
+	if not candidate_names:
+		return set()
+	names = {
+		str(row.name)
+		for row in frappe.get_all(
+			"EduEdge School Branch",
+			filters={
+				"name": ["in", candidate_names],
+				"institution": home_institution,
+			},
+			fields=["name"],
+			limit_page_length=0,
 		)
 	}
 	if within is None:
