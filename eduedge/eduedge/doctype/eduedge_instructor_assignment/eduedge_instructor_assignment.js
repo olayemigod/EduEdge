@@ -66,12 +66,39 @@ async function applyOfferingContext(frm) {
 		await frm.set_value("program_offering", null);
 		return;
 	}
-	await frm.set_value({
+	const updates = {
 		school_branch: row.school_branch,
 		institution: row.institution || null,
 		academic_year: row.academic_year || null,
 		academic_term: row.academic_term || null,
-	});
+	};
+	let period = {};
+	if (row.academic_term) {
+		const term = await frappe.db.get_value(
+			"Academic Term",
+			row.academic_term,
+			["term_start_date", "term_end_date"],
+		);
+		period = term?.message || {};
+	}
+	if ((!period.term_start_date && !period.term_end_date) && row.academic_year) {
+		const year = await frappe.db.get_value(
+			"Academic Year",
+			row.academic_year,
+			["year_start_date", "year_end_date"],
+		);
+		period = {
+			term_start_date: year?.message?.year_start_date || "",
+			term_end_date: year?.message?.year_end_date || "",
+		};
+	}
+	if (!frm.doc.valid_from && period.term_start_date) {
+		updates.valid_from = period.term_start_date;
+	}
+	if (!frm.doc.valid_to && period.term_end_date) {
+		updates.valid_to = period.term_end_date;
+	}
+	await frm.set_value(updates);
 }
 
 frappe.ui.form.on("EduEdge Instructor Assignment", {
