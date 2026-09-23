@@ -381,6 +381,7 @@ export default {
 					message: this.capabilityEnforcement.enabled ? __("Instructor capability enforcement enabled") : __("Instructor capability enforcement disabled"),
 					indicator: "green",
 				});
+				this.capabilityConfirm.busy = false;
 				this.closeCapabilityConfirm();
 			} catch (error) {
 				this.capabilityConfirm.busy = false;
