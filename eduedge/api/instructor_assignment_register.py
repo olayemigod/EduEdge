@@ -322,12 +322,19 @@ def get_instructor_assignment_register_page(
     selected_instructor = next((row for row in instructors if _row_name(row) == instructor), None)
     if instructor and not selected_instructor:
         frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
+    authoring_available = bool(
+        not selected_instructor or str(selected_instructor.get("status") or "") == "Active"
+    )
 
-    governed_names = eligible_branch_names(instructor, within=permitted_names) if instructor else set()
+    governed_names = (
+        eligible_branch_names(instructor, within=permitted_names)
+        if instructor and authoring_available
+        else set()
+    )
     governed = [row for row in permitted if _row_name(row) in governed_names]
     governed_name_list = [_row_name(row) for row in governed if _row_name(row)]
 
-    selected = core._list_values(branches)
+    selected = core._list_values(branches) if authoring_available else []
     if selected and any(name not in governed_name_list for name in selected):
         frappe.throw(
             _("One or more selected Branches are not covered by this Instructor's Branch Governance eligibility."),
@@ -349,7 +356,7 @@ def get_instructor_assignment_register_page(
         course_map,
         configured_course_map,
     )
-    requested_offerings = core._list_values(offerings)
+    requested_offerings = core._list_values(offerings) if authoring_available else []
     offering_names = {_row_name(row) for row in offering_rows if _row_name(row)}
     if requested_offerings and any(name not in offering_names for name in requested_offerings):
         frappe.throw(
@@ -406,6 +413,7 @@ def get_instructor_assignment_register_page(
         "selected_branches": selected,
         "instructors": instructors,
         "selected_instructor": selected_instructor,
+        "authoring_available": authoring_available,
         "offerings": offering_rows,
         "groups": groups,
         "courses": courses,
