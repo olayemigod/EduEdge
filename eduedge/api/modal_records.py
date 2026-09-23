@@ -111,7 +111,7 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 		"title": _("Instructor Branch Assignment"),
 		"create_title": _("Assign Instructor to Branch"),
 		"edit_title": _("Update Instructor Branch Assignment"),
-		"subtitle": _("Connect an instructor to an enabled campus without changing the Instructor master."),
+		"subtitle": _("Grant or schedule Instructor Branch Eligibility. Academic responsibilities are assigned later from Instructor Assignments."),
 		"full_form_route": "/app/eduedge-instructor-branch-assignment",
 		"fields": [
 			{"fieldname": "instructor", "type": "Link", "label": _("Instructor"), "options_doctype": "Instructor", "required": True},
@@ -305,7 +305,14 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		filters = {"academic_year": values.get("academic_year")} if values.get("academic_year") else {}
 		return _link_rows("Academic Term", query, ["name", "term_name"], filters=filters, label_field="term_name")
 	if fieldname == "instructor":
-		return _link_rows("Instructor", query, ["name", "instructor_name"], label_field="instructor_name")
+		return _link_rows(
+			"Instructor",
+			query,
+			["name", "instructor_name"],
+			filters={"status": "Active"},
+			label_field="instructor_name",
+			order_by="instructor_name asc",
+		)
 
 	return _link_rows(field.get("options_doctype") or "", query, ["name"])
 
