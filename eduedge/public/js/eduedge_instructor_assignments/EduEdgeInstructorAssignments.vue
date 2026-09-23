@@ -113,6 +113,11 @@
 								<span>{{ row.assignment_type }} does not grant Subject, Topic, CBT or Assessment access. Add a separate Subject Instructor row for academic content responsibility.</span>
 							</div>
 
+							<div v-if="row.branch_eligibility_full_period === false" class="row-note wide">
+								<strong>Partial Branch Eligibility</strong>
+								<span>This Class overlaps the Instructor's governed Branch period, but the full academic period is not covered. Set Valid From and Valid To inside Branch Governance before previewing.</span>
+							</div>
+
 							<label>
 								<span>Valid From</span>
 								<input v-model="row.valid_from" type="date" class="form-control" @change="invalidatePreview" />
@@ -266,6 +271,7 @@ function newRow(preset = {}) {
 		courses: Array.isArray(preset.courses) ? [...preset.courses] : [],
 		valid_from: preset.valid_from || "",
 		valid_to: preset.valid_to || "",
+		branch_eligibility_full_period: preset.branch_eligibility_full_period ?? null,
 		enabled: preset.enabled === 0 ? 0 : 1,
 		notes: preset.notes || "",
 	};
@@ -433,22 +439,27 @@ export default {
 			row.program_offering = "";
 			row.student_groups = [];
 			row.courses = [];
+			row.branch_eligibility_full_period = null;
 			this.invalidatePreview();
 		},
 		offeringSelected(row, option) {
 			row.program_offering = option?.value || "";
 			row.student_groups = [];
 			row.courses = [];
+			row.branch_eligibility_full_period = option?.branch_eligibility_full_period ?? null;
 			if (option?.value) this.offeringLabels[option.value] = option.label || option.value;
 			if (option?.school_branch) row.branch = option.school_branch;
-			if (!row.valid_from && option?.period_start_date) row.valid_from = option.period_start_date;
-			if (!row.valid_to && option?.period_end_date) row.valid_to = option.period_end_date;
+			if (row.branch_eligibility_full_period !== false) {
+				if (!row.valid_from && option?.period_start_date) row.valid_from = option.period_start_date;
+				if (!row.valid_to && option?.period_end_date) row.valid_to = option.period_end_date;
+			}
 			this.invalidatePreview();
 		},
 		offeringCleared(row) {
 			row.program_offering = "";
 			row.student_groups = [];
 			row.courses = [];
+			row.branch_eligibility_full_period = null;
 			this.invalidatePreview();
 		},
 		applyRoutePreset(preset = {}) {
@@ -465,17 +476,19 @@ export default {
 			const governedOffering = governedBranch && preset.program_offering && governedOfferings.has(preset.program_offering)
 				? preset.program_offering
 				: "";
+			const governedOfferingRecord = (this.data.offerings || []).find((row) => row.name === governedOffering);
 			this.rows = [newRow({
 				branch: governedBranch,
 				program_offering: governedOffering,
 				assignment_scope: preset.student_group ? CLASS_ARM_SCOPE : CLASS_SCOPE,
 				student_groups: governedOffering && preset.student_group ? [preset.student_group] : [],
 				courses: governedOffering && preset.course ? [preset.course] : [],
+				branch_eligibility_full_period: governedOfferingRecord?.branch_eligibility_full_period ?? null,
 			})];
 			if (preset.branch && !governedBranch) {
 				this.saveError = __("The requested Branch is not covered by this Instructor's Branch Governance eligibility.");
 			} else if (preset.program_offering && !governedOffering) {
-				this.saveError = __("The requested Class / Programme Offering falls outside this Instructor's Branch Governance eligibility period.");
+				this.saveError = __("The requested Class / Programme Offering does not overlap this Instructor's Branch Governance eligibility period.");
 			} else {
 				this.invalidatePreview();
 			}
