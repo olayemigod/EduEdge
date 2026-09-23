@@ -422,6 +422,11 @@ def _plan(payload: dict) -> tuple[list[PlannedAssignment], dict]:
 		period_start, period_end = _period_dates(offering.academic_year, offering.academic_term)
 		start = start or period_start
 		end = end or period_end
+		if start and end and getdate(end) < getdate(start):
+			frappe.throw(
+				_("{0}: resolved Valid To cannot be earlier than Valid From.").format(label),
+				frappe.ValidationError,
+			)
 		if period_start and start and getdate(start) < getdate(period_start):
 			frappe.throw(_("{0}: Valid From cannot be earlier than the selected Class academic period.").format(label), frappe.ValidationError)
 		if period_end and end and getdate(end) > getdate(period_end):
