@@ -489,6 +489,10 @@ export default {
 		applyRoutePreset(preset = {}) {
 			if (this.routePresetApplied || !this.loaded || !this.canManage) return;
 			this.routePresetApplied = true;
+			if (!this.canAuthorSelectedInstructor) {
+				this.saveError = "";
+				return;
+			}
 			if (!preset.branch && !preset.program_offering && !preset.student_group && !preset.course) return;
 			const eligible = new Set((this.data.allowed_branches || []).map((row) => row.name));
 			const governedBranch = preset.branch && eligible.has(preset.branch) ? preset.branch : "";
