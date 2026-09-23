@@ -9,7 +9,11 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import CAPABILITY_FIELDS
 from eduedge.education.offerings import assert_branch_access
-from eduedge.services.instructor_branch_governance import assert_instructor_branch_eligibility
+from eduedge.services.instructor_branch_governance import (
+    assert_instructor_branch_eligibility,
+    assignment_eligibility_covers_period,
+    assignment_eligibility_overlap_periods,
+)
 from eduedge.education.teaching_assignments import (
     ACADEMIC_ASSIGNMENT_SCOPES,
     CLASS_ARM_SCOPE,
@@ -130,10 +134,51 @@ class EduEdgeInstructorAssignment(Document):
                 self.academic_year,
                 self.academic_term,
             )
-            if not self.valid_from and period_start:
-                self.valid_from = period_start
-            if not self.valid_to and period_end:
-                self.valid_to = period_end
+            full_period_eligible = assignment_eligibility_covers_period(
+                self.instructor,
+                self.school_branch,
+                period_start,
+                period_end,
+            )
+            eligibility_windows = assignment_eligibility_overlap_periods(
+                self.instructor,
+                self.school_branch,
+                period_start,
+                period_end,
+            )
+            if full_period_eligible:
+                if not self.valid_from and period_start:
+                    self.valid_from = period_start
+                if not self.valid_to and period_end:
+                    self.valid_to = period_end
+            elif eligibility_windows:
+                matching_windows = eligibility_windows
+                if self.valid_from:
+                    start = getdate(self.valid_from)
+                    matching_windows = [
+                        row for row in matching_windows
+                        if getdate(row["valid_from"]) <= start <= getdate(row["valid_to"])
+                    ]
+                if self.valid_to:
+                    end = getdate(self.valid_to)
+                    matching_windows = [
+                        row for row in matching_windows
+                        if getdate(row["valid_from"]) <= end <= getdate(row["valid_to"])
+                    ]
+                if len(matching_windows) == 1:
+                    window = matching_windows[0]
+                    if not self.valid_from:
+                        self.valid_from = window["valid_from"]
+                    if not self.valid_to:
+                        self.valid_to = window["valid_to"]
+                elif not self.valid_from or not self.valid_to:
+                    frappe.throw(
+                        _(
+                            "This Class overlaps multiple Branch Eligibility periods. "
+                            "Select Valid From and Valid To within one governed period before saving."
+                        ),
+                        frappe.ValidationError,
+                    )
             if self.valid_from and self.valid_to and getdate(self.valid_to) < getdate(self.valid_from):
                 frappe.throw(_("Valid To cannot be earlier than Valid From."), frappe.ValidationError)
             if period_start and self.valid_from and getdate(self.valid_from) < getdate(period_start):
