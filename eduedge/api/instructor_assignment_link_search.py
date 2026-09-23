@@ -25,6 +25,21 @@ def _allowed_branch_map() -> dict[str, dict]:
 	return {row["name"]: row for row in core._allowed_branches()}
 
 
+def _assert_search_instructor_available(instructor: str) -> str:
+	resolved = str(instructor or "").strip()
+	if not resolved:
+		return ""
+	if not assignments._can_manage_assignments():
+		own = set(current_user_instructors())
+		if resolved not in own:
+			frappe.throw("The selected Instructor is not available to your user.", frappe.PermissionError)
+	doc = frappe.get_doc("Instructor", resolved)
+	doc.check_permission("read")
+	if str(doc.status or "") != "Active":
+		frappe.throw("Select an active Instructor.", frappe.ValidationError)
+	return resolved
+
+
 def _offering_governed_for_instructor(instructor: str, branch: str, offering) -> bool:
 	resolved_instructor = str(instructor or "").strip()
 	if not resolved_instructor:
@@ -136,15 +151,18 @@ def search_instructors(query: str = "", page_length: int | str = 20) -> list[dic
 @frappe.whitelist()
 def search_assignment_offerings(
 	branch: str,
-	instructor: str | None = None,
 	query: str = "",
 	page_length: int | str = 20,
+	instructor: str | None = None,
 ) -> list[dict]:
 	core._require_read()
 	allowed = _allowed_branch_map()
 	if branch not in allowed:
 		frappe.throw("The selected Branch is not available to your user.", frappe.PermissionError)
 	core.assert_branch_access(branch)
+	if instructor:
+		resolved_instructor = _assert_search_instructor_available(instructor)
+		_assert_governed_branch(resolved_instructor, branch)
 	rows = get_bounded_candidates(
 		"EduEdge Program Offering",
 		filters={"school_branch": branch, "is_active": 1},
@@ -168,7 +186,7 @@ def search_assignment_offerings(
 		row["period_start_date"], row["period_end_date"] = assignments._period_dates(
 			row.get("academic_year"), row.get("academic_term")
 		)
-		if instructor and not _offering_governed_for_instructor(instructor, branch, row):
+		if instructor and not _offering_governed_for_instructor(resolved_instructor, branch, row):
 			continue
 		row["value"] = row.get("name")
 		row["label"] = row.get("offering_title") or row.get("name")
@@ -196,14 +214,16 @@ def search_assignment_offerings(
 def search_assignment_class_arms(
 	branch: str,
 	program_offering: str,
-	instructor: str | None = None,
 	query: str = "",
 	page_length: int | str = 20,
+	instructor: str | None = None,
 ) -> list[dict]:
 	core._require_read()
 	offering = _validated_offering(branch, program_offering)
 	if instructor:
-		_assert_offering_period_governance(instructor, branch, offering)
+		resolved_instructor = _assert_search_instructor_available(instructor)
+		_assert_governed_branch(resolved_instructor, branch)
+		_assert_offering_period_governance(resolved_instructor, branch, offering)
 	filters: dict = {BRANCH_FIELD: branch, "disabled": 0}
 	meta = frappe.get_meta("Student Group")
 	if meta.has_field(OFFERING_FIELD):
@@ -252,14 +272,16 @@ def search_assignment_class_arms(
 def search_assignment_courses(
 	branch: str,
 	program_offering: str,
-	instructor: str | None = None,
 	query: str = "",
 	page_length: int | str = 20,
+	instructor: str | None = None,
 ) -> list[dict]:
 	core._require_read()
 	offering = _validated_offering(branch, program_offering)
 	if instructor:
-		_assert_offering_period_governance(instructor, branch, offering)
+		resolved_instructor = _assert_search_instructor_available(instructor)
+		_assert_governed_branch(resolved_instructor, branch)
+		_assert_offering_period_governance(resolved_instructor, branch, offering)
 	meta = frappe.get_meta("Course")
 	fields = ["name", "course_name"]
 	filters: dict = {}
