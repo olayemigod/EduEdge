@@ -80,6 +80,21 @@ class TestInstructorAssignmentAuthoringHardeningContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_assignment_conflict_checks_are_serialized_by_institution(self):
+        source = ASSIGNMENT_CONTROLLER.read_text(encoding="utf-8")
+
+        self.assertIn("def _lock_assignment_scope", source)
+        self.assertIn("tabEduEdge Institution", source)
+        self.assertIn("for update", source.lower())
+        self.assertLess(
+            source.index("self._lock_assignment_scope()"),
+            source.index("self._validate_duplicate()"),
+        )
+        self.assertLess(
+            source.index("self._lock_assignment_scope()"),
+            source.index("self._validate_primary_responsibility()"),
+        )
+
     def test_new_assignment_defaults_to_selected_academic_period(self):
         controller = ASSIGNMENT_CONTROLLER.read_text(encoding="utf-8")
         native = NATIVE_FORM.read_text(encoding="utf-8")
