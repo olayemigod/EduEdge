@@ -13,7 +13,7 @@
 			/>
 		</label>
 
-		<label v-if="row && row.assignment_scope !== branchOnlyScope" class="assignment-search-field wide">
+		<label v-if="row" class="assignment-search-field wide">
 			<span>Class / Programme Offering *</span>
 			<EdgeLinkField
 				:model-value="row.program_offering"
@@ -68,7 +68,6 @@ export default {
 		instructor: { type: String, default: "" },
 		row: { type: Object, default: null },
 		showInstructor: { type: Boolean, default: false },
-		branchOnlyScope: { type: String, required: true },
 		classArmScope: { type: String, required: true },
 		requiresSubjects: { type: Boolean, default: false },
 		subjectLabel: { type: String, default: "Subjects / Courses" },
