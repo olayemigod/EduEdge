@@ -110,6 +110,39 @@ PEOPLE_CUSTOM_FIELDS = {
 }
 
 
+def reconcile_instructor_primary_branches() -> dict:
+	"""Refresh the stored current Primary Branch from dated Branch Governance.
+
+	This keeps the read-only denormalized Instructor field correct when an
+	eligibility period starts or ends without any document save on that day.
+	"""
+	if not (
+		frappe.db.exists("DocType", "Instructor")
+		and frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment")
+		and frappe.get_meta("Instructor").has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+	):
+		return {"checked": 0, "updated": 0}
+
+	from eduedge.services.instructor_branch_governance import primary_branch
+
+	names = frappe.get_all("Instructor", pluck="name", limit_page_length=0)
+	updated = 0
+	for instructor in names:
+		governed_primary = primary_branch(instructor)
+		current = frappe.db.get_value("Instructor", instructor, INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+		if (current or None) == (governed_primary or None):
+			continue
+		frappe.db.set_value(
+			"Instructor",
+			instructor,
+			INSTRUCTOR_PRIMARY_BRANCH_FIELD,
+			governed_primary,
+			update_modified=False,
+		)
+		updated += 1
+	return {"checked": len(names), "updated": updated}
+
+
 def _backfill_instructor_primary_branches() -> None:
 	if not (
 		frappe.db.exists("DocType", "Instructor")
