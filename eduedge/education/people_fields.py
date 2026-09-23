@@ -68,9 +68,10 @@ PEOPLE_CUSTOM_FIELDS = {
 			"label": "Primary School Branch / Campus",
 			"options": "EduEdge School Branch",
 			"insert_after": INSTITUTION_FIELD,
+			"read_only": 1,
 			"in_list_view": 1,
 			"in_standard_filter": 1,
-			"description": "Primary operational Branch. Additional eligibility remains governed by background Branch assignments.",
+			"description": "Compatibility mirror of the current Primary Instructor Branch Eligibility. Manage this in Branch Governance.",
 		},
 		{
 			"fieldname": "eduedge_email",
