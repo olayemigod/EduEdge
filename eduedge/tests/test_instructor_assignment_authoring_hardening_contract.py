@@ -6,6 +6,13 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
 BATCH_API = APP / "api" / "instructor_assignments.py"
 LINK_SEARCH = APP / "api" / "instructor_assignment_link_search.py"
+ASSIGNMENT_CONTROLLER = (
+    APP
+    / "eduedge"
+    / "doctype"
+    / "eduedge_instructor_assignment"
+    / "eduedge_instructor_assignment.py"
+)
 NATIVE_FORM = (
     APP
     / "eduedge"
@@ -72,6 +79,28 @@ class TestInstructorAssignmentAuthoringHardeningContract(unittest.TestCase):
             "applyOfferingContext",
         ):
             self.assertIn(token, source)
+
+    def test_new_assignment_defaults_to_selected_academic_period(self):
+        controller = ASSIGNMENT_CONTROLLER.read_text(encoding="utf-8")
+        native = NATIVE_FORM.read_text(encoding="utf-8")
+
+        for token in (
+            "def _academic_period_dates",
+            "if self.is_new():",
+            "if not self.valid_from and period_start",
+            "if not self.valid_to and period_end",
+            '"term_start_date", "term_end_date"',
+            '"year_start_date", "year_end_date"',
+        ):
+            self.assertIn(token, controller)
+
+        for token in (
+            '"term_start_date", "term_end_date"',
+            '"year_start_date", "year_end_date"',
+            "if (!frm.doc.valid_from && period.term_start_date)",
+            "if (!frm.doc.valid_to && period.term_end_date)",
+        ):
+            self.assertIn(token, native)
 
     def test_existing_native_assignment_identity_is_read_only(self):
         source = NATIVE_FORM.read_text(encoding="utf-8")
