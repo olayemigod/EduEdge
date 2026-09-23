@@ -50,7 +50,7 @@ frappe.ui.form.on("EduEdge Instructor Branch Assignment", {
 			},
 		}));
 		frm.set_query("instructor", () => ({
-			filters: { status: "Active" },
+			query: "eduedge.api.instructor_branch_eligibility.instructor_branch_eligibility_instructor_query",
 		}));
 	},
 
