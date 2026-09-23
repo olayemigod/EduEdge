@@ -165,6 +165,43 @@ def assignment_eligibility_covers_period(
 	return eligibility_covers_period(instructor, branch, valid_from, valid_to)
 
 
+
+def assignment_eligibility_overlaps_period(
+	instructor: str,
+	branch: str,
+	valid_from=None,
+	valid_to=None,
+) -> bool:
+	"""Return whether a new responsibility could occupy any valid time in the target period.
+
+	Smart-form discovery uses overlap so a mid-period Instructor is not prevented
+	from selecting the Class. Final assignment authoring still requires full
+	coverage of the actual Valid From / Valid To through
+	assert_instructor_branch_eligibility.
+	"""
+	if not branch_matches_instructor_home_institution(
+		instructor,
+		branch,
+		require_home=True,
+	):
+		return False
+	rows = get_instructor_branch_eligibility_rows(
+		instructor,
+		branch=branch,
+		enabled_only=True,
+	)
+	if not rows:
+		return False
+	target_start = _start(valid_from)
+	target_end = _end(valid_to)
+	if target_end < target_start:
+		return False
+	return any(
+		_start(row.get("valid_from")) <= target_end
+		and target_start <= _end(row.get("valid_to"))
+		for row in rows
+	)
+
 def assert_instructor_branch_eligibility(
 	instructor: str,
 	branch: str,
