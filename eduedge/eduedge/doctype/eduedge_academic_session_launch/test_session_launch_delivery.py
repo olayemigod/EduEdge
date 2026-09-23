@@ -96,6 +96,15 @@ class TestSessionLaunchDelivery(FrappeTestCase):
         if frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
             instructor_values[INSTITUTION_FIELD] = institution.name
         instructor = self._insert("Instructor", **instructor_values)
+        self._insert(
+            "EduEdge Instructor Branch Assignment",
+            instructor=instructor.name,
+            school_branch=branch.name,
+            enabled=1,
+            is_primary=1,
+            valid_from=year.year_start_date,
+            valid_to=year.year_end_date,
+        )
 
         offering = save_programme_offering(
             school_branch=branch.name,
