@@ -100,6 +100,8 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             'if is_instructor_eligibility and not instructor:',
             'get_allowed_school_branches(company=company, institution=institution)',
             'filters[INSTITUTION_FIELD] = ["in", institution_names]',
+            'if name and doctype == "EduEdge Instructor Branch Assignment":',
+            'field["read_only"] = True',
         ):
             self.assertIn(token, source)
 
