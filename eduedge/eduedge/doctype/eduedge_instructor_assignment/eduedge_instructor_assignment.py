@@ -73,6 +73,7 @@ class EduEdgeInstructorAssignment(Document):
         self._validate_capability_state()
         self._validate_existing_responsibility()
         self._validate_lifecycle_audit()
+        self._lock_assignment_scope()
         self._validate_duplicate()
         self._validate_primary_responsibility()
         self.assignment_title = self._build_title()
@@ -465,6 +466,17 @@ class EduEdgeInstructorAssignment(Document):
                 _("Preparation Reason requires a Prepared From Assignment link."),
                 frappe.ValidationError,
             )
+
+    def _lock_assignment_scope(self) -> None:
+        # Duplicate and primary-responsibility rules span multiple Instructor rows.
+        # Serialise academic-responsibility writes at the Institution boundary so
+        # concurrent managers cannot both pass the same conflict checks.
+        if not self.institution:
+            return
+        frappe.db.sql(
+            "select name from `tabEduEdge Institution` where name = %s for update",
+            (self.institution,),
+        )
 
     def _validate_duplicate(self) -> None:
         if not self.enabled:
