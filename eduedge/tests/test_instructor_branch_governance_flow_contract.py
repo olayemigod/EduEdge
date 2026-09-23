@@ -171,5 +171,28 @@ class TestInstructorBranchGovernanceFlowContract(unittest.TestCase):
         self.assertIn("values[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary", fields)
 
 
+    def test_effective_runtime_access_is_assignment_intersect_governance(self):
+        teaching = (APP / "education" / "teaching_assignments.py").read_text(encoding="utf-8")
+        capabilities = (
+            APP / "education" / "instructor_assignment_capabilities.py"
+        ).read_text(encoding="utf-8")
+        schedule_assignment = (
+            APP / "education" / "instructor_assignments.py"
+        ).read_text(encoding="utf-8")
+        schedule_options = (
+            APP / "api" / "teaching_assignment_options.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("eligibility_covers_period", teaching)
+        self.assertIn("reference_date,\n            reference_date", teaching)
+        self.assertIn("eligibility_covers_period(instructor, branch, resolved_date, resolved_date)", capabilities)
+        self.assertIn("Update Branch Governance first.", schedule_assignment)
+        self.assertIn("eligibility_covers_period(", schedule_assignment)
+        self.assertIn("tabEduEdge Instructor Branch Assignment", schedule_options)
+        self.assertIn("eligibility.enabled = 1", schedule_options)
+        self.assertIn("eligibility.valid_from", schedule_options)
+        self.assertIn("eligibility.valid_to", schedule_options)
+
+
 if __name__ == "__main__":
     unittest.main()
