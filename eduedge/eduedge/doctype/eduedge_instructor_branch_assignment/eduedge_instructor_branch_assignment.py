@@ -121,6 +121,17 @@ class EduEdgeInstructorBranchAssignment(Document):
             )
         if (
             cint(self.enabled)
+            and not branch.institution
+            and not self._is_narrowing_update()
+        ):
+            frappe.throw(
+                _(
+                    "The School Branch / Campus must belong to an Institution before Instructor Branch Eligibility can be enabled or widened."
+                ),
+                frappe.ValidationError,
+            )
+        if (
+            cint(self.enabled)
             and home_institution
             and branch.institution
             and home_institution != branch.institution
