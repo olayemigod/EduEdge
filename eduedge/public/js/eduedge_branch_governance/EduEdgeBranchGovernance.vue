@@ -191,7 +191,7 @@
 									<td><strong>{{ eligibility.branch_name || eligibility.school_branch }}</strong><div class="text-muted">{{ eligibility.school_branch }}</div></td>
 									<td>{{ eligibility.valid_from || 'No start restriction' }} → {{ eligibility.valid_to || 'Open ended' }}</td>
 									<td>{{ eligibility.academic_assignment_count }} linked assignment{{ eligibility.academic_assignment_count === 1 ? '' : 's' }}</td>
-									<td><EdgeStatusBadge :label="eligibility.status" :status="eligibility.status" :tone="eligibilityTone(eligibility.status)" /></td>
+									<td><EdgeStatusBadge :label="eligibility.status" :status="eligibility.status" :tone="eligibilityTone(eligibility.status)" /><div v-if="eligibility.governance_note" class="eduedge-missing-list">{{ eligibility.governance_note }}</div></td>
 									<td>
 										<div class="eduedge-row-actions">
 											<button
@@ -359,7 +359,7 @@ export default {
 		},
 		eligibilityTone(status) {
 			if (status === "Active") return "success";
-			if (["Disabled", "Expired", "Instructor Inactive"].includes(status)) return "danger";
+			if (["Disabled", "Expired", "Instructor Inactive", "Needs Home Institution", "Institution Mismatch"].includes(status)) return "danger";
 			if (status === "Scheduled") return "warning";
 			return "neutral";
 		},
