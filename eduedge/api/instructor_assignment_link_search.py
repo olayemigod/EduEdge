@@ -11,6 +11,7 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.teaching_assignments import current_user_instructors
 from eduedge.services.instructor_branch_governance import (
 	assignment_eligibility_covers_period,
+	assignment_eligibility_overlaps_period,
 	eligible_branch_names,
 )
 
@@ -40,7 +41,7 @@ def _assert_search_instructor_available(instructor: str) -> str:
 	return resolved
 
 
-def _offering_governed_for_instructor(instructor: str, branch: str, offering) -> bool:
+def _offering_available_for_instructor(instructor: str, branch: str, offering) -> bool:
 	resolved_instructor = str(instructor or "").strip()
 	if not resolved_instructor:
 		return True
@@ -48,7 +49,7 @@ def _offering_governed_for_instructor(instructor: str, branch: str, offering) ->
 		offering.get("academic_year"),
 		offering.get("academic_term"),
 	)
-	return assignment_eligibility_covers_period(
+	return assignment_eligibility_overlaps_period(
 		resolved_instructor,
 		branch,
 		period_start,
@@ -57,10 +58,10 @@ def _offering_governed_for_instructor(instructor: str, branch: str, offering) ->
 
 
 def _assert_offering_period_governance(instructor: str, branch: str, offering) -> None:
-	if _offering_governed_for_instructor(instructor, branch, offering):
+	if _offering_available_for_instructor(instructor, branch, offering):
 		return
 	frappe.throw(
-		"The selected Class / Programme Offering falls outside this Instructor's Branch Governance eligibility period.",
+		"The selected Class / Programme Offering does not overlap this Instructor's Branch Governance eligibility period.",
 		frappe.ValidationError,
 	)
 
@@ -186,8 +187,15 @@ def search_assignment_offerings(
 		row["period_start_date"], row["period_end_date"] = assignments._period_dates(
 			row.get("academic_year"), row.get("academic_term")
 		)
-		if instructor and not _offering_governed_for_instructor(resolved_instructor, branch, row):
+		if instructor and not _offering_available_for_instructor(resolved_instructor, branch, row):
 			continue
+		if instructor:
+			row["branch_eligibility_full_period"] = assignment_eligibility_covers_period(
+				resolved_instructor,
+				branch,
+				row.get("period_start_date"),
+				row.get("period_end_date"),
+			)
 		row["value"] = row.get("name")
 		row["label"] = row.get("offering_title") or row.get("name")
 		row["description"] = " · ".join(
@@ -197,6 +205,11 @@ def search_assignment_offerings(
 				row.get("program"),
 				row.get("academic_year"),
 				row.get("academic_term"),
+				(
+					"Partial Branch Eligibility — set assignment dates within the governed period"
+					if instructor and row.get("branch_eligibility_full_period") is False
+					else None
+				),
 			)
 			if value
 		)
