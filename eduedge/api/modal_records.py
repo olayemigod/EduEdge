@@ -208,6 +208,12 @@ def get_modal_schema(resource: str, name: str | None = None, context: str | dict
 		can_save = True
 		values.update({key: value for key, value in parsed_context.items() if key in _field_map(config)})
 
+	fields = _initial_link_options(config, values, parsed_context)
+	if name and doctype == "EduEdge Instructor Branch Assignment":
+		for field in fields:
+			if field.get("fieldname") in {"instructor", "school_branch"}:
+				field["read_only"] = True
+
 	return {
 		"resource": resource,
 		"doctype": doctype,
@@ -215,7 +221,7 @@ def get_modal_schema(resource: str, name: str | None = None, context: str | dict
 		"title": config["edit_title"] if name else config["create_title"],
 		"subtitle": config["subtitle"],
 		"submit_label": _("Save Changes") if name else _("Create"),
-		"fields": _initial_link_options(config, values, parsed_context),
+		"fields": fields,
 		"values": values,
 		"can_save": can_save,
 		"full_form_route": _full_form_route(config, name),
