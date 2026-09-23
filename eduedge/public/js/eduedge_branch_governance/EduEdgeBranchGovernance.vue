@@ -62,6 +62,7 @@
 					<EdgeStatCard label="Covered Campuses" :value="`${context.counts.covered_branches}/${context.counts.enabled_branches}`" helper="Direct or company HQ access" />
 					<EdgeStatCard label="Accounting Ready" :value="`${context.counts.accounting_ready_branches}/${context.counts.enabled_branches}`" helper="Core branch defaults completed" />
 					<EdgeStatCard label="Instructor Eligibility" :value="context.counts.active_instructor_eligibility || 0" helper="Active governed Instructor Branch periods" />
+					<EdgeStatCard label="Eligibility Review" :value="context.counts.instructor_eligibility_review_required || 0" helper="Enabled periods with no linked academic responsibility" />
 					<EdgeStatCard label="Enforcement" :value="context.settings.enforcement_enabled ? 'Active' : 'Not Active'" helper="Backend operational access gate" />
 				</EdgeDashboardLayout>
 
@@ -190,7 +191,10 @@
 									</td>
 									<td><strong>{{ eligibility.branch_name || eligibility.school_branch }}</strong><div class="text-muted">{{ eligibility.school_branch }}</div></td>
 									<td>{{ eligibility.valid_from || 'No start restriction' }} → {{ eligibility.valid_to || 'Open ended' }}</td>
-									<td>{{ eligibility.academic_assignment_count }} linked assignment{{ eligibility.academic_assignment_count === 1 ? '' : 's' }}</td>
+									<td>
+										{{ eligibility.academic_assignment_count }} linked assignment{{ eligibility.academic_assignment_count === 1 ? '' : 's' }}
+										<div v-if="eligibility.reconciliation_review_required" class="eduedge-review-note">Review required: confirm this unsupported eligibility is intentional.</div>
+									</td>
 									<td><EdgeStatusBadge :label="eligibility.status" :status="eligibility.status" :tone="eligibilityTone(eligibility.status)" /><div v-if="eligibility.governance_note" class="eduedge-missing-list">{{ eligibility.governance_note }}</div></td>
 									<td>
 										<div class="eduedge-row-actions">
@@ -202,6 +206,7 @@
 											>
 												Edit Eligibility
 											</button>
+											<button type="button" class="edge-button" @click="reviewInstructorEligibility(eligibility)">{{ eligibility.reconciliation_review_required ? 'Review Eligibility' : 'Review' }}</button>
 											<button type="button" class="edge-button" @click="openAcademicAssignments(eligibility)">Academic Assignments</button>
 										</div>
 									</td>
@@ -304,6 +309,23 @@ function emptyConfirmDialog() {
 	return { open: false, busy: false, title: "", message: "", confirmLabel: "Continue", action: null };
 }
 
+function emptyEligibilityReview() {
+	return {
+		open: false,
+		loading: false,
+		busy: false,
+		error: "",
+		title: "Instructor Branch Eligibility Review",
+		subtitle: "",
+		instructor: "",
+		instructorName: "",
+		rows: [],
+		reviewRequiredCount: 0,
+		selectedName: "",
+		reason: "",
+	};
+}
+
 export default {
 	name: "EduEdgeBranchGovernance",
 	data() {
@@ -318,10 +340,11 @@ export default {
 			menuItems: EDUEDGE_MENU_ITEMS,
 			recordModal: createRecordModalState(),
 			confirmDialog: emptyConfirmDialog(),
+			eligibilityReview: emptyEligibilityReview(),
 			context: {
 				user: {}, companies: [], selected_company: null, branches: [], assignments: [], instructor_eligibility: [], activation_checks: [],
 				settings: { enforcement_enabled: false, hq_all_branch_view_enabled: true },
-				counts: { enabled_branches: 0, active_assignments: 0, covered_branches: 0, accounting_ready_branches: 0, active_instructor_eligibility: 0, instructors_with_active_eligibility: 0 },
+				counts: { enabled_branches: 0, active_assignments: 0, covered_branches: 0, accounting_ready_branches: 0, active_instructor_eligibility: 0, instructors_with_active_eligibility: 0, instructor_eligibility_review_required: 0 },
 				permissions: { can_manage_access: false, can_view_access_details: false, can_view_instructor_eligibility: false, can_manage_instructor_eligibility: false, can_manage_accounting: false, can_manage_enforcement: false },
 				can_enable_enforcement: false,
 			},
