@@ -668,6 +668,13 @@ export default {
 .eduedge-governance-table { margin-bottom: 0; min-width: 62rem; }
 .eduedge-governance-table td { vertical-align: middle; }
 .eduedge-missing-list { color: var(--text-muted); font-size: .85rem; margin-top: .35rem; max-width: 22rem; }
+.eduedge-review-note { color: var(--text-muted); font-size: .85rem; line-height: 1.45; margin-top: .35rem; max-width: 30rem; }
+.eduedge-eligibility-review { display: grid; gap: 1rem; }
+.eduedge-review-summary { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem 1rem; }
+.eduedge-review-summary p { color: var(--text-muted); margin: 0; }
+.eduedge-review-table { min-width: 58rem; }
+.eduedge-cleanup-reason { border-top: 1px solid var(--border-color); display: grid; gap: .5rem; padding-top: 1rem; }
+.eduedge-cleanup-reason label { display: grid; gap: .35rem; }
 .eduedge-row-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .eduedge-confirm-copy { color: var(--edge-color-ink-700, var(--text-color)); line-height: 1.55; margin: 0; }
 @media (max-width: 720px) {
