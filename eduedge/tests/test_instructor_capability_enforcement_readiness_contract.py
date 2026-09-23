@@ -15,6 +15,15 @@ class TestInstructorCapabilityEnforcementReadinessContract(unittest.TestCase):
             / "eduedge_settings"
             / "eduedge_settings.py"
         ).read_text(encoding="utf-8")
+        settings_json = (
+            APP
+            / "eduedge"
+            / "doctype"
+            / "eduedge_settings"
+            / "eduedge_settings.json"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"fieldname":"enforce_instructor_assignment_capabilities","fieldtype":"Check","label":"Enforce Exact Instructor Assignment Capabilities","read_only":1', settings_json)
+
         for token in (
             "self._validate_capability_enforcement_change()",
             "def _validate_capability_enforcement_change",
