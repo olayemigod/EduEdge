@@ -64,54 +64,53 @@ def instructor_branch_eligibility_instructor_query(doctype, txt, searchfield, st
 		return []
 
 	fields = ["name", "instructor_name", "department", "employee", INSTITUTION_FIELD]
+	needle = str(txt or "").strip()
+	or_filters = None
+	if needle:
+		like = f"%{needle}%"
+		or_filters = {
+			"name": ["like", like],
+			"instructor_name": ["like", like],
+			"department": ["like", like],
+			"employee": ["like", like],
+			INSTITUTION_FIELD: ["like", like],
+		}
 	rows = frappe.get_list(
 		"Instructor",
 		filters={
 			"status": "Active",
 			INSTITUTION_FIELD: ["in", sorted(institutions)],
 		},
+		or_filters=or_filters,
 		fields=fields,
 		order_by="instructor_name asc",
-		limit_start=0,
-		limit_page_length=500,
+		limit_start=int(start),
+		limit_page_length=int(page_len),
 	)
+	row_institutions = {
+		str(row.get(INSTITUTION_FIELD) or "").strip()
+		for row in rows
+		if str(row.get(INSTITUTION_FIELD) or "").strip()
+	}
 	institution_names = {
 		row.name: row.institution_name
 		for row in frappe.get_list(
 			"EduEdge Institution",
-			filters={"name": ["in", sorted(institutions)]},
+			filters={"name": ["in", sorted(row_institutions)]},
 			fields=["name", "institution_name"],
 			limit_page_length=0,
 		)
-	}
-	needle = str(txt or "").strip().lower()
-	result = []
-	for row in rows:
-		haystack = " ".join(
-			str(value or "")
-			for value in (
-				row.get("name"),
-				row.get("instructor_name"),
-				row.get("department"),
-				row.get("employee"),
-				row.get(INSTITUTION_FIELD),
-				institution_names.get(row.get(INSTITUTION_FIELD)),
-			)
-		).lower()
-		if needle and needle not in haystack:
-			continue
-		result.append(
-			[
-				row.get("name"),
-				row.get("instructor_name") or row.get("name"),
-				institution_names.get(row.get(INSTITUTION_FIELD)) or row.get(INSTITUTION_FIELD) or "",
-				row.get("department") or "",
-				row.get("employee") or "",
-			]
-		)
-		if len(result) >= int(start) + int(page_len):
-			break
-	return result[int(start) : int(start) + int(page_len)]
+	} if row_institutions else {}
+	return [
+		[
+			row.get("name"),
+			row.get("instructor_name") or row.get("name"),
+			institution_names.get(row.get(INSTITUTION_FIELD)) or row.get(INSTITUTION_FIELD) or "",
+			row.get("department") or "",
+			row.get("employee") or "",
+		]
+		for row in rows
+	]
 
 
 def _supporting_assignments(instructor: str, school_branch: str, valid_from=None, valid_to=None) -> list[dict]:
