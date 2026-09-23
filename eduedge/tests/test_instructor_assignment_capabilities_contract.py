@@ -58,6 +58,7 @@ class TestInstructorAssignmentCapabilitiesContract(unittest.TestCase):
         for token in (
             "def get_active_instructor_names_for_user",
             'filters={"user_id": resolved_user, "status": "Active"}',
+            "if len(employees) != 1:",
             'filters={"employee": ["in", employees], "status": "Active"}',
             "def resolve_exact_instructor_for_user",
             "if len(instructors) == 1",
