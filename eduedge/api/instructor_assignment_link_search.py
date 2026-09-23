@@ -99,18 +99,27 @@ def _validated_offering(branch: str, program_offering: str):
 
 
 @frappe.whitelist()
-def search_instructors(query: str = "", page_length: int | str = 20) -> list[dict]:
+def search_instructors(
+	query: str = "",
+	page_length: int | str = 20,
+	include_history: int | str = 0,
+) -> list[dict]:
 	core._require_read()
-	filters: dict = {"status": "Active"}
-	if assignments._can_manage_assignments():
-		visible = assignments._manager_visible_instructor_names(include_history=False)
+	manager = assignments._can_manage_assignments()
+	history_mode = bool(cint(include_history)) and manager
+	filters: dict = {}
+	if manager:
+		visible = assignments._manager_visible_instructor_names(include_history=history_mode)
 		filters["name"] = ["in", sorted(visible)] if visible else ["in", ["__none__"]]
+		if not history_mode:
+			filters["status"] = "Active"
 	else:
 		own = current_user_instructors()
 		filters["name"] = ["in", own] if own else ["in", ["__none__"]]
+		filters["status"] = "Active"
 	meta = frappe.get_meta("Instructor")
-	fields = ["name", "instructor_name", "department", "employee"]
-	search_fields = ["instructor_name", "department", "employee"]
+	fields = ["name", "instructor_name", "department", "employee", "status"]
+	search_fields = ["instructor_name", "department", "employee", "status"]
 	for fieldname in (INSTITUTION_FIELD, "eduedge_email", "eduedge_mobile"):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
@@ -142,6 +151,7 @@ def search_instructors(query: str = "", page_length: int | str = 20) -> list[dic
 			for value in (
 				institution_name,
 				row.get("department"),
+				(row.get("status") if row.get("status") and row.get("status") != "Active" else None),
 				row.get("eduedge_mobile"),
 				row.get("eduedge_email"),
 			)
