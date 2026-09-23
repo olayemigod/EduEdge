@@ -205,13 +205,16 @@ def _manager_visible_instructor_names(*, include_history: bool = False) -> set[s
 
 def _instructors(*, include_history: bool = False) -> list[dict]:
 	meta = frappe.get_meta("Instructor")
-	filters: dict[str, Any] = {"status": "Active"}
+	filters: dict[str, Any] = {}
 	if _can_manage_assignments():
 		visible = _manager_visible_instructor_names(include_history=include_history)
 		filters["name"] = ["in", sorted(visible)] if visible else ["in", ["__none__"]]
+		if not include_history:
+			filters["status"] = "Active"
 	else:
 		own = current_user_instructors()
 		filters["name"] = ["in", own] if own else ["in", ["__none__"]]
+		filters["status"] = "Active"
 	fields = ["name", "instructor_name", "department", "employee", "status"]
 	for fieldname in (INSTITUTION_FIELD, "eduedge_email", "eduedge_mobile"):
 		if meta.has_field(fieldname):
