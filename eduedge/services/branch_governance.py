@@ -373,6 +373,12 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 		else:
 			status = "Active"
 
+		governance_note = ""
+		if status == "Needs Home Institution":
+			governance_note = "Update the Instructor Home Institution before creating new academic responsibilities."
+		elif status == "Institution Mismatch":
+			governance_note = "This eligibility is outside the Instructor Home Institution. Preserve history, then correct the profile or create eligibility in a valid campus."
+
 		support = [
 			assignment
 			for assignment in academic_rows
@@ -396,6 +402,7 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 				"branch_institution": row_branch_institution,
 				"academic_assignment_count": len(support),
 				"status": status,
+				"governance_note": governance_note,
 			}
 		)
 		result.append(row)
