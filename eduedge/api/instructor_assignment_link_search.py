@@ -11,6 +11,7 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.teaching_assignments import current_user_instructors
 from eduedge.services.instructor_branch_governance import (
 	assignment_eligibility_covers_period,
+	assignment_eligibility_overlap_periods,
 	assignment_eligibility_overlaps_period,
 	eligible_branch_names,
 )
@@ -191,6 +192,12 @@ def search_assignment_offerings(
 			continue
 		if instructor:
 			row["branch_eligibility_full_period"] = assignment_eligibility_covers_period(
+				resolved_instructor,
+				branch,
+				row.get("period_start_date"),
+				row.get("period_end_date"),
+			)
+			row["branch_eligibility_periods"] = assignment_eligibility_overlap_periods(
 				resolved_instructor,
 				branch,
 				row.get("period_start_date"),
@@ -390,6 +397,12 @@ def get_assignment_offering_context(
 		"period_start_date": str(period_start or ""),
 		"period_end_date": str(period_end or ""),
 		"branch_eligibility_full_period": assignment_eligibility_covers_period(
+			resolved_instructor,
+			branch,
+			period_start,
+			period_end,
+		),
+		"branch_eligibility_periods": assignment_eligibility_overlap_periods(
 			resolved_instructor,
 			branch,
 			period_start,
