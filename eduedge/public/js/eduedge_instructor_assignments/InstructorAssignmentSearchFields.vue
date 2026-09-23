@@ -95,6 +95,7 @@ export default {
 			if (!row?.branch) return [];
 			return call("eduedge.api.instructor_assignment_link_search.search_assignment_offerings", {
 				branch: row.branch,
+				instructor: this.instructor || "",
 				query: query || "",
 				page_length: 20,
 			});
@@ -104,6 +105,7 @@ export default {
 			return call("eduedge.api.instructor_assignment_link_search.search_assignment_class_arms", {
 				branch: row.branch,
 				program_offering: row.program_offering,
+				instructor: this.instructor || "",
 				query: query || "",
 				page_length: 20,
 			});
@@ -113,6 +115,7 @@ export default {
 			return call("eduedge.api.instructor_assignment_link_search.search_assignment_courses", {
 				branch: row.branch,
 				program_offering: row.program_offering,
+				instructor: this.instructor || "",
 				query: query || "",
 				page_length: 20,
 			});
