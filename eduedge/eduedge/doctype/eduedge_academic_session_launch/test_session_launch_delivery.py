@@ -359,6 +359,13 @@ class TestSessionLaunchDelivery(FrappeTestCase):
         )
         self.assertEqual(effective_after, [])
 
+        revoked_readiness = get_session_delivery_context(launch_name)
+        self.assertEqual(revoked_readiness["summary"]["assigned_teaching_contexts"], 0)
+        self.assertEqual(revoked_readiness["summary"]["unassigned_teaching_contexts"], 1)
+        self.assertEqual(revoked_readiness["summary"]["class_responsibility_assigned"], 0)
+        self.assertEqual(revoked_readiness["summary"]["class_responsibility_missing"], 1)
+        self.assertFalse(revoked_readiness["summary"]["class_responsibility_ready"])
+
         with self.assertRaises(frappe.ValidationError):
             create_teaching_schedule(
                 branch=branch.name,
