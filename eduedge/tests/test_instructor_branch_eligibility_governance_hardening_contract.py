@@ -20,6 +20,13 @@ DOCTYPE_JSON = (
     / "eduedge_instructor_branch_assignment.json"
 )
 MODAL_RECORDS = APP / "api" / "modal_records.py"
+NATIVE_FORM = (
+    APP
+    / "eduedge"
+    / "doctype"
+    / "eduedge_instructor_branch_assignment"
+    / "eduedge_instructor_branch_assignment.js"
+)
 
 
 class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCase):
@@ -82,8 +89,22 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             '"clear_fields": ["school_branch"]',
             'is_instructor_eligibility = config.get("doctype") == "EduEdge Instructor Branch Assignment"',
             'frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD)',
+            'if is_instructor_eligibility and not instructor:',
             'get_allowed_school_branches(company=company, institution=institution)',
             'filters[INSTITUTION_FIELD] = ["in", institution_names]',
+        ):
+            self.assertIn(token, source)
+
+    def test_native_form_uses_same_cascading_governance(self):
+        source = NATIVE_FORM.read_text(encoding="utf-8")
+
+        for token in (
+            'frm.set_query("school_branch"',
+            'eduedge.api.education.school_branch_query',
+            'eduedge_institution',
+            'clearBranch: true',
+            'frm.set_df_property("instructor", "read_only"',
+            'frm.set_df_property("school_branch", "read_only"',
         ):
             self.assertIn(token, source)
 
