@@ -243,6 +243,7 @@ def _require_incoming_branch_access(instructor: str, branch: str, start, end, *,
     )
     return _branch_access_preview(instructor, branch, start, end)
 
+
 def _replacement_plan(source, replacement_instructor: str, handover_date: str | None, reason: str | None) -> dict:
     resolved_reason = _clean_reason(reason)
     handover = _handover_date(handover_date)
