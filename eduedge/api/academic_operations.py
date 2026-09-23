@@ -8,6 +8,7 @@ from frappe.utils import getdate, nowdate
 
 from eduedge.education.academic_operations import ASSIGNMENT_DOCTYPE
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import is_limited_instructor_user
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import (
@@ -186,37 +187,39 @@ def get_attendance_register(
 	course_schedule: str | None = None,
 ) -> dict:
 	_require_academic_operator()
-	group = frappe.db.get_value(
-		"Student Group",
-		student_group,
-		["name", "student_group_name", BRANCH_FIELD, "disabled"],
-		as_dict=True,
-	)
-	if not group:
+	try:
+		group = frappe.get_doc("Student Group", student_group)
+	except frappe.DoesNotExistError:
 		frappe.throw(_("Student Group does not exist."), frappe.DoesNotExistError)
+	group.check_permission("read")
 	assert_branch_access(group.get(BRANCH_FIELD))
 	if group.disabled:
 		frappe.throw(_("The selected Student Group is disabled."), frappe.ValidationError)
+	if not course_schedule and is_limited_instructor_user(frappe.session.user):
+		frappe.throw(
+			_("Limited Instructor attendance must be anchored to an exact Course Schedule."),
+			frappe.PermissionError,
+		)
 
 	target_date = str(getdate(date or nowdate()))
 	schedule = None
 	if course_schedule:
-		schedule = frappe.db.get_value(
-			"Course Schedule",
-			course_schedule,
-			[
-				"name",
-				"student_group",
-				"schedule_date",
-				"instructor",
-				"instructor_name",
-				"course",
-				BRANCH_FIELD,
-			],
-			as_dict=True,
-		)
-		if not schedule:
+		try:
+			schedule_doc = frappe.get_doc("Course Schedule", course_schedule)
+		except frappe.DoesNotExistError:
 			frappe.throw(_("Course Schedule does not exist."), frappe.DoesNotExistError)
+		schedule_doc.check_permission("read")
+		schedule = frappe._dict(
+			{
+				"name": schedule_doc.name,
+				"student_group": schedule_doc.student_group,
+				"schedule_date": schedule_doc.schedule_date,
+				"instructor": schedule_doc.instructor,
+				"instructor_name": schedule_doc.instructor_name,
+				"course": schedule_doc.course,
+				BRANCH_FIELD: schedule_doc.get(BRANCH_FIELD),
+			}
+		)
 		if schedule.student_group != student_group:
 			frappe.throw(
 				_("Course Schedule does not belong to the selected Student Group."),
