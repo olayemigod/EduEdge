@@ -64,7 +64,7 @@ class TestInstructorAssignmentCapabilityEnforcementFoundation(unittest.TestCase)
         ):
             self.assertIn(token, source)
 
-    def test_capability_option_rows_are_exact_active_assignments_not_branch_access(self):
+    def test_capability_option_rows_require_exact_assignment_and_effective_branch_governance(self):
         source = self._source()
         for token in (
             "def get_user_capability_assignment_rows",
@@ -77,8 +77,12 @@ class TestInstructorAssignmentCapabilityEnforcementFoundation(unittest.TestCase)
             '"student_group"',
             '"course"',
             "_effective(row, resolved_date)",
+            "eligibility_covers_period(",
+            "row.get(\"school_branch\")",
+            "resolved_date,",
         ):
             self.assertIn(token, source)
+        # Branch Governance is a necessary runtime boundary, never a capability source.
         self.assertNotIn("EduEdge Instructor Branch Assignment", source)
 
     def test_enforcement_foundation_does_not_take_over_question_review_or_final_approval(self):
