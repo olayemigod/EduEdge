@@ -439,11 +439,6 @@ def prepare_instructor_assignment_for_next_period(
         )
         if plan.get("already_prepared"):
             return plan
-        if plan["conflict_count"]:
-            frappe.throw(
-                _("Next-period preparation has {0} conflict(s). Resolve them before saving.").format(plan["conflict_count"]),
-                frappe.ValidationError,
-            )
 
         destination = plan["destination"]
         start = getdate(destination["valid_from"])
@@ -455,6 +450,11 @@ def prepare_instructor_assignment_for_next_period(
             end,
             label=_("Prepared Instructor Assignment"),
         )
+        if plan["conflict_count"]:
+            frappe.throw(
+                _("Next-period preparation has {0} conflict(s). Resolve them before saving.").format(plan["conflict_count"]),
+                frappe.ValidationError,
+            )
         branch_result = assignment_eligibility_preview(
             source.instructor,
             destination["school_branch"],
