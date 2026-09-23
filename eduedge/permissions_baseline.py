@@ -210,6 +210,8 @@ def get_default_permission_matrix() -> dict[str, dict[str, set[str]]]:
 	_grant(matrix, "EduEdge User Branch Access", ("Academic Administrator",), VIEW)
 	_grant(matrix, "EduEdge Instructor Branch Assignment", managers, MANAGE)
 	_grant(matrix, "EduEdge Instructor Branch Assignment", ("Teacher", "Instructor"), VIEW)
+	_grant(matrix, "EduEdge Instructor Assignment", managers, MANAGE)
+	_grant(matrix, "EduEdge Instructor Assignment", ACADEMIC_OPERATORS, VIEW)
 	_grant(matrix, "EduEdge Program Offering", managers, MANAGE)
 	_grant(matrix, "EduEdge Program Offering", ACADEMIC_OPERATORS + ADMISSION_OPERATORS, VIEW)
 	_grant(matrix, "EduEdge Result Publication", managers, MANAGE)
