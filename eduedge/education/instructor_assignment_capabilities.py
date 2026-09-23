@@ -243,7 +243,18 @@ def get_user_capability_assignment_rows(
         limit_page_length=0,
     )
     resolved_date = getdate(on_date or nowdate())
-    return [dict(row) for row in rows if _effective(row, resolved_date)]
+    instructor = instructors[0]
+    return [
+        dict(row)
+        for row in rows
+        if _effective(row, resolved_date)
+        and eligibility_covers_period(
+            instructor,
+            row.get("school_branch"),
+            resolved_date,
+            resolved_date,
+        )
+    ]
 
 
 def require_instructor_assignment_capability(
