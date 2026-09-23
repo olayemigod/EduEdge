@@ -47,7 +47,7 @@ class TestInstructorBranchEligibilityReconciliation(FrappeTestCase):
         return self._insert(
             "EduEdge School Branch",
             branch_name=f"QA {label} Campus {self.suffix}",
-            branch_code=f"QA{label[:4].upper()}{self.suffix}",
+            branch_code=f"QA{label.replace(' ', '').upper()[:8]}{self.suffix}",
             company=self.company,
             institution=institution.name,
             enabled=1,
