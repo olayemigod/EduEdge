@@ -316,7 +316,7 @@ def get_instructor_assignment_register_page(
     permitted = core._allowed_branches()
     permitted_names = [_row_name(row) for row in permitted if _row_name(row)]
 
-    instructors = _instructors()
+    instructors = _instructors(include_history=True)
     if not instructor and not _can_manage_assignments() and len(instructors) == 1:
         instructor = _row_name(instructors[0])
     selected_instructor = next((row for row in instructors if _row_name(row) == instructor), None)
