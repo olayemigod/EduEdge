@@ -176,6 +176,44 @@ def _scoped_branch_names(institution: str, branch: str, branches: list[dict]) ->
 	}
 
 
+def _has_full_institution_branch_scope(institution: str, branches: list[dict]) -> bool:
+	resolved = str(institution or "").strip()
+	if not resolved or resolved == ALL_INSTITUTIONS_KEY:
+		return False
+	allowed = {
+		row["name"]
+		for row in branches
+		if row.get("institution") == resolved and row.get("name")
+	}
+	all_enabled = set(
+		frappe.get_all(
+			"EduEdge School Branch",
+			filters={"institution": resolved, "enabled": 1},
+			pluck="name",
+			limit_page_length=0,
+		)
+	)
+	return all_enabled.issubset(allowed)
+
+
+def _instructor_operational_in_branches(name: str, branch_names: set[str]) -> bool:
+	if not name or not branch_names:
+		return False
+	if primary_branch(name) in branch_names:
+		return True
+	for doctype in ("EduEdge Instructor Branch Assignment", "EduEdge Instructor Assignment"):
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		if frappe.get_all(
+			doctype,
+			filters={"instructor": name, "school_branch": ["in", sorted(branch_names)]},
+			pluck="name",
+			limit_page_length=1,
+		):
+			return True
+	return False
+
+
 def _operational_instructor_names(institution: str, branch: str, branches: list[dict]) -> set[str] | None:
 	if institution == ALL_INSTITUTIONS_KEY and not branch:
 		return None
@@ -206,7 +244,12 @@ def _operational_instructor_names(institution: str, branch: str, branches: list[
 	meta = frappe.get_meta("Instructor")
 	if branch and meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD):
 		filters[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = branch
-	elif institution and institution != ALL_INSTITUTIONS_KEY and meta.has_field(INSTITUTION_FIELD):
+	elif (
+		institution
+		and institution != ALL_INSTITUTIONS_KEY
+		and meta.has_field(INSTITUTION_FIELD)
+		and _has_full_institution_branch_scope(institution, branches)
+	):
 		filters[INSTITUTION_FIELD] = institution
 	home_names = set(
 		frappe.get_list("Instructor", filters=filters, pluck="name", limit_page_length=0)
@@ -451,19 +494,26 @@ def save_instructor(payload: str | dict) -> dict:
 		doc.check_permission("write")
 		if not _is_global_instructor_admin():
 			current_institution = str(doc.get(INSTITUTION_FIELD) or "").strip()
-			if current_institution:
-				if current_institution not in allowed_institutions:
-					frappe.throw(
-						_("The selected Instructor is outside your available Institution scope."),
-						frappe.PermissionError,
-					)
-			else:
-				operational_names = _operational_instructor_names("", "", allowed_branch_rows) or set()
-				if name not in operational_names:
-					frappe.throw(
-						_("The selected Instructor is outside your available academic scope."),
-						frappe.PermissionError,
-					)
+			if current_institution and current_institution not in allowed_institutions:
+				frappe.throw(
+					_("The selected Instructor is outside your available Institution scope."),
+					frappe.PermissionError,
+				)
+			allowed_branch_names = {
+				row["name"]
+				for row in allowed_branch_rows
+				if row.get("name")
+				and (not current_institution or row.get("institution") == current_institution)
+			}
+			full_institution_scope = bool(
+				current_institution
+				and _has_full_institution_branch_scope(current_institution, allowed_branch_rows)
+			)
+			if not full_institution_scope and not _instructor_operational_in_branches(name, allowed_branch_names):
+				frappe.throw(
+					_("The selected Instructor is outside your available academic scope."),
+					frappe.PermissionError,
+				)
 	else:
 		_require_permission("create")
 		doc = frappe.new_doc("Instructor")
