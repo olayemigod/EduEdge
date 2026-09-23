@@ -60,7 +60,7 @@
 		<template #footer>
 			<button type="button" class="edge-button" :disabled="busy" @click="close">Cancel</button>
 			<button type="button" class="edge-button edge-button--primary" :disabled="busy || !canSave" @click="save">
-				{{ busy ? 'Saving capabilities...' : 'Save Capabilities' }}
+				{{ busy ? 'Saving capabilities...' : needsExplicitReview && !hasChanges ? 'Mark Reviewed' : 'Save Capabilities' }}
 			</button>
 		</template>
 	</EdgeModal>
