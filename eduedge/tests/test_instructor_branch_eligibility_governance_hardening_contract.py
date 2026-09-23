@@ -28,6 +28,7 @@ INSTRUCTOR_ASSIGNMENT_JSON = (
     / "eduedge_instructor_assignment.json"
 )
 PERMISSION_BASELINE = APP / "permissions_baseline.py"
+ELIGIBILITY_API = APP / "api" / "instructor_branch_eligibility.py"
 NATIVE_FORM = (
     APP
     / "eduedge"
@@ -99,11 +100,18 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             'frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD)',
             'if is_instructor_eligibility and not instructor:',
             'get_allowed_school_branches(company=company, institution=institution)',
+            'get_allowed_institutions(company=company)',
             'filters[INSTITUTION_FIELD] = ["in", institution_names]',
             'if name and doctype == "EduEdge Instructor Branch Assignment":',
             'field["read_only"] = True',
         ):
             self.assertIn(token, source)
+
+        instructor_block = source.split('if fieldname == "instructor":', 1)[1].split(
+            'return _link_rows(', 1
+        )[0]
+        self.assertIn("if is_instructor_eligibility and frappe.get_meta", instructor_block)
+        self.assertNotIn("is_instructor_eligibility and company", instructor_block)
 
     def test_instructor_assignment_authoring_is_manager_governed(self):
         definition = json.loads(INSTRUCTOR_ASSIGNMENT_JSON.read_text(encoding="utf-8"))
@@ -121,10 +129,13 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
 
     def test_native_form_uses_same_cascading_governance(self):
         source = NATIVE_FORM.read_text(encoding="utf-8")
+        api = ELIGIBILITY_API.read_text(encoding="utf-8")
 
         for token in (
             'frm.set_query("school_branch"',
             'eduedge.api.education.school_branch_query',
+            'frm.set_query("instructor"',
+            'eduedge.api.instructor_branch_eligibility.instructor_branch_eligibility_instructor_query',
             'eduedge_institution',
             'clearBranch: true',
             'frm.is_new() && frm.doc.school_branch',
@@ -132,6 +143,17 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             'frm.set_df_property("school_branch", "read_only"',
         ):
             self.assertIn(token, source)
+
+        for token in (
+            "def instructor_branch_eligibility_instructor_query",
+            "_require_eligibility_read()",
+            "_allowed_eligibility_institutions()",
+            '"status": "Active"',
+            'INSTITUTION_FIELD: ["in", sorted(institutions)]',
+            "limit_start=int(start)",
+            "limit_page_length=int(page_len)",
+        ):
+            self.assertIn(token, api)
 
 
 if __name__ == "__main__":
