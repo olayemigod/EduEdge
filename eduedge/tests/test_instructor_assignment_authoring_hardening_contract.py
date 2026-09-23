@@ -40,6 +40,7 @@ class TestInstructorAssignmentAuthoringHardeningContract(unittest.TestCase):
             "def instructor_assignment_course_query",
             "eligible_branch_names",
             "_assert_governed_branch",
+            "assignments._require_assignment_manager()",
         ):
             self.assertIn(token, source)
 
