@@ -202,6 +202,69 @@ def assignment_eligibility_overlaps_period(
 		for row in rows
 	)
 
+
+def assignment_eligibility_overlap_periods(
+	instructor: str,
+	branch: str,
+	valid_from=None,
+	valid_to=None,
+) -> list[dict]:
+	"""Return merged Branch Eligibility windows clipped to the target period.
+
+	This is a read-only smart-form helper. It never widens, creates or otherwise
+	mutates Branch Governance. Final assignment saves still require full coverage
+	of the exact responsibility dates.
+	"""
+	if not branch_matches_instructor_home_institution(
+		instructor,
+		branch,
+		require_home=True,
+	):
+		return []
+	rows = get_instructor_branch_eligibility_rows(
+		instructor,
+		branch=branch,
+		enabled_only=True,
+	)
+	if not rows:
+		return []
+
+	target_start = _start(valid_from)
+	target_end = _end(valid_to)
+	if target_end < target_start:
+		return []
+
+	intervals: list[tuple] = []
+	for row in rows:
+		start = max(_start(row.get("valid_from")), target_start)
+		end = min(_end(row.get("valid_to")), target_end)
+		if end >= start:
+			intervals.append((start, end))
+	if not intervals:
+		return []
+
+	intervals.sort(key=lambda item: (item[0], item[1]))
+	merged: list[list] = []
+	for start, end in intervals:
+		if not merged:
+			merged.append([start, end])
+			continue
+		previous = merged[-1]
+		if start <= previous[1] + timedelta(days=1):
+			if end > previous[1]:
+				previous[1] = end
+		else:
+			merged.append([start, end])
+
+	return [
+		{
+			"valid_from": str(start),
+			"valid_to": str(end),
+		}
+		for start, end in merged
+	]
+
+
 def assert_instructor_branch_eligibility(
 	instructor: str,
 	branch: str,
