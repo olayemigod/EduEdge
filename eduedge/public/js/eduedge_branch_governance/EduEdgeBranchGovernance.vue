@@ -359,7 +359,7 @@ export default {
 		},
 		eligibilityTone(status) {
 			if (status === "Active") return "success";
-			if (["Disabled", "Expired", "Instructor Inactive", "Needs Home Institution", "Home Institution Disabled", "Institution Mismatch"].includes(status)) return "danger";
+			if (["Disabled", "Expired", "Instructor Inactive", "Needs Home Institution", "Home Institution Disabled", "Branch Missing Institution", "Institution Mismatch"].includes(status)) return "danger";
 			if (status === "Scheduled") return "warning";
 			return "neutral";
 		},
