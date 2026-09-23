@@ -89,10 +89,17 @@ class TestInstructorAssignmentAuthoringHardeningContract(unittest.TestCase):
             "if self.is_new():",
             "if not self.valid_from and period_start",
             "if not self.valid_to and period_end",
+            "Valid From cannot be earlier than the selected Class academic period",
+            "Valid From cannot be later than the selected Class academic period",
+            "Valid To cannot be earlier than the selected Class academic period",
+            "Valid To cannot be later than the selected Class academic period",
             '"term_start_date", "term_end_date"',
             '"year_start_date", "year_end_date"',
         ):
             self.assertIn(token, controller)
+
+        batch = BATCH_API.read_text(encoding="utf-8")
+        self.assertIn("resolved Valid To cannot be earlier than Valid From", batch)
 
         for token in (
             '"term_start_date", "term_end_date"',
