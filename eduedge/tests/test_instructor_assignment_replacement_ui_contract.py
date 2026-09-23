@@ -114,6 +114,8 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
             "Changing any field after preview requires a fresh preview.",
             "Branch Eligibility impact",
             "The outgoing Instructor's Branch Eligibility is not changed",
+            "branch-governance-required",
+            "Branch Governance must be updated before this replacement can be confirmed.",
             "previewPlan.successor?.valid_from",
             "previewPlan.successor?.valid_to",
             "previewPlan.conflicts || []",
@@ -146,6 +148,9 @@ class TestInstructorAssignmentReplacementUIContract(unittest.TestCase):
         self.assertNotIn("{{ previewPlan.successor.student_group }}", component)
         self.assertNotIn("{{ previewPlan.successor.course }}", component)
         self.assertNotIn("{{ previewPlan.incoming_branch_eligibility?.name }}", component)
+        self.assertNotIn("A Branch Eligibility period will be created", component)
+        self.assertNotIn("Branch Eligibility will be extended", component)
+        self.assertNotIn("will be re-enabled", component)
         self.assertIn("enforceReadableReferenceLabels", bundle)
 
     def test_page_and_popup_buttons_labels_and_controls_have_edgesuite_visual_contract(self):
