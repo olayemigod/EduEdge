@@ -148,15 +148,23 @@ function plannerParts() {
 
 function applyPlannerVisibility(proxy, parts, toolbar) {
 	if (!parts) return;
-	const open = Boolean(proxy.canManage && proxy.assignmentPlannerOpen);
+	const canAuthor = Boolean(proxy.canManage && proxy.canAuthorSelectedInstructor);
+	const open = Boolean(canAuthor && proxy.assignmentPlannerOpen);
 	for (const element of [parts.plannerPanel, parts.rowsStack, parts.actionPanel]) {
 		if (element) element.hidden = !open;
 	}
 	parts.plannerPanel?.classList.toggle("eduedge-assignment-planner-open", open);
 	const button = toolbar?.querySelector("[data-eduedge-toggle-assignment-planner]");
 	if (button) {
-		button.textContent = open ? "Close Assignment Planner" : "Add Assignment";
+		button.disabled = !canAuthor;
+		button.textContent = !canAuthor
+			? "Historical Record"
+			: (open ? "Close Assignment Planner" : "Add Assignment");
 		button.setAttribute("aria-expanded", open ? "true" : "false");
+		button.setAttribute(
+			"title",
+			canAuthor ? "" : "Inactive historical Instructors are review-only until reactivated.",
+		);
 	}
 }
 
@@ -168,7 +176,8 @@ function syncToolbarInstructor(proxy, toolbar) {
 	for (const row of proxy.data?.instructors || []) {
 		const option = document.createElement("option");
 		option.value = row.name;
-		option.textContent = row.instructor_name || row.name;
+		const label = row.instructor_name || row.name;
+		option.textContent = row.status && row.status !== "Active" ? `${label} · ${row.status}` : label;
 		select.appendChild(option);
 	}
 	select.value = current;
@@ -205,6 +214,7 @@ function ensureViewFirstPlanner(proxy) {
 			await proxy.load?.();
 		});
 		toolbar.querySelector("[data-eduedge-toggle-assignment-planner]")?.addEventListener("click", () => {
+			if (!proxy.canAuthorSelectedInstructor) return;
 			proxy.assignmentPlannerOpen = !proxy.assignmentPlannerOpen;
 			const currentParts = plannerParts();
 			applyPlannerVisibility(proxy, currentParts, toolbar);
