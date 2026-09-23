@@ -192,7 +192,10 @@
 									<td><strong>{{ eligibility.branch_name || eligibility.school_branch }}</strong><div class="text-muted">{{ eligibility.school_branch }}</div></td>
 									<td>{{ eligibility.valid_from || 'No start restriction' }} → {{ eligibility.valid_to || 'Open ended' }}</td>
 									<td>
-										{{ eligibility.academic_assignment_count }} linked assignment{{ eligibility.academic_assignment_count === 1 ? '' : 's' }}
+										<span v-if="eligibility.academic_assignment_support_visible !== false">
+											{{ eligibility.academic_assignment_count }} linked assignment{{ eligibility.academic_assignment_count === 1 ? '' : 's' }}
+										</span>
+										<span v-else class="text-muted">Assignment support restricted</span>
 										<div v-if="eligibility.reconciliation_review_required" class="eduedge-review-note">Review required: confirm this unsupported eligibility is intentional.</div>
 									</td>
 									<td><EdgeStatusBadge :label="eligibility.status" :status="eligibility.status" :tone="eligibilityTone(eligibility.status)" /><div v-if="eligibility.governance_note" class="eduedge-missing-list">{{ eligibility.governance_note }}</div></td>
@@ -330,11 +333,12 @@
 							<td>{{ row.valid_from || 'No start restriction' }} → {{ row.valid_to || 'Open ended' }}</td>
 							<td>
 								<EdgeStatusBadge
-									:label="row.review_required ? 'Needs review' : row.supporting_assignment_count ? 'Supported' : 'Historical'"
+									:label="row.support_state === 'restricted' ? 'Support restricted' : row.review_required ? 'Needs review' : row.supporting_assignment_count ? 'Supported' : 'Historical'"
 									:status="row.support_state"
-									:tone="row.review_required ? 'warning' : row.supporting_assignment_count ? 'success' : 'neutral'"
+									:tone="row.support_state === 'restricted' ? 'neutral' : row.review_required ? 'warning' : row.supporting_assignment_count ? 'success' : 'neutral'"
 								/>
-								<div class="eduedge-missing-list">{{ row.supporting_assignment_count }} supporting academic assignment{{ row.supporting_assignment_count === 1 ? '' : 's' }}</div>
+								<div v-if="row.assignment_support_visible !== false" class="eduedge-missing-list">{{ row.supporting_assignment_count }} supporting academic assignment{{ row.supporting_assignment_count === 1 ? '' : 's' }}</div>
+								<div v-else class="eduedge-missing-list">Assignment support details are hidden by your current permissions.</div>
 								<div v-if="row.review_reason" class="eduedge-review-note">{{ row.review_reason }}</div>
 							</td>
 							<td>
