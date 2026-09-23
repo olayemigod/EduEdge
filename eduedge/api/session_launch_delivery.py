@@ -272,14 +272,21 @@ def _responsibility_rows(groups: list[dict], assignments: list[dict], offerings:
 		offering = offerings.get(group.get("resolved_offering")) or {}
 		period_start = offering.get("period_start_date")
 		period_end = offering.get("period_end_date")
+		branch = group.get(BRANCH_FIELD) or offering.get("school_branch") or ""
 		matched = [
 			row
 			for row in by_group.get(group["name"], [])
 			if readiness._date_overlap(row.get("valid_from"), row.get("valid_to"), period_start, period_end)
+			and readiness._assignment_branch_governance_covers_period(
+				row,
+				branch,
+				period_start,
+				period_end,
+			)
 		]
 		result.append(
 			{
-				"branch": group.get(BRANCH_FIELD) or offering.get("school_branch") or "",
+				"branch": branch,
 				"program_offering": group.get("resolved_offering") or "",
 				"offering_label": offering.get("offering_title") or group.get("program") or "",
 				"period_start_date": period_start,
