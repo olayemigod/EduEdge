@@ -103,7 +103,7 @@
 							<small>{{ successorContextLabel(previewPlan.successor) }}</small>
 						</div>
 						<div class="eduedge-replacement-plan-card eduedge-replacement-plan-grid__wide">
-							<strong class="eduedge-replacement-plan-label">Branch Eligibility impact</strong>
+							<strong class="eduedge-replacement-plan-label">Branch Eligibility check</strong>
 							<span>{{ branchImpactLabel(previewPlan.incoming_branch_eligibility) }}</span>
 							<small>{{ branchEligibilitySummary(previewPlan.incoming_branch_eligibility) }}</small>
 							<small>The outgoing Instructor's Branch Eligibility is not changed by Replace / Handover.</small>
