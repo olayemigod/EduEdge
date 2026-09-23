@@ -439,9 +439,28 @@ def save_instructor(payload: str | dict) -> dict:
 	require_eduedge_access(feature_key="academics", action="save_instructor")
 	data = _parse_payload(payload)
 	name = str(data.get("name") or "").strip()
+	allowed_institution_rows = _allowed_institutions()
+	allowed_institutions = {row["name"] for row in allowed_institution_rows}
+	allowed_branch_rows = _allowed_branches()
+
 	if name:
 		doc = frappe.get_doc("Instructor", name)
 		doc.check_permission("write")
+		if not _is_global_instructor_admin():
+			current_institution = str(doc.get(INSTITUTION_FIELD) or "").strip()
+			if current_institution:
+				if current_institution not in allowed_institutions:
+					frappe.throw(
+						_("The selected Instructor is outside your available Institution scope."),
+						frappe.PermissionError,
+					)
+			else:
+				operational_names = _operational_instructor_names("", "", allowed_branch_rows) or set()
+				if name not in operational_names:
+					frappe.throw(
+						_("The selected Instructor is outside your available academic scope."),
+						frappe.PermissionError,
+					)
 	else:
 		_require_permission("create")
 		doc = frappe.new_doc("Instructor")
@@ -450,7 +469,6 @@ def save_instructor(payload: str | dict) -> dict:
 	institution = str(data.get(INSTITUTION_FIELD) or "").strip()
 	if not institution:
 		frappe.throw(_("Home Institution is required for the Instructor profile."), frappe.ValidationError)
-	allowed_institutions = {row["name"] for row in _allowed_institutions()}
 	if institution not in allowed_institutions:
 		frappe.throw(_("The selected Home Institution is not available to your user."), frappe.PermissionError)
 
@@ -491,4 +509,9 @@ def save_instructor(payload: str | dict) -> dict:
 	if not doc.instructor_name:
 		frappe.throw(_("Instructor Name is required."), frappe.ValidationError)
 	doc.save()
-	return _instructor_detail(doc.name)
+	response_branches = {
+		row["name"]
+		for row in allowed_branch_rows
+		if row.get("institution") == institution
+	}
+	return _instructor_detail(doc.name, response_branches)
