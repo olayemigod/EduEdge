@@ -562,13 +562,27 @@ def _classify(plan: list[PlannedAssignment], instructor: str) -> tuple[list, lis
 			None,
 		)
 		if exact:
+			if cint(exact.enabled) != cint(row.enabled):
+				conflicts.append(
+					{
+						"name": exact.name,
+						"row_id": row.row_id,
+						"label": row.label,
+						"reason": _(
+							"Existing assignment status differs. Use the governed Disable or Re-enable Assignment action instead of changing status from the batch planner."
+						),
+						"current_enabled": cint(exact.enabled),
+						"requested_enabled": cint(row.enabled),
+					}
+				)
+				continue
 			existing.append(
 				{
 					"name": exact.name,
 					"row_id": row.row_id,
 					"label": row.label,
 					"enabled": cint(exact.enabled),
-					"requested_enabled": row.enabled,
+					"requested_enabled": cint(row.enabled),
 					"notes": row.notes,
 				}
 			)
@@ -721,13 +735,18 @@ def save_instructor_assignment_batch(payload: str | dict) -> dict:
 	created = [_save_assignment(meta["instructor"], row) for row in create]
 	updated = []
 	for row in existing:
-		if cint(row["enabled"]) == cint(row["requested_enabled"]) and not row.get("notes"):
+		if cint(row["enabled"]) != cint(row["requested_enabled"]):
+			frappe.throw(
+				_(
+					"Existing Instructor Assignment status cannot be changed from the batch planner. Use the governed Disable or Re-enable Assignment action."
+				),
+				frappe.ValidationError,
+			)
+		if not row.get("notes"):
 			continue
 		doc = frappe.get_doc("EduEdge Instructor Assignment", row["name"])
 		doc.check_permission("write")
-		doc.enabled = cint(row["requested_enabled"])
-		if row.get("notes"):
-			doc.notes = row["notes"]
+		doc.notes = row["notes"]
 		doc.save()
 		updated.append({"name": doc.name, "row_id": row["row_id"], "enabled": doc.enabled})
 	return {
