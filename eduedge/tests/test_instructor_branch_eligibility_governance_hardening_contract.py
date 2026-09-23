@@ -20,6 +20,14 @@ DOCTYPE_JSON = (
     / "eduedge_instructor_branch_assignment.json"
 )
 MODAL_RECORDS = APP / "api" / "modal_records.py"
+INSTRUCTOR_ASSIGNMENT_JSON = (
+    APP
+    / "eduedge"
+    / "doctype"
+    / "eduedge_instructor_assignment"
+    / "eduedge_instructor_assignment.json"
+)
+PERMISSION_BASELINE = APP / "permissions_baseline.py"
 NATIVE_FORM = (
     APP
     / "eduedge"
@@ -94,6 +102,20 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             'filters[INSTITUTION_FIELD] = ["in", institution_names]',
         ):
             self.assertIn(token, source)
+
+    def test_instructor_assignment_authoring_is_manager_governed(self):
+        definition = json.loads(INSTRUCTOR_ASSIGNMENT_JSON.read_text(encoding="utf-8"))
+        academics_user = next(
+            row for row in definition.get("permissions", []) if row.get("role") == "Academics User"
+        )
+        self.assertEqual(academics_user.get("read"), 1)
+        self.assertEqual(academics_user.get("report"), 1)
+        self.assertFalse(academics_user.get("create", 0))
+        self.assertFalse(academics_user.get("write", 0))
+
+        baseline = PERMISSION_BASELINE.read_text(encoding="utf-8")
+        self.assertIn('_grant(matrix, "EduEdge Instructor Assignment", managers, MANAGE)', baseline)
+        self.assertIn('_grant(matrix, "EduEdge Instructor Assignment", ACADEMIC_OPERATORS, VIEW)', baseline)
 
     def test_native_form_uses_same_cascading_governance(self):
         source = NATIVE_FORM.read_text(encoding="utf-8")
