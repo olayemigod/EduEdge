@@ -4,7 +4,7 @@ const NAVIGATION_STATE_VERSION = "v1";
 const FAVORITES_STATE_VERSION = "v1";
 const COMPACT_STYLESHEET = "/assets/eduedge/css/eduedge_compact_navigation.css";
 const EDUEDGE_ROUTE_ALIASES = Object.freeze({
-	"/app/eduedge-instructor-branch-assignment": "/app/eduedge-instructor-assignments",
+	"/app/eduedge-instructor-branch-assignment": "/app/eduedge-branch-governance",
 	"/app/eduedge-scheme-of-work": "/app/eduedge-schemes-of-work",
 });
 
