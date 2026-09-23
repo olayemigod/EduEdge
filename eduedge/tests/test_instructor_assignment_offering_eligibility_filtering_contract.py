@@ -32,7 +32,7 @@ class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.Test
             "assignment_eligibility_covers_period",
             "def _offering_available_for_instructor",
             "assignments._period_dates(",
-            "if instructor and not _offering_governed_for_instructor",
+            "if instructor and not _offering_available_for_instructor",
             "continue",
         ):
             self.assertIn(token, source)
