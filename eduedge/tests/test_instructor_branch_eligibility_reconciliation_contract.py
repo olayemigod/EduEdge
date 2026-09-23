@@ -17,6 +17,13 @@ class TestInstructorBranchEligibilityReconciliationContract(unittest.TestCase):
             "No academic assignment supports this eligibility period",
             "active_branch_count",
             "review_required_count",
+            "_require_eligibility_read()",
+            "permission_aware=True",
+            '"support_state"',
+            '"review_classification"',
+            '"provenance"',
+            '"created_by"',
+            '"modified_by"',
         ):
             self.assertIn(token, source)
 
@@ -50,15 +57,34 @@ class TestInstructorBranchEligibilityReconciliationContract(unittest.TestCase):
             "academic_assignment_count",
             '"status": status',
             "Instructor Inactive",
+            "reconciliation_review_required",
+            '"instructor_eligibility_review_required"',
         ):
             self.assertIn(token, service)
         for token in (
             "Instructor Branch Eligibility",
             "academic_assignment_count",
             "linked assignment",
-            "Manage",
+            "Review Eligibility",
+            "reviewInstructorEligibility",
+            "get_instructor_branch_eligibility_review",
+            "disable_unused_instructor_branch_eligibility",
+            'type: "POST"',
+            "Disable unused",
+            "eligibilityReview.reason",
+            "retained in history",
+            "never deleted automatically",
         ):
             self.assertIn(token, component)
+
+
+    def test_review_does_not_probe_out_of_scope_instructor_existence(self):
+        source = (APP / "api" / "instructor_branch_eligibility.py").read_text(encoding="utf-8")
+        review = source.split("def get_instructor_branch_eligibility_review", 1)[1].split(
+            '@frappe.whitelist(methods=["POST"])', 1
+        )[0]
+        self.assertNotIn('frappe.db.exists("Instructor", instructor)', review)
+        self.assertIn('filters={"instructor": instructor, "school_branch": ["in", sorted(allowed)]}', review)
 
     def test_reconciliation_remains_history_safe_and_not_assignment_side_authoring(self):
         alignment = (
