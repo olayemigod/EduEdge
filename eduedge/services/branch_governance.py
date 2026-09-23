@@ -334,12 +334,15 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 	)
 	branch_institution = {row["name"]: row.get("institution") for row in branches if row.get("name")}
 	instructor_names = sorted({row.instructor for row in rows if row.instructor})
+	instructor_fields = ["name", "instructor_name", "status", "employee"]
+	if frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
+		instructor_fields.append(INSTITUTION_FIELD)
 	instructors = {
 		row.name: dict(row)
 		for row in frappe.get_all(
 			"Instructor",
 			filters={"name": ["in", instructor_names]},
-			fields=["name", "instructor_name", "status", "employee", INSTITUTION_FIELD],
+			fields=instructor_fields,
 			limit_page_length=0,
 		)
 	} if instructor_names else {}
