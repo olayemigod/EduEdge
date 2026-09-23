@@ -40,6 +40,18 @@ class TestInstructorAssignmentLifecycleBranchGovernanceContract(unittest.TestCas
             ):
                 self.assertIn(token, source, f"{relative}: {token}")
 
+    def test_governance_validation_precedes_lifecycle_mutation(self):
+        cases = (
+            ("api/instructor_assignment_replacement.py", "source.valid_to = handover"),
+            ("api/instructor_assignment_transfer.py", "source.valid_to = transfer"),
+            ("api/instructor_assignment_preparation.py", 'prepared = frappe.new_doc("EduEdge Instructor Assignment")'),
+        )
+        for relative, mutation in cases:
+            source = (APP / relative).read_text(encoding="utf-8")
+            assert_at = source.index("assert_instructor_branch_eligibility(")
+            mutation_at = source.index(mutation)
+            self.assertLess(assert_at, mutation_at, relative)
+
     def test_service_preview_is_read_only_and_never_promises_mutation(self):
         source = (APP / "services" / "instructor_branch_governance.py").read_text(encoding="utf-8")
         for token in (
