@@ -64,10 +64,15 @@ class EduEdgeInstructorBranchAssignment(Document):
         instructor = frappe.db.get_value("Instructor", self.instructor, fields, as_dict=True)
         if not instructor:
             frappe.throw(_("Select a valid Instructor."), frappe.ValidationError)
-        if cint(self.enabled) and instructor.status != "Active":
+        if (
+            cint(self.enabled)
+            and instructor.status != "Active"
+            and not self._is_narrowing_update()
+        ):
             frappe.throw(
                 _(
-                    "Instructor Branch Eligibility can be enabled only for an active Instructor. Disable the eligibility when closing historical access."
+                    "Instructor Branch Eligibility can be enabled only for an active Instructor. "
+                    "Existing historical eligibility may be shortened or disabled, but cannot be widened."
                 ),
                 frappe.ValidationError,
             )
@@ -84,10 +89,15 @@ class EduEdgeInstructorBranchAssignment(Document):
         )
         if not branch:
             frappe.throw(_("Select a valid School Branch / Campus."), frappe.ValidationError)
-        if cint(self.enabled) and not cint(branch.enabled):
+        if (
+            cint(self.enabled)
+            and not cint(branch.enabled)
+            and not self._is_narrowing_update()
+        ):
             frappe.throw(
                 _(
-                    "Instructor Branch Eligibility can be enabled only for an enabled School Branch / Campus. Disable the eligibility when closing historical access."
+                    "Instructor Branch Eligibility can be enabled only for an enabled School Branch / Campus. "
+                    "Existing historical eligibility may be shortened or disabled, but cannot be widened."
                 ),
                 frappe.ValidationError,
             )
@@ -97,10 +107,14 @@ class EduEdgeInstructorBranchAssignment(Document):
             if getattr(self, "_instructor_row", None)
             else None
         )
-        if cint(self.enabled) and not home_institution:
+        if (
+            cint(self.enabled)
+            and not home_institution
+            and not self._is_narrowing_update()
+        ):
             frappe.throw(
                 _(
-                    "Set the Instructor's Home Institution before enabling Branch Eligibility. "
+                    "Set the Instructor's Home Institution before enabling or widening Branch Eligibility. "
                     "Legacy Instructor profiles must be classified before receiving new academic responsibilities."
                 ),
                 frappe.ValidationError,
@@ -110,6 +124,7 @@ class EduEdgeInstructorBranchAssignment(Document):
             and home_institution
             and branch.institution
             and home_institution != branch.institution
+            and not self._is_narrowing_update()
         ):
             frappe.throw(
                 _(
@@ -118,6 +133,26 @@ class EduEdgeInstructorBranchAssignment(Document):
                 frappe.ValidationError,
             )
         self._branch_row = branch
+
+    def _is_narrowing_update(self) -> bool:
+        before = self.get_doc_before_save()
+        if not before:
+            return False
+        if before.instructor != self.instructor or before.school_branch != self.school_branch:
+            return False
+        if not cint(self.enabled):
+            return True
+        if not cint(before.enabled):
+            return False
+        old_start = getdate(before.valid_from) if before.valid_from else getdate("1900-01-01")
+        new_start = getdate(self.valid_from) if self.valid_from else getdate("1900-01-01")
+        old_end = getdate(before.valid_to) if before.valid_to else getdate("2999-12-31")
+        new_end = getdate(self.valid_to) if self.valid_to else getdate("2999-12-31")
+        if new_start < old_start or new_end > old_end:
+            return False
+        if cint(self.is_primary) > cint(before.is_primary):
+            return False
+        return True
 
     def _lock_instructor_scope(self) -> None:
         # Serialize all eligibility writes for an Instructor so concurrent inserts
