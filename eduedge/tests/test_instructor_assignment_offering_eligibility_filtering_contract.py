@@ -24,24 +24,25 @@ PLANNER_UI = (
 
 
 class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.TestCase):
-    def test_offering_search_filters_by_full_branch_governance_period(self):
+    def test_offering_search_requires_branch_governance_period_overlap(self):
         source = LINK_SEARCH.read_text(encoding="utf-8")
 
         for token in (
+            "assignment_eligibility_overlaps_period",
             "assignment_eligibility_covers_period",
-            "def _offering_governed_for_instructor",
+            "def _offering_available_for_instructor",
             "assignments._period_dates(",
             "if instructor and not _offering_governed_for_instructor",
             "continue",
         ):
             self.assertIn(token, source)
 
-    def test_dependent_searches_reject_offering_outside_governed_period(self):
+    def test_dependent_searches_reject_offering_without_governed_period_overlap(self):
         source = LINK_SEARCH.read_text(encoding="utf-8")
 
         for token in (
             "def _assert_offering_period_governance",
-            "falls outside this Instructor's Branch Governance eligibility period",
+            "does not overlap this Instructor's Branch Governance eligibility period",
             "def search_assignment_class_arms",
             "def search_assignment_courses",
         ):
@@ -101,6 +102,7 @@ class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.Test
 
         for token in (
             "def _filter_planner_options_by_instructor",
+            "assignment_eligibility_overlaps_period(",
             "assignment_eligibility_covers_period(",
             "governed_offerings",
             "governed_groups",
@@ -125,7 +127,7 @@ class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.Test
             "program_offering: governedOffering",
             "student_groups: governedOffering && preset.student_group",
             "courses: governedOffering && preset.course",
-            "falls outside this Instructor's Branch Governance eligibility period",
+            "does not overlap this Instructor's Branch Governance eligibility period",
         ):
             self.assertIn(token, source)
 
@@ -143,6 +145,17 @@ class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.Test
         self.assertIn("instructor=instructor", offering_query)
         self.assertIn("instructor=instructor", class_arm_query)
         self.assertIn("_assert_offering_period_governance(instructor, branch, offering)", course_query)
+
+        native = (
+            APP
+            / "eduedge"
+            / "doctype"
+            / "eduedge_instructor_assignment"
+            / "eduedge_instructor_assignment.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("get_assignment_offering_context", native)
+        self.assertIn("branch_eligibility_full_period === false", native)
+        self.assertIn('await clearFields(frm, ["student_group", "course", "valid_from", "valid_to"])', native)
 
 
 if __name__ == "__main__":
