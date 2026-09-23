@@ -9,6 +9,7 @@ from eduedge.api.instructor_branch_eligibility import (
     get_instructor_branch_eligibility_review,
 )
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.services.academic_calendar import ensure_institution_calendar
 
 
 class TestInstructorBranchEligibilityReconciliation(FrappeTestCase):
@@ -93,6 +94,14 @@ class TestInstructorBranchEligibilityReconciliation(FrappeTestCase):
             year_start_date="2094-09-01",
             year_end_date="2095-08-31",
         )
+        self._insert(
+            "Academic Term",
+            academic_year=year.name,
+            term_name=f"QA Eligibility Term {self.suffix}",
+            term_start_date="2094-09-01",
+            term_end_date="2095-08-31",
+        )
+        ensure_institution_calendar(institution.name, year.name)
         department = self._insert(
             "Department",
             department_name=f"QA Eligibility Section {self.suffix}",
