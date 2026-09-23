@@ -553,11 +553,6 @@ def transfer_instructor_assignment(
             transfer_date,
             reason,
         )
-        if plan["conflict_count"]:
-            frappe.throw(
-                _("Transfer plan has {0} conflict(s). Resolve them before saving.").format(plan["conflict_count"]),
-                frappe.ValidationError,
-            )
 
         transfer = getdate(plan["transfer_date"])
         destination = plan["destination"]
@@ -572,6 +567,11 @@ def transfer_instructor_assignment(
             successor_end,
             label=_("Transferred Instructor Assignment"),
         )
+        if plan["conflict_count"]:
+            frappe.throw(
+                _("Transfer plan has {0} conflict(s). Resolve them before saving.").format(plan["conflict_count"]),
+                frappe.ValidationError,
+            )
 
         source.valid_to = transfer
         source.ended_on = transfer
