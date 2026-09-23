@@ -79,5 +79,35 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         self.assertNotIn("room: null", hydrate_body)
 
 
+
+    def test_limited_instructor_list_scope_matches_exact_schedule_ownership(self):
+        source = (APP / "education" / "permissions.py").read_text(encoding="utf-8")
+        for token in (
+            "def _schedule_assignment_condition",
+            "Branches that have not adopted Academic Instructor Assignments keep the legacy",
+            "from `tabEduEdge Instructor Assignment` branch_assignment",
+            "assignment.program_offering = student_group.",
+            "assignment.course =",
+            "assignment.assignment_type in",
+            "assignment.enabled = 1",
+            "assignment.valid_from is null",
+            "assignment.valid_to is null",
+            "from `tabEduEdge Instructor Branch Assignment` eligibility",
+            "eligibility.enabled = 1",
+            '_schedule_assignment_condition("`tabCourse Schedule`", resolved_user)',
+            'where schedule.name = `tabStudent Attendance`.course_schedule',
+            'where schedule.student_group = `tabStudent Group`.name',
+            "return any(instructor_owns_schedule(schedule, resolved_user) for schedule in schedules)",
+        ):
+            self.assertIn(token, source)
+
+        schedule_query = source.split("def course_schedule_query", 1)[1].split(
+            "def student_attendance_query", 1
+        )[0]
+        self.assertNotIn(
+            'return _and_conditions(branch_condition, f"`tabCourse Schedule`.instructor in',
+            schedule_query,
+        )
+
 if __name__ == "__main__":
     unittest.main()
