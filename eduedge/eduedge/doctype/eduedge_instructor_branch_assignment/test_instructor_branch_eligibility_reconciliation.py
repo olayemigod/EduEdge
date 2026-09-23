@@ -4,6 +4,7 @@ import frappe
 from education.education.test_utils import before_tests
 from frappe.tests.utils import FrappeTestCase
 
+from eduedge.api.class_arms import save_class_arm
 from eduedge.api.instructor_branch_eligibility import (
     disable_unused_instructor_branch_eligibility,
     get_instructor_branch_eligibility_review,
@@ -126,14 +127,22 @@ class TestInstructorBranchEligibilityReconciliation(FrappeTestCase):
             delivery_mode="Onsite",
             is_active=1,
         )
+        class_arm = save_class_arm(
+            display_name=f"QA Eligibility Class Arm {self.suffix}",
+            branch=branch.name,
+            offering=offering.name,
+            group_based_on="Batch",
+            students=[],
+        )
         return self._insert(
             "EduEdge Instructor Assignment",
             instructor=instructor.name,
             assignment_type="Class Teacher",
-            assignment_scope="Class / Programme Offering",
+            assignment_scope="Class Arm",
             institution=institution.name,
             school_branch=branch.name,
             program_offering=offering.name,
+            student_group=class_arm["name"],
             enabled=1,
         )
 
