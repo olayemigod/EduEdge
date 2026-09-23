@@ -160,6 +160,22 @@ def _resolve_filters(institution: str | None, branch: str | None) -> tuple[str, 
 	return resolved_institution, resolved_branch, institutions, branches
 
 
+def _scoped_branch_names(institution: str, branch: str, branches: list[dict]) -> set[str] | None:
+	"""Return Branches visible in the selected Instructor page context.
+
+	None is reserved for the explicit global All Institutions view. Every
+	other context returns an exact Branch set, including an empty set.
+	"""
+	if institution == ALL_INSTITUTIONS_KEY and not branch:
+		return None
+	return {
+		row["name"]
+		for row in branches
+		if (not institution or row.get("institution") == institution)
+		and (not branch or row["name"] == branch)
+	}
+
+
 def _operational_instructor_names(institution: str, branch: str, branches: list[dict]) -> set[str] | None:
 	if institution == ALL_INSTITUTIONS_KEY and not branch:
 		return None
@@ -245,17 +261,22 @@ def _summarise_branch_eligibility(rows: list[dict]) -> list[dict]:
 	)
 
 
-def _instructor_detail(name: str) -> dict:
+def _instructor_detail(name: str, branch_names: set[str] | None = None) -> dict:
 	doc = frappe.get_doc("Instructor", name)
 	doc.check_permission("read")
 	result = doc.as_dict(no_nulls=False)
-	governed_primary = primary_branch(doc.name)
-	result[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary
-	result["primary_branch_governed"] = governed_primary
 	result["identity"] = get_instructor_identity_state(doc.name)
+
+	assignment_filters: dict[str, Any] = {"instructor": doc.name}
+	eligibility_filters: dict[str, Any] = {"instructor": doc.name}
+	if branch_names is not None:
+		branch_filter = ["in", sorted(branch_names)] if branch_names else ["in", ["__none__"]]
+		assignment_filters["school_branch"] = branch_filter
+		eligibility_filters["school_branch"] = branch_filter
+
 	result["assignments"] = frappe.get_list(
 		"EduEdge Instructor Assignment",
-		filters={"instructor": doc.name},
+		filters=assignment_filters,
 		fields=[
 			"name", "assignment_title", "institution", "school_branch", "program_offering",
 			"student_group", "course", "assignment_type", "assignment_scope", "enabled",
@@ -265,15 +286,28 @@ def _instructor_detail(name: str) -> dict:
 	) if frappe.db.exists("DocType", "EduEdge Instructor Assignment") else []
 	periods = frappe.get_list(
 		"EduEdge Instructor Branch Assignment",
-		filters={"instructor": doc.name},
+		filters=eligibility_filters,
 		fields=["name", "school_branch", "is_primary", "enabled", "valid_from", "valid_to"],
 		order_by="is_primary desc, school_branch asc, valid_from asc",
 		limit_page_length=500,
 	) if frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment") else []
+
+	if branch_names is None:
+		governed_primary = primary_branch(doc.name)
+	else:
+		governed_primary = next(
+			(
+				row.school_branch
+				for row in periods
+				if cint(row.enabled) and cint(row.is_primary)
+			),
+			"",
+		)
+	result[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary
+	result["primary_branch_governed"] = governed_primary
 	result["branch_eligibility_periods"] = periods
 	result["branch_eligibility"] = _summarise_branch_eligibility(periods)
 	return result
-
 
 def _departments(institution: str) -> list[dict]:
 	if not institution or institution == ALL_INSTITUTIONS_KEY or not frappe.has_permission("Department", "read"):
@@ -326,6 +360,13 @@ def get_instructors_page(
 	_require_permission("read")
 	resolved_institution, resolved_branch, institutions, branches = _resolve_filters(institution, branch)
 	operational_names = _operational_instructor_names(resolved_institution, resolved_branch, branches)
+	detail_branch_names = _scoped_branch_names(resolved_institution, resolved_branch, branches)
+	selected_instructor_name = str(instructor or "").strip()
+	if selected_instructor_name and operational_names is not None and selected_instructor_name not in operational_names:
+		frappe.throw(
+			_("The selected Instructor is outside the current Institution / Branch scope."),
+			frappe.PermissionError,
+		)
 	filters: dict[str, Any] = {}
 	if operational_names is not None:
 		filters["name"] = ["in", sorted(operational_names)] if operational_names else ["in", ["__none__"]]
@@ -381,7 +422,7 @@ def get_instructors_page(
 		"selected_branch": selected_branch,
 		"filters": {"institution": resolved_institution, "branch": resolved_branch},
 		"instructors": rows,
-		"instructor": _instructor_detail(instructor) if instructor else None,
+		"instructor": _instructor_detail(selected_instructor_name, detail_branch_names) if selected_instructor_name else None,
 		"departments": _departments(resolved_institution),
 		"employees": _employee_options(resolved_institution),
 		"genders": frappe.get_list("Gender", fields=["name"], order_by="name asc", limit_page_length=100),
