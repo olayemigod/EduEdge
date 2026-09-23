@@ -57,6 +57,16 @@ class TestInstructorProfileScopeHardeningContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_list_rows_mask_primary_branch_outside_visible_scope(self):
+        source = self._source()
+
+        for token in (
+            "governed_primary = primary_branch(row.name)",
+            "detail_branch_names is not None and governed_primary not in detail_branch_names",
+            'row[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary',
+        ):
+            self.assertIn(token, source)
+
     def test_existing_profile_write_checks_current_scope_before_mutation(self):
         source = self._source()
 
