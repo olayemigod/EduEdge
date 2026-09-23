@@ -17,6 +17,7 @@ class TestInstructorHomeInstitutionGovernanceContract(unittest.TestCase):
             "require_home=True",
             "Instructor Home Institution is required before creating a new academic responsibility",
             "The selected Branch is outside the Instructor Home Institution",
+            "The Instructor Home Institution is disabled or unavailable",
         ):
             self.assertIn(token, source)
 
@@ -74,6 +75,7 @@ class TestInstructorHomeInstitutionGovernanceContract(unittest.TestCase):
         for token in (
             "Needs Home Institution",
             "Institution Mismatch",
+            "Home Institution Disabled",
             "governance_note",
             "instructor_fields",
             "has_field(INSTITUTION_FIELD)",
@@ -84,6 +86,7 @@ class TestInstructorHomeInstitutionGovernanceContract(unittest.TestCase):
             "eligibility.governance_note",
             "Needs Home Institution",
             "Institution Mismatch",
+            "Home Institution Disabled",
         ):
             self.assertIn(token, component)
 
