@@ -326,11 +326,10 @@ def get_instructor_assignment_register_page(
         not selected_instructor or str(selected_instructor.get("status") or "") == "Active"
     )
 
-    governed_names = (
-        eligible_branch_names(instructor, within=permitted_names)
-        if instructor and authoring_available
-        else set()
-    )
+    governed_names = eligible_branch_names(
+        instructor,
+        within=permitted_names,
+    ) if instructor and authoring_available else set()
     governed = [row for row in permitted if _row_name(row) in governed_names]
     governed_name_list = [_row_name(row) for row in governed if _row_name(row)]
 
