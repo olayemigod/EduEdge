@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from eduedge.api.instructor_assignment_capabilities import get_capability_enforcement_settings_summary
 from eduedge.platform.access import require_eduedge_access
 from eduedge.platform.runtime_context import get_product_identity
 from eduedge.services.branch_context import get_allowed_school_branches, is_branch_access_enforced
@@ -28,6 +29,11 @@ TAB_CONFIG = {
 		"fields": [
 			{"fieldname": "allow_hq_all_branch_view", "label": _("Allow Authorised HQ All-Branch View"), "type": "Check"},
 		],
+	},
+	"assignment_capabilities": {
+		"label": _("Instructor Capabilities"),
+		"description": _("Review exact Instructor Assignment capabilities and activate enforcement only after identity and current-assignment readiness checks pass."),
+		"fields": [],
 	},
 	"report_cards": {
 		"label": _("Report Cards"),
@@ -152,6 +158,7 @@ def get_settings_center() -> dict:
 			"enabled": is_branch_access_enforced(),
 			"manage_route": "/app/eduedge-branch-governance",
 		},
+		"capability_enforcement": get_capability_enforcement_settings_summary(),
 	}
 
 
