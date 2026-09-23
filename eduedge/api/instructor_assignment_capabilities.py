@@ -9,17 +9,362 @@ from eduedge.education.instructor_assignment_capabilities import (
     ASSIGNMENT_DOCTYPE,
     CAPABILITY_FIELDS,
     CAPABILITY_LABELS,
+    assignment_capability_enforcement_enabled,
     get_instructor_assignment_capability_state,
+)
+from eduedge.education.instructor_scope import (
+    INSTRUCTOR_SCOPE_BYPASS_ROLES,
+    LIMITED_INSTRUCTOR_ROLES,
 )
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import COURSE_REQUIRED_TYPES
 from eduedge.platform.access import require_eduedge_access
+from eduedge.services.branch_context import get_allowed_school_branches
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 CAPABILITY_AUDIT_FIELDS = (
     "capabilities_updated_on",
     "capabilities_updated_by",
     "capabilities_update_reason",
 )
+
+
+GLOBAL_CAPABILITY_ADMIN_ROLES = {
+    "System Manager",
+    "EduEdge Super Administrator",
+    "EduEdge Administrator",
+}
+READINESS_DETAIL_LIMIT = 100
+
+
+def _capability_enforcement_has_full_scope(user: str | None = None) -> bool:
+    resolved_user = user or frappe.session.user
+    roles = set(frappe.get_roles(resolved_user))
+    if roles.intersection(GLOBAL_CAPABILITY_ADMIN_ROLES):
+        return True
+    all_branches = set(
+        frappe.get_all(
+            "EduEdge School Branch",
+            filters={"enabled": 1},
+            pluck="name",
+            limit_page_length=0,
+        )
+    )
+    if not all_branches:
+        return False
+    allowed = {
+        str(row.get("name") or "").strip()
+        for row in get_allowed_school_branches(user=resolved_user)
+        if str(row.get("name") or "").strip()
+    }
+    return all_branches == allowed
+
+
+def _can_manage_capability_enforcement(user: str | None = None) -> bool:
+    resolved_user = user or frappe.session.user
+    if not resolved_user or resolved_user == "Guest":
+        return False
+    if not frappe.has_permission("EduEdge Settings", "write", user=resolved_user):
+        return False
+    return _capability_enforcement_has_full_scope(resolved_user)
+
+
+def _require_capability_enforcement_admin() -> None:
+    if not _can_manage_capability_enforcement():
+        frappe.throw(
+            _(
+                "Changing Instructor Assignment Capability Enforcement requires EduEdge Settings write access and visibility across every enabled Branch / Campus."
+            ),
+            frappe.PermissionError,
+        )
+
+
+def _limited_instructor_user_rows() -> list[dict]:
+    relevant_roles = sorted(set(LIMITED_INSTRUCTOR_ROLES).union(INSTRUCTOR_SCOPE_BYPASS_ROLES))
+    role_rows = frappe.get_all(
+        "Has Role",
+        filters={"parenttype": "User", "role": ["in", relevant_roles]},
+        fields=["parent", "role"],
+        limit_page_length=0,
+    )
+    roles_by_user: dict[str, set[str]] = {}
+    for row in role_rows:
+        roles_by_user.setdefault(str(row.parent), set()).add(str(row.role))
+    candidate_names = sorted(
+        user
+        for user, roles in roles_by_user.items()
+        if roles.intersection(LIMITED_INSTRUCTOR_ROLES)
+        and not roles.intersection(INSTRUCTOR_SCOPE_BYPASS_ROLES)
+    )
+    if not candidate_names:
+        return []
+    return [
+        dict(row)
+        for row in frappe.get_all(
+            "User",
+            filters={"name": ["in", candidate_names], "enabled": 1},
+            fields=["name", "full_name"],
+            order_by="full_name asc, name asc",
+            limit_page_length=0,
+        )
+    ]
+
+
+def _identity_readiness(users: list[dict]) -> tuple[dict[str, str], list[dict]]:
+    user_names = [row["name"] for row in users if row.get("name")]
+    if not user_names:
+        return {}, []
+    employees = frappe.get_all(
+        "Employee",
+        filters={"user_id": ["in", user_names], "status": "Active"},
+        fields=["name", "employee_name", "user_id"],
+        limit_page_length=0,
+    )
+    employees_by_user: dict[str, list] = {}
+    for row in employees:
+        employees_by_user.setdefault(str(row.user_id), []).append(row)
+
+    employee_names = [row.name for row in employees if row.name]
+    instructors = (
+        frappe.get_all(
+            "Instructor",
+            filters={"employee": ["in", employee_names], "status": "Active"},
+            fields=["name", "instructor_name", "employee"],
+            limit_page_length=0,
+        )
+        if employee_names
+        else []
+    )
+    employee_to_user = {row.name: str(row.user_id) for row in employees if row.name and row.user_id}
+    instructors_by_user: dict[str, list] = {}
+    for row in instructors:
+        user = employee_to_user.get(row.employee)
+        if user:
+            instructors_by_user.setdefault(user, []).append(row)
+
+    ready: dict[str, str] = {}
+    blockers: list[dict] = []
+    for user in users:
+        name = str(user.get("name") or "")
+        active_employees = employees_by_user.get(name, [])
+        active_instructors = instructors_by_user.get(name, [])
+        reason = ""
+        if len(active_employees) == 0:
+            reason = _("No active Employee is linked to this User.")
+        elif len(active_employees) > 1:
+            reason = _("More than one active Employee is linked to this User.")
+        elif len(active_instructors) == 0:
+            reason = _("No active Instructor is linked through this User's active Employee.")
+        elif len(active_instructors) > 1:
+            reason = _("More than one active Instructor resolves from this User.")
+        if reason:
+            blockers.append(
+                {
+                    "type": "identity",
+                    "user": name,
+                    "label": user.get("full_name") or name,
+                    "reason": reason,
+                    "active_employee_count": len(active_employees),
+                    "active_instructor_count": len(active_instructors),
+                }
+            )
+            continue
+        ready[name] = active_instructors[0].name
+    return ready, blockers
+
+
+def _assignment_is_effective(row, today) -> bool:
+    if row.get("valid_from") and getdate(row.get("valid_from")) > today:
+        return False
+    if row.get("valid_to") and getdate(row.get("valid_to")) < today:
+        return False
+    return True
+
+
+def _capability_enforcement_readiness() -> dict:
+    users = _limited_instructor_user_rows()
+    ready_identity, identity_blockers = _identity_readiness(users)
+    instructor_names = sorted(set(ready_identity.values()))
+    assignments = (
+        frappe.get_all(
+            ASSIGNMENT_DOCTYPE,
+            filters={
+                "instructor": ["in", instructor_names],
+                "assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)],
+                "enabled": 1,
+            },
+            fields=[
+                "name",
+                "assignment_title",
+                "instructor",
+                "school_branch",
+                "program_offering",
+                "student_group",
+                "course",
+                "valid_from",
+                "valid_to",
+                *CAPABILITY_AUDIT_FIELDS,
+                *CAPABILITY_FIELDS,
+            ],
+            order_by="school_branch asc, instructor asc, valid_from asc",
+            limit_page_length=0,
+        )
+        if instructor_names
+        else []
+    )
+    today = getdate(nowdate())
+    current_rows = []
+    scheduled_rows = []
+    governance_blockers = []
+    unreviewed_blockers = []
+    future_unreviewed = []
+    eligibility_cache: dict[tuple[str, str], bool] = {}
+
+    for source in assignments:
+        row = dict(source)
+        if row.get("valid_to") and getdate(row.get("valid_to")) < today:
+            continue
+        if row.get("valid_from") and getdate(row.get("valid_from")) > today:
+            scheduled_rows.append(row)
+            if not row.get("capabilities_updated_on"):
+                future_unreviewed.append(
+                    {
+                        "type": "future-unreviewed",
+                        "assignment": row.get("name"),
+                        "label": row.get("assignment_title") or row.get("name"),
+                        "school_branch": row.get("school_branch"),
+                        "valid_from": str(row.get("valid_from") or ""),
+                        "reason": _("Future Subject responsibility has not had its capabilities explicitly reviewed."),
+                    }
+                )
+            continue
+        if not _assignment_is_effective(row, today):
+            continue
+        current_rows.append(row)
+        eligibility_key = (str(row.get("instructor") or ""), str(row.get("school_branch") or ""))
+        if eligibility_key not in eligibility_cache:
+            eligibility_cache[eligibility_key] = eligibility_covers_period(
+                eligibility_key[0],
+                eligibility_key[1],
+                today,
+                today,
+            )
+        if not eligibility_cache[eligibility_key]:
+            governance_blockers.append(
+                {
+                    "type": "branch-eligibility",
+                    "assignment": row.get("name"),
+                    "label": row.get("assignment_title") or row.get("name"),
+                    "instructor": row.get("instructor"),
+                    "school_branch": row.get("school_branch"),
+                    "reason": _("Current Subject responsibility is not covered by effective Instructor Branch Eligibility."),
+                }
+            )
+        if not row.get("capabilities_updated_on"):
+            unreviewed_blockers.append(
+                {
+                    "type": "capability-review",
+                    "assignment": row.get("name"),
+                    "label": row.get("assignment_title") or row.get("name"),
+                    "instructor": row.get("instructor"),
+                    "school_branch": row.get("school_branch"),
+                    "course": row.get("course"),
+                    "reason": _("Current Subject responsibility has not had its capabilities explicitly reviewed."),
+                }
+            )
+
+    blockers = [*identity_blockers, *governance_blockers, *unreviewed_blockers]
+    warnings = future_unreviewed
+    return {
+        "enabled": assignment_capability_enforcement_enabled(),
+        "ready": not blockers,
+        "can_manage": _can_manage_capability_enforcement(),
+        "counts": {
+            "limited_instructor_users": len(users),
+            "identity_ready_users": len(ready_identity),
+            "identity_blockers": len(identity_blockers),
+            "current_subject_assignments": len(current_rows),
+            "current_unreviewed_assignments": len(unreviewed_blockers),
+            "current_branch_eligibility_blockers": len(governance_blockers),
+            "future_subject_assignments": len(scheduled_rows),
+            "future_unreviewed_assignments": len(future_unreviewed),
+        },
+        "blockers": blockers[:READINESS_DETAIL_LIMIT],
+        "warnings": warnings[:READINESS_DETAIL_LIMIT],
+        "details_truncated": len(blockers) > READINESS_DETAIL_LIMIT or len(warnings) > READINESS_DETAIL_LIMIT,
+        "manage_route": "/app/eduedge-instructor-assignments",
+    }
+
+
+def get_capability_enforcement_settings_summary() -> dict:
+    """Return Settings Center-safe status without leaking global readiness details."""
+    enabled = assignment_capability_enforcement_enabled()
+    if not _can_manage_capability_enforcement():
+        return {
+            "enabled": enabled,
+            "ready": False,
+            "can_manage": False,
+            "counts": {},
+            "blockers": [],
+            "warnings": [],
+            "details_truncated": False,
+            "manage_route": "/app/eduedge-instructor-assignments",
+        }
+    return _capability_enforcement_readiness()
+
+
+@frappe.whitelist()
+def get_instructor_assignment_capability_enforcement_readiness() -> dict:
+    _require_capability_enforcement_admin()
+    require_eduedge_access(
+        feature_key="academics",
+        action="view_instructor_assignment_capability_enforcement_readiness",
+    )
+    return _capability_enforcement_readiness()
+
+
+@frappe.whitelist(methods=["POST"])
+def set_instructor_assignment_capability_enforcement(
+    enabled: int | str,
+    confirmed: int | str = 0,
+) -> dict:
+    _require_capability_enforcement_admin()
+    require_eduedge_access(
+        feature_key="academics",
+        action="set_instructor_assignment_capability_enforcement",
+    )
+    if not cint(confirmed):
+        frappe.throw(
+            _("Confirm the Instructor Assignment capability enforcement change before continuing."),
+            frappe.ValidationError,
+        )
+    target = bool(cint(enabled))
+    current = assignment_capability_enforcement_enabled()
+    readiness = _capability_enforcement_readiness()
+    if target and not readiness.get("ready"):
+        counts = readiness.get("counts") or {}
+        frappe.throw(
+            _(
+                "Capability enforcement cannot be enabled until readiness blockers are resolved. Identity blockers: {0}; unreviewed current Subject assignments: {1}; Branch Eligibility blockers: {2}."
+            ).format(
+                counts.get("identity_blockers", 0),
+                counts.get("current_unreviewed_assignments", 0),
+                counts.get("current_branch_eligibility_blockers", 0),
+            ),
+            frappe.ValidationError,
+        )
+    if current == target:
+        return readiness
+
+    settings = frappe.get_single("EduEdge Settings")
+    settings.check_permission("write")
+    settings.enforce_instructor_assignment_capabilities = int(target)
+    frappe.flags.in_eduedge_capability_enforcement_change = True
+    try:
+        settings.save()
+    finally:
+        frappe.flags.in_eduedge_capability_enforcement_change = False
+    return _capability_enforcement_readiness()
 
 
 def _assignment_names(names: str | list | tuple | None) -> list[str]:
@@ -193,7 +538,7 @@ def update_instructor_assignment_capabilities(
             frappe.throw(block_reason, frappe.ValidationError)
 
         before = {fieldname: cint(doc.get(fieldname)) for fieldname in CAPABILITY_FIELDS}
-        if before == resolved_capabilities:
+        if before == resolved_capabilities and doc.capabilities_updated_on:
             return {
                 "name": doc.name,
                 "action": "already-configured",
@@ -219,17 +564,21 @@ def update_instructor_assignment_capabilities(
             for fieldname in CAPABILITY_FIELDS
             if before.get(fieldname) != resolved_capabilities.get(fieldname)
         ]
+        reviewed_without_value_change = not changed
         doc.add_comment(
             "Info",
-            _("Instructor Assignment capabilities updated: {0}. Reason: {1}").format(
-                ", ".join(changed) or _("No capability changes"),
+            _(
+                "Instructor Assignment capabilities {0}: {1}. Reason: {2}"
+            ).format(
+                _("reviewed") if reviewed_without_value_change else _("updated"),
+                ", ".join(changed) or _("explicitly reviewed with no capability grants"),
                 resolved_reason,
             ),
         )
         return {
             "name": doc.name,
             "assignment_title": doc.assignment_title,
-            "action": "capabilities-updated",
+            "action": "capabilities-reviewed" if reviewed_without_value_change else "capabilities-updated",
             "capabilities": resolved_capabilities,
             "capability_version": str(doc.modified or ""),
             "capabilities_updated_on": str(doc.capabilities_updated_on or ""),
