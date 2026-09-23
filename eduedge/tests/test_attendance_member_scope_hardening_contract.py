@@ -6,6 +6,10 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "eduedge"
 API = APP / "api" / "academic_operations.py"
 FORM = APP / "public" / "js" / "education" / "student_attendance.js"
+HOOKS = APP / "hooks.py"
+SAFE = APP / "api" / "academic_operations_safe.py"
+REVIEW = APP / "api" / "academic_operations_review.py"
+INTEGRATION = APP / "api" / "integration_qa_hardening.py"
 
 
 class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
@@ -101,6 +105,94 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         self.assertIn("doc.save()", block)
         self.assertIn("doc.submit()", block)
         self.assertNotIn("ignore_permissions", block)
+
+
+    def test_live_attendance_routes_use_safe_runtime_overrides(self):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        for token in (
+            '"eduedge.api.academic_operations.get_operations_context": "eduedge.api.integration_qa_hardening.get_operations_context"',
+            '"eduedge.api.academic_operations.get_attendance_register": "eduedge.api.academic_operations_safe.get_attendance_register"',
+            '"eduedge.api.academic_operations.save_attendance_register": "eduedge.api.academic_operations_safe.save_attendance_register"',
+        ):
+            self.assertIn(token, hooks)
+
+        review = REVIEW.read_text(encoding="utf-8")
+        integration = INTEGRATION.read_text(encoding="utf-8")
+        self.assertIn(
+            "payload = safe.get_operations_context(branch=branch, date=date, student_group=student_group)",
+            review,
+        )
+        self.assertIn(
+            "payload = academic_operations_review.get_operations_context(",
+            integration,
+        )
+
+    def test_safe_runtime_register_revalidates_group_and_schedule_permissions(self):
+        source = SAFE.read_text(encoding="utf-8")
+        register = source.split("def get_attendance_register", 1)[1].split(
+            "@frappe.whitelist()\n@guard_eduedge_action",
+            1,
+        )[0]
+        resolver = source.split("def _resolve_register_schedule", 1)[1].split(
+            "@frappe.whitelist()\ndef get_attendance_register",
+            1,
+        )[0]
+        schedule = source.split("def _get_schedule_row", 1)[1].split(
+            "def _resolve_register_schedule",
+            1,
+        )[0]
+
+        for token in (
+            'group_doc = frappe.get_doc("Student Group", student_group)',
+            'group_doc.check_permission("read")',
+            "base.assert_branch_access(branch)",
+        ):
+            self.assertIn(token, register)
+
+        for token in (
+            'doc = frappe.get_doc("Course Schedule", course_schedule)',
+            'doc.check_permission("read")',
+        ):
+            self.assertIn(token, schedule)
+
+        for token in (
+            "limited_instructor = is_limited_instructor_user()",
+            'filters["instructor"] = ["in", get_user_instructor_names(required=True)]',
+            'frappe.get_list(',
+            '"Course Schedule"',
+            "More than one Course Schedule exists for this Class and date.",
+            "Attendance can only be recorded against a Course Schedule assigned to your Instructor profile.",
+        ):
+            self.assertIn(token, resolver)
+
+    def test_safe_runtime_attendance_reads_and_writes_remain_permission_aware(self):
+        source = SAFE.read_text(encoding="utf-8")
+        summary = source.split("def _attendance_summary", 1)[1].split(
+            "def _room_usage",
+            1,
+        )[0]
+        coverage = source.split("def _attendance_coverage", 1)[1].split(
+            "def _attendance_summary",
+            1,
+        )[0]
+        save = source.split("def save_attendance_register", 1)[1]
+
+        for block in (summary, coverage):
+            self.assertIn('frappe.get_list(', block)
+            self.assertIn('"Student Attendance"', block)
+            self.assertNotIn("frappe.get_all(", block)
+
+        for token in (
+            'permissions["can_write_attendance"]',
+            'permissions["can_create_attendance"]',
+            'permissions["can_submit_attendance"]',
+            'doc.check_permission("write")',
+            'doc.check_permission("submit")',
+            "doc.save()",
+            "doc.submit()",
+        ):
+            self.assertIn(token, save)
+        self.assertNotIn("ignore_permissions", save)
 
 
 if __name__ == "__main__":
