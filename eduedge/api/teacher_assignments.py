@@ -19,7 +19,7 @@ from eduedge.platform.access import require_eduedge_access
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
 BRANCH_ONLY_SCOPE = "Branch Access Only"
-BULK_SCOPES = (BRANCH_ONLY_SCOPE, CLASS_SCOPE, CLASS_ARM_SCOPE)
+BULK_SCOPES = (CLASS_SCOPE, CLASS_ARM_SCOPE)
 ASSIGNMENT_TYPES = (
 	"Class Teacher",
 	"Subject Teacher",
@@ -524,116 +524,21 @@ def _classify_existing(plan: list[PlannedAssignment], meta: dict) -> tuple[list[
 @frappe.whitelist(methods=["POST"])
 def preview_teacher_assignment_batch(payload: str | dict) -> dict:
 	_require_read()
-	plan, skipped, meta = _plan(_parse_payload(payload))
-	create, existing, conflicts = _classify_existing(plan, meta)
-	return {
-		"scope": meta["assignment_scope"],
-		"branch_count": len(meta["branches"]),
-		"valid_combinations": len(plan),
-		"create_count": len(create),
-		"existing_count": len(existing),
-		"skipped_count": len(skipped),
-		"conflict_count": len(conflicts),
-		"create": [asdict(row) for row in create],
-		"existing": existing,
-		"skipped": skipped,
-		"conflicts": conflicts,
-	}
-
-
-def _ensure_branch_assignment(instructor: str, branch: str, valid_from, valid_to, make_primary: bool) -> tuple[str, str]:
-	name = frappe.db.exists(
-		"EduEdge Instructor Branch Assignment",
-		{"instructor": instructor, "school_branch": branch},
+	frappe.throw(
+		_(
+			"The legacy Teacher Assignment matrix has been retired. Refresh EduEdge and use Instructor Assignments, which consumes Branch Governance eligibility and explicit responsibility rows."
+		),
+		frappe.ValidationError,
 	)
-	if name:
-		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", name)
-		doc.check_permission("write")
-		old_start = getdate(doc.valid_from) if doc.valid_from else None
-		new_start = getdate(valid_from) if valid_from else None
-		if new_start and (not old_start or new_start < old_start):
-			doc.valid_from = valid_from
-		if not doc.valid_to or not valid_to:
-			doc.valid_to = None
-		elif getdate(valid_to) > getdate(doc.valid_to):
-			doc.valid_to = valid_to
-		doc.enabled = 1
-		doc.save()
-		return doc.name, "updated"
-	if not frappe.has_permission("EduEdge Instructor Branch Assignment", "create"):
-		frappe.throw(_("You are not permitted to create Branch access for Teachers."), frappe.PermissionError)
-	doc = frappe.new_doc("EduEdge Instructor Branch Assignment")
-	doc.instructor = instructor
-	doc.school_branch = branch
-	doc.enabled = 1
-	doc.is_primary = 1 if make_primary else 0
-	doc.valid_from = valid_from
-	doc.valid_to = valid_to
-	doc.save()
-	return doc.name, "created"
 
 
 @frappe.whitelist(methods=["POST"])
 def save_teacher_assignment_batch(payload: str | dict) -> dict:
 	require_eduedge_access(feature_key="academics", action="save_teacher_assignment_batch")
-	data = _parse_payload(payload)
-	plan, skipped, meta = _plan(data)
-	if meta["assignment_scope"] != BRANCH_ONLY_SCOPE and not frappe.has_permission("EduEdge Instructor Assignment", "create"):
-		frappe.throw(_("You are not permitted to create Teacher Assignments."), frappe.PermissionError)
-	create, existing, conflicts = _classify_existing(plan, meta)
-	if conflicts:
-		frappe.throw(
-			_("Teacher Assignment batch has {0} overlapping conflict(s). Resolve the existing assignments before saving.").format(len(conflicts)),
-			frappe.ValidationError,
-		)
-	primary_exists = frappe.db.exists(
-		"EduEdge Instructor Branch Assignment",
-		{"instructor": meta["instructor"], "is_primary": 1, "enabled": 1},
+	frappe.throw(
+		_(
+			"The legacy Teacher Assignment matrix cannot save assignments or Branch Eligibility. Refresh EduEdge and use Instructor Assignments; manage eligibility in Branch Governance first."
+		),
+		frappe.ValidationError,
 	)
-	branch_results: list[dict] = []
-	for index, branch in enumerate(meta["branches"]):
-		name, action = _ensure_branch_assignment(
-			meta["instructor"],
-			branch,
-			meta["valid_from"],
-			meta["valid_to"],
-			make_primary=bool(not primary_exists and index == 0),
-		)
-		if action == "created" and not primary_exists and index == 0:
-			primary_exists = name
-		branch_results.append({"name": name, "branch": branch, "action": action})
-	created: list[dict] = []
-	for row in create:
-		doc = frappe.new_doc("EduEdge Instructor Assignment")
-		doc.instructor = meta["instructor"]
-		doc.assignment_type = meta["assignment_type"]
-		doc.assignment_scope = row.assignment_scope
-		doc.enabled = meta["enabled"]
-		doc.school_branch = row.branch
-		doc.program_offering = row.program_offering
-		doc.student_group = row.student_group
-		doc.course = row.course
-		doc.valid_from = meta["valid_from"]
-		doc.valid_to = meta["valid_to"]
-		doc.notes = meta["notes"]
-		doc.save()
-		created.append({"name": doc.name, "label": row.label})
-	for row in existing:
-		if not row.get("enabled"):
-			doc = frappe.get_doc("EduEdge Instructor Assignment", row["name"])
-			doc.check_permission("write")
-			doc.enabled = 1
-			doc.notes = meta["notes"] or doc.notes
-			doc.save()
-	return {
-		"branch_access": branch_results,
-		"created": created,
-		"existing": existing,
-		"skipped": skipped,
-		"summary": {
-			"branches_created_or_updated": len(branch_results),
-			"assignments_created": len(created),
-			"assignments_existing": len(existing),
-			"invalid_combinations_skipped": len(skipped),
-		},
-	}
+
