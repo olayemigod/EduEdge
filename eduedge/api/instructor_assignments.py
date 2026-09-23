@@ -239,27 +239,49 @@ def get_instructor_assignments_page(
 	offerings: str | list | None = None,
 ) -> dict:
 	core._require_read()
-	allowed = core._allowed_branches()
-	allowed_names = [row["name"] for row in allowed]
-	selected = core._list_values(branches)
-	if selected and any(name not in allowed_names for name in selected):
-		frappe.throw(_("One or more selected Branches are not available to your user."), frappe.PermissionError)
-	if not selected:
-		current = str((core.get_current_school_branch() or {}).get("name") or "").strip()
-		selected = [current] if current else (allowed_names[:] if len(allowed_names) == 1 else [])
+	permitted = core._allowed_branches()
+	permitted_names = [row["name"] for row in permitted]
 	instructors = _instructors()
 	if not instructor and not _can_manage_assignments() and len(instructors) == 1:
 		instructor = instructors[0].name
 	selected_instructor = next((row for row in instructors if row.name == instructor), None)
 	if instructor and not selected_instructor:
 		frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
+
+	governed_names = eligible_branch_names(instructor, within=permitted_names) if instructor else set()
+	allowed = [row for row in permitted if row["name"] in governed_names]
+	allowed_names = [row["name"] for row in allowed]
+	selected = core._list_values(branches)
+	if selected and any(name not in allowed_names for name in selected):
+		frappe.throw(
+			_(
+				"One or more selected Branches are not covered by this Instructor's Branch Governance eligibility."
+			),
+			frappe.PermissionError,
+		)
+	if not selected:
+		current = str((core.get_current_school_branch() or {}).get("name") or "").strip()
+		selected = [current] if current in allowed_names else (allowed_names[:] if len(allowed_names) == 1 else [])
+
 	offering_rows, groups, courses, course_map, configured_course_map = _all_options(allowed)
 	requested_offerings = core._list_values(offerings)
 	if requested_offerings and any(name not in {row.name for row in offering_rows} for name in requested_offerings):
-		frappe.throw(_("One or more selected Classes are not available to your user."), frappe.PermissionError)
-	register_branches = selected or allowed_names
+		frappe.throw(
+			_("One or more selected Classes are outside this Instructor's Branch Governance eligibility."),
+			frappe.PermissionError,
+		)
+
+	eligibility_rows = []
+	if instructor and _can_manage_assignments():
+		eligibility_rows = [
+			row
+			for row in get_instructor_branch_eligibility_rows(instructor, enabled_only=False)
+			if row.get("school_branch") in permitted_names
+		]
+
 	return {
 		"allowed_branches": allowed,
+		"permitted_branches": permitted,
 		"selected_branches": selected,
 		"instructors": instructors,
 		"selected_instructor": selected_instructor,
@@ -268,23 +290,24 @@ def get_instructor_assignments_page(
 		"courses": courses,
 		"course_map": {key: sorted(values) for key, values in course_map.items()},
 		"configured_course_map": {key: sorted(values) for key, values in configured_course_map.items()},
-		"assignments": core._assignment_rows(instructor, register_branches),
-		"branch_assignments": core._branch_assignment_rows(instructor, register_branches) if _can_manage_assignments() else [],
+		"assignments": core._assignment_rows(instructor, permitted_names),
+		"branch_assignments": eligibility_rows,
 		"assignment_types": list(ASSIGNMENT_TYPES),
 		"assignment_scopes": list(BULK_SCOPES),
 		"subject_required_types": sorted(SUBJECT_REQUIRED_TYPES),
 		"class_responsibility_types": sorted(CLASS_RESPONSIBILITY_TYPES),
+		"governance": {
+			"route": "/app/eduedge-branch-governance",
+			"eligible_branch_count": len(governed_names),
+			"eligibility_period_count": len(eligibility_rows),
+		},
 		"permissions": {
 			"can_manage": _can_manage_assignments(),
 			"can_create": frappe.has_permission("EduEdge Instructor Assignment", "create"),
 			"can_write": frappe.has_permission("EduEdge Instructor Assignment", "write"),
-			"can_manage_branch_access": bool(
-				frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
-				or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
-			),
+			"can_view_branch_governance": frappe.has_permission("EduEdge Instructor Branch Assignment", "read"),
 		},
 	}
-
 
 def _maps(rows: list[dict], allowed: list[dict]) -> tuple[dict, dict, dict, dict]:
 	branch_map = {row["name"]: row for row in allowed}
