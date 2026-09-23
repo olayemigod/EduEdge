@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import cint, getdate
 
 from eduedge.api import teacher_assignments as core
+from eduedge.education.academic_fields import INSTITUTION_FIELD
 
 
 def _overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
@@ -19,6 +20,98 @@ def _overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
 
 def _allowed_branch_names() -> set[str]:
 	return {str(row.get("name") or "").strip() for row in core._allowed_branches() if row.get("name")}
+
+
+def _require_eligibility_read() -> None:
+	if not frappe.session.user or frappe.session.user == "Guest":
+		frappe.throw(_("Authentication required."), frappe.PermissionError)
+	if not frappe.has_permission("EduEdge Instructor Branch Assignment", "read"):
+		frappe.throw(
+			_("You are not permitted to view Instructor Branch Eligibility."),
+			frappe.PermissionError,
+		)
+
+
+def _allowed_eligibility_institutions() -> set[str]:
+	branches = core._allowed_branches()
+	institutions = {
+		str(row.get("institution") or "").strip()
+		for row in branches
+		if str(row.get("institution") or "").strip()
+	}
+	if not institutions:
+		return set()
+	return set(
+		frappe.get_all(
+			"EduEdge Institution",
+			filters={"name": ["in", sorted(institutions)], "enabled": 1},
+			pluck="name",
+			limit_page_length=0,
+		)
+	)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def instructor_branch_eligibility_instructor_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Active Instructors whose Home Institution is represented by an allowed Branch."""
+	_require_eligibility_read()
+	institutions = _allowed_eligibility_institutions()
+	if not institutions:
+		return []
+	meta = frappe.get_meta("Instructor")
+	if not meta.has_field(INSTITUTION_FIELD):
+		return []
+
+	fields = ["name", "instructor_name", "department", "employee", INSTITUTION_FIELD]
+	rows = frappe.get_list(
+		"Instructor",
+		filters={
+			"status": "Active",
+			INSTITUTION_FIELD: ["in", sorted(institutions)],
+		},
+		fields=fields,
+		order_by="instructor_name asc",
+		limit_start=0,
+		limit_page_length=500,
+	)
+	institution_names = {
+		row.name: row.institution_name
+		for row in frappe.get_list(
+			"EduEdge Institution",
+			filters={"name": ["in", sorted(institutions)]},
+			fields=["name", "institution_name"],
+			limit_page_length=0,
+		)
+	}
+	needle = str(txt or "").strip().lower()
+	result = []
+	for row in rows:
+		haystack = " ".join(
+			str(value or "")
+			for value in (
+				row.get("name"),
+				row.get("instructor_name"),
+				row.get("department"),
+				row.get("employee"),
+				row.get(INSTITUTION_FIELD),
+				institution_names.get(row.get(INSTITUTION_FIELD)),
+			)
+		).lower()
+		if needle and needle not in haystack:
+			continue
+		result.append(
+			[
+				row.get("name"),
+				row.get("instructor_name") or row.get("name"),
+				institution_names.get(row.get(INSTITUTION_FIELD)) or row.get(INSTITUTION_FIELD) or "",
+				row.get("department") or "",
+				row.get("employee") or "",
+			]
+		)
+		if len(result) >= int(start) + int(page_len):
+			break
+	return result[int(start) : int(start) + int(page_len)]
 
 
 def _supporting_assignments(instructor: str, school_branch: str, valid_from=None, valid_to=None) -> list[dict]:
