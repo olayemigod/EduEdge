@@ -20,6 +20,9 @@ class TestInstructorBranchEligibilityReconciliationContract(unittest.TestCase):
             "_require_eligibility_read()",
             "permission_aware=True",
             '"support_state"',
+            '"assignment_support_visible"',
+            "can_read_assignments",
+            "frappe.has_permission(\"EduEdge Instructor Assignment\", \"read\")",
             '"review_classification"',
             '"provenance"',
             '"created_by"',
@@ -58,6 +61,9 @@ class TestInstructorBranchEligibilityReconciliationContract(unittest.TestCase):
             '"status": status',
             "Instructor Inactive",
             "reconciliation_review_required",
+            "can_read_academic_assignments",
+            'frappe.get_list(',
+            '"academic_assignment_support_visible"',
             '"instructor_eligibility_review_required"',
         ):
             self.assertIn(token, service)
@@ -72,6 +78,9 @@ class TestInstructorBranchEligibilityReconciliationContract(unittest.TestCase):
             'type: "POST"',
             "Disable unused",
             "eligibilityReview.reason",
+            "academic_assignment_support_visible",
+            "assignment_support_visible",
+            "Support restricted",
             "retained in history",
             "never deleted automatically",
         ):
