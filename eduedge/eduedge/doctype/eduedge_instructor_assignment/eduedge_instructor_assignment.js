@@ -100,8 +100,9 @@ frappe.ui.form.on("EduEdge Instructor Assignment", {
 	refresh(frm) {
 		lockExistingResponsibility(frm);
 		if (!frm.is_new()) {
-			frm.dashboard.set_headline(
+			frm.set_intro(
 				__("Responsibility identity is historical. Use EduEdge End, Replace, Transfer, Prepare, Disable or Re-enable actions instead of editing it in place."),
+				"blue",
 			);
 		}
 	},
