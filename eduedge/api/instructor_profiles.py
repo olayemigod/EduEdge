@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, getdate, nowdate
+from frappe.utils import cint, getdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.instructor_scope import (
@@ -13,6 +13,7 @@ from eduedge.education.instructor_scope import (
 )
 from eduedge.education.people_fields import INSTRUCTOR_PRIMARY_BRANCH_FIELD
 from eduedge.platform.access import require_eduedge_access
+from eduedge.services.instructor_branch_governance import primary_branch
 from eduedge.services.branch_context import (
 	get_allowed_institutions,
 	get_allowed_school_branches,
@@ -34,7 +35,6 @@ INSTRUCTOR_FIELDS = (
 	"status",
 	"department",
 	INSTITUTION_FIELD,
-	INSTRUCTOR_PRIMARY_BRANCH_FIELD,
 	"eduedge_email",
 	"eduedge_mobile",
 	"eduedge_qualification",
@@ -249,6 +249,9 @@ def _instructor_detail(name: str) -> dict:
 	doc = frappe.get_doc("Instructor", name)
 	doc.check_permission("read")
 	result = doc.as_dict(no_nulls=False)
+	governed_primary = primary_branch(doc.name)
+	result[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary
+	result["primary_branch_governed"] = governed_primary
 	result["identity"] = get_instructor_identity_state(doc.name)
 	result["assignments"] = frappe.get_list(
 		"EduEdge Instructor Assignment",
@@ -359,9 +362,11 @@ def get_instructors_page(
 	identity_map = get_instructor_identity_states([row.name for row in rows])
 	for row in rows:
 		home = institution_map.get(row.get(INSTITUTION_FIELD)) or {}
-		primary = branch_map.get(row.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD)) or {}
+		governed_primary = primary_branch(row.name)
+		primary = branch_map.get(governed_primary) or {}
+		row[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary
 		row["institution_name"] = home.get("institution_name") or row.get(INSTITUTION_FIELD)
-		row["primary_branch_name"] = primary.get("branch_name") or row.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+		row["primary_branch_name"] = primary.get("branch_name") or governed_primary
 		row["identity"] = identity_map.get(row.name, {})
 
 	selected_institution = institution_map.get(resolved_institution) or {}
@@ -388,61 +393,6 @@ def get_instructors_page(
 	}
 
 
-def _covers_date(row, day) -> bool:
-	return bool(
-		cint(row.get("enabled"))
-		and (not row.get("valid_from") or getdate(row.get("valid_from")) <= day)
-		and (not row.get("valid_to") or getdate(row.get("valid_to")) >= day)
-	)
-
-
-def _ensure_branch_eligibility(instructor: str, branch: str) -> None:
-	"""Make the selected Branch primary for *current* eligibility without rewriting history."""
-	today = getdate(nowdate())
-	periods = frappe.get_all(
-		"EduEdge Instructor Branch Assignment",
-		filters={"instructor": instructor},
-		fields=["name", "school_branch", "enabled", "is_primary", "valid_from", "valid_to"],
-		order_by="valid_from asc, modified asc",
-		limit_page_length=0,
-	)
-	current_target = [row for row in periods if row.school_branch == branch and _covers_date(row, today)]
-	if len(current_target) > 1:
-		frappe.throw(
-			_("More than one current Branch eligibility period exists for this Instructor and Branch. Resolve Branch eligibility before setting a Primary Branch."),
-			frappe.ValidationError,
-		)
-
-	# Demote only another *currently effective* primary period. Historical and future
-	# primary periods are not rewritten by saving the Instructor profile.
-	for row in periods:
-		if row.school_branch == branch or not cint(row.is_primary) or not _covers_date(row, today):
-			continue
-		other = frappe.get_doc("EduEdge Instructor Branch Assignment", row.name)
-		other.check_permission("write")
-		other.is_primary = 0
-		other.save()
-
-	if current_target:
-		doc = frappe.get_doc("EduEdge Instructor Branch Assignment", current_target[0].name)
-		doc.check_permission("write")
-		if not cint(doc.is_primary):
-			doc.is_primary = 1
-			doc.save()
-		return
-
-	if not frappe.has_permission("EduEdge Instructor Branch Assignment", "create"):
-		frappe.throw(_("You are not permitted to create Instructor Branch eligibility."), frappe.PermissionError)
-	doc = frappe.new_doc("EduEdge Instructor Branch Assignment")
-	doc.instructor = instructor
-	doc.school_branch = branch
-	doc.enabled = 1
-	doc.is_primary = 1
-	doc.valid_from = today
-	doc.valid_to = None
-	doc.save()
-
-
 @frappe.whitelist(methods=["POST"])
 def save_instructor(payload: str | dict) -> dict:
 	require_eduedge_access(feature_key="academics", action="save_instructor")
@@ -463,13 +413,15 @@ def save_instructor(payload: str | dict) -> dict:
 	if institution not in allowed_institutions:
 		frappe.throw(_("The selected Home Institution is not available to your user."), frappe.PermissionError)
 
-	branch = str(data.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD) or "").strip()
-	if branch:
-		branch_row = next((row for row in _allowed_branches() if row["name"] == branch), None)
-		if not branch_row:
-			frappe.throw(_("The selected Primary Branch is not available to your user."), frappe.PermissionError)
-		if branch_row.get("institution") != institution:
-			frappe.throw(_("Primary Branch must belong to the Instructor's Home Institution."), frappe.ValidationError)
+	requested_primary = str(data.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD) or "").strip()
+	governed_primary = primary_branch(name) if name else None
+	if requested_primary and requested_primary != (governed_primary or ""):
+		frappe.throw(
+			_(
+				"Primary Branch is managed by Instructor Branch Eligibility in Branch Governance. Update Branch Governance first."
+			),
+			frappe.ValidationError,
+		)
 
 	department = str(data.get("department") or "").strip()
 	if department and frappe.get_meta("Department").has_field(INSTITUTION_FIELD):
@@ -494,10 +446,8 @@ def save_instructor(payload: str | dict) -> dict:
 	if doc.meta.has_field(INSTITUTION_FIELD):
 		doc.set(INSTITUTION_FIELD, institution)
 	if doc.meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD):
-		doc.set(INSTRUCTOR_PRIMARY_BRANCH_FIELD, branch or None)
+		doc.set(INSTRUCTOR_PRIMARY_BRANCH_FIELD, governed_primary or None)
 	if not doc.instructor_name:
 		frappe.throw(_("Instructor Name is required."), frappe.ValidationError)
 	doc.save()
-	if branch:
-		_ensure_branch_eligibility(doc.name, branch)
 	return _instructor_detail(doc.name)
