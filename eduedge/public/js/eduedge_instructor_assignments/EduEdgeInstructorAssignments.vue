@@ -457,15 +457,25 @@ export default {
 			if (!preset.branch && !preset.program_offering && !preset.student_group && !preset.course) return;
 			const eligible = new Set((this.data.allowed_branches || []).map((row) => row.name));
 			const governedBranch = preset.branch && eligible.has(preset.branch) ? preset.branch : "";
+			const governedOfferings = new Set(
+				(this.data.offerings || [])
+					.filter((row) => row.school_branch === governedBranch)
+					.map((row) => row.name),
+			);
+			const governedOffering = governedBranch && preset.program_offering && governedOfferings.has(preset.program_offering)
+				? preset.program_offering
+				: "";
 			this.rows = [newRow({
 				branch: governedBranch,
-				program_offering: governedBranch ? preset.program_offering : "",
+				program_offering: governedOffering,
 				assignment_scope: preset.student_group ? CLASS_ARM_SCOPE : CLASS_SCOPE,
-				student_groups: governedBranch && preset.student_group ? [preset.student_group] : [],
-				courses: governedBranch && preset.course ? [preset.course] : [],
+				student_groups: governedOffering && preset.student_group ? [preset.student_group] : [],
+				courses: governedOffering && preset.course ? [preset.course] : [],
 			})];
 			if (preset.branch && !governedBranch) {
 				this.saveError = __("The requested Branch is not covered by this Instructor's Branch Governance eligibility.");
+			} else if (preset.program_offering && !governedOffering) {
+				this.saveError = __("The requested Class / Programme Offering falls outside this Instructor's Branch Governance eligibility period.");
 			} else {
 				this.invalidatePreview();
 			}
