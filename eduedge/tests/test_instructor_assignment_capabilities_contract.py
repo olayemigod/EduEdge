@@ -132,7 +132,8 @@ class TestInstructorAssignmentCapabilitiesContract(unittest.TestCase):
             "doc.add_comment(",
             "Instructor Assignment capabilities updated",
             '"action": "already-configured"',
-            '"action": "capabilities-updated"',
+            '"capabilities-reviewed" if reviewed_without_value_change else "capabilities-updated"',
+            "explicitly reviewed with no capability grants",
         ):
             self.assertIn(token, source)
 
