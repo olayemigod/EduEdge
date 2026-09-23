@@ -363,8 +363,13 @@ def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
 		)
 	) if home_institution_names else set()
 
+	can_reconcile_instructor_eligibility = bool(
+		frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
+		or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
+	)
 	can_read_academic_assignments = bool(
-		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		can_reconcile_instructor_eligibility
+		and frappe.db.exists("DocType", "EduEdge Instructor Assignment")
 		and frappe.has_permission("EduEdge Instructor Assignment", "read")
 	)
 	academic_rows = frappe.get_list(
