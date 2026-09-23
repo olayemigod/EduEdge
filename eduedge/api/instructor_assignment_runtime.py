@@ -17,8 +17,9 @@ def _selected_instructor(name: str | None) -> dict | None:
 	resolved = str(name or "").strip()
 	if not resolved:
 		return None
-	filters = {"name": resolved, "status": "Active"}
-	if core._can_manage_assignments():
+	manager = core._can_manage_assignments()
+	filters = {"name": resolved}
+	if manager:
 		visible = core._manager_visible_instructor_names(include_history=True)
 		if resolved not in visible:
 			frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
@@ -26,10 +27,11 @@ def _selected_instructor(name: str | None) -> dict | None:
 		own = current_user_instructors()
 		if resolved not in own:
 			frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
+		filters["status"] = "Active"
 	row = frappe.db.get_value(
 		"Instructor",
 		filters,
-		["name", "instructor_name", "department", "employee", INSTITUTION_FIELD],
+		["name", "instructor_name", "department", "employee", "status", INSTITUTION_FIELD],
 		as_dict=True,
 	)
 	if not row:
@@ -54,15 +56,18 @@ def get_instructor_assignments_page(
 			selected_instructor = _selected_instructor(own[0])
 
 	resolved_instructor = selected_instructor.get("name") if selected_instructor else None
+	authoring_available = bool(
+		not selected_instructor or str(selected_instructor.get("status") or "") == "Active"
+	)
 	governed_names = (
 		eligible_branch_names(resolved_instructor, within=permitted_names)
-		if resolved_instructor
+		if resolved_instructor and authoring_available
 		else set()
 	)
 	allowed = [row for row in permitted if row["name"] in governed_names]
 	allowed_names = [row["name"] for row in allowed]
 
-	selected = legacy._list_values(branches)
+	selected = legacy._list_values(branches) if authoring_available else []
 	if selected and any(name not in allowed_names for name in selected):
 		frappe.throw(
 			_(
@@ -90,6 +95,7 @@ def get_instructor_assignments_page(
 		"permitted_branches": permitted,
 		"selected_branches": selected,
 		"selected_instructor": selected_instructor,
+		"authoring_available": authoring_available,
 		"assignments": legacy._assignment_rows(resolved_instructor, permitted_names),
 		"branch_assignments": eligibility_rows,
 		"assignment_types": list(core.ASSIGNMENT_TYPES),
