@@ -115,7 +115,7 @@
 
 							<div v-if="row.branch_eligibility_full_period === false" class="row-note wide">
 								<strong>Partial Branch Eligibility</strong>
-								<span>This Class overlaps the Instructor's governed Branch period, but the full academic period is not covered. Set Valid From and Valid To inside Branch Governance before previewing.</span>
+								<span>This Class overlaps the Instructor's governed Branch period, but the full academic period is not covered. Use a valid window: {{ eligibilityPeriodsLabel(row) }}.</span>
 							</div>
 
 							<label>
@@ -272,6 +272,7 @@ function newRow(preset = {}) {
 		valid_from: preset.valid_from || "",
 		valid_to: preset.valid_to || "",
 		branch_eligibility_full_period: preset.branch_eligibility_full_period ?? null,
+		branch_eligibility_periods: Array.isArray(preset.branch_eligibility_periods) ? [...preset.branch_eligibility_periods] : [],
 		enabled: preset.enabled === 0 ? 0 : 1,
 		notes: preset.notes || "",
 	};
@@ -442,6 +443,7 @@ export default {
 			row.valid_from = "";
 			row.valid_to = "";
 			row.branch_eligibility_full_period = null;
+			row.branch_eligibility_periods = [];
 			this.invalidatePreview();
 		},
 		offeringSelected(row, option) {
@@ -449,11 +451,19 @@ export default {
 			row.student_groups = [];
 			row.courses = [];
 			row.branch_eligibility_full_period = option?.branch_eligibility_full_period ?? null;
+			row.branch_eligibility_periods = Array.isArray(option?.branch_eligibility_periods)
+				? [...option.branch_eligibility_periods]
+				: [];
 			if (option?.value) this.offeringLabels[option.value] = option.label || option.value;
 			if (option?.school_branch) row.branch = option.school_branch;
 			if (row.branch_eligibility_full_period === false) {
-				row.valid_from = "";
-				row.valid_to = "";
+				if (row.branch_eligibility_periods.length === 1) {
+					row.valid_from = row.branch_eligibility_periods[0].valid_from || "";
+					row.valid_to = row.branch_eligibility_periods[0].valid_to || "";
+				} else {
+					row.valid_from = "";
+					row.valid_to = "";
+				}
 			} else {
 				row.valid_from = option?.period_start_date || "";
 				row.valid_to = option?.period_end_date || "";
@@ -467,6 +477,7 @@ export default {
 			row.valid_from = "";
 			row.valid_to = "";
 			row.branch_eligibility_full_period = null;
+			row.branch_eligibility_periods = [];
 			this.invalidatePreview();
 		},
 		applyRoutePreset(preset = {}) {
@@ -484,6 +495,10 @@ export default {
 				? preset.program_offering
 				: "";
 			const governedOfferingRecord = (this.data.offerings || []).find((row) => row.name === governedOffering);
+			const eligibilityPeriods = Array.isArray(governedOfferingRecord?.branch_eligibility_periods)
+				? governedOfferingRecord.branch_eligibility_periods
+				: [];
+			const partial = governedOfferingRecord?.branch_eligibility_full_period === false;
 			this.rows = [newRow({
 				branch: governedBranch,
 				program_offering: governedOffering,
@@ -491,6 +506,13 @@ export default {
 				student_groups: governedOffering && preset.student_group ? [preset.student_group] : [],
 				courses: governedOffering && preset.course ? [preset.course] : [],
 				branch_eligibility_full_period: governedOfferingRecord?.branch_eligibility_full_period ?? null,
+				branch_eligibility_periods: eligibilityPeriods,
+				valid_from: partial && eligibilityPeriods.length === 1
+					? (eligibilityPeriods[0].valid_from || "")
+					: (partial ? "" : (governedOfferingRecord?.period_start_date || "")),
+				valid_to: partial && eligibilityPeriods.length === 1
+					? (eligibilityPeriods[0].valid_to || "")
+					: (partial ? "" : (governedOfferingRecord?.period_end_date || "")),
 			})];
 			if (preset.branch && !governedBranch) {
 				this.saveError = __("The requested Branch is not covered by this Instructor's Branch Governance eligibility.");
@@ -506,6 +528,11 @@ export default {
 		institutionForRow(row) { return this.institutionForBranch(row.branch); },
 		offeringLabel(name) { return this.offeringLabels[name] || name || "Class"; },
 		courseName(name) { return this.courseLabels[name] || name || ""; },
+		eligibilityPeriodsLabel(row) {
+			const periods = Array.isArray(row?.branch_eligibility_periods) ? row.branch_eligibility_periods : [];
+			if (!periods.length) return __("check Branch Governance before continuing");
+			return periods.map((period) => `${period.valid_from || "?"} to ${period.valid_to || "?"}`).join("; ");
+		},
 		branchPeriodStatus(item) {
 			if (!Number(item.enabled)) return { label: "Disabled", status: "disabled", tone: "danger" };
 			const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
