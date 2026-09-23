@@ -97,7 +97,10 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             '_schedule_assignment_condition("`tabCourse Schedule`", resolved_user)',
             'where schedule.name = `tabStudent Attendance`.course_schedule',
             'where schedule.student_group = `tabStudent Group`.name',
-            "return any(instructor_owns_schedule(schedule, resolved_user) for schedule in schedules)",
+            'select schedule.name',
+            'where schedule.student_group = %s',
+            'and ({ownership})',
+            'limit 1',
         ):
             self.assertIn(token, source)
 
