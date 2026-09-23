@@ -565,16 +565,15 @@ def update_instructor_assignment_capabilities(
             if before.get(fieldname) != resolved_capabilities.get(fieldname)
         ]
         reviewed_without_value_change = not changed
-        doc.add_comment(
-            "Info",
-            _(
-                "Instructor Assignment capabilities {0}: {1}. Reason: {2}"
-            ).format(
-                _("reviewed") if reviewed_without_value_change else _("updated"),
-                ", ".join(changed) or _("explicitly reviewed with no capability grants"),
-                resolved_reason,
-            ),
-        )
+        if reviewed_without_value_change:
+            audit_message = _(
+                "Instructor Assignment capabilities reviewed: explicitly reviewed with no capability grants. Reason: {0}"
+            ).format(resolved_reason)
+        else:
+            audit_message = _(
+                "Instructor Assignment capabilities updated: {0}. Reason: {1}"
+            ).format(", ".join(changed), resolved_reason)
+        doc.add_comment("Info", audit_message)
         return {
             "name": doc.name,
             "assignment_title": doc.assignment_title,
