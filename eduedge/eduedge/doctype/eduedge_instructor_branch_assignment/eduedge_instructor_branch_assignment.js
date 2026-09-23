@@ -25,7 +25,7 @@ async function refreshInstructorInstitution(frm, { clearBranch = false } = {}) {
 	const institution = response?.message?.eduedge_institution || "";
 	frm.__eduedge_instructor_institution = institution || EMPTY_INSTITUTION;
 
-	if (frm.doc.school_branch && institution) {
+	if (frm.is_new() && frm.doc.school_branch && institution) {
 		const branchResponse = await frappe.db.get_value(
 			"EduEdge School Branch",
 			frm.doc.school_branch,
