@@ -98,7 +98,10 @@ def _validated_offering(branch: str, program_offering: str):
 def search_instructors(query: str = "", page_length: int | str = 20) -> list[dict]:
 	core._require_read()
 	filters: dict = {"status": "Active"}
-	if not assignments._can_manage_assignments():
+	if assignments._can_manage_assignments():
+		visible = assignments._manager_visible_instructor_names(include_history=False)
+		filters["name"] = ["in", sorted(visible)] if visible else ["in", ["__none__"]]
+	else:
 		own = current_user_instructors()
 		filters["name"] = ["in", own] if own else ["in", ["__none__"]]
 	meta = frappe.get_meta("Instructor")
