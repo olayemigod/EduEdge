@@ -22,6 +22,7 @@ from eduedge.education.teaching_assignments import (
 from eduedge.platform.access import require_eduedge_access
 from eduedge.services.instructor_branch_governance import (
 	assert_instructor_branch_eligibility,
+	assignment_eligibility_covers_period,
 	eligible_branch_names,
 	get_instructor_branch_eligibility_rows,
 )
@@ -232,6 +233,92 @@ def _all_options(allowed: list[dict]) -> tuple[list[dict], list[dict], list[dict
 	return offerings, groups, courses, visible_map, configured_map
 
 
+def _filter_planner_options_by_instructor(
+	instructor: str | None,
+	offerings: list[dict],
+	groups: list[dict],
+	courses: list[dict],
+	visible_map: dict[str, set[str]],
+	configured_map: dict[str, set[str]],
+) -> tuple[list[dict], list[dict], list[dict], dict[str, set[str]], dict[str, set[str]]]:
+	"""Keep planner preload data inside the Instructor's date-bounded Branch Governance scope."""
+	resolved_instructor = str(instructor or "").strip()
+	if not resolved_instructor:
+		return offerings, groups, courses, visible_map, configured_map
+
+	governed_offerings = [
+		row
+		for row in offerings
+		if assignment_eligibility_covers_period(
+			resolved_instructor,
+			str(row.get("school_branch") or "").strip(),
+			row.get("period_start_date"),
+			row.get("period_end_date"),
+		)
+	]
+	offering_names = {
+		str(row.get("name") or "").strip()
+		for row in governed_offerings
+		if str(row.get("name") or "").strip()
+	}
+	contexts = [
+		{
+			"school_branch": str(row.get("school_branch") or "").strip(),
+			"program": str(row.get("program") or "").strip(),
+			"academic_year": str(row.get("academic_year") or "").strip(),
+			"academic_term": str(row.get("academic_term") or "").strip(),
+		}
+		for row in governed_offerings
+	]
+
+	def group_matches(row) -> bool:
+		linked = str(row.get(OFFERING_FIELD) or "").strip()
+		if linked:
+			return linked in offering_names
+		branch = str(row.get(BRANCH_FIELD) or "").strip()
+		program = str(row.get("program") or "").strip()
+		year = str(row.get("academic_year") or "").strip()
+		term = str(row.get("academic_term") or "").strip()
+		return any(
+			branch == context["school_branch"]
+			and (not program or program == context["program"])
+			and (not year or year == context["academic_year"])
+			and (not term or term == context["academic_term"])
+			for context in contexts
+		)
+
+	governed_groups = [row for row in groups if group_matches(row)]
+	programs = {
+		str(row.get("program") or "").strip()
+		for row in governed_offerings
+		if str(row.get("program") or "").strip()
+	}
+	governed_visible_map = {
+		program: set(visible_map.get(program, set()))
+		for program in programs
+	}
+	governed_configured_map = {
+		program: set(configured_map.get(program, set()))
+		for program in programs
+	}
+	visible_courses = {
+		course
+		for values in governed_visible_map.values()
+		for course in values
+	}
+	governed_courses = [
+		row for row in courses
+		if str(row.get("name") or "").strip() in visible_courses
+	]
+	return (
+		governed_offerings,
+		governed_groups,
+		governed_courses,
+		governed_visible_map,
+		governed_configured_map,
+	)
+
+
 @frappe.whitelist()
 def get_instructor_assignments_page(
 	instructor: str | None = None,
@@ -264,6 +351,14 @@ def get_instructor_assignments_page(
 		selected = [current] if current in allowed_names else (allowed_names[:] if len(allowed_names) == 1 else [])
 
 	offering_rows, groups, courses, course_map, configured_course_map = _all_options(allowed)
+	offering_rows, groups, courses, course_map, configured_course_map = _filter_planner_options_by_instructor(
+		instructor,
+		offering_rows,
+		groups,
+		courses,
+		course_map,
+		configured_course_map,
+	)
 	requested_offerings = core._list_values(offerings)
 	if requested_offerings and any(name not in {row.name for row in offering_rows} for name in requested_offerings):
 		frappe.throw(
