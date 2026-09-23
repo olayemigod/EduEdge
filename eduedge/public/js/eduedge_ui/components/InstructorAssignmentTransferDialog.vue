@@ -349,6 +349,7 @@ export default {
 			]).join(" · ");
 		},
 		conflictLabel(conflict) {
+			if (conflict?.type === "branch-eligibility-blocked") return conflict?.reason || "Branch Governance does not cover the responsibility period.";
 			if (conflict?.type === "transferring-instructor-overlap") return "Instructor already has an overlapping exact responsibility in the destination context.";
 			if (conflict?.type === "primary-responsibility-overlap") return "Another Instructor already owns this primary responsibility in the destination period.";
 			return "Transfer conflict";
@@ -405,11 +406,9 @@ export default {
 		},
 		branchImpactLabel(branch) {
 			const action = String(branch?.action || "");
-			if (action === "existing") return "Existing Branch Eligibility already covers the destination period; no Branch change will be made.";
-			if (action === "create") return "A Branch Eligibility period will be created for the Instructor in the destination Branch.";
-			if (action === "extend") return "Existing Branch Eligibility will be extended only as required for the destination responsibility.";
-			if (action === "enable") return "An exact disabled Branch Eligibility period will be re-enabled for the destination responsibility.";
-			return "Branch Eligibility impact is unavailable. Do not confirm until the preview is complete.";
+			if (action === "covered") return "Covered — Branch Governance already authorizes the full destination period. No Branch Eligibility change will be made.";
+			if (action === "blocked") return "Blocked — update Instructor Branch Eligibility in Branch Governance before transferring this responsibility.";
+			return "Branch Eligibility check is unavailable. Do not confirm until the preview is complete.";
 		},
 		setBusy(value, label) {
 			this.busy = Boolean(value);
