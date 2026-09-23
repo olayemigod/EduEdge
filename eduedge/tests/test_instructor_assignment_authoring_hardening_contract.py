@@ -121,8 +121,12 @@ class TestInstructorAssignmentAuthoringHardeningContract(unittest.TestCase):
             "period_start_date",
             "period_end_date",
             "branch_eligibility_full_period === false",
-            "valid_from: partial ? null : (row.period_start_date || null)",
-            "valid_to: partial ? null : (row.period_end_date || null)",
+            "branch_eligibility_periods",
+            "eligibilityPeriods.length === 1",
+            "singleWindow ? (singleWindow.valid_from || null)",
+            "singleWindow ? (singleWindow.valid_to || null)",
+            "row.period_start_date || null",
+            "row.period_end_date || null",
         ):
             self.assertIn(token, native)
 
