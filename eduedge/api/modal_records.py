@@ -175,6 +175,59 @@ def _record_label(doc, config: dict) -> str:
 	return str(doc.name)
 
 
+def _instructor_eligibility_options(
+	query: str = "",
+	*,
+	company: str | None = None,
+) -> list[dict]:
+	"""Return active Instructors classified to an enabled, permission-visible Home Institution."""
+	if not frappe.has_permission("Instructor", "read"):
+		return []
+	meta = frappe.get_meta("Instructor")
+	if not meta.has_field(INSTITUTION_FIELD):
+		return []
+	institutions = get_allowed_institutions(company=company)
+	institution_map = {
+		str(row.get("name") or "").strip(): row
+		for row in institutions
+		if str(row.get("name") or "").strip()
+	}
+	if not institution_map:
+		return []
+	filters = {
+		"status": "Active",
+		INSTITUTION_FIELD: ["in", sorted(institution_map)],
+	}
+	fields = ["name", "instructor_name", INSTITUTION_FIELD]
+	needle = str(query or "").strip()
+	or_filters = None
+	if needle:
+		or_filters = [
+			["name", "like", f"%{needle}%"],
+			["instructor_name", "like", f"%{needle}%"],
+		]
+	rows = frappe.get_list(
+		"Instructor",
+		filters=filters,
+		or_filters=or_filters,
+		fields=fields,
+		order_by="instructor_name asc",
+		limit_page_length=MAX_OPTIONS,
+	)
+	return [
+		{
+			"value": row.get("name"),
+			"label": row.get("instructor_name") or row.get("name"),
+			"description": (
+				institution_map.get(str(row.get(INSTITUTION_FIELD) or "").strip(), {}).get("institution_name")
+				or row.get(INSTITUTION_FIELD)
+				or ""
+			),
+		}
+		for row in rows
+	]
+
+
 def _full_form_route(config: dict, name: str | None = None) -> str:
 	base = config["full_form_route"].rstrip("/")
 	return f"{base}/{name}" if name else base
@@ -207,6 +260,18 @@ def get_modal_schema(resource: str, name: str | None = None, context: str | dict
 			frappe.throw(_("You are not permitted to create {0}.").format(doctype), frappe.PermissionError)
 		can_save = True
 		values.update({key: value for key, value in parsed_context.items() if key in _field_map(config)})
+		if doctype == "EduEdge Instructor Branch Assignment" and values.get("instructor"):
+			requested_instructor = str(values.get("instructor") or "").strip()
+			available = {
+				str(row.get("value") or "").strip()
+				for row in _instructor_eligibility_options(
+					requested_instructor,
+					company=str(parsed_context.get("company") or "").strip() or None,
+				)
+			}
+			if requested_instructor not in available:
+				values["instructor"] = ""
+				values["school_branch"] = ""
 
 	fields = _initial_link_options(config, values, parsed_context)
 	if name and doctype == "EduEdge Instructor Branch Assignment":
@@ -319,21 +384,13 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		filters = {"academic_year": values.get("academic_year")} if values.get("academic_year") else {}
 		return _link_rows("Academic Term", query, ["name", "term_name"], filters=filters, label_field="term_name")
 	if fieldname == "instructor":
-		filters: dict[str, Any] = {"status": "Active"}
-		if is_instructor_eligibility and company and frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
-			institution_names = [
-				row.get("name")
-				for row in get_allowed_institutions(company=company)
-				if row.get("name")
-			]
-			if not institution_names:
-				return []
-			filters[INSTITUTION_FIELD] = ["in", institution_names]
+		if is_instructor_eligibility:
+			return _instructor_eligibility_options(query, company=company)
 		return _link_rows(
 			"Instructor",
 			query,
 			["name", "instructor_name"],
-			filters=filters,
+			filters={"status": "Active"},
 			label_field="instructor_name",
 			order_by="instructor_name asc",
 		)
@@ -374,6 +431,33 @@ def _link_rows(
 			"description": row.get("name") if label_field and row.get(label_field) and row.get(label_field) != row.get("name") else "",
 		}
 		for row in rows
+	]
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def instructor_branch_assignment_instructor_query(doctype, txt, searchfield, start, page_len, filters):
+	_require_login()
+	if not (
+		frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
+		or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
+	):
+		frappe.throw(
+			_("You are not permitted to manage Instructor Branch Eligibility."),
+			frappe.PermissionError,
+		)
+	filters = _parse_json(filters)
+	company = str(filters.get("company") or "").strip() or None
+	rows = _instructor_eligibility_options(txt or "", company=company)
+	resolved_start = max(cint(start), 0)
+	resolved_length = min(max(cint(page_len) or 20, 1), MAX_OPTIONS)
+	return [
+		[
+			row.get("value"),
+			row.get("label") or row.get("value"),
+			row.get("description") or "",
+		]
+		for row in rows[resolved_start : resolved_start + resolved_length]
 	]
 
 
