@@ -3,15 +3,19 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate
+from frappe.utils import cint, getdate, nowdate
 
+from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.people_fields import INSTRUCTOR_PRIMARY_BRANCH_FIELD
 from eduedge.services.instructor_branch_governance import primary_branch
 
 
 class EduEdgeInstructorBranchAssignment(Document):
     def validate(self) -> None:
+        self._validate_identity()
+        self._validate_instructor()
         self._validate_branch()
+        self._lock_instructor_scope()
         self._validate_dates()
         self._validate_duplicate()
         self._validate_primary()
@@ -19,12 +23,101 @@ class EduEdgeInstructorBranchAssignment(Document):
     def on_update(self) -> None:
         _sync_instructor_primary_branch(self.instructor)
 
+    def on_trash(self) -> None:
+        if not self.valid_from or getdate(self.valid_from) <= getdate(nowdate()):
+            frappe.throw(
+                _(
+                    "Instructor Branch Eligibility that has started or has no future start date cannot be deleted. Disable or end the eligibility so Branch Governance history remains auditable."
+                ),
+                frappe.PermissionError,
+            )
+        if _has_linked_academic_responsibility(self):
+            frappe.throw(
+                _(
+                    "Instructor Branch Eligibility with linked academic responsibilities cannot be deleted. Disable or end the eligibility and preserve the historical governance trail."
+                ),
+                frappe.PermissionError,
+            )
+
     def after_delete(self) -> None:
         _sync_instructor_primary_branch(self.instructor)
 
+    def _validate_identity(self) -> None:
+        before = self.get_doc_before_save()
+        if not before:
+            return
+        if before.instructor != self.instructor or before.school_branch != self.school_branch:
+            frappe.throw(
+                _(
+                    "Existing Instructor Branch Eligibility identity cannot be changed. Delete only an unused future eligibility or create a new eligibility period for the correct Instructor and Branch."
+                ),
+                frappe.ValidationError,
+            )
+
+    def _validate_instructor(self) -> None:
+        if not self.instructor:
+            frappe.throw(_("Select an Instructor."), frappe.ValidationError)
+        meta = frappe.get_meta("Instructor")
+        fields = ["name", "instructor_name", "status"]
+        if meta.has_field(INSTITUTION_FIELD):
+            fields.append(INSTITUTION_FIELD)
+        instructor = frappe.db.get_value("Instructor", self.instructor, fields, as_dict=True)
+        if not instructor:
+            frappe.throw(_("Select a valid Instructor."), frappe.ValidationError)
+        if cint(self.enabled) and instructor.status != "Active":
+            frappe.throw(
+                _(
+                    "Instructor Branch Eligibility can be enabled only for an active Instructor. Disable the eligibility when closing historical access."
+                ),
+                frappe.ValidationError,
+            )
+        self._instructor_row = instructor
+
     def _validate_branch(self) -> None:
-        if not frappe.db.get_value("EduEdge School Branch", self.school_branch, "enabled"):
-            frappe.throw(_("Select an enabled School Branch / Campus."), frappe.ValidationError)
+        if not self.school_branch:
+            frappe.throw(_("Select a School Branch / Campus."), frappe.ValidationError)
+        branch = frappe.db.get_value(
+            "EduEdge School Branch",
+            self.school_branch,
+            ["name", "branch_name", "institution", "enabled"],
+            as_dict=True,
+        )
+        if not branch:
+            frappe.throw(_("Select a valid School Branch / Campus."), frappe.ValidationError)
+        if cint(self.enabled) and not cint(branch.enabled):
+            frappe.throw(
+                _(
+                    "Instructor Branch Eligibility can be enabled only for an enabled School Branch / Campus. Disable the eligibility when closing historical access."
+                ),
+                frappe.ValidationError,
+            )
+
+        home_institution = (
+            self._instructor_row.get(INSTITUTION_FIELD)
+            if getattr(self, "_instructor_row", None)
+            else None
+        )
+        if (
+            cint(self.enabled)
+            and home_institution
+            and branch.institution
+            and home_institution != branch.institution
+        ):
+            frappe.throw(
+                _(
+                    "School Branch / Campus must belong to the Instructor's Home Institution. Cross-campus eligibility is allowed within the same Institution; cross-Institution eligibility is not."
+                ),
+                frappe.ValidationError,
+            )
+        self._branch_row = branch
+
+    def _lock_instructor_scope(self) -> None:
+        # Serialize all eligibility writes for an Instructor so concurrent inserts
+        # cannot bypass overlap or single-primary-period validation.
+        frappe.db.sql(
+            "select name from `tabInstructor` where name = %s for update",
+            (self.instructor,),
+        )
 
     def _validate_dates(self) -> None:
         if self.valid_from and self.valid_to and getdate(self.valid_to) < getdate(self.valid_from):
@@ -77,6 +170,24 @@ class EduEdgeInstructorBranchAssignment(Document):
                 )
 
 
+def _has_linked_academic_responsibility(doc) -> bool:
+    if not frappe.db.exists("DocType", "EduEdge Instructor Assignment"):
+        return False
+    rows = frappe.get_all(
+        "EduEdge Instructor Assignment",
+        filters={
+            "instructor": doc.instructor,
+            "school_branch": doc.school_branch,
+        },
+        fields=["name", "valid_from", "valid_to"],
+        limit_page_length=0,
+    )
+    return any(
+        _date_ranges_overlap(doc.valid_from, doc.valid_to, row.valid_from, row.valid_to)
+        for row in rows
+    )
+
+
 def _sync_instructor_primary_branch(instructor: str | None) -> None:
     name = str(instructor or "").strip()
     if not name or not frappe.db.exists("Instructor", name):
@@ -95,7 +206,6 @@ def _sync_instructor_primary_branch(instructor: str | None) -> None:
         governed_primary,
         update_modified=False,
     )
-
 
 
 def _date_ranges_overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
