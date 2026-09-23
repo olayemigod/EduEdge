@@ -6,8 +6,9 @@ from frappe.utils import add_days, cint, getdate, nowdate
 
 from eduedge.api.instructor_assignment_replacement import (
     _branch_access_preview,
-    _ensure_incoming_branch_access,
+    _branch_governance_conflict,
     _overlap,
+    _require_incoming_branch_access,
     _type_variants,
 )
 from eduedge.api.instructor_assignments import _period_dates, _require_assignment_manager
@@ -388,6 +389,9 @@ def _transfer_plan(
             "branch_name": destination["branch_name"],
         }
     )
+    branch_conflict = _branch_governance_conflict(branch_access)
+    if branch_conflict:
+        conflicts.append(branch_conflict)
     return {
         "source": {
             "name": source.name,
@@ -558,6 +562,14 @@ def transfer_instructor_assignment(
         successor_end = getdate(destination["valid_to"]) if destination["valid_to"] else None
         resolved_reason = plan["reason"]
 
+        branch_result = _require_incoming_branch_access(
+            source.instructor,
+            destination["school_branch"],
+            successor_start,
+            successor_end,
+            label=_("Transferred Instructor Assignment"),
+        )
+
         source.valid_to = transfer
         source.ended_on = transfer
         source.ended_by = frappe.session.user
@@ -567,13 +579,6 @@ def transfer_instructor_assignment(
             source.save()
         finally:
             frappe.flags.in_eduedge_assignment_lifecycle = False
-
-        branch_result = _ensure_incoming_branch_access(
-            source.instructor,
-            destination["school_branch"],
-            successor_start,
-            successor_end,
-        )
 
         successor = frappe.new_doc("EduEdge Instructor Assignment")
         successor.instructor = source.instructor
