@@ -14,6 +14,13 @@ SEARCH_FIELDS = (
     / "eduedge_instructor_assignments"
     / "InstructorAssignmentSearchFields.vue"
 )
+PLANNER_UI = (
+    APP
+    / "public"
+    / "js"
+    / "eduedge_instructor_assignments"
+    / "EduEdgeInstructorAssignments.vue"
+)
 
 
 class TestInstructorAssignmentOfferingEligibilityFilteringContract(unittest.TestCase):
