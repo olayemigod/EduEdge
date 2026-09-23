@@ -125,6 +125,7 @@ class TestInstructorBranchEligibilityGovernanceHardeningContract(unittest.TestCa
             'eduedge.api.education.school_branch_query',
             'eduedge_institution',
             'clearBranch: true',
+            'frm.is_new() && frm.doc.school_branch',
             'frm.set_df_property("instructor", "read_only"',
             'frm.set_df_property("school_branch", "read_only"',
         ):
