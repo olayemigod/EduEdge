@@ -23,6 +23,7 @@ from eduedge.platform.access import require_eduedge_access
 from eduedge.services.instructor_branch_governance import (
 	assert_instructor_branch_eligibility,
 	assignment_eligibility_covers_period,
+	assignment_eligibility_overlaps_period,
 	eligible_branch_names,
 	get_instructor_branch_eligibility_rows,
 )
@@ -246,16 +247,25 @@ def _filter_planner_options_by_instructor(
 	if not resolved_instructor:
 		return offerings, groups, courses, visible_map, configured_map
 
-	governed_offerings = [
-		row
-		for row in offerings
-		if assignment_eligibility_covers_period(
+	governed_offerings = []
+	for row in offerings:
+		branch = str(row.get("school_branch") or "").strip()
+		period_start = row.get("period_start_date")
+		period_end = row.get("period_end_date")
+		if not assignment_eligibility_overlaps_period(
 			resolved_instructor,
-			str(row.get("school_branch") or "").strip(),
-			row.get("period_start_date"),
-			row.get("period_end_date"),
+			branch,
+			period_start,
+			period_end,
+		):
+			continue
+		row["branch_eligibility_full_period"] = assignment_eligibility_covers_period(
+			resolved_instructor,
+			branch,
+			period_start,
+			period_end,
 		)
-	]
+		governed_offerings.append(row)
 	offering_names = {
 		str(row.get("name") or "").strip()
 		for row in governed_offerings
