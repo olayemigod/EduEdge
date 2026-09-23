@@ -109,6 +109,36 @@ class TestSessionLaunchDeliveryContract(unittest.TestCase):
         self.assertNotIn("get_all(\"Instructor\"", panel)
         self.assertNotIn("get_all(\"Course\"", panel)
 
+    def test_session_launch_instructor_picker_consumes_branch_governance(self):
+        api = (APP / "api/session_launch_delivery.py").read_text(encoding="utf-8")
+        panel = (APP / "public/js/eduedge_ui/components/EduEdgeSessionDeliveryPanel.vue").read_text(encoding="utf-8")
+        db_test = (
+            APP
+            / "eduedge"
+            / "doctype"
+            / "eduedge_academic_session_launch"
+            / "test_session_launch_delivery.py"
+        ).read_text(encoding="utf-8")
+
+        for token in (
+            "eligibility_covers_period",
+            "def _guided_governance_windows",
+            'filters.get("teaching_contexts")',
+            'filters.get("student_groups")',
+            "Branch Governance eligible for selected responsibility",
+        ):
+            self.assertIn(token, api)
+        for token in (
+            "governanceFilters",
+            "teaching_contexts: JSON.stringify(this.selectedTeaching)",
+            "student_groups: JSON.stringify(this.selectedResponsibilities)",
+            "Only Instructors whose governed Branch Eligibility covers every selected responsibility period are shown.",
+        ):
+            self.assertIn(token, panel)
+        self.assertIn('"EduEdge Instructor Branch Assignment"', db_test)
+        self.assertIn("valid_from=year.year_start_date", db_test)
+        self.assertIn("valid_to=year.year_end_date", db_test)
+
     def test_timetable_readiness_is_audited_and_step_7b_uses_governed_native_creation(self):
         api = (APP / "api/session_launch_delivery.py").read_text(encoding="utf-8")
         timetable = (APP / "api/session_launch_timetable.py").read_text(encoding="utf-8")
