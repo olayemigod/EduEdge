@@ -18,7 +18,7 @@ from eduedge.api.session_launch import _allowed_branches, _get_launch_by_name, _
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE
 from eduedge.services.academic_calendar import CALENDAR_DOCTYPE, PERIOD_DOCTYPE, get_enabled_institution_calendar
-from eduedge.services.instructor_branch_governance import eligibility_covers_period
+from eduedge.services.instructor_branch_governance import assignment_eligibility_covers_period
 
 MAX_TEACHING_CONTEXTS = 3000
 MAX_SCHEDULE_ROWS = 5000
@@ -645,7 +645,7 @@ def guided_instructor_query(doctype, txt, searchfield, start, page_len, filters)
 		for row in rows
 		if row.get("value")
 		and all(
-			eligibility_covers_period(
+			assignment_eligibility_covers_period(
 				row["value"],
 				window["branch"],
 				window.get("valid_from"),
