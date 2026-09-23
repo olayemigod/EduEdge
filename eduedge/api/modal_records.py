@@ -260,6 +260,18 @@ def get_modal_schema(resource: str, name: str | None = None, context: str | dict
 			frappe.throw(_("You are not permitted to create {0}.").format(doctype), frappe.PermissionError)
 		can_save = True
 		values.update({key: value for key, value in parsed_context.items() if key in _field_map(config)})
+		if doctype == "EduEdge Instructor Branch Assignment" and values.get("instructor"):
+			requested_instructor = str(values.get("instructor") or "").strip()
+			available = {
+				str(row.get("value") or "").strip()
+				for row in _instructor_eligibility_options(
+					requested_instructor,
+					company=str(parsed_context.get("company") or "").strip() or None,
+				)
+			}
+			if requested_instructor not in available:
+				values["instructor"] = ""
+				values["school_branch"] = ""
 
 	fields = _initial_link_options(config, values, parsed_context)
 	if name and doctype == "EduEdge Instructor Branch Assignment":
