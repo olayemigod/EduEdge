@@ -166,6 +166,9 @@ class TestInstructorBranchGovernanceFlowContract(unittest.TestCase):
         self.assertIn("doc.set(INSTRUCTOR_PRIMARY_BRANCH_FIELD, governed_primary)", governance)
         self.assertIn("Primary Branch is managed by Instructor Branch Eligibility in Branch Governance", profiles)
         self.assertNotIn("def _ensure_branch_eligibility", profiles)
+        self.assertIn("governed_primary = primary_branch(instructor)", fields)
+        self.assertIn('for instructor in frappe.get_all("Instructor", pluck="name", limit_page_length=0)', fields)
+        self.assertIn("values[INSTRUCTOR_PRIMARY_BRANCH_FIELD] = governed_primary", fields)
 
 
 if __name__ == "__main__":
