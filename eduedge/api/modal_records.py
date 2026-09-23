@@ -250,6 +250,8 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		institution = frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD) or institution
 
 	if fieldname == "school_branch":
+		if is_instructor_eligibility and not instructor:
+			return []
 		rows = get_allowed_school_branches(company=company, institution=institution)
 		if query:
 			needle = query.lower()
