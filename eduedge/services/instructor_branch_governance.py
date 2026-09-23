@@ -7,6 +7,8 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from eduedge.education.academic_fields import INSTITUTION_FIELD
+
 
 ELIGIBILITY_DOCTYPE = "EduEdge Instructor Branch Assignment"
 MIN_DATE = getdate("1900-01-01")
@@ -20,6 +22,30 @@ def _start(value):
 def _end(value):
 	return getdate(value) if value else MAX_DATE
 
+
+def instructor_home_institution(instructor: str) -> str:
+	name = str(instructor or "").strip()
+	if not name or not frappe.db.exists("Instructor", name):
+		return ""
+	meta = frappe.get_meta("Instructor")
+	if not meta.has_field(INSTITUTION_FIELD):
+		return ""
+	return str(frappe.db.get_value("Instructor", name, INSTITUTION_FIELD) or "").strip()
+
+
+def branch_matches_instructor_home_institution(
+	instructor: str,
+	branch: str,
+	*,
+	require_home: bool = False,
+) -> bool:
+	home_institution = instructor_home_institution(instructor)
+	if not home_institution:
+		return not require_home
+	branch_institution = str(
+		frappe.db.get_value("EduEdge School Branch", branch, "institution") or ""
+	).strip()
+	return bool(branch_institution and branch_institution == home_institution)
 
 def get_instructor_branch_eligibility_rows(
 	instructor: str,
@@ -111,6 +137,27 @@ def eligibility_covers_period(
 	return any(start <= target_start and end >= target_end for start, end in merged)
 
 
+def assignment_eligibility_covers_period(
+	instructor: str,
+	branch: str,
+	valid_from=None,
+	valid_to=None,
+) -> bool:
+	"""Strict authoring check for new academic responsibilities.
+
+	Historical runtime access keeps using eligibility_covers_period so legacy
+	records remain readable and operational history is not silently rewritten.
+	New assignments require a classified Home Institution and a Branch in that
+	same Institution.
+	"""
+	if not branch_matches_instructor_home_institution(
+		instructor,
+		branch,
+		require_home=True,
+	):
+		return False
+	return eligibility_covers_period(instructor, branch, valid_from, valid_to)
+
 def assert_instructor_branch_eligibility(
 	instructor: str,
 	branch: str,
@@ -119,7 +166,7 @@ def assert_instructor_branch_eligibility(
 	*,
 	label: str | None = None,
 ) -> None:
-	if eligibility_covers_period(instructor, branch, valid_from, valid_to):
+	if assignment_eligibility_covers_period(instructor, branch, valid_from, valid_to):
 		return
 	branch_label = (
 		frappe.db.get_value("EduEdge School Branch", branch, "branch_name")
@@ -142,7 +189,16 @@ def eligible_branch_names(
 	within: Iterable[str] | None = None,
 ) -> set[str]:
 	rows = get_instructor_branch_eligibility_rows(instructor, enabled_only=True)
-	names = {str(row.get("school_branch") or "").strip() for row in rows if row.get("school_branch")}
+	names = {
+		str(row.get("school_branch") or "").strip()
+		for row in rows
+		if row.get("school_branch")
+		and branch_matches_instructor_home_institution(
+			instructor,
+			row.get("school_branch"),
+			require_home=True,
+		)
+	}
 	if within is None:
 		return names
 	allowed = {str(value or "").strip() for value in within if str(value or "").strip()}
