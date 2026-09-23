@@ -344,12 +344,6 @@ def replace_instructor_assignment(
             )
 
         plan = _replacement_plan(source, replacement_instructor, handover_date, reason)
-        if plan["conflict_count"]:
-            frappe.throw(
-                _("Replacement plan has {0} conflict(s). Resolve them before saving.").format(plan["conflict_count"]),
-                frappe.ValidationError,
-            )
-
         handover = getdate(plan["handover_date"])
         successor_start = getdate(plan["successor"]["valid_from"])
         successor_end = getdate(plan["successor"]["valid_to"]) if plan["successor"]["valid_to"] else None
@@ -362,6 +356,11 @@ def replace_instructor_assignment(
             successor_end,
             label=_("Replacement Instructor Assignment"),
         )
+        if plan["conflict_count"]:
+            frappe.throw(
+                _("Replacement plan has {0} conflict(s). Resolve them before saving.").format(plan["conflict_count"]),
+                frappe.ValidationError,
+            )
 
         source.valid_to = handover
         source.ended_on = handover
