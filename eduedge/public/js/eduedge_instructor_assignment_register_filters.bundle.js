@@ -1,7 +1,7 @@
 import InstructorAssignmentRegisterFilters from "./eduedge_ui/components/InstructorAssignmentRegisterFilters.vue";
 import { createEduEdgeApp } from "./eduedge_ui/app_factory";
 
-const BASE_PAGE_METHOD = "eduedge.api.instructor_assignments.get_instructor_assignments_page";
+const BASE_PAGE_METHOD = "eduedge.api.instructor_assignment_runtime.get_instructor_assignments_page";
 const FILTERED_PAGE_METHOD = "eduedge.api.instructor_assignment_register.get_instructor_assignment_register_page";
 const FILTER_PREFIX = "assignment_";
 const DEFAULT_REGISTER_TAB = "register";
@@ -187,7 +187,7 @@ function ensureViewFirstPlanner(proxy) {
 		toolbar.innerHTML = `
 			<div class="eduedge-instructor-assignment-record-toolbar__identity">
 				<strong>Instructor records</strong>
-				<small>Review assignments and Branch eligibility first. Open the planner only when you need to add responsibility.</small>
+				<small>Review academic assignments and Branch Governance eligibility first. Open the planner only when you need to add responsibility.</small>
 			</div>
 			<div class="eduedge-instructor-assignment-record-toolbar__actions">
 				<label><span>Instructor</span><select class="form-control" data-eduedge-view-instructor></select></label>
@@ -196,8 +196,12 @@ function ensureViewFirstPlanner(proxy) {
 		`;
 		parts.plannerPanel.insertAdjacentElement("beforebegin", toolbar);
 		toolbar.querySelector("select[data-eduedge-view-instructor]")?.addEventListener("change", async (event) => {
-			proxy.instructor = event.target.value || "";
-			proxy.invalidatePreview?.();
+			const value = event.target.value || "";
+			if (typeof proxy.resetPlannerForInstructor === "function") proxy.resetPlannerForInstructor(value);
+			else {
+				proxy.instructor = value;
+				proxy.invalidatePreview?.();
+			}
 			await proxy.load?.();
 		});
 		toolbar.querySelector("[data-eduedge-toggle-assignment-planner]")?.addEventListener("click", () => {
@@ -228,7 +232,7 @@ function applyRegisterTab(proxy, layout, registerPanel, eligibilityPanel, tabs) 
 
 function ensureRegisterTabs(proxy) {
 	const registerPanel = findRegisterPanel();
-	const eligibilityPanel = panelByHeading("Branch Eligibility Periods");
+	const eligibilityPanel = panelByHeading("Instructor Branch Eligibility");
 	const layout = registerPanel?.closest(".register-layout");
 	if (!layout || !registerPanel || !eligibilityPanel) return;
 	ensureRegisterTabStyles();
@@ -242,7 +246,7 @@ function ensureRegisterTabs(proxy) {
 		tabs.setAttribute("aria-label", "Instructor assignment records");
 		tabs.innerHTML = `
 			<button type="button" role="tab" data-register-tab="register">Instructor Assignment Register</button>
-			<button type="button" role="tab" data-register-tab="eligibility">Branch Eligibility Periods</button>
+			<button type="button" role="tab" data-register-tab="eligibility">Branch Governance Eligibility</button>
 		`;
 		layout.prepend(tabs);
 		for (const button of tabs.querySelectorAll("button[data-register-tab]")) {
@@ -331,8 +335,11 @@ function install(component) {
 		const cleaned = cleanFilters(nextFilters);
 		const nextInstructor = cleaned.instructor || this.instructor || "";
 		if (nextInstructor !== this.instructor) {
-			this.instructor = nextInstructor;
-			this.invalidatePreview?.();
+			if (typeof this.resetPlannerForInstructor === "function") this.resetPlannerForInstructor(nextInstructor);
+			else {
+				this.instructor = nextInstructor;
+				this.invalidatePreview?.();
+			}
 		}
 		cleaned.instructor = this.instructor || nextInstructor;
 		this.registerFilters = cleaned;
