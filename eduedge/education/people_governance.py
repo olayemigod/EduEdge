@@ -12,6 +12,7 @@ from eduedge.education.people_fields import (
 	PHOTO_REVIEW_NOTE_FIELD,
 	PHOTO_STATUS_FIELD,
 )
+from eduedge.services.instructor_branch_governance import primary_branch
 
 PEOPLE_MANAGER_ROLES = {
 	"System Manager",
@@ -87,18 +88,27 @@ def before_validate_student_applicant(doc, method=None) -> None:
 def before_validate_instructor(doc, method=None) -> None:
 	from eduedge.education.academic_validation import validate_master_institution
 
-	branch = doc.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD) if doc.meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD) else None
-	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
+	# Primary Branch is a compatibility mirror only. Branch Governance owns the
+	# underlying Instructor Branch Eligibility and direct Instructor-form/API edits
+	# must never become a second authority.
+	if doc.meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD):
+		governed_primary = primary_branch(doc.name) if not doc.is_new() else None
+		doc.set(INSTRUCTOR_PRIMARY_BRANCH_FIELD, governed_primary)
+
 	validate_master_institution(doc, required=doc.is_new())
 	institution = doc.get(INSTITUTION_FIELD) if doc.meta.has_field(INSTITUTION_FIELD) else None
+	branch = doc.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD) if doc.meta.has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD) else None
 	if branch:
 		branch_row = frappe.db.get_value(
 			"EduEdge School Branch", branch, ["institution", "enabled"], as_dict=True
 		)
 		if not branch_row or not branch_row.enabled:
-			frappe.throw(_("Select an enabled Primary Branch / Campus."), frappe.ValidationError)
+			frappe.throw(_("Governed Primary Branch / Campus is no longer enabled. Review Branch Governance."), frappe.ValidationError)
 		if institution and branch_row.institution != institution:
-			frappe.throw(_("Primary Branch / Campus must belong to the Instructor's Home Institution."), frappe.ValidationError)
+			frappe.throw(
+				_("Governed Primary Branch / Campus must belong to the Instructor's Home Institution. Review Branch Governance."),
+				frappe.ValidationError,
+			)
 		if doc.meta.has_field(INSTITUTION_FIELD) and not institution:
 			doc.set(INSTITUTION_FIELD, branch_row.institution)
 
