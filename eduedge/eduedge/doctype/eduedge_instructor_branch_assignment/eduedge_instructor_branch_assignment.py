@@ -121,6 +121,21 @@ class EduEdgeInstructorBranchAssignment(Document):
             )
         if (
             cint(self.enabled)
+            and home_institution
+            and not frappe.db.exists(
+                "EduEdge Institution",
+                {"name": home_institution, "enabled": 1},
+            )
+            and not self._is_narrowing_update()
+        ):
+            frappe.throw(
+                _(
+                    "The Instructor Home Institution must be enabled before Branch Eligibility can be enabled or widened."
+                ),
+                frappe.ValidationError,
+            )
+        if (
+            cint(self.enabled)
             and not branch.institution
             and not self._is_narrowing_update()
         ):
