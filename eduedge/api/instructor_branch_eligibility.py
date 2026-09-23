@@ -180,31 +180,49 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 		limit_page_length=0,
 	)
 
+	can_read_assignments = bool(
+		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.has_permission("EduEdge Instructor Assignment", "read")
+	)
 	review_rows = []
 	active_branches: set[str] = set()
 	for row in rows:
-		support = _supporting_assignments(
-			instructor,
-			row.school_branch,
-			row.valid_from,
-			row.valid_to,
-			permission_aware=True,
+		support = (
+			_supporting_assignments(
+				instructor,
+				row.school_branch,
+				row.valid_from,
+				row.valid_to,
+				permission_aware=True,
+			)
+			if can_read_assignments
+			else []
 		)
 		enabled = bool(cint(row.enabled))
 		if enabled:
 			active_branches.add(row.school_branch)
-		review_required = bool(enabled and not support)
+		review_required = bool(can_read_assignments and enabled and not support)
+		support_state = (
+			"restricted"
+			if not can_read_assignments
+			else ("unsupported" if review_required else ("supported" if support else "disabled-history"))
+		)
 		review_rows.append(
 			{
 				**dict(row),
-				"supporting_assignment_count": len(support),
-				"supporting_assignments": support[:20],
+				"assignment_support_visible": can_read_assignments,
+				"supporting_assignment_count": len(support) if can_read_assignments else None,
+				"supporting_assignments": support[:20] if can_read_assignments else [],
 				"review_required": review_required,
-				"support_state": "unsupported" if review_required else ("supported" if support else "disabled-history"),
+				"support_state": support_state,
 				"review_classification": "unsupported-enabled-eligibility" if review_required else "",
 				"review_reason": _(
 					"No academic assignment supports this eligibility period. Confirm that it is intentional explicit eligibility or disable it as legacy/stale history."
-				) if review_required else "",
+				) if review_required else (
+					_("Academic assignment support is restricted by your current permissions.")
+					if not can_read_assignments
+					else ""
+				),
 				"provenance": {
 					"created_on": row.get("creation"),
 					"created_by": row.get("owner"),
