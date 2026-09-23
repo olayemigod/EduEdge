@@ -124,6 +124,15 @@ class EduEdgeInstructorAssignment(Document):
         self.institution = offering.institution
         self.academic_year = offering.academic_year
         self.academic_term = offering.academic_term or None
+        if self.is_new():
+            period_start, period_end = _academic_period_dates(
+                self.academic_year,
+                self.academic_term,
+            )
+            if not self.valid_from and period_start:
+                self.valid_from = period_start
+            if not self.valid_to and period_end:
+                self.valid_to = period_end
         self._offering_program = offering.program
 
     def _validate_group_context(self) -> None:
@@ -504,6 +513,27 @@ class EduEdgeInstructorAssignment(Document):
             parts.append(_course_label(self.course))
         return " · ".join(value for value in parts if value)
 
+
+
+def _academic_period_dates(academic_year=None, academic_term=None):
+    if academic_term:
+        row = frappe.db.get_value(
+            "Academic Term",
+            academic_term,
+            ["term_start_date", "term_end_date"],
+            as_dict=True,
+        ) or {}
+        if row.get("term_start_date") or row.get("term_end_date"):
+            return row.get("term_start_date"), row.get("term_end_date")
+    if academic_year:
+        row = frappe.db.get_value(
+            "Academic Year",
+            academic_year,
+            ["year_start_date", "year_end_date"],
+            as_dict=True,
+        ) or {}
+        return row.get("year_start_date"), row.get("year_end_date")
+    return None, None
 
 def _same_value(left, right) -> bool:
     return str(left or "") == str(right or "")
