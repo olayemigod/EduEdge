@@ -9,6 +9,7 @@ from frappe.utils import cint
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.user_branch_access_permissions import (
+	assignable_access_levels,
 	assignable_company_names,
 	assignable_institution_names,
 	manageable_user_names,
@@ -214,6 +215,13 @@ def get_modal_schema(resource: str, name: str | None = None, context: str | dict
 		values.update({key: value for key, value in parsed_context.items() if key in _field_map(config)})
 
 	fields = _initial_link_options(config, values, parsed_context)
+	if doctype == "EduEdge User Branch Access":
+		access_levels = assignable_access_levels()
+		for field in fields:
+			if field.get("fieldname") == "access_scope":
+				field["options"] = access_levels
+		if values.get("access_scope") not in access_levels and access_levels:
+			values["access_scope"] = access_levels[-1]
 	if name and doctype == "EduEdge Instructor Branch Assignment":
 		for field in fields:
 			if field.get("fieldname") in {"instructor", "school_branch"}:
