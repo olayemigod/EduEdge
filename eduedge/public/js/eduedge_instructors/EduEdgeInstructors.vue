@@ -13,7 +13,7 @@
 				<EdgePageHeader
 					eyebrow="People Operations"
 					title="Instructors"
-					subtitle="Maintain Institution-wide Instructor identities, optional home Branches, qualifications and cross-Institution operational assignments."
+					subtitle="Maintain Institution-wide Instructor identities, governed campus eligibility, qualifications and cross-campus responsibilities within the Home Institution."
 					:action-label="canCreate ? 'Add Instructor' : ''"
 					@action="newInstructor"
 				/>
