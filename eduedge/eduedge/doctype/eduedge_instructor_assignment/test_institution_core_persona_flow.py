@@ -408,6 +408,75 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [enrollment.name],
         )
 
+        # List permissions must fail closed on an ambiguous User -> Instructor
+        # identity just like document permission and capability resolution.
+        frappe.set_user("Administrator")
+        duplicate_instructor = self._make_instructor(
+            institution,
+            "Alpha Duplicate",
+            employee=instructor_employee,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Course Schedule",
+                filters={"name": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Student",
+                filters={"name": student.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Program Enrollment",
+                filters={"name": enrollment.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_attendance_register(
+                class_a["name"],
+                "2094-10-05",
+                schedule_a.name,
+            )
+
+        # Correcting the identity restores the already-authorised exact assignment
+        # without deleting the duplicate historical Instructor record.
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "Instructor",
+            duplicate_instructor.name,
+            "status",
+            "Inactive",
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Course Schedule",
+                filters={"name": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [schedule_a.name],
+        )
+        self.assertTrue(frappe.db.exists("Instructor", duplicate_instructor.name))
+
         exact_capabilities = get_instructor_assignment_capability_state(
             user=instructor_user.name,
             school_branch=branch_a.name,
