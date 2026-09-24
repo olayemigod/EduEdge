@@ -8,6 +8,11 @@ from frappe import _
 from frappe.utils import cint
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.user_branch_access_permissions import (
+	assignable_company_names,
+	assignable_institution_names,
+	manageable_user_names,
+)
 from eduedge.services.branch_context import (
 	get_allowed_institutions,
 	get_allowed_school_branches,
@@ -283,6 +288,10 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 
 	if fieldname == "institution":
 		rows = get_allowed_institutions(company=company)
+		if config.get("doctype") == "EduEdge User Branch Access":
+			assignable = assignable_institution_names(values.get("access_scope"), company=company)
+			if assignable is not None:
+				rows = [row for row in rows if row.get("name") in assignable]
 		if query:
 			needle = query.lower()
 			rows = [
@@ -302,13 +311,27 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		]
 
 	if fieldname == "company":
-		return _link_rows("Company", query, ["name", "company_name"], filters={"is_group": 0}, label_field="company_name")
+		filters: dict[str, Any] = {"is_group": 0}
+		if config.get("doctype") == "EduEdge User Branch Access":
+			assignable = assignable_company_names(values.get("access_scope"))
+			if assignable is not None:
+				if not assignable:
+					return []
+				filters["name"] = ["in", sorted(assignable)]
+		return _link_rows("Company", query, ["name", "company_name"], filters=filters, label_field="company_name")
 	if fieldname == "user":
+		filters: dict[str, Any] = {"enabled": 1, "user_type": "System User"}
+		if config.get("doctype") == "EduEdge User Branch Access":
+			manageable = manageable_user_names(company=company)
+			if manageable is not None:
+				if not manageable:
+					return []
+				filters["name"] = ["in", sorted(manageable)]
 		return _link_rows(
 			"User",
 			query,
 			["name", "full_name"],
-			filters={"enabled": 1, "user_type": "System User"},
+			filters=filters,
 			label_field="full_name",
 		)
 	if fieldname == "program":
