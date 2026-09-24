@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 
 from eduedge.education.user_branch_access_permissions import (
+    assignable_access_levels,
     assignable_company_names,
     assignable_institution_names,
     manageable_user_names,
@@ -11,6 +12,11 @@ from eduedge.education.user_branch_access_permissions import (
 
 def _like(txt: str | None) -> str:
     return f"%{str(txt or '').strip()}%"
+
+
+@frappe.whitelist()
+def get_user_branch_access_authoring_context() -> dict:
+    return {"access_levels": assignable_access_levels()}
 
 
 @frappe.whitelist()
