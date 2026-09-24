@@ -394,13 +394,19 @@ def _employee_department_scope(institution: str, company: str) -> set[str] | Non
 	return {str(name) for name in [*owned, *unclassified] if name}
 
 
-def _employee_options(institution: str) -> list[dict]:
+def _employee_options(
+	institution: str,
+	*,
+	query: str | None = None,
+	start: int = 0,
+	page_length: int = MAX_EMPLOYEE_OPTIONS,
+) -> list[dict]:
 	"""Return active Employees valid for the selected Home Institution.
 
 	The Company remains the ERPNext HR boundary. When Department carries EduEdge
 	Institution ownership, exclude Employees explicitly assigned to another
 	Institution while preserving legacy Employees whose Department is unclassified
-	or blank. Results remain bounded; the page never loads the whole Employee table.
+	or blank. Search is applied server-side and every query remains bounded.
 	"""
 	if (
 		not institution
@@ -413,19 +419,34 @@ def _employee_options(institution: str) -> list[dict]:
 	if not company:
 		return []
 
+	start = max(cint(start), 0)
+	page_length = min(max(cint(page_length), 1), MAX_EMPLOYEE_OPTIONS)
+	fetch_limit = min(start + page_length, MAX_EMPLOYEE_OPTIONS)
+	needle = str(query or "").strip()
+	search_filters = (
+		{
+			"name": ["like", f"%{needle}%"],
+			"employee_name": ["like", f"%{needle}%"],
+			"user_id": ["like", f"%{needle}%"],
+		}
+		if needle
+		else None
+	)
 	fields = ["name", "employee_name", "department", "gender", "user_id", "status", "company"]
 	department_scope = _employee_department_scope(institution, company)
 	if department_scope is None:
 		return frappe.get_list(
 			"Employee",
 			filters={"status": "Active", "company": company},
+			or_filters=search_filters,
 			fields=fields,
 			order_by="employee_name asc",
-			limit_page_length=MAX_EMPLOYEE_OPTIONS,
+			limit_start=start,
+			limit_page_length=page_length,
 		)
 
 	rows = []
-	if department_scope:
+	if department_scope and fetch_limit:
 		rows.extend(
 			frappe.get_list(
 				"Employee",
@@ -434,13 +455,13 @@ def _employee_options(institution: str) -> list[dict]:
 					"company": company,
 					"department": ["in", sorted(department_scope)],
 				},
+				or_filters=search_filters,
 				fields=fields,
 				order_by="employee_name asc",
-				limit_page_length=MAX_EMPLOYEE_OPTIONS,
+				limit_page_length=fetch_limit,
 			)
 		)
-	remaining = max(MAX_EMPLOYEE_OPTIONS - len(rows), 0)
-	if remaining:
+	if fetch_limit:
 		rows.extend(
 			frappe.get_list(
 				"Employee",
@@ -449,16 +470,18 @@ def _employee_options(institution: str) -> list[dict]:
 					"company": company,
 					"department": ["is", "not set"],
 				},
+				or_filters=search_filters,
 				fields=fields,
 				order_by="employee_name asc",
-				limit_page_length=remaining,
+				limit_page_length=fetch_limit,
 			)
 		)
 	unique = {row.name: row for row in rows if row.get("name")}
-	return sorted(
+	ordered = sorted(
 		unique.values(),
 		key=lambda row: str(row.get("employee_name") or row.get("name") or "").lower(),
-	)[:MAX_EMPLOYEE_OPTIONS]
+	)
+	return ordered[start : start + page_length]
 
 
 @frappe.whitelist()
@@ -498,17 +521,12 @@ def instructor_profile_employee_query(doctype, txt, searchfield, start, page_len
 	allowed = {row["name"] for row in _allowed_institutions()}
 	if not institution or institution not in allowed:
 		return []
-	needle = str(txt or "").strip().lower()
-	rows = _employee_options(institution)
-	if needle:
-		rows = [
-			row for row in rows
-			if needle in str(row.get("name") or "").lower()
-			or needle in str(row.get("employee_name") or "").lower()
-			or needle in str(row.get("user_id") or "").lower()
-		]
-	start = max(int(start), 0)
-	page_len = max(int(page_len), 1)
+	rows = _employee_options(
+		institution,
+		query=txt,
+		start=int(start),
+		page_length=int(page_len),
+	)
 	return [
 		[
 			row.get("name"),
@@ -516,7 +534,7 @@ def instructor_profile_employee_query(doctype, txt, searchfield, start, page_len
 			row.get("department") or "",
 			row.get("user_id") or "",
 		]
-		for row in rows[start : start + page_len]
+		for row in rows
 	]
 
 
