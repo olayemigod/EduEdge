@@ -468,7 +468,11 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         native_attendance.student_group = class_a["name"]
         native_attendance.date = "2094-10-05"
         native_attendance.status = "Present"
-        before_validate_student_attendance(native_attendance)
+        # The register flow already created this Student/session row above. Native
+        # validation must first resolve and authorize the exact schedule, then the
+        # existing duplicate guard remains authoritative.
+        with self.assertRaises(frappe.DuplicateEntryError):
+            before_validate_student_attendance(native_attendance)
         self.assertEqual(native_attendance.course_schedule, schedule_a.name)
 
         unscheduled_attendance = frappe.new_doc("Student Attendance")
