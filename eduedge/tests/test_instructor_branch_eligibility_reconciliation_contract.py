@@ -91,6 +91,42 @@ class TestInstructorBranchEligibilityReconciliationContract(unittest.TestCase):
             self.assertIn(token, component)
 
 
+    def test_primary_branch_rollover_is_daily_batched_and_idempotent(self):
+        hooks = (APP / "hooks.py").read_text(encoding="utf-8")
+        people = (APP / "education" / "people_fields.py").read_text(encoding="utf-8")
+        governance = (APP / "services" / "instructor_branch_governance.py").read_text(encoding="utf-8")
+
+        self.assertIn('"daily": [', hooks)
+        self.assertIn(
+            '"eduedge.education.people_fields.reconcile_instructor_primary_branches"',
+            hooks,
+        )
+
+        start = people.index("def reconcile_instructor_primary_branches")
+        end = people.index("def _backfill_instructor_primary_branches", start)
+        reconcile = people[start:end]
+        for token in (
+            'filters={"enabled": 1, "is_primary": 1}',
+            'fields=["instructor", "school_branch", "valid_from", "valid_to"]',
+            "current_by_instructor",
+            'fields=["name", INSTRUCTOR_PRIMARY_BRANCH_FIELD]',
+            "candidates[0] if len(candidates) == 1 else None",
+            "if (current or None) == (governed_primary or None)",
+            "update_modified=False",
+            '"checked": len(instructors)',
+            '"updated": updated',
+        ):
+            self.assertIn(token, reconcile)
+        self.assertNotIn("INSTITUTION_FIELD", reconcile)
+        self.assertNotIn("primary_branch(", reconcile)
+
+        for token in (
+            "def primary_branch(instructor: str, *, on_date=None)",
+            "day = getdate(on_date or nowdate())",
+            '_start(row.get("valid_from")) <= day <= _end(row.get("valid_to"))',
+        ):
+            self.assertIn(token, governance)
+
     def test_review_does_not_probe_out_of_scope_instructor_existence(self):
         source = (APP / "api" / "instructor_branch_eligibility.py").read_text(encoding="utf-8")
         review = source.split("def get_instructor_branch_eligibility_review", 1)[1].split(
