@@ -83,6 +83,11 @@ class TestInstructorEmployeeInstitutionScopeContract(unittest.TestCase):
             "Employees explicitly classified under another Institution's HR Department are excluded.",
             source,
         )
+        self.assertIn(
+            "cross-campus responsibilities within the Home Institution",
+            source,
+        )
+        self.assertNotIn("cross-Institution operational assignments", source)
 
 
 if __name__ == "__main__":
