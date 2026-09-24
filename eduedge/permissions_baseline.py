@@ -185,6 +185,12 @@ def get_default_permission_matrix() -> dict[str, dict[str, set[str]]]:
 	_grant(matrix, "Assessment Plan", ("CBT Invigilator",), VIEW)
 	_grant(matrix, "Assessment Result", ("Bursar",), VIEW)
 
+	# People Operations requires the same native Instructor authority as the
+	# governed assignment surfaces. Keep this in the clean-install baseline so
+	# new sites do not depend on historical migration patches for core workflow.
+	_grant(matrix, "Instructor", managers + ("School HR Officer",), MANAGE)
+	_grant(matrix, "Instructor", ACADEMIC_OPERATORS, VIEW)
+
 	_grant(matrix, "EduEdge School Branch", PLATFORM_MANAGERS + ("School Administrator",), MANAGE)
 	_grant(
 		matrix,
