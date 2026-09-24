@@ -68,6 +68,27 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertNotIn("apply_default_permission_baseline", after_migrate)
 		self.assertIn("ensure_eduedge_page_role_baseline", after_migrate)
 
+	def test_instructor_people_permissions_are_in_baseline_and_reconciled_once(self):
+		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
+		patches = (EDUEDGE / "patches.txt").read_text()
+		patch = (
+			EDUEDGE
+			/ "patches"
+			/ "v1_0"
+			/ "reconcile_instructor_people_permissions.py"
+		).read_text()
+
+		self.assertIn(
+			'_grant(matrix, "Instructor", managers + ("School HR Officer",), MANAGE)',
+			baseline,
+		)
+		self.assertIn('_grant(matrix, "Instructor", ACADEMIC_OPERATORS, VIEW)', baseline)
+		self.assertIn("reconcile_instructor_people_permissions", patches)
+		self.assertIn("INSTRUCTOR_MANAGERS = PLATFORM_MANAGERS + SCHOOL_MANAGERS", patch)
+		self.assertIn('_ensure_permission_row("Instructor", role, set(MANAGE))', patch)
+		self.assertIn('_ensure_permission_row("Instructor", role, set(VIEW))', patch)
+		self.assertIn("custom roles are deliberately untouched", patch.lower())
+
 	def test_installed_role_audit_classifies_and_flags_sensitive_access(self):
 		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
 		for marker in (
