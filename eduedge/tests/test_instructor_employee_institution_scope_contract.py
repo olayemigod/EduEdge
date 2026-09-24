@@ -21,7 +21,9 @@ class TestInstructorEmployeeInstitutionScopeContract(unittest.TestCase):
             '"department": ["in", sorted(department_scope)]',
             '"department": ["is", "not set"]',
             "MAX_EMPLOYEE_OPTIONS",
-            "Results remain bounded",
+            "every query remains bounded",
+            "or_filters=search_filters",
+            "query=txt",
         ):
             self.assertIn(token, source)
 
