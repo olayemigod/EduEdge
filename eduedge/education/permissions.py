@@ -169,16 +169,11 @@ def result_publication_log_query(user: str | None = None) -> str:
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
 	instructor_condition = ""
 	if is_limited_instructor_user(resolved_user):
-		instructor_values = _instructor_sql_values(resolved_user)
-		if not instructor_values:
+		ownership = _owned_student_group_condition("publication.student_group", resolved_user)
+		if ownership == "1=0":
 			return "1=0"
 		instructor_condition = f"""
-				and exists (
-					select 1
-					from `tabCourse Schedule` schedule
-					where schedule.student_group = publication.student_group
-						and schedule.instructor in ({instructor_values})
-				)
+				and ({ownership})
 		"""
 	return f"""
 		exists (
@@ -221,19 +216,11 @@ def guardian_query(user: str | None = None) -> str:
 	branch_values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
 	teacher_condition = ""
 	if is_limited_instructor_user(resolved_user):
-		instructor_values = _instructor_sql_values(resolved_user)
-		if not instructor_values:
+		ownership = _owned_student_condition("student.name", resolved_user)
+		if ownership == "1=0":
 			return "1=0"
 		teacher_condition = f"""
-			and exists (
-				select 1
-				from `tabStudent Group Student` group_student
-				inner join `tabCourse Schedule` schedule on schedule.student_group = group_student.parent
-				where group_student.parenttype = 'Student Group'
-					and group_student.active = 1
-					and group_student.student = student.name
-					and schedule.instructor in ({instructor_values})
-			)
+			and ({ownership})
 		"""
 	return f"""
 		exists (
@@ -545,13 +532,19 @@ def _has_instructor_student_group_scope(student_group: str | None, user: str) ->
 		return True
 	if not student_group:
 		return False
-	instructors = get_user_instructor_names(user)
-	if not instructors:
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
 		return False
 	return bool(
-		frappe.db.exists(
-			"Course Schedule",
-			{"student_group": student_group, "instructor": ["in", instructors]},
+		frappe.db.sql(
+			f"""
+			select schedule.name
+			from `tabCourse Schedule` schedule
+			where schedule.student_group = %s
+				and ({ownership})
+			limit 1
+			""",
+			(student_group,),
 		)
 	)
 
@@ -559,15 +552,15 @@ def _has_instructor_student_group_scope(student_group: str | None, user: str) ->
 def _owned_student_group_condition(group_expression: str, user: str) -> str:
 	if not is_limited_instructor_user(user):
 		return ""
-	values = _instructor_sql_values(user)
-	if not values:
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
 		return "1=0"
 	return f"""
 		exists (
 			select 1
 			from `tabCourse Schedule` schedule
 			where schedule.student_group = {group_expression}
-				and schedule.instructor in ({values})
+				and ({ownership})
 		)
 	"""
 
@@ -575,8 +568,8 @@ def _owned_student_group_condition(group_expression: str, user: str) -> str:
 def _owned_student_condition(student_expression: str, user: str) -> str:
 	if not is_limited_instructor_user(user):
 		return ""
-	values = _instructor_sql_values(user)
-	if not values:
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
 		return "1=0"
 	return f"""
 		exists (
@@ -586,7 +579,7 @@ def _owned_student_condition(student_expression: str, user: str) -> str:
 			where group_student.parenttype = 'Student Group'
 				and group_student.active = 1
 				and group_student.student = {student_expression}
-				and schedule.instructor in ({values})
+				and ({ownership})
 		)
 	"""
 
@@ -594,22 +587,22 @@ def _owned_student_condition(student_expression: str, user: str) -> str:
 def _student_is_owned(student: str | None, user: str) -> bool:
 	if not student:
 		return False
-	instructors = get_user_instructor_names(user)
-	if not instructors:
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
 		return False
 	return bool(
 		frappe.db.sql(
-			"""
-			select 1
+			f"""
+			select schedule.name
 			from `tabStudent Group Student` group_student
 			inner join `tabCourse Schedule` schedule on schedule.student_group = group_student.parent
 			where group_student.parenttype = 'Student Group'
 				and group_student.active = 1
 				and group_student.student = %s
-				and schedule.instructor in %(instructors)s
+				and ({ownership})
 			limit 1
 			""",
-			{"student": student, "instructors": tuple(instructors)},
+			(student,),
 		)
 	)
 
