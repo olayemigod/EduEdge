@@ -366,12 +366,41 @@ def _departments(institution: str) -> list[dict]:
 	)
 
 
-def _employee_options(institution: str) -> list[dict]:
-	"""Return only active Employees relevant to the selected Home Institution.
+def _employee_department_scope(institution: str, company: str) -> set[str] | None:
+	"""Departments valid for an Instructor Employee link.
 
-	Employee is a dependent field of Home Institution. Do not expose/load the entire
-	Employee table into the Instructor page. Global administrators select a Home
-	Institution first; the UI then reloads this bounded, company-scoped option set.
+	None means the Department master has no EduEdge Institution field. Where the
+	field exists, keep Departments owned by the selected Institution and legacy
+	Departments that have not yet been classified. Explicitly cross-Institution
+	Departments are excluded.
+	"""
+	if not frappe.db.exists("DocType", "Department"):
+		return None
+	meta = frappe.get_meta("Department")
+	if not meta.has_field(INSTITUTION_FIELD):
+		return None
+	owned = frappe.get_all(
+		"Department",
+		filters={"company": company, INSTITUTION_FIELD: institution},
+		pluck="name",
+		limit_page_length=0,
+	)
+	unclassified = frappe.get_all(
+		"Department",
+		filters={"company": company, INSTITUTION_FIELD: ["is", "not set"]},
+		pluck="name",
+		limit_page_length=0,
+	)
+	return {str(name) for name in [*owned, *unclassified] if name}
+
+
+def _employee_options(institution: str) -> list[dict]:
+	"""Return active Employees valid for the selected Home Institution.
+
+	The Company remains the ERPNext HR boundary. When Department carries EduEdge
+	Institution ownership, exclude Employees explicitly assigned to another
+	Institution while preserving legacy Employees whose Department is unclassified
+	or blank. Results remain bounded; the page never loads the whole Employee table.
 	"""
 	if (
 		not institution
@@ -383,13 +412,112 @@ def _employee_options(institution: str) -> list[dict]:
 	company = frappe.db.get_value("EduEdge Institution", institution, "company")
 	if not company:
 		return []
-	return frappe.get_list(
-		"Employee",
-		filters={"status": "Active", "company": company},
-		fields=["name", "employee_name", "department", "gender", "user_id", "status", "company"],
-		order_by="employee_name asc",
-		limit_page_length=MAX_EMPLOYEE_OPTIONS,
+
+	fields = ["name", "employee_name", "department", "gender", "user_id", "status", "company"]
+	department_scope = _employee_department_scope(institution, company)
+	if department_scope is None:
+		return frappe.get_list(
+			"Employee",
+			filters={"status": "Active", "company": company},
+			fields=fields,
+			order_by="employee_name asc",
+			limit_page_length=MAX_EMPLOYEE_OPTIONS,
+		)
+
+	rows = []
+	if department_scope:
+		rows.extend(
+			frappe.get_list(
+				"Employee",
+				filters={
+					"status": "Active",
+					"company": company,
+					"department": ["in", sorted(department_scope)],
+				},
+				fields=fields,
+				order_by="employee_name asc",
+				limit_page_length=MAX_EMPLOYEE_OPTIONS,
+			)
+		)
+	remaining = max(MAX_EMPLOYEE_OPTIONS - len(rows), 0)
+	if remaining:
+		rows.extend(
+			frappe.get_list(
+				"Employee",
+				filters={
+					"status": "Active",
+					"company": company,
+					"department": ["is", "not set"],
+				},
+				fields=fields,
+				order_by="employee_name asc",
+				limit_page_length=remaining,
+			)
+		)
+	unique = {row.name: row for row in rows if row.get("name")}
+	return sorted(
+		unique.values(),
+		key=lambda row: str(row.get("employee_name") or row.get("name") or "").lower(),
+	)[:MAX_EMPLOYEE_OPTIONS]
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def instructor_profile_department_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Department options for the selected Instructor Home Institution."""
+	_require_permission("read")
+	filters = frappe._dict(filters or {})
+	institution = str(filters.get("institution") or "").strip()
+	allowed = {row["name"] for row in _allowed_institutions()}
+	if not institution or institution not in allowed or not frappe.has_permission("Department", "read"):
+		return []
+	query_filters = {INSTITUTION_FIELD: institution} if frappe.get_meta("Department").has_field(INSTITUTION_FIELD) else {}
+	needle = str(txt or "").strip()
+	rows = frappe.get_list(
+		"Department",
+		filters=query_filters,
+		or_filters={
+			"name": ["like", f"%{needle}%"],
+			"department_name": ["like", f"%{needle}%"],
+		} if needle else None,
+		fields=["name", "department_name"],
+		order_by="department_name asc",
+		limit_start=int(start),
+		limit_page_length=int(page_len),
 	)
+	return [[row.name, row.department_name or row.name] for row in rows]
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def instructor_profile_employee_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Bounded Employee options for the selected Instructor Home Institution."""
+	_require_permission("read")
+	filters = frappe._dict(filters or {})
+	institution = str(filters.get("institution") or "").strip()
+	allowed = {row["name"] for row in _allowed_institutions()}
+	if not institution or institution not in allowed:
+		return []
+	needle = str(txt or "").strip().lower()
+	rows = _employee_options(institution)
+	if needle:
+		rows = [
+			row for row in rows
+			if needle in str(row.get("name") or "").lower()
+			or needle in str(row.get("employee_name") or "").lower()
+			or needle in str(row.get("user_id") or "").lower()
+		]
+	start = max(int(start), 0)
+	page_len = max(int(page_len), 1)
+	return [
+		[
+			row.get("name"),
+			row.get("employee_name") or row.get("name"),
+			row.get("department") or "",
+			row.get("user_id") or "",
+		]
+		for row in rows[start : start + page_len]
+	]
 
 
 @frappe.whitelist()
@@ -546,11 +674,34 @@ def save_instructor(payload: str | dict) -> dict:
 		if not frappe.has_permission("Employee", "read"):
 			frappe.throw(_("You are not permitted to link Employee records."), frappe.PermissionError)
 		company = frappe.db.get_value("EduEdge Institution", institution, "company")
-		employee_row = frappe.db.get_value("Employee", employee, ["status", "company"], as_dict=True)
+		employee_row = frappe.db.get_value(
+			"Employee",
+			employee,
+			["status", "company", "department"],
+			as_dict=True,
+		)
 		if not employee_row or employee_row.status != "Active":
 			frappe.throw(_("Select an active Employee."), frappe.ValidationError)
 		if company and employee_row.company != company:
 			frappe.throw(_("Linked Employee must belong to the Home Institution's Company."), frappe.ValidationError)
+		employee_context_changed = bool(
+			not name
+			or employee != str(doc.get("employee") or "").strip()
+			or institution != str(doc.get(INSTITUTION_FIELD) or "").strip()
+		)
+		if (
+			employee_context_changed
+			and employee_row.department
+			and frappe.get_meta("Department").has_field(INSTITUTION_FIELD)
+		):
+			employee_department_institution = frappe.db.get_value(
+				"Department", employee_row.department, INSTITUTION_FIELD
+			)
+			if employee_department_institution and employee_department_institution != institution:
+				frappe.throw(
+					_("Linked Employee Department must belong to the Instructor's Home Institution."),
+					frappe.ValidationError,
+				)
 
 	for fieldname in INSTRUCTOR_FIELDS:
 		if doc.meta.has_field(fieldname) and fieldname in data:
