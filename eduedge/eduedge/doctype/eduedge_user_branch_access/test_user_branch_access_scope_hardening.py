@@ -4,6 +4,8 @@ import frappe
 from education.education.test_utils import before_tests
 from frappe.tests.utils import FrappeTestCase
 
+from eduedge.education.user_branch_access_permissions import assignable_access_levels
+
 
 class TestUserBranchAccessScopeHardening(FrappeTestCase):
     def setUp(self) -> None:
@@ -112,6 +114,7 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
         out_beta = self._grant(target_beta, "Branch", branch=branch_b1)
 
         frappe.set_user(branch_admin.name)
+        self.assertEqual(assignable_access_levels(), ["Branch"])
         self.assertTrue(frappe.has_permission("EduEdge User Branch Access", "create"))
         in_scope = self._regular_create(target_a1, "Branch", branch=branch_a1)
 
@@ -148,6 +151,7 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
         institution_admin = self._make_user("Institution Admin")
         self._grant(institution_admin, "Institution", institution=institution_a)
         frappe.set_user(institution_admin.name)
+        self.assertEqual(assignable_access_levels(), ["Institution", "Branch"])
         self._regular_create(self._make_user("Institution Branch"), "Branch", branch=branch_a2)
         self._regular_create(
             self._make_user("Institution Peer"),
@@ -167,6 +171,7 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
         company_admin = self._make_user("Company Admin")
         self._grant(company_admin, "Company")
         frappe.set_user(company_admin.name)
+        self.assertEqual(assignable_access_levels(), ["Company", "Institution", "Branch"])
         self._regular_create(self._make_user("Company Peer"), "Company")
         self._regular_create(
             self._make_user("Company Institution"),
