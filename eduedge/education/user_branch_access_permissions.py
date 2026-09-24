@@ -126,6 +126,39 @@ def assert_user_branch_access_scope(doc) -> None:
     )
 
 
+
+def assert_default_branch_change_scope(doc) -> None:
+    if not cint(doc.get("is_default_branch")) or _effective_scope(doc) != ASSIGNMENT_SCOPE_BRANCH:
+        return
+    scope = get_assignable_access_scope()
+    if scope is None:
+        return
+    rows = frappe.get_all(
+        "EduEdge User Branch Access",
+        filters={
+            "user": doc.get("user"),
+            "is_default_branch": 1,
+            "name": ["!=", doc.get("name") or ""],
+        },
+        fields=[
+            "name",
+            "access_scope",
+            "hq_all_branch_access",
+            "company",
+            "institution",
+            "school_branch",
+        ],
+        limit_page_length=0,
+    )
+    if any(not _scope_allowed(row, scope) for row in rows):
+        frappe.throw(
+            _(
+                "This user already has a default Branch outside your governed access scope. "
+                "A platform administrator must change the cross-scope default."
+            ),
+            frappe.PermissionError,
+        )
+
 def has_user_branch_access_permission(doc, user=None, permission_type=None) -> bool:
     resolved = user or frappe.session.user
     if _is_privileged(resolved) or not is_branch_access_enforced():
