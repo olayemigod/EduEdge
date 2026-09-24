@@ -56,13 +56,25 @@ def get_branch_governance_context(
 	branches = _get_branch_rows(company=company, allowed_branch_names=allowed_branch_names)
 	allowed_companies = {row["company"] for row in branches if row.get("company")}
 	allowed_institutions = {row["institution"] for row in branches if row.get("institution")}
-	assignments = _get_access_rows(
+	coverage_assignments = _get_access_rows(
 		company=company,
 		allowed_branch_names=allowed_branch_names,
 		allowed_companies=allowed_companies,
 		allowed_institutions=allowed_institutions,
+		permission_aware=False,
 	)
-	active_assignments = [row for row in assignments if row["status"] == "Active"]
+	assignments = (
+		_get_access_rows(
+			company=company,
+			allowed_branch_names=allowed_branch_names,
+			allowed_companies=allowed_companies,
+			allowed_institutions=allowed_institutions,
+			permission_aware=True,
+		)
+		if include_assignment_details
+		else []
+	)
+	active_assignments = [row for row in coverage_assignments if row["status"] == "Active"]
 	instructor_eligibility = (
 		_get_instructor_eligibility_rows(branches)
 		if include_instructor_eligibility
@@ -463,6 +475,7 @@ def _get_access_rows(
 	allowed_branch_names: set[str] | None = None,
 	allowed_companies: set[str] | None = None,
 	allowed_institutions: set[str] | None = None,
+	permission_aware: bool = False,
 ) -> list[dict]:
 	if (
 		allowed_branch_names is not None
@@ -472,7 +485,8 @@ def _get_access_rows(
 	):
 		return []
 	filters = {"company": company} if company else {}
-	rows = frappe.get_all(
+	getter = frappe.get_list if permission_aware else frappe.get_all
+	rows = getter(
 		"EduEdge User Branch Access",
 		filters=filters,
 		fields=[
