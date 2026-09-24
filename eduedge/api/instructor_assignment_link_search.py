@@ -498,8 +498,9 @@ def instructor_assignment_branch_query(doctype, txt, searchfield, start, page_le
 	instructor = str(values.get("instructor") or "").strip()
 	if not instructor:
 		return []
+	resolved_instructor = _assert_search_instructor_available(instructor)
 	allowed = _allowed_branch_map()
-	governed = eligible_branch_names(instructor, within=allowed.keys())
+	governed = eligible_branch_names(resolved_instructor, within=allowed.keys())
 	needle = str(txt or "").strip().lower()
 	rows = []
 	for name in sorted(governed):
