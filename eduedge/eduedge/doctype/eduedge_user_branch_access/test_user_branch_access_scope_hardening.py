@@ -65,6 +65,7 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
             "company": self.company,
             "enabled": 1,
             "can_switch_branch": 1,
+            "is_default_branch": is_default_branch,
         }
         if institution:
             values["institution"] = institution.name
@@ -72,7 +73,7 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
             values["school_branch"] = branch.name
         return self._insert("EduEdge User Branch Access", **values)
 
-    def _regular_create(self, user, scope: str, *, branch=None, institution=None):
+    def _regular_create(self, user, scope: str, *, branch=None, institution=None, is_default_branch: int = 0):
         values = {
             "doctype": "EduEdge User Branch Access",
             "user": user.name,
@@ -199,9 +200,11 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
 
         frappe.set_user(actor.name)
         with self.assertRaises(frappe.PermissionError):
-            self._regular_create(target, "Branch", branch=branch_one).db_set(
-                "is_default_branch",
-                1,
+            self._regular_create(
+                target,
+                "Branch",
+                branch=branch_one,
+                is_default_branch=1,
             )
 
         self.assertEqual(
