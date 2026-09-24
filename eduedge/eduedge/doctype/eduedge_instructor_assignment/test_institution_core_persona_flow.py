@@ -463,10 +463,31 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         # Ambiguous teaching identity must fail closed everywhere, not just at
         # document-level Course Schedule permission checks.
         frappe.set_user("Administrator")
-        duplicate_instructor = self._make_instructor(
+        ambiguous_employee = self._insert(
+            "Employee",
+            naming_series="HR-EMP-",
+            first_name="QA Ambiguous Instructor",
+            company=self.company,
+            create_user_permission=0,
+            date_of_birth="1991-06-09",
+            date_of_joining="2021-01-01",
+            department=department.name,
+            gender="Female",
+            status="Active",
+        )
+        self._make_instructor(
             institution,
-            "Duplicate Alpha",
-            employee=instructor_employee,
+            "Ambiguous Alpha",
+            employee=ambiguous_employee,
+        )
+        # Simulate a legacy/data-integrity anomaly without weakening normal Instructor
+        # or Employee validation: one User resolves through two active Employees.
+        frappe.db.set_value(
+            "Employee",
+            ambiguous_employee.name,
+            "user_id",
+            instructor_user.name,
+            update_modified=False,
         )
         frappe.clear_cache(user=instructor_user.name)
 
@@ -504,10 +525,10 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
 
         frappe.set_user("Administrator")
         frappe.db.set_value(
-            "Instructor",
-            duplicate_instructor.name,
-            "status",
-            "Inactive",
+            "Employee",
+            ambiguous_employee.name,
+            "user_id",
+            None,
             update_modified=False,
         )
         frappe.clear_cache(user=instructor_user.name)
