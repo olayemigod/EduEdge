@@ -47,6 +47,25 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         self.assertIn("student_group: frm.doc.student_group", source)
 
 
+    def test_native_attendance_hook_revalidates_exact_schedule_ownership(self):
+        source = (APP / "education" / "academic_operations.py").read_text(encoding="utf-8")
+        hook = source.split("def before_validate_student_attendance", 1)[1].split(
+            "def _validate_limited_instructor_attendance_schedule", 1
+        )[0]
+        guard = source.split("def _validate_limited_instructor_attendance_schedule", 1)[1].split(
+            "def _resolve_exact_attendance_schedule", 1
+        )[0]
+
+        self.assertIn("_validate_limited_instructor_attendance_schedule(schedule)", hook)
+        for token in (
+            "is_limited_instructor_user(frappe.session.user)",
+            "Limited Instructor attendance must be anchored to an exact Course Schedule.",
+            'schedule_doc = frappe.get_doc("Course Schedule", schedule.name)',
+            'schedule_doc.check_permission("read")',
+        ):
+            self.assertIn(token, guard)
+
+
     def test_attendance_register_requires_student_group_and_schedule_read_scope(self):
         source = API.read_text(encoding="utf-8")
         block = source.split("def get_attendance_register", 1)[1].split(
