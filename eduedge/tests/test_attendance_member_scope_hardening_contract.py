@@ -157,7 +157,7 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
 
         for token in (
             "limited_instructor = is_limited_instructor_user()",
-            'filters["instructor"] = ["in", get_user_instructor_names(required=True)]',
+            'filters["instructor"] = resolve_exact_instructor_for_user(required=True)',
             'frappe.get_list(',
             '"Course Schedule"',
             "More than one Course Schedule exists for this Class and date.",
