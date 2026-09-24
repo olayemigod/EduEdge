@@ -7,6 +7,7 @@ from frappe.utils import cint, now_datetime
 
 from eduedge.api.academic_operations_safe import (
     get_attendance_register,
+    get_operations_context,
     save_attendance_register,
 )
 from eduedge.api.branch_governance import get_governance_context
@@ -458,6 +459,69 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
                 "2094-10-05",
                 schedule_b.name,
             )
+
+        # Ambiguous teaching identity must fail closed everywhere, not just at
+        # document-level Course Schedule permission checks.
+        frappe.set_user("Administrator")
+        duplicate_instructor = self._make_instructor(
+            institution,
+            "Duplicate Alpha",
+            employee=instructor_employee,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Course Schedule",
+                filters={"name": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Student",
+                filters={"name": student.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_operations_context(
+                branch=branch_a.name,
+                date="2094-10-05",
+                student_group=class_a["name"],
+            )
+        with self.assertRaises(frappe.PermissionError):
+            get_attendance_register(
+                class_a["name"],
+                "2094-10-05",
+                schedule_a.name,
+            )
+
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "Instructor",
+            duplicate_instructor.name,
+            "status",
+            "Inactive",
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Course Schedule",
+                filters={"name": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [schedule_a.name],
+        )
 
         # A stale Course Schedule must not keep downstream learner visibility alive
         # after the exact Subject responsibility is no longer effective.
