@@ -544,6 +544,74 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [schedule_a.name],
         )
 
+        # Also freeze legacy drift where one active Employee has two active Instructor
+        # records. Normal validation prevents this today, but imported/older data must
+        # still fail closed without deleting the historical duplicate.
+        frappe.set_user("Administrator")
+        duplicate_instructor = self._insert(
+            "Instructor",
+            instructor_name=f"QA Alpha Duplicate Instructor {self.suffix}",
+            status="Inactive",
+            employee=instructor_employee.name,
+            **{INSTITUTION_FIELD: institution.name},
+        )
+        frappe.db.set_value(
+            "Instructor",
+            duplicate_instructor.name,
+            "status",
+            "Active",
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Course Schedule",
+                filters={"name": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Program Enrollment",
+                filters={"name": enrollment.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_operations_context(
+                branch=branch_a.name,
+                date="2094-10-05",
+                student_group=class_a["name"],
+            )
+
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "Instructor",
+            duplicate_instructor.name,
+            "status",
+            "Inactive",
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Course Schedule",
+                filters={"name": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [schedule_a.name],
+        )
+        self.assertTrue(frappe.db.exists("Instructor", duplicate_instructor.name))
+
         # A stale Course Schedule must not keep downstream learner visibility alive
         # after the exact Subject responsibility is no longer effective.
         frappe.set_user("Administrator")
