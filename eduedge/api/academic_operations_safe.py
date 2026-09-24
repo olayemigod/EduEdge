@@ -10,8 +10,8 @@ from eduedge.api import academic_operations as base
 from eduedge.education.academic_operations import ASSIGNMENT_DOCTYPE
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_scope import (
-	get_user_instructor_names,
 	is_limited_instructor_user,
+	resolve_exact_instructor_for_user,
 )
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.academic_calendar import resolve_academic_defaults
@@ -220,7 +220,12 @@ def get_operations_context(
 	academic_year = calendar_context.get("academic_year")
 	academic_term = calendar_context.get("academic_term")
 	limited_instructor = is_limited_instructor_user()
-	instructor_names = get_user_instructor_names(required=limited_instructor)
+	exact_instructor = (
+		resolve_exact_instructor_for_user(required=True)
+		if limited_instructor
+		else ""
+	)
+	instructor_names = [exact_instructor] if exact_instructor else []
 
 	group_filters: dict = {BRANCH_FIELD: resolved_branch, "disabled": 0}
 	if academic_year:
@@ -394,7 +399,7 @@ def _resolve_register_schedule(
 		BRANCH_FIELD: branch,
 	}
 	if limited_instructor:
-		filters["instructor"] = ["in", get_user_instructor_names(required=True)]
+		filters["instructor"] = resolve_exact_instructor_for_user(required=True)
 	matching = frappe.get_list(
 		"Course Schedule",
 		filters=filters,
