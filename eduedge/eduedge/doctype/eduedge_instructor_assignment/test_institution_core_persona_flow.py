@@ -411,10 +411,20 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         # List permissions must fail closed on an ambiguous User -> Instructor
         # identity just like document permission and capability resolution.
         frappe.set_user("Administrator")
-        duplicate_instructor = self._make_instructor(
-            institution,
-            "Alpha Duplicate",
-            employee=instructor_employee,
+        duplicate_instructor = self._insert(
+            "Instructor",
+            instructor_name=f"QA Alpha Duplicate Instructor {self.suffix}",
+            status="Inactive",
+            employee=instructor_employee.name,
+            **{INSTITUTION_FIELD: institution.name},
+        )
+        # Simulate legacy/imported data drift that bypassed today's validation.
+        frappe.db.set_value(
+            "Instructor",
+            duplicate_instructor.name,
+            "status",
+            "Active",
+            update_modified=False,
         )
         frappe.clear_cache(user=instructor_user.name)
 
