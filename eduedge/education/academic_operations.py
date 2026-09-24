@@ -17,6 +17,7 @@ ASSIGNMENT_DOCTYPE = "EduEdge Instructor Branch Assignment"
 def before_validate_student_group(doc, method=None) -> None:
 	_assign_branch(doc)
 	offering = resolve_exact_offering(doc, purpose="enrollment")
+	_validate_student_group_identity(doc)
 	_validate_branch(doc)
 	_validate_term_year(doc.academic_year, doc.academic_term)
 	if not doc.program:
@@ -42,6 +43,41 @@ def before_validate_student_group(doc, method=None) -> None:
 	for row in doc.get("instructors") or []:
 		if row.instructor:
 			assert_instructor_assignment(row.instructor, doc.get(BRANCH_FIELD), reference_date=nowdate())
+
+
+STUDENT_GROUP_IDENTITY_FIELDS = (
+	BRANCH_FIELD,
+	OFFERING_FIELD,
+	"eduedge_class_arm",
+	"program",
+	"academic_year",
+	"academic_term",
+	"batch",
+	"group_based_on",
+	"student_category",
+	"course",
+)
+
+
+def _validate_student_group_identity(doc) -> None:
+	"""Preserve the academic identity of an existing period-specific Student Group."""
+	before = doc.get_doc_before_save()
+	if not before:
+		return
+	changed = [
+		fieldname
+		for fieldname in STUDENT_GROUP_IDENTITY_FIELDS
+		if doc.meta.has_field(fieldname)
+		and (before.get(fieldname) or None) != (doc.get(fieldname) or None)
+	]
+	if changed:
+		frappe.throw(
+			_(
+				"Existing Student Group academic context cannot be changed ({0}). "
+				"Create a new Student Group / Class Arm for the corrected Branch, Programme Offering, period, grouping basis, or Course."
+			).format(", ".join(changed)),
+			frappe.ValidationError,
+		)
 
 
 def _validate_group_program_context(doc, offering) -> None:
@@ -95,22 +131,59 @@ def _validate_group_course_context(doc) -> None:
 
 
 def _validate_student_group_enrollment(doc, student: str) -> None:
-	filters = {"student": student, "docstatus": 1, BRANCH_FIELD: doc.get(BRANCH_FIELD)}
+	base_filters = {
+		"student": student,
+		"docstatus": 1,
+		BRANCH_FIELD: doc.get(BRANCH_FIELD),
+	}
+	if doc.student_category:
+		base_filters["student_category"] = doc.student_category
+
 	offering = doc.get(OFFERING_FIELD) if doc.meta.has_field(OFFERING_FIELD) else None
+	enrollment_names: list[str] = []
 	if offering and frappe.get_meta("Program Enrollment").has_field(OFFERING_FIELD):
-		if frappe.db.exists("Program Enrollment", {**filters, OFFERING_FIELD: offering}):
-			return
-	if doc.program:
-		filters["program"] = doc.program
-	if doc.academic_year:
-		filters["academic_year"] = doc.academic_year
-	if doc.academic_term:
-		filters["academic_term"] = doc.academic_term
-	if doc.batch:
-		filters["student_batch_name"] = doc.batch
-	if not frappe.db.exists("Program Enrollment", filters):
+		enrollment_names = frappe.get_all(
+			"Program Enrollment",
+			filters={**base_filters, OFFERING_FIELD: offering},
+			pluck="name",
+			limit_page_length=0,
+		)
+
+	if not enrollment_names:
+		fallback_filters = dict(base_filters)
+		if doc.program:
+			fallback_filters["program"] = doc.program
+		if doc.academic_year:
+			fallback_filters["academic_year"] = doc.academic_year
+		if doc.academic_term:
+			fallback_filters["academic_term"] = doc.academic_term
+		if doc.batch:
+			fallback_filters["student_batch_name"] = doc.batch
+		enrollment_names = frappe.get_all(
+			"Program Enrollment",
+			filters=fallback_filters,
+			pluck="name",
+			limit_page_length=0,
+		)
+
+	if not enrollment_names:
 		frappe.throw(
 			_("Student {0} has no submitted enrollment matching this Programme Offering and Branch.").format(student),
+			frappe.ValidationError,
+		)
+
+	if doc.course and not frappe.db.exists(
+		"Program Enrollment Course",
+		{
+			"parent": ["in", enrollment_names],
+			"parenttype": "Program Enrollment",
+			"course": doc.course,
+		},
+	):
+		frappe.throw(
+			_(
+				"Student {0} is not enrolled in Course / Subject {1} for this Programme Offering and Branch."
+			).format(student, doc.course),
 			frappe.ValidationError,
 		)
 

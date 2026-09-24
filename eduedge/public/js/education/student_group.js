@@ -29,6 +29,7 @@ function setStudentGroupQueries(frm) {
 	frm.set_query("student", "students", () => ({
 		query: "eduedge.api.academic_group_context.student_group_student_query",
 		filters: {
+			student_group: frm.is_new() ? "" : frm.doc.name,
 			eduedge_school_branch: frm.doc.eduedge_school_branch,
 			eduedge_program_offering: frm.doc.eduedge_program_offering,
 			academic_year: frm.doc.academic_year,
@@ -83,7 +84,7 @@ async function clearStudentGroupContext(frm, fields) {
 
 function applyExistingPeriodLock(frm) {
 	const locked = !frm.is_new();
-	for (const fieldname of ["eduedge_school_branch", "eduedge_program_offering", "eduedge_class_arm", "program", "academic_year", "academic_term", "batch"]) {
+	for (const fieldname of ["eduedge_school_branch", "eduedge_program_offering", "eduedge_class_arm", "program", "academic_year", "academic_term", "batch", "group_based_on", "student_category", "course"]) {
 		if (frm.fields_dict[fieldname]) frm.set_df_property(fieldname, "read_only", locked ? 1 : frm.fields_dict[fieldname].df.read_only || 0);
 	}
 	if (frm.fields_dict.instructors) {
