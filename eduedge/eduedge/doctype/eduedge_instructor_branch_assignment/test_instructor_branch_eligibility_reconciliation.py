@@ -154,8 +154,8 @@ class TestInstructorBranchEligibilityReconciliation(FrappeTestCase):
 
     def test_dated_primary_branch_mirror_rolls_forward_and_expires(self):
         institution = self._make_institution("Rollover")
-        branch_one = self._make_branch(institution, "Rollover One")
-        branch_two = self._make_branch(institution, "Rollover Two")
+        branch_one = self._make_branch(institution, "January Primary")
+        branch_two = self._make_branch(institution, "February Primary")
         instructor = self._make_instructor(institution, "Rollover")
 
         self._insert(
