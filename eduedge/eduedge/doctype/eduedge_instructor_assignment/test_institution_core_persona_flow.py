@@ -1,0 +1,452 @@
+from __future__ import annotations
+
+import frappe
+from education.education.test_utils import before_tests
+from frappe.tests.utils import FrappeTestCase
+from frappe.utils import cint, now_datetime
+
+from eduedge.api.academic_operations_safe import (
+    get_attendance_register,
+    save_attendance_register,
+)
+from eduedge.api.branch_governance import get_governance_context
+from eduedge.api.class_arms import save_class_arm
+from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
+from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_assignment_capabilities import (
+    get_instructor_assignment_capability_state,
+)
+from eduedge.services.academic_calendar import ensure_institution_calendar
+
+
+class TestInstitutionCorePersonaFlow(FrappeTestCase):
+    """DB-backed freeze coverage for Branch -> Instructor -> Schedule -> Attendance."""
+
+    def setUp(self) -> None:
+        before_tests()
+        frappe.set_user("Administrator")
+        self.suffix = frappe.generate_hash(length=8).upper()
+        self.company = "_Test Company"
+        settings = frappe.get_single("EduEdge Settings")
+        self.original_branch_enforcement = cint(
+            settings.enable_user_branch_access_enforcement
+        )
+        self.original_capability_enforcement = cint(
+            settings.enforce_instructor_assignment_capabilities
+        )
+        self._set_enforcement(branch=1, capabilities=1)
+        if frappe.db.exists("Holiday List", "Test Holiday List"):
+            frappe.db.set_value(
+                "Company",
+                self.company,
+                "default_holiday_list",
+                "Test Holiday List",
+            )
+
+    def tearDown(self) -> None:
+        frappe.set_user("Administrator")
+        self._set_enforcement(
+            branch=self.original_branch_enforcement,
+            capabilities=self.original_capability_enforcement,
+        )
+
+    def _set_enforcement(self, *, branch: int, capabilities: int) -> None:
+        settings = frappe.get_single("EduEdge Settings")
+        settings.enable_user_branch_access_enforcement = cint(branch)
+        settings.enforce_instructor_assignment_capabilities = cint(capabilities)
+        frappe.flags.in_eduedge_capability_enforcement_change = True
+        try:
+            settings.save(ignore_permissions=True)
+        finally:
+            frappe.flags.in_eduedge_capability_enforcement_change = False
+
+    def _insert(self, doctype: str, **values):
+        return frappe.get_doc({"doctype": doctype, **values}).insert(
+            ignore_permissions=True
+        )
+
+    def _make_user(self, role: str, label: str):
+        email = (
+            f"qa-core-{label.lower().replace(' ', '-')}-"
+            f"{self.suffix.lower()}@example.com"
+        )
+        user = self._insert(
+            "User",
+            email=email,
+            first_name=f"QA {label}",
+            enabled=1,
+            user_type="System User",
+            send_welcome_email=0,
+            roles=[{"role": role}],
+        )
+        frappe.clear_cache(user=user.name)
+        return user
+
+    def _grant_branch(self, user, branch):
+        return self._insert(
+            "EduEdge User Branch Access",
+            user=user.name,
+            branch_role="Other",
+            access_scope="Branch",
+            school_branch=branch.name,
+            enabled=1,
+            can_switch_branch=1,
+        )
+
+    def _make_institution(self, label: str):
+        return self._insert(
+            "EduEdge Institution",
+            institution_name=f"QA Core {label} School {self.suffix}",
+            institution_code=f"QAC{label[:4].upper()}{self.suffix}",
+            company=self.company,
+            institution_type="PRIMARY",
+            enabled=1,
+        )
+
+    def _make_branch(self, institution, label: str):
+        return self._insert(
+            "EduEdge School Branch",
+            branch_name=f"QA Core {label} Campus {self.suffix}",
+            branch_code=f"QAC{label.replace(' ', '').upper()[:8]}{self.suffix}",
+            company=self.company,
+            institution=institution.name,
+            enabled=1,
+        )
+
+    def _make_employee(self, user, department, label: str):
+        return self._insert(
+            "Employee",
+            naming_series="HR-EMP-",
+            first_name=f"QA {label}",
+            company=self.company,
+            user_id=user.name,
+            create_user_permission=0,
+            date_of_birth="1990-05-08",
+            date_of_joining="2020-01-01",
+            department=department.name,
+            gender="Female",
+            status="Active",
+        )
+
+    def _make_instructor(self, institution, label: str, employee=None):
+        values = {
+            "instructor_name": f"QA {label} Instructor {self.suffix}",
+            "status": "Active",
+            INSTITUTION_FIELD: institution.name,
+        }
+        if employee:
+            values["employee"] = employee.name
+        return self._insert("Instructor", **values)
+
+    def _make_offering(self, institution, branch, program, year, label: str):
+        return self._insert(
+            "EduEdge Program Offering",
+            school_branch=branch.name,
+            program=program.name,
+            academic_year=year.name,
+            offering_title=f"QA Core {label} Intake {self.suffix}",
+            offering_code=f"QA-CORE-{label.replace(' ', '').upper()[:8]}-{self.suffix}",
+            study_mode="Full-Time",
+            delivery_mode="Onsite",
+            enrollment_enabled=1,
+            is_active=1,
+        )
+
+    def _make_eligibility(self, instructor, branch, *, primary: int = 0):
+        return self._insert(
+            "EduEdge Instructor Branch Assignment",
+            instructor=instructor.name,
+            school_branch=branch.name,
+            enabled=1,
+            is_primary=primary,
+        )
+
+    def _make_subject_assignment(
+        self,
+        instructor,
+        institution,
+        branch,
+        offering,
+        student_group: str,
+        course,
+    ):
+        return self._insert(
+            "EduEdge Instructor Assignment",
+            instructor=instructor.name,
+            assignment_type="Subject Instructor",
+            assignment_scope="Class Arm",
+            institution=institution.name,
+            school_branch=branch.name,
+            program_offering=offering.name,
+            student_group=student_group,
+            course=course.name,
+            enabled=1,
+        )
+
+    def _grant_assignment_capabilities(self, assignment) -> None:
+        doc = frappe.get_doc("EduEdge Instructor Assignment", assignment.name)
+        doc.can_view_subject_content = 1
+        doc.can_enter_marks = 1
+        doc.capabilities_updated_on = now_datetime()
+        doc.capabilities_updated_by = "Administrator"
+        doc.capabilities_update_reason = "Institution Core persona freeze fixture"
+        frappe.flags.in_eduedge_assignment_capability_update = True
+        try:
+            doc.save(ignore_permissions=True)
+        finally:
+            frappe.flags.in_eduedge_assignment_capability_update = False
+
+    def _make_schedule(
+        self,
+        *,
+        student_group: str,
+        instructor,
+        course,
+        room,
+        branch,
+        from_time: str,
+    ):
+        return self._insert(
+            "Course Schedule",
+            naming_series="EDU-CSH-.YYYY.-",
+            student_group=student_group,
+            instructor=instructor.name,
+            course=course.name,
+            schedule_date="2094-10-05",
+            room=room.name,
+            from_time=from_time,
+            to_time="10:00:00" if from_time == "09:00:00" else "12:00:00",
+            **{BRANCH_FIELD: branch.name},
+        )
+
+    def test_institution_core_persona_matrix(self):
+        institution = self._make_institution("Alpha")
+        branch_a = self._make_branch(institution, "Alpha One")
+        branch_b = self._make_branch(institution, "Alpha Two")
+        unrelated_institution = self._make_institution("Beta")
+        unrelated_branch = self._make_branch(unrelated_institution, "Beta One")
+
+        year = self._insert(
+            "Academic Year",
+            academic_year_name=f"QA Core {self.suffix}",
+            year_start_date="2094-09-01",
+            year_end_date="2095-08-31",
+        )
+        self._insert(
+            "Academic Term",
+            academic_year=year.name,
+            term_name=f"QA Core Term {self.suffix}",
+            term_start_date="2094-09-01",
+            term_end_date="2094-12-31",
+        )
+        ensure_institution_calendar(institution.name, year.name)
+
+        department = self._insert(
+            "Department",
+            department_name=f"QA Core Section {self.suffix}",
+            company=self.company,
+            is_group=0,
+            **{INSTITUTION_FIELD: institution.name},
+        )
+        course = self._insert(
+            "Course",
+            course_name=f"QA Core Mathematics {self.suffix}",
+            **{INSTITUTION_FIELD: institution.name},
+        )
+        extra_course = self._insert(
+            "Course",
+            course_name=f"QA Core Science {self.suffix}",
+            **{INSTITUTION_FIELD: institution.name},
+        )
+        program = self._insert(
+            "Program",
+            program_name=f"QA Core Class {self.suffix}",
+            department=department.name,
+            courses=[
+                {"course": course.name, "required": 1},
+                {"course": extra_course.name, "required": 1},
+            ],
+            **{INSTITUTION_FIELD: institution.name},
+        )
+
+        offering_a = self._make_offering(
+            institution, branch_a, program, year, "Alpha One"
+        )
+        offering_b = self._make_offering(
+            institution, branch_b, program, year, "Alpha Two"
+        )
+
+        instructor_user = self._make_user("Instructor", "Instructor")
+        instructor_employee = self._make_employee(
+            instructor_user, department, "Instructor"
+        )
+        instructor_a = self._make_instructor(
+            institution, "Alpha", employee=instructor_employee
+        )
+        instructor_b = self._make_instructor(institution, "Beta")
+        self._make_eligibility(instructor_a, branch_a, primary=1)
+        self._make_eligibility(instructor_b, branch_b, primary=1)
+        self._grant_branch(instructor_user, branch_a)
+
+        school_admin = self._make_user("School Administrator", "School Admin")
+        self._grant_branch(school_admin, branch_a)
+        self._grant_branch(school_admin, branch_b)
+
+        student = self._insert(
+            "Student",
+            first_name="QA",
+            last_name=f"Core Learner {self.suffix}",
+            student_email_id=f"qa-core-student-{self.suffix.lower()}@example.com",
+            enabled=1,
+            **{BRANCH_FIELD: branch_a.name},
+        )
+        enrollment = self._insert(
+            "Program Enrollment",
+            student=student.name,
+            program=program.name,
+            academic_year=year.name,
+            enrollment_date="2094-09-02",
+            **{
+                BRANCH_FIELD: branch_a.name,
+                OFFERING_FIELD: offering_a.name,
+            },
+        )
+        enrollment.submit()
+
+        class_a = save_class_arm(
+            display_name=f"QA Core A {self.suffix}",
+            branch=branch_a.name,
+            offering=offering_a.name,
+            students=[{"student": student.name}],
+        )
+        class_b = save_class_arm(
+            display_name=f"QA Core B {self.suffix}",
+            branch=branch_b.name,
+            offering=offering_b.name,
+            students=[],
+        )
+
+        assignment_a = self._make_subject_assignment(
+            instructor_a,
+            institution,
+            branch_a,
+            offering_a,
+            class_a["name"],
+            course,
+        )
+        self._grant_assignment_capabilities(assignment_a)
+        self._make_subject_assignment(
+            instructor_b,
+            institution,
+            branch_b,
+            offering_b,
+            class_b["name"],
+            course,
+        )
+
+        room_a = self._insert(
+            "Room",
+            room_name=f"QA Core A Room {self.suffix}",
+            **{BRANCH_FIELD: branch_a.name},
+        )
+        room_b = self._insert(
+            "Room",
+            room_name=f"QA Core B Room {self.suffix}",
+            **{BRANCH_FIELD: branch_b.name},
+        )
+        schedule_a = self._make_schedule(
+            student_group=class_a["name"],
+            instructor=instructor_a,
+            course=course,
+            room=room_a,
+            branch=branch_a,
+            from_time="09:00:00",
+        )
+        schedule_b = self._make_schedule(
+            student_group=class_b["name"],
+            instructor=instructor_b,
+            course=course,
+            room=room_b,
+            branch=branch_b,
+            from_time="11:00:00",
+        )
+
+        frappe.set_user(instructor_user.name)
+        visible_schedules = frappe.get_list(
+            "Course Schedule",
+            filters={"name": ["in", [schedule_a.name, schedule_b.name]]},
+            pluck="name",
+            page_length=10,
+        )
+        self.assertEqual(visible_schedules, [schedule_a.name])
+
+        exact_capabilities = get_instructor_assignment_capability_state(
+            user=instructor_user.name,
+            school_branch=branch_a.name,
+            program_offering=offering_a.name,
+            student_group=class_a["name"],
+            course=course.name,
+            on_date="2094-10-05",
+        )
+        self.assertEqual(exact_capabilities["identity_status"], "resolved")
+        self.assertEqual(exact_capabilities["instructor"], instructor_a.name)
+        self.assertTrue(exact_capabilities["can_view_subject_content"])
+        self.assertTrue(exact_capabilities["can_enter_marks"])
+
+        wrong_subject_capabilities = get_instructor_assignment_capability_state(
+            user=instructor_user.name,
+            school_branch=branch_a.name,
+            program_offering=offering_a.name,
+            student_group=class_a["name"],
+            course=extra_course.name,
+            on_date="2094-10-05",
+        )
+        self.assertFalse(wrong_subject_capabilities["can_view_subject_content"])
+        self.assertFalse(wrong_subject_capabilities["can_enter_marks"])
+
+        register = get_attendance_register(
+            class_a["name"],
+            "2094-10-05",
+            schedule_a.name,
+        )
+        self.assertEqual(register["course_schedule"]["name"], schedule_a.name)
+        self.assertEqual(
+            [row["student"] for row in register["students"]],
+            [student.name],
+        )
+        save_result = save_attendance_register(
+            class_a["name"],
+            "2094-10-05",
+            [{"student": student.name, "status": "Present"}],
+            schedule_a.name,
+            submit=0,
+        )
+        self.assertEqual(save_result["created"], 1)
+        self.assertEqual(save_result["course_schedule"], schedule_a.name)
+
+        with self.assertRaises(frappe.PermissionError):
+            get_attendance_register(
+                class_b["name"],
+                "2094-10-05",
+                schedule_b.name,
+            )
+
+        frappe.set_user(school_admin.name)
+        governance = get_governance_context()
+        governed_branches = {row["name"] for row in governance["branches"]}
+        self.assertEqual(governed_branches, {branch_a.name, branch_b.name})
+        self.assertNotIn(unrelated_branch.name, governed_branches)
+
+        manager_schedules = frappe.get_list(
+            "Course Schedule",
+            filters={"name": ["in", [schedule_a.name, schedule_b.name]]},
+            pluck="name",
+            page_length=10,
+        )
+        self.assertEqual(set(manager_schedules), {schedule_a.name, schedule_b.name})
+
+
+if __name__ == "__main__":
+    import unittest
+
+    unittest.main()

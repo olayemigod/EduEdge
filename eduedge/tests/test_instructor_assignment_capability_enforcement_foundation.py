@@ -85,6 +85,20 @@ class TestInstructorAssignmentCapabilityEnforcementFoundation(unittest.TestCase)
         # Branch Governance is a necessary runtime boundary, never a capability source.
         self.assertNotIn("EduEdge Instructor Branch Assignment", source)
 
+    def test_effective_capability_rows_include_enabled_state_used_by_runtime_filter(self):
+        source = self._source()
+        matching = source.split("def get_matching_instructor_capability_assignments", 1)[1].split(
+            "def get_instructor_assignment_capability_state", 1
+        )[0]
+        option_rows = source.split("def get_user_capability_assignment_rows", 1)[1].split(
+            "def require_instructor_assignment_capability", 1
+        )[0]
+
+        # _effective() reads row.enabled. Filtering enabled=1 at SQL level is not
+        # enough if the returned row omits that field: cint(None) would fail closed.
+        self.assertIn('"enabled",', matching)
+        self.assertIn('"enabled",', option_rows)
+
     def test_enforcement_foundation_does_not_take_over_question_review_or_final_approval(self):
         source = self._source()
         for forbidden in (
