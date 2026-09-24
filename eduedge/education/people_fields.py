@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+from frappe.utils import getdate, nowdate
 
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 
@@ -108,6 +109,62 @@ PEOPLE_CUSTOM_FIELDS = {
 		},
 	],
 }
+
+
+
+def reconcile_instructor_primary_branches() -> dict:
+	"""Refresh the current Primary Branch compatibility mirror from dated governance.
+
+	This scheduled reconciliation does not change Home Institution or Branch
+	Eligibility. It only keeps the read-only Instructor mirror aligned when a
+	future primary period becomes active or a dated primary period expires.
+	"""
+	if not (
+		frappe.db.exists("DocType", "Instructor")
+		and frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment")
+		and frappe.get_meta("Instructor").has_field(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+	):
+		return {"checked": 0, "updated": 0}
+
+	day = getdate(nowdate())
+	primary_rows = frappe.get_all(
+		"EduEdge Instructor Branch Assignment",
+		filters={"enabled": 1, "is_primary": 1},
+		fields=["instructor", "school_branch", "valid_from", "valid_to"],
+		limit_page_length=0,
+	)
+	current_by_instructor: dict[str, list[str]] = {}
+	for row in primary_rows:
+		start = getdate(row.valid_from) if row.valid_from else getdate("1900-01-01")
+		end = getdate(row.valid_to) if row.valid_to else getdate("2999-12-31")
+		if not (start <= day <= end):
+			continue
+		instructor = str(row.instructor or "").strip()
+		branch = str(row.school_branch or "").strip()
+		if instructor and branch:
+			current_by_instructor.setdefault(instructor, []).append(branch)
+
+	instructors = frappe.get_all(
+		"Instructor",
+		fields=["name", INSTRUCTOR_PRIMARY_BRANCH_FIELD],
+		limit_page_length=0,
+	)
+	updated = 0
+	for row in instructors:
+		candidates = current_by_instructor.get(row.name, [])
+		governed_primary = candidates[0] if len(candidates) == 1 else None
+		current = row.get(INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+		if (current or None) == (governed_primary or None):
+			continue
+		frappe.db.set_value(
+			"Instructor",
+			row.name,
+			INSTRUCTOR_PRIMARY_BRANCH_FIELD,
+			governed_primary,
+			update_modified=False,
+		)
+		updated += 1
+	return {"checked": len(instructors), "updated": updated}
 
 
 def _backfill_instructor_primary_branches() -> None:
