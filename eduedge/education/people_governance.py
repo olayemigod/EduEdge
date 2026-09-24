@@ -120,7 +120,52 @@ def before_validate_instructor(doc, method=None) -> None:
 				_("Department / School Section must belong to the Instructor's Home Institution."),
 				frappe.ValidationError,
 			)
+	_validate_instructor_employee_context(doc, institution)
 	_validate_instructor_employee_identity(doc)
+
+
+def _validate_instructor_employee_context(doc, institution: str | None) -> None:
+	"""Reject new cross-Institution Employee links without rewriting legacy history."""
+	employee_name = str(doc.get("employee") or "").strip()
+	institution = str(institution or "").strip()
+	if not employee_name or not institution or not frappe.db.exists("DocType", "Employee"):
+		return
+	before = doc.get_doc_before_save()
+	context_changed = bool(
+		doc.is_new()
+		or not before
+		or str(before.get("employee") or "").strip() != employee_name
+		or str(before.get(INSTITUTION_FIELD) or "").strip() != institution
+	)
+	if not context_changed:
+		return
+
+	employee = frappe.db.get_value(
+		"Employee",
+		employee_name,
+		["name", "company", "department"],
+		as_dict=True,
+	)
+	if not employee:
+		frappe.throw(_("Select a valid Employee for this Instructor."), frappe.ValidationError)
+
+	institution_company = frappe.db.get_value("EduEdge Institution", institution, "company")
+	if institution_company and employee.company != institution_company:
+		frappe.throw(
+			_("Linked Employee must belong to the Home Institution's Company."),
+			frappe.ValidationError,
+		)
+
+	if not employee.department or not frappe.get_meta("Department").has_field(INSTITUTION_FIELD):
+		return
+	employee_department_institution = frappe.db.get_value(
+		"Department", employee.department, INSTITUTION_FIELD
+	)
+	if employee_department_institution and employee_department_institution != institution:
+		frappe.throw(
+			_("Linked Employee Department must belong to the Instructor's Home Institution."),
+			frappe.ValidationError,
+		)
 
 
 def _validate_instructor_employee_identity(doc) -> None:
