@@ -13,6 +13,7 @@ from eduedge.api.academic_operations_safe import (
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
+from eduedge.education.academic_operations import before_validate_student_attendance
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import (
     get_instructor_assignment_capability_state,
@@ -459,6 +460,33 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
                 "2094-10-05",
                 schedule_b.name,
             )
+
+        # Native Student Attendance must apply the same exact Course Schedule
+        # ownership boundary as the EdgeSuite attendance register.
+        native_attendance = frappe.new_doc("Student Attendance")
+        native_attendance.student = student.name
+        native_attendance.student_group = class_a["name"]
+        native_attendance.date = "2094-10-05"
+        native_attendance.status = "Present"
+        before_validate_student_attendance(native_attendance)
+        self.assertEqual(native_attendance.course_schedule, schedule_a.name)
+
+        unscheduled_attendance = frappe.new_doc("Student Attendance")
+        unscheduled_attendance.student = student.name
+        unscheduled_attendance.student_group = class_a["name"]
+        unscheduled_attendance.date = "2094-10-06"
+        unscheduled_attendance.status = "Present"
+        with self.assertRaises(frappe.PermissionError):
+            before_validate_student_attendance(unscheduled_attendance)
+
+        foreign_schedule_attendance = frappe.new_doc("Student Attendance")
+        foreign_schedule_attendance.student = student.name
+        foreign_schedule_attendance.student_group = class_b["name"]
+        foreign_schedule_attendance.course_schedule = schedule_b.name
+        foreign_schedule_attendance.date = "2094-10-05"
+        foreign_schedule_attendance.status = "Present"
+        with self.assertRaises(frappe.PermissionError):
+            before_validate_student_attendance(foreign_schedule_attendance)
 
         # Ambiguous teaching identity must fail closed everywhere, not just at
         # document-level Course Schedule permission checks.
