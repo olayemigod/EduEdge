@@ -22,3 +22,4 @@ eduedge.patches.v0_9.rename_scheme_of_work_page_route
 eduedge.patches.v0_9.harden_school_event_permissions
 eduedge.patches.v1_0.backfill_report_card_verification_tokens
 eduedge.patches.v1_0.add_result_record_unique_constraints
+eduedge.patches.v1_0.reconcile_instructor_people_permissions
