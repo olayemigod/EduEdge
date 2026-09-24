@@ -98,5 +98,18 @@ class TestUserBranchAccessScopeHardeningContract(unittest.TestCase):
             self.assertIn(token, source)
 
 
+    def test_internal_context_invalidation_does_not_use_self_service_cross_user_apis(self):
+        source = (APP / "services" / "branch_context.py").read_text(encoding="utf-8")
+        block = source.split("def invalidate_user_branch_context", 1)[1].split(
+            "def _normalise_active_scope", 1
+        )[0]
+        self.assertIn("_get_active_access_rows(user)", block)
+        self.assertIn('"EduEdge School Branch"', block)
+        self.assertNotIn("get_allowed_school_branches(user=user)", block)
+        self.assertNotIn("get_branch_access_profile(user=user)", block)
+        self.assertIn("internal server routine", block)
+
+
+
 if __name__ == "__main__":
     unittest.main()
