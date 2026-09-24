@@ -137,5 +137,12 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             self.assertIn(token, derived_scope)
         self.assertNotIn("schedule.instructor in", derived_scope)
 
+        identity_values = source.split("def _instructor_sql_values", 1)[1].split(
+            "def _branch_condition", 1
+        )[0]
+        self.assertIn("resolve_exact_instructor_for_user(user)", identity_values)
+        self.assertIn("if instructor else", identity_values)
+        self.assertNotIn("get_user_instructor_names", identity_values)
+
 if __name__ == "__main__":
     unittest.main()
