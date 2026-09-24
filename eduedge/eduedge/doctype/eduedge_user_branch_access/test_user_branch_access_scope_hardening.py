@@ -41,7 +41,7 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
         return self._insert(
             "EduEdge School Branch",
             branch_name=f"UBA {label} Campus {self.suffix}",
-            branch_code=f"UBA{label.replace(' ', '').upper()[:7]}{self.suffix}",
+            branch_code=f"UBA{label.replace(' ', '').upper()[:12]}{self.suffix}",
             company=self.company,
             institution=institution.name,
             enabled=1,
@@ -67,7 +67,6 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
             "company": self.company,
             "enabled": 1,
             "can_switch_branch": 1,
-            "is_default_branch": is_default_branch,
         }
         if institution:
             values["institution"] = institution.name
@@ -84,6 +83,7 @@ class TestUserBranchAccessScopeHardening(FrappeTestCase):
             "company": self.company,
             "enabled": 1,
             "can_switch_branch": 1,
+            "is_default_branch": is_default_branch,
         }
         if institution:
             values["institution"] = institution.name
