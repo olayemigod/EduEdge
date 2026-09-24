@@ -6,9 +6,9 @@ from eduedge.access_control import user_has_role_permission
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_scope import (
-	get_user_instructor_names,
 	instructor_owns_schedule,
 	is_limited_instructor_user,
+	resolve_exact_instructor_for_user,
 )
 from eduedge.education.teaching_assignments import (
 	CLASS_ARM_SCOPE,
@@ -691,8 +691,9 @@ def _schedule_assignment_condition(schedule_alias: str, user: str) -> str:
 
 
 def _instructor_sql_values(user: str) -> str:
-	instructors = get_user_instructor_names(user)
-	return ", ".join(frappe.db.escape(value) for value in sorted(instructors))
+	"""Return one exact Instructor identity for permission SQL, or fail closed."""
+	instructor = resolve_exact_instructor_for_user(user)
+	return frappe.db.escape(instructor) if instructor else ""
 
 
 def _branch_condition(
