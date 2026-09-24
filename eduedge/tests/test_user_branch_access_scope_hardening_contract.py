@@ -33,6 +33,9 @@ class TestUserBranchAccessScopeHardeningContract(unittest.TestCase):
             'return "(" + " or ".join(parts) + ")" if parts else "1=0"',
             "def assert_default_branch_change_scope",
             "default Branch outside your governed access scope",
+            "def assignable_access_levels",
+            'return [ASSIGNMENT_SCOPE_INSTITUTION, ASSIGNMENT_SCOPE_BRANCH]',
+            'return [ASSIGNMENT_SCOPE_BRANCH]',
         ):
             self.assertIn(token, source)
 
@@ -57,6 +60,8 @@ class TestUserBranchAccessScopeHardeningContract(unittest.TestCase):
             "assignable_company_names",
             "assignable_institution_names",
             "manageable_user_names",
+            "assignable_access_levels",
+            'field["options"] = access_levels',
             'config.get("doctype") == "EduEdge User Branch Access"',
             'filters["name"] = ["in", sorted(assignable)]',
             'filters["name"] = ["in", sorted(manageable)]',
@@ -72,6 +77,8 @@ class TestUserBranchAccessScopeHardeningContract(unittest.TestCase):
             / "eduedge_user_branch_access.js"
         ).read_text(encoding="utf-8")
         for token in (
+            "eduedge.api.user_branch_access.get_user_branch_access_authoring_context",
+            'frm.set_df_property("access_scope", "options", levels.join("\\n"))',
             "eduedge.api.user_branch_access.user_branch_access_user_query",
             "eduedge.api.user_branch_access.user_branch_access_company_query",
             "eduedge.api.user_branch_access.user_branch_access_institution_query",
