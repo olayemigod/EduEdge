@@ -99,6 +99,16 @@ class TestInstructorSelectorScopeHardeningContract(unittest.TestCase):
         ):
             self.assertIn(token, selected)
 
+    def test_assignment_selector_labels_do_not_require_institution_master_read(self):
+        source = ASSIGNMENTS.read_text(encoding="utf-8")
+        instructor_block = source.split("def _instructors", 1)[1].split(
+            "def _period_dates", 1
+        )[0]
+
+        self.assertIn("for branch in core._allowed_branches()", instructor_block)
+        self.assertIn('branch.get("institution_name")', instructor_block)
+        self.assertNotIn('"EduEdge Institution"', instructor_block)
+
     def test_native_instructor_query_keeps_active_governance_revalidation(self):
         source = LINK_SEARCH.read_text(encoding="utf-8")
         native = source.split("def instructor_assignment_instructor_query", 1)[1].split(

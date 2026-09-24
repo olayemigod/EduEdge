@@ -226,14 +226,16 @@ def _instructors(*, include_history: bool = False) -> list[dict]:
 		order_by="instructor_name asc",
 		limit_page_length=1000,
 	)
-	institutions = {
-		row.name: row.institution_name
-		for row in frappe.get_list(
-			"EduEdge Institution",
-			fields=["name", "institution_name"],
-			limit_page_length=0,
-		)
-	}
+	# Labels are presentation data, so reuse the already permission-scoped Branch
+	# context instead of scanning the Institution master. This keeps assignment
+	# managers inside their Branch authority even when they do not have direct
+	# Institution DocType read permission.
+	institutions = {}
+	for branch in core._allowed_branches():
+		institution = str(branch.get("institution") or "").strip()
+		institution_name = str(branch.get("institution_name") or "").strip()
+		if institution and institution_name:
+			institutions.setdefault(institution, institution_name)
 	for row in rows:
 		row["home_institution_name"] = institutions.get(row.get(INSTITUTION_FIELD)) or row.get(INSTITUTION_FIELD)
 	return rows
