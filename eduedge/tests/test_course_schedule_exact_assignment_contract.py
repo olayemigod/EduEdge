@@ -112,5 +112,30 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             schedule_query,
         )
 
+        result_log = source.split("def result_publication_log_query", 1)[1].split(
+            "def report_card_review_query", 1
+        )[0]
+        self.assertIn(
+            '_owned_student_group_condition("publication.student_group", resolved_user)',
+            result_log,
+        )
+        self.assertNotIn("schedule.instructor in", result_log)
+
+        guardian = source.split("def guardian_query", 1)[1].split(
+            "def has_education_branch_permission", 1
+        )[0]
+        self.assertIn('_owned_student_condition("student.name", resolved_user)', guardian)
+        self.assertNotIn("schedule.instructor in", guardian)
+
+        derived_scope = source.split("def _has_instructor_student_group_scope", 1)[1].split(
+            "def _schedule_assignment_condition", 1
+        )[0]
+        for token in (
+            'ownership = _schedule_assignment_condition("schedule", user)',
+            "and ({ownership})",
+        ):
+            self.assertIn(token, derived_scope)
+        self.assertNotIn("schedule.instructor in", derived_scope)
+
 if __name__ == "__main__":
     unittest.main()
