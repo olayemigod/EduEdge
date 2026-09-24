@@ -214,6 +214,28 @@ def user_branch_access_query(user: str | None = None) -> str:
     return "(" + " or ".join(parts) + ")" if parts else "1=0"
 
 
+
+def assignable_access_levels() -> list[str]:
+    scope = get_assignable_access_scope()
+    if scope is None:
+        return [
+            ASSIGNMENT_SCOPE_COMPANY,
+            ASSIGNMENT_SCOPE_INSTITUTION,
+            ASSIGNMENT_SCOPE_BRANCH,
+        ]
+    if scope["companies"]:
+        return [
+            ASSIGNMENT_SCOPE_COMPANY,
+            ASSIGNMENT_SCOPE_INSTITUTION,
+            ASSIGNMENT_SCOPE_BRANCH,
+        ]
+    if scope["institutions"]:
+        return [ASSIGNMENT_SCOPE_INSTITUTION, ASSIGNMENT_SCOPE_BRANCH]
+    if scope["branches"]:
+        return [ASSIGNMENT_SCOPE_BRANCH]
+    return []
+
+
 def assignable_company_names(access_scope: str | None = None) -> set[str] | None:
     scope = get_assignable_access_scope()
     if scope is None:
