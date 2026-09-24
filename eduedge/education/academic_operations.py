@@ -8,6 +8,7 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_hierarchy import _validate_department
 from eduedge.education.academic_validation import resolve_exact_offering
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import is_limited_instructor_user
 from eduedge.education.offerings import assert_branch_access, get_context_branch, validate_program_offering
 from eduedge.services.academic_calendar import assert_institution_calendar_context
 
@@ -253,6 +254,7 @@ def before_validate_student_attendance(doc, method=None) -> None:
 	)
 	if doc.course_schedule and not schedule:
 		frappe.throw(_("Course Schedule does not exist."), frappe.DoesNotExistError)
+	_validate_limited_instructor_attendance_schedule(schedule)
 	if schedule:
 		if doc.student_group and doc.student_group != schedule.student_group:
 			frappe.throw(_("Student Attendance Student Group must match the selected Course Schedule."), frappe.ValidationError)
@@ -277,6 +279,24 @@ def before_validate_student_attendance(doc, method=None) -> None:
 		if not is_member:
 			frappe.throw(_("Student {0} is not an active member of Student Group {1}.").format(doc.student, group_name), frappe.ValidationError)
 	_validate_attendance_duplicate(doc)
+
+
+def _validate_limited_instructor_attendance_schedule(schedule) -> None:
+	"""Require direct Instructor attendance to resolve through an owned Course Schedule.
+
+	The EdgeSuite attendance register already enforces this boundary. Keep the native
+	Student Attendance hook equally safe so alternate entry surfaces and custom calls
+	cannot create unscheduled or another Instructor's attendance for a limited user.
+	"""
+	if not is_limited_instructor_user(frappe.session.user):
+		return
+	if not schedule:
+		frappe.throw(
+			_("Limited Instructor attendance must be anchored to an exact Course Schedule."),
+			frappe.PermissionError,
+		)
+	schedule_doc = frappe.get_doc("Course Schedule", schedule.name)
+	schedule_doc.check_permission("read")
 
 
 def _resolve_exact_attendance_schedule(doc) -> None:
