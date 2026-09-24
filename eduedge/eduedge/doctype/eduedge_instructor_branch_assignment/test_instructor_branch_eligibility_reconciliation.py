@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import frappe
 from education.education.test_utils import before_tests
 from frappe.tests.utils import FrappeTestCase
@@ -10,6 +12,10 @@ from eduedge.api.instructor_branch_eligibility import (
     get_instructor_branch_eligibility_review,
 )
 from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.people_fields import (
+    INSTRUCTOR_PRIMARY_BRANCH_FIELD,
+    reconcile_instructor_primary_branches,
+)
 from eduedge.services.academic_calendar import ensure_institution_calendar
 
 
@@ -144,6 +150,59 @@ class TestInstructorBranchEligibilityReconciliation(FrappeTestCase):
             program_offering=offering.name,
             student_group=class_arm["name"],
             enabled=1,
+        )
+
+    def test_dated_primary_branch_mirror_rolls_forward_and_expires(self):
+        institution = self._make_institution("Rollover")
+        branch_one = self._make_branch(institution, "Rollover One")
+        branch_two = self._make_branch(institution, "Rollover Two")
+        instructor = self._make_instructor(institution, "Rollover")
+
+        self._insert(
+            "EduEdge Instructor Branch Assignment",
+            instructor=instructor.name,
+            school_branch=branch_one.name,
+            enabled=1,
+            is_primary=1,
+            valid_from="2099-01-01",
+            valid_to="2099-01-31",
+        )
+        self._insert(
+            "EduEdge Instructor Branch Assignment",
+            instructor=instructor.name,
+            school_branch=branch_two.name,
+            enabled=1,
+            is_primary=1,
+            valid_from="2099-02-01",
+            valid_to="2099-02-28",
+        )
+
+        with patch("eduedge.education.people_fields.nowdate", return_value="2099-01-15"):
+            january = reconcile_instructor_primary_branches()
+            self.assertGreaterEqual(january["updated"], 1)
+            self.assertEqual(
+                frappe.db.get_value("Instructor", instructor.name, INSTRUCTOR_PRIMARY_BRANCH_FIELD),
+                branch_one.name,
+            )
+            rerun = reconcile_instructor_primary_branches()
+            self.assertEqual(rerun["updated"], 0)
+
+        with patch("eduedge.education.people_fields.nowdate", return_value="2099-02-15"):
+            reconcile_instructor_primary_branches()
+            self.assertEqual(
+                frappe.db.get_value("Instructor", instructor.name, INSTRUCTOR_PRIMARY_BRANCH_FIELD),
+                branch_two.name,
+            )
+
+        with patch("eduedge.education.people_fields.nowdate", return_value="2099-03-15"):
+            reconcile_instructor_primary_branches()
+            self.assertIsNone(
+                frappe.db.get_value("Instructor", instructor.name, INSTRUCTOR_PRIMARY_BRANCH_FIELD)
+            )
+
+        self.assertEqual(
+            frappe.db.get_value("Instructor", instructor.name, INSTITUTION_FIELD),
+            institution.name,
         )
 
     def test_persona_scoped_review_and_history_safe_cleanup(self):
