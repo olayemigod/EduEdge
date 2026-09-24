@@ -380,6 +380,34 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
         self.assertEqual(visible_schedules, [schedule_a.name])
 
+        self.assertEqual(
+            frappe.get_list(
+                "Student Group",
+                filters={"name": class_a["name"]},
+                pluck="name",
+                page_length=10,
+            ),
+            [class_a["name"]],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Student",
+                filters={"name": student.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [student.name],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Program Enrollment",
+                filters={"name": enrollment.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [enrollment.name],
+        )
+
         exact_capabilities = get_instructor_assignment_capability_state(
             user=instructor_user.name,
             school_branch=branch_a.name,
@@ -430,6 +458,75 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
                 "2094-10-05",
                 schedule_b.name,
             )
+
+        # A stale Course Schedule must not keep downstream learner visibility alive
+        # after the exact Subject responsibility is no longer effective.
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            assignment_a.name,
+            "enabled",
+            0,
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Course Schedule",
+                filters={"name": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Student Group",
+                filters={"name": class_a["name"]},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Student",
+                filters={"name": student.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Program Enrollment",
+                filters={"name": enrollment.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Student Attendance",
+                filters={"course_schedule": schedule_a.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_attendance_register(
+                class_a["name"],
+                "2094-10-05",
+                schedule_a.name,
+            )
+
+        frappe.set_user("Administrator")
+        self.assertTrue(frappe.db.exists("Course Schedule", schedule_a.name))
+        self.assertTrue(frappe.db.exists("EduEdge Instructor Assignment", assignment_a.name))
 
         frappe.set_user(school_admin.name)
         governance = get_governance_context()
