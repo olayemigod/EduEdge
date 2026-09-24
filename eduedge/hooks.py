@@ -72,6 +72,7 @@ add_to_apps_screen = [
 ]
 
 doctype_js = {
+	"Instructor": "public/js/education/instructor.js",
 	"Program": "public/js/education/program.js",
 	"Course": "public/js/education/course.js",
 	"Student Admission": "public/js/education/student_admission.js",
