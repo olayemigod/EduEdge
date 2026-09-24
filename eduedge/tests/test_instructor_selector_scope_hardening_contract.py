@@ -109,6 +109,16 @@ class TestInstructorSelectorScopeHardeningContract(unittest.TestCase):
         self.assertIn('branch.get("institution_name")', instructor_block)
         self.assertNotIn('"EduEdge Institution"', instructor_block)
 
+    def test_native_branch_query_revalidates_selected_instructor_before_eligibility_lookup(self):
+        source = LINK_SEARCH.read_text(encoding="utf-8")
+        native = source.split("def instructor_assignment_branch_query", 1)[1].split(
+            "@frappe.whitelist()", 1
+        )[0]
+
+        self.assertIn("_assert_search_instructor_available(instructor)", native)
+        self.assertIn("eligible_branch_names(resolved_instructor", native)
+        self.assertNotIn("eligible_branch_names(instructor, within=allowed.keys())", native)
+
     def test_native_instructor_query_keeps_active_governance_revalidation(self):
         source = LINK_SEARCH.read_text(encoding="utf-8")
         native = source.split("def instructor_assignment_instructor_query", 1)[1].split(
