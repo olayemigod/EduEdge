@@ -59,7 +59,7 @@ class TestInstructorEmployeeInstitutionScopeContract(unittest.TestCase):
             "def instructor_profile_employee_query",
             'allowed = {row["name"] for row in _allowed_institutions()}',
             "institution not in allowed",
-            "_require_permission("read")",
+            '_require_permission("read")',
         ):
             self.assertIn(token, source)
 
