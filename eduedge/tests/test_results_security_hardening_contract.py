@@ -22,7 +22,9 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("def _governed_result_query", permissions)
 		self.assertIn("def _owned_student_group_condition", permissions)
 		self.assertIn("schedule.student_group", permissions)
-		self.assertIn("schedule.instructor", permissions)
+		self.assertIn("def _schedule_assignment_condition", permissions)
+		self.assertIn('ownership = _schedule_assignment_condition("schedule", user)', permissions)
+		self.assertIn("assignment.instructor =", permissions)
 
 	def test_report_card_service_rejects_unassigned_teacher_class(self):
 		service = (APP / "education" / "report_cards.py").read_text()
