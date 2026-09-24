@@ -137,5 +137,22 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             self.assertIn(token, derived_scope)
         self.assertNotIn("schedule.instructor in", derived_scope)
 
+    def test_limited_instructor_identity_must_be_unique_in_list_and_runtime_scope(self):
+        permissions = (APP / "education" / "permissions.py").read_text(encoding="utf-8")
+        runtime = (APP / "api" / "academic_operations_safe.py").read_text(encoding="utf-8")
+
+        instructor_sql = permissions.split("def _instructor_sql_values", 1)[1].split(
+            "def _branch_condition", 1
+        )[0]
+        self.assertIn("resolve_exact_instructor_for_user(user)", instructor_sql)
+        self.assertNotIn("get_user_instructor_names", instructor_sql)
+
+        for token in (
+            "resolve_exact_instructor_for_user(required=True)",
+            "instructor_names = [exact_instructor] if exact_instructor else []",
+            'filters["instructor"] = resolve_exact_instructor_for_user(required=True)',
+        ):
+            self.assertIn(token, runtime)
+
 if __name__ == "__main__":
     unittest.main()
