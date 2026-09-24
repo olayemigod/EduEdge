@@ -1,3 +1,12 @@
+async function applyAccessScopeOptions(frm) {
+	const response = await frappe.call("eduedge.api.user_branch_access.get_user_branch_access_authoring_context");
+	const levels = response.message?.access_levels || [];
+	frm.set_df_property("access_scope", "options", levels.join("\n"));
+	if (frm.is_new() && levels.length && !levels.includes(frm.doc.access_scope)) {
+		await frm.set_value("access_scope", levels[levels.length - 1]);
+	}
+}
+
 frappe.ui.form.on("EduEdge User Branch Access", {
 	setup(frm) {
 		frm.set_query("user", () => ({
@@ -25,6 +34,7 @@ frappe.ui.form.on("EduEdge User Branch Access", {
 	},
 
 	refresh(frm) {
+		applyAccessScopeOptions(frm);
 		const scope = frm.doc.access_scope || (frm.doc.hq_all_branch_access ? "Company" : "Branch");
 		frm.toggle_reqd("institution", ["Institution", "Branch"].includes(scope));
 		frm.toggle_reqd("school_branch", scope === "Branch");
