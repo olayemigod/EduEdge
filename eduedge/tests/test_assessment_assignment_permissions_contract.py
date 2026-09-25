@@ -65,6 +65,40 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_create_permission_derives_read_only_branch_before_before_validate(self):
+        source = self._source()
+
+        plan_context = source.split("def _plan_context", 1)[1].split("def _result_context", 1)[0]
+        self.assertIn('frappe.db.get_value("Student Group", student_group, BRANCH_FIELD)', plan_context)
+        self.assertIn('"school_branch": str(doc.get(BRANCH_FIELD) or derived_branch or "")', plan_context)
+
+        helper = source.split("def _has_context_branch_permission", 1)[1].split(
+            "def has_assessment_plan_permission", 1
+        )[0]
+        for token in (
+            "if doc.get(BRANCH_FIELD):",
+            "if not branch:",
+            '"doctype": doc.doctype',
+            "BRANCH_FIELD: branch",
+            "has_education_branch_permission(proxy, user, permission_type)",
+        ):
+            self.assertIn(token, helper)
+
+        plan_permission = source.split("def has_assessment_plan_permission", 1)[1].split(
+            "def has_assessment_result_permission", 1
+        )[0]
+        self.assertIn("context = _plan_context(doc)", plan_permission)
+        self.assertIn("_has_context_branch_permission(", plan_permission)
+
+        result_permission = source.split("def has_assessment_result_permission", 1)[1]
+        self.assertIn("context = _result_context(doc)", result_permission)
+        self.assertIn("_has_context_branch_permission(", result_permission)
+
+    def test_controller_hook_does_not_replace_role_permission_manager(self):
+        source = self._source()
+        self.assertGreaterEqual(source.count("if not doc:\n        return True"), 2)
+
+
     def test_plan_mutation_requires_create_assessment_plan_capability(self):
         source = self._source()
         for token in (
