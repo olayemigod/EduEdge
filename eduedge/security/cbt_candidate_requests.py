@@ -39,6 +39,7 @@ MAX_TEXT_ANSWER_LENGTH = 10_000
 MAX_NUMERIC_ANSWER_LENGTH = 128
 MAX_SELECTED_OPTION_IDS = 50
 MAX_PENDING_COUNT = 10_000
+ALLOWED_HEARTBEAT_RUNTIME_EVENTS = {"Concurrent Tab Detected"}
 SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
@@ -199,7 +200,10 @@ def enforce_candidate_request(command: str, args: dict | None = None) -> None:
 		if pending < 0 or pending > MAX_PENDING_COUNT:
 			_validation_error("Reported Pending Count is outside the allowed range.")
 	if action == "heartbeat":
-		pending = cint(args.get("pending_sync_count"))
+		pending = cint(args.get("reported_pending_count"))
 		if pending < 0 or pending > MAX_PENDING_COUNT:
-			_validation_error("Pending Sync Count is outside the allowed range.")
+			_validation_error("Reported Pending Count is outside the allowed range.")
+		runtime_event = str(args.get("runtime_event") or "").strip()
+		if runtime_event and runtime_event not in ALLOWED_HEARTBEAT_RUNTIME_EVENTS:
+			_validation_error("Unsupported CBT runtime security event.")
 	_enforce_rate_limit(action, attempt_name, launch_token)
