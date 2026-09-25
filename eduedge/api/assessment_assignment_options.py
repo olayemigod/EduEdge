@@ -17,6 +17,7 @@ from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE,
 
 
 MAX_GROUP_OPTIONS = 500
+MAX_PLAN_OPTIONS = 500
 
 
 def _group_record(name: str):
@@ -218,3 +219,93 @@ def assessment_plan_course_query(doctype, txt, searchfield, start, page_len, fil
         order_by="course_name asc",
         as_list=True,
     )
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def assessment_result_plan_query(doctype, txt, searchfield, start, page_len, filters):
+    """Return submitted Assessment Plans the current user may use for mark entry."""
+    _require_academic_operator()
+    filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+    branch = _resolve_branch(filters.get(BRANCH_FIELD))
+    pattern = f"%{txt or ''}%"
+    base_filters = {BRANCH_FIELD: branch, "docstatus": 1}
+
+    capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()
+    if not capability_scoped:
+        return frappe.get_list(
+            "Assessment Plan",
+            filters=base_filters,
+            or_filters={
+                "name": ["like", pattern],
+                "assessment_name": ["like", pattern],
+                "student_group": ["like", pattern],
+                "course": ["like", pattern],
+            },
+            fields=["name", "assessment_name", "student_group", "course", "schedule_date"],
+            start=int(start),
+            page_length=int(page_len),
+            order_by="schedule_date desc, assessment_name asc, name asc",
+            as_list=True,
+        )
+
+    if not frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+        return []
+
+    capability_rows = get_user_capability_assignment_rows(
+        "can_enter_marks",
+        user=frappe.session.user,
+        school_branch=branch,
+        on_date=nowdate(),
+    )
+    conditions = []
+    for row in capability_rows:
+        offering = str(row.get("program_offering") or "")
+        course = str(row.get("course") or "")
+        if not offering or not course:
+            continue
+        condition = (
+            f"(student_group.\`{OFFERING_FIELD}\` = {frappe.db.escape(offering)} "
+            f"and plan.course = {frappe.db.escape(course)}"
+        )
+        if row.get("assignment_scope") == CLASS_ARM_SCOPE:
+            student_group = str(row.get("student_group") or "")
+            if not student_group:
+                continue
+            condition += f" and plan.student_group = {frappe.db.escape(student_group)}"
+        elif row.get("assignment_scope") != CLASS_SCOPE:
+            continue
+        conditions.append(condition + ")")
+    if not conditions:
+        return []
+
+    return frappe.db.sql(
+        f"""
+        select
+            plan.name,
+            plan.assessment_name,
+            plan.student_group,
+            plan.course,
+            plan.schedule_date
+        from \`tabAssessment Plan\` plan
+        inner join \`tabStudent Group\` student_group on student_group.name = plan.student_group
+        where plan.\`{BRANCH_FIELD}\` = %(branch)s
+            and plan.docstatus = 1
+            and ({" or ".join(conditions)})
+            and (
+                plan.name like %(txt)s
+                or coalesce(plan.assessment_name, '') like %(txt)s
+                or coalesce(plan.student_group, '') like %(txt)s
+                or coalesce(plan.course, '') like %(txt)s
+            )
+        order by plan.schedule_date desc, plan.assessment_name asc, plan.name asc
+        limit %(start)s, %(page_len)s
+        """,
+        {
+            "branch": branch,
+            "txt": pattern,
+            "start": max(int(start), 0),
+            "page_len": min(max(int(page_len), 1), MAX_PLAN_OPTIONS),
+        },
+        as_dict=False,
+    )
+
