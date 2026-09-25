@@ -36,6 +36,19 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_list_queries_require_covering_branch_eligibility(self):
+        source = self._source()
+        for token in (
+            "from `tabEduEdge Instructor Branch Assignment` eligibility",
+            "eligibility.instructor = assignment.instructor",
+            "eligibility.school_branch = assignment.school_branch",
+            "eligibility.enabled = 1",
+            "eligibility.valid_from is null",
+            "eligibility.valid_to is null",
+        ):
+            self.assertIn(token, source)
+
+
     def test_query_fails_closed_for_missing_or_ambiguous_instructor_identity(self):
         source = self._source()
         for token in (
