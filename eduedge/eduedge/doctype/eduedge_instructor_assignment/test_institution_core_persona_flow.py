@@ -31,6 +31,7 @@ from eduedge.api.teaching_schedule import (
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.assessment_permissions import has_assessment_plan_permission
 from eduedge.education.instructor_assignment_capabilities import (
     get_instructor_assignment_capability_state,
 )
@@ -441,6 +442,13 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         # Frappe Document.insert() checks create permission before before_validate.
         # The permission hook must derive Branch from the selected Class instead of
         # rejecting the draft because the read-only Branch has not been assigned yet.
+        self.assertTrue(
+            has_assessment_plan_permission(
+                pending_plan,
+                user=instructor_user.name,
+                ptype="create",
+            )
+        )
         pending_plan.check_permission("create")
         self.assertFalse(pending_plan.get(BRANCH_FIELD))
 
