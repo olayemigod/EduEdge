@@ -271,9 +271,14 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	program = str(filters.get("program") or "").strip()
 	branch = str(filters.get(BRANCH_FIELD) or "").strip()
+	student_group = str(filters.get("student_group") or "").strip()
+	reference_date = filters.get("reference_date")
 	if not program or not branch:
 		return []
 	branch = safe.base._resolve_branch(branch)
+	limited_instructor = is_limited_instructor_user()
+	if limited_instructor and (not student_group or not reference_date):
+		return []
 	institution = frappe.db.get_value("EduEdge School Branch", branch, "institution")
 	program_row = frappe.db.get_value("Program", program, ["department", INSTITUTION_FIELD], as_dict=True)
 	if not program_row or program_row.get(INSTITUTION_FIELD) != institution:
@@ -286,6 +291,86 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	)
 	if not course_names:
 		return []
+
+	if limited_instructor:
+		exact_instructor = resolve_exact_instructor_for_user()
+		if not exact_instructor:
+			return []
+		target_date = getdate(reference_date)
+		if not eligibility_covers_period(
+			exact_instructor,
+			branch,
+			target_date,
+			target_date,
+		):
+			return []
+		group_fields = ["name", "program", BRANCH_FIELD, "disabled"]
+		if frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+			group_fields.append(OFFERING_FIELD)
+		group = frappe.db.get_value("Student Group", student_group, group_fields, as_dict=True)
+		if (
+			not group
+			or group.disabled
+			or group.program != program
+			or group.get(BRANCH_FIELD) != branch
+		):
+			return []
+
+		assignment_mode = (
+			frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+			and frappe.db.exists(
+				"EduEdge Instructor Assignment",
+				{"school_branch": branch},
+			)
+		)
+		if assignment_mode:
+			program_offering = group.get(OFFERING_FIELD)
+			if not program_offering:
+				return []
+			assigned_rows = frappe.db.sql(
+				"""
+				select distinct assignment.course
+				from `tabEduEdge Instructor Assignment` assignment
+				where assignment.instructor = %(instructor)s
+					and assignment.school_branch = %(branch)s
+					and assignment.program_offering = %(program_offering)s
+					and assignment.course in %(course_names)s
+					and assignment.assignment_type in %(assignment_types)s
+					and assignment.enabled = 1
+					and (
+						assignment.assignment_scope = %(class_scope)s
+						or (
+							assignment.assignment_scope = %(arm_scope)s
+							and assignment.student_group = %(student_group)s
+						)
+					)
+					and (
+						assignment.valid_from is null
+						or assignment.valid_from <= %(reference_date)s
+					)
+					and (
+						assignment.valid_to is null
+						or assignment.valid_to >= %(reference_date)s
+					)
+				order by assignment.course asc
+				""",
+				{
+					"instructor": exact_instructor,
+					"branch": branch,
+					"program_offering": program_offering,
+					"course_names": tuple(course_names),
+					"assignment_types": tuple(sorted(COURSE_REQUIRED_TYPES)),
+					"class_scope": CLASS_SCOPE,
+					"arm_scope": CLASS_ARM_SCOPE,
+					"student_group": student_group,
+					"reference_date": target_date,
+				},
+				as_dict=True,
+			)
+			course_names = [row.course for row in assigned_rows if row.course]
+			if not course_names:
+				return []
+
 	course_filters = {"name": ["in", course_names]}
 	course_meta = frappe.get_meta("Course")
 	if course_meta.has_field(INSTITUTION_FIELD):
