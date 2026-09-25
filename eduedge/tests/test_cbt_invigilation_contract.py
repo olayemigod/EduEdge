@@ -57,7 +57,7 @@ class TestCBTInvigilationContract(unittest.TestCase):
 
 		for token in (
 			"<th>Reconciliation</th>",
-			'candidate.attempt_status === "Pending Sync"',
+			"candidate.attempt_status === 'Pending Sync'",
 			'candidate.connection.code === "PENDING_SYNC"',
 			"candidate.reconciliation_deadline",
 			"Awaiting browser zero-pending confirmation",
