@@ -19,6 +19,9 @@
 	const SYNC_DEBOUNCE_MS = 900;
 	const PERIODIC_SYNC_MS = 12000;
 	const HEARTBEAT_MS = 30000;
+	const TAB_LEASE_REFRESH_MS = 4000;
+	const TAB_LEASE_TTL_MS = 15000;
+	const CONCURRENT_TAB_EVENT = "Concurrent Tab Detected";
 	const BASIC_RICH_TEXT_TAGS = new Set([
 		"P",
 		"BR",
@@ -119,6 +122,16 @@
 		return value;
 	}
 
+	function tabInstanceId(attempt) {
+		const key = `eduedge:cbt:tab-instance:${attempt}`;
+		let value = window.sessionStorage.getItem(key);
+		if (!value) {
+			value = randomId();
+			window.sessionStorage.setItem(key, value);
+		}
+		return value;
+	}
+
 	function sanitizeRichText(raw) {
 		const template = document.createElement("template");
 		template.innerHTML = String(raw || "");
@@ -173,6 +186,7 @@
 			this.root = root;
 			this.launch = readLaunchContext();
 			this.clientSession = this.launch.attempt ? clientSessionId(this.launch.attempt) : "";
+			this.tabInstance = this.launch.attempt ? tabInstanceId(this.launch.attempt) : "";
 			this.storage = null;
 			this.serverState = null;
 			this.questions = [];
@@ -185,6 +199,10 @@
 			this.timerInterval = null;
 			this.periodicSyncInterval = null;
 			this.heartbeatInterval = null;
+			this.tabLeaseInterval = null;
+			this.tabConflict = false;
+			this.tabEventReported = false;
+			this.tabEventQueued = false;
 			this.timerBaseSeconds = 0;
 			this.timerBasePerformance = window.performance.now();
 			this.serverClockOffsetMs = 0;
@@ -209,6 +227,7 @@
 			}
 			try {
 				this.storage = await window.EduEdgeCBTRuntimeStorage.open(this.launch.attempt);
+				if (!(await this.acquireTabLease())) return;
 				this.currentIndex = Number(await this.storage.getMeta("current_question", 0)) || 0;
 				this.submissionRequested = Boolean(await this.storage.getMeta("submission_requested", false));
 				await this.loadStateWithOfflineFallback();
@@ -307,6 +326,106 @@
 		setConnection(value) {
 			this.connectionState = value;
 			this.updateConnectionUI();
+		}
+
+		tabLeaseKey() {
+			return `eduedge:cbt:active-tab:${this.launch.attempt}`;
+		}
+
+		readTabLease() {
+			try {
+				const value = window.localStorage.getItem(this.tabLeaseKey());
+				return value ? JSON.parse(value) : null;
+			} catch (error) {
+				return null;
+			}
+		}
+
+		tabLeaseIsFresh(lease) {
+			return Boolean(
+				lease?.tab_id
+				&& Number.isFinite(Number(lease.updated_at))
+				&& Date.now() - Number(lease.updated_at) < TAB_LEASE_TTL_MS
+			);
+		}
+
+		writeTabLease() {
+			window.localStorage.setItem(
+				this.tabLeaseKey(),
+				JSON.stringify({ tab_id: this.tabInstance, updated_at: Date.now() })
+			);
+		}
+
+		async acquireTabLease() {
+			const existing = this.readTabLease();
+			if (
+				this.tabLeaseIsFresh(existing)
+				&& existing.tab_id !== this.tabInstance
+			) {
+				await this.handleTabConflict();
+				return false;
+			}
+			this.writeTabLease();
+			const confirmed = this.readTabLease();
+			if (!confirmed || confirmed.tab_id !== this.tabInstance) {
+				await this.handleTabConflict();
+				return false;
+			}
+			return true;
+		}
+
+		refreshTabLease() {
+			if (this.tabConflict || !this.launch.attempt) return;
+			const existing = this.readTabLease();
+			if (
+				this.tabLeaseIsFresh(existing)
+				&& existing.tab_id !== this.tabInstance
+			) {
+				void this.handleTabConflict();
+				return;
+			}
+			this.writeTabLease();
+		}
+
+		async reportRuntimeEvent(eventName) {
+			if (this.tabEventReported) return;
+			if (!navigator.onLine) {
+				if (!this.tabEventQueued) {
+					this.tabEventQueued = true;
+					window.addEventListener("online", () => {
+						this.tabEventQueued = false;
+						void this.reportRuntimeEvent(eventName);
+					}, { once: true });
+				}
+				return;
+			}
+			this.tabEventReported = true;
+			try {
+				await apiCall(API.heartbeat, {
+					attempt_name: this.launch.attempt,
+					launch_token: this.launch.token,
+					client_session_id: this.clientSession,
+					reported_pending_count: this.pendingCount,
+					runtime_event: eventName,
+				});
+			} catch (error) {
+				this.tabEventReported = false;
+			}
+		}
+
+		async handleTabConflict() {
+			if (this.tabConflict) return;
+			this.tabConflict = true;
+			this.locallyLocked = true;
+			window.clearTimeout(this.syncTimer);
+			window.clearInterval(this.timerInterval);
+			window.clearInterval(this.periodicSyncInterval);
+			window.clearInterval(this.heartbeatInterval);
+			window.clearInterval(this.tabLeaseInterval);
+			this.renderFatal(
+				"This examination is already active in another browser tab. Continue in the original tab. If it was closed unexpectedly, wait briefly and try again."
+			);
+			await this.reportRuntimeEvent(CONCURRENT_TAB_EVENT);
 		}
 
 		renderLoading(message) {
@@ -695,6 +814,7 @@
 					launch_token: this.launch.token,
 					client_session_id: this.clientSession,
 					reported_pending_count: this.pendingCount,
+					runtime_event: runtimeEvent || undefined,
 				});
 				this.updateServerClock(result.server_time);
 				this.serverState.status = result.status;
@@ -721,7 +841,8 @@
 			}
 		}
 
-		async heartbeat() {
+		async heartbeat(runtimeEvent = "") {
+			if (this.tabConflict) return;
 			if (!navigator.onLine || !this.serverState || this.serverState.status === "Prepared") return;
 			try {
 				const result = await apiCall(API.heartbeat, {
@@ -729,6 +850,7 @@
 					launch_token: this.launch.token,
 					client_session_id: this.clientSession,
 					reported_pending_count: this.pendingCount,
+					runtime_event: runtimeEvent || undefined,
 				});
 				this.updateServerClock(result.server_time);
 				this.setConnection("online");
@@ -858,9 +980,11 @@
 			window.clearInterval(this.timerInterval);
 			window.clearInterval(this.periodicSyncInterval);
 			window.clearInterval(this.heartbeatInterval);
+			window.clearInterval(this.tabLeaseInterval);
 			this.timerInterval = window.setInterval(() => this.updateTimerUI(), 1000);
 			this.periodicSyncInterval = window.setInterval(() => this.flushSync(), PERIODIC_SYNC_MS);
 			this.heartbeatInterval = window.setInterval(() => this.heartbeat(), HEARTBEAT_MS);
+			this.tabLeaseInterval = window.setInterval(() => this.refreshTabLease(), TAB_LEASE_REFRESH_MS);
 		}
 
 		installLifecycleHandlers() {
@@ -870,6 +994,16 @@
 				await this.refreshState();
 			});
 			window.addEventListener("offline", () => this.setConnection("offline"));
+			window.addEventListener("storage", (event) => {
+				if (event.key !== this.tabLeaseKey() || !event.newValue) return;
+				const lease = this.readTabLease();
+				if (
+					this.tabLeaseIsFresh(lease)
+					&& lease.tab_id !== this.tabInstance
+				) {
+					void this.handleTabConflict();
+				}
+			});
 			document.addEventListener("visibilitychange", () => {
 				if (!document.hidden) {
 					this.flushSync();
