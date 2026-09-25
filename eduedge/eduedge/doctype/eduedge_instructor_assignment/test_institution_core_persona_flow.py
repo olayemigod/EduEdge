@@ -21,6 +21,7 @@ from eduedge.api.teaching_schedule import (
     get_teaching_schedule_context,
     search_teaching_schedule_class_arms,
     search_teaching_schedule_courses,
+    search_teaching_schedule_offerings,
 )
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
@@ -417,6 +418,14 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [course.name],
         )
 
+        guided_offerings = search_teaching_schedule_offerings(
+            branch=branch_a.name,
+            reference_date="2094-10-05",
+        )
+        self.assertEqual(
+            [row["value"] for row in guided_offerings],
+            [offering_a.name],
+        )
         guided_class_arms = search_teaching_schedule_class_arms(
             branch=branch_a.name,
             program_offering=offering_a.name,
