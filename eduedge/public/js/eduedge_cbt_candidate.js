@@ -814,7 +814,6 @@
 					launch_token: this.launch.token,
 					client_session_id: this.clientSession,
 					reported_pending_count: this.pendingCount,
-					runtime_event: runtimeEvent || undefined,
 				});
 				this.updateServerClock(result.server_time);
 				this.serverState.status = result.status;
