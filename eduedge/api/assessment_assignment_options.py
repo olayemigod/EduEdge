@@ -311,6 +311,7 @@ def assessment_result_plan_query(doctype, txt, searchfield, start, page_len, fil
         as_dict=False,
     )
 
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def assessment_result_student_query(doctype, txt, searchfield, start, page_len, filters):
