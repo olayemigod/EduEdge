@@ -64,7 +64,9 @@ async function applyStudentGroupChange(frm) {
 		frm.__eduedge_student_group_program = "";
 		frm.__eduedge_applying_group_context = true;
 		try {
-			await frm.set_value({ eduedge_school_branch: null, course: null, instructor: null, room: null });
+			// Clearing the Class should clear Class-dependent values only.
+			// Branch and Room remain valid because Room is governed by Branch, not Class.
+			await frm.set_value({ course: null, instructor: null });
 		} finally {
 			frm.__eduedge_applying_group_context = false;
 		}
@@ -75,14 +77,17 @@ async function applyStudentGroupChange(frm) {
 	if (!message) return;
 	frm.__eduedge_student_group_program = message.program || "";
 	const fixedCourse = message.group_based_on === "Course" ? (message.course || null) : null;
+	const nextBranch = message.eduedge_school_branch || null;
+	const branchChanged = (frm.doc.eduedge_school_branch || null) !== nextBranch;
+	const values = {
+		eduedge_school_branch: nextBranch,
+		course: fixedCourse,
+		instructor: null,
+	};
+	if (branchChanged) values.room = null;
 	frm.__eduedge_applying_group_context = true;
 	try {
-		await frm.set_value({
-			eduedge_school_branch: message.eduedge_school_branch || null,
-			course: fixedCourse,
-			instructor: null,
-			room: null,
-		});
+		await frm.set_value(values);
 	} finally {
 		frm.__eduedge_applying_group_context = false;
 	}
