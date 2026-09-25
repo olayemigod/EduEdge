@@ -30,6 +30,7 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import (
     get_instructor_assignment_capability_state,
 )
+from eduedge.permissions_baseline import ensure_legacy_attendance_report_role_guard
 from eduedge.services.academic_calendar import ensure_institution_calendar
 
 
@@ -305,6 +306,19 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         school_admin = self._make_user("School Administrator", "School Admin")
         self._grant_branch(school_admin, branch_a)
         self._grant_branch(school_admin, branch_b)
+
+        academics_user = self._make_user("Academics User", "Academics User")
+        self._grant_branch(academics_user, branch_a)
+        ensure_legacy_attendance_report_role_guard()
+        frappe.set_user(academics_user.name)
+        self.assertTrue(frappe.has_permission("Student Attendance", "report"))
+        for report_name in (
+            "Student Batch-Wise Attendance",
+            "Student Monthly Attendance Sheet",
+            "Absent Student Report",
+        ):
+            self.assertFalse(frappe.get_doc("Report", report_name).is_permitted())
+        frappe.set_user("Administrator")
 
         student = self._insert(
             "Student",
