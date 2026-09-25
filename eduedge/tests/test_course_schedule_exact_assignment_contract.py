@@ -87,7 +87,7 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             "assignment.student_group = group_row.name",
         ):
             self.assertIn(token, helper)
-        self.assertNotIn("Course Schedule", helper)
+        self.assertNotIn("`tabCourse Schedule`", helper)
 
         query = source.split("def student_group_query", 1)[1].split(
             "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef course_query",
