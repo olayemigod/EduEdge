@@ -98,6 +98,25 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_assessment_plan_cascade_preserves_stable_context(self):
+        source = self._client()
+
+        group_handler = source.split("student_group(frm)", 1)[1].split(
+            "course(frm)", 1
+        )[0]
+        self.assertIn('frm.set_value("course", null)', group_handler)
+        self.assertIn('frm.set_value("examiner", null)', group_handler)
+        self.assertNotIn('frm.set_value("room", null)', group_handler)
+        self.assertNotIn('frm.set_value("supervisor", null)', group_handler)
+
+        date_handler = source.split("schedule_date(frm)", 1)[1]
+        self.assertIn('frm.set_value("examiner", null)', date_handler)
+        self.assertIn('frm.set_value("supervisor", null)', date_handler)
+        self.assertNotIn('frm.set_value("student_group", null)', date_handler)
+        self.assertNotIn('frm.set_value("course", null)', date_handler)
+        self.assertNotIn('frm.set_value("room", null)', date_handler)
+
+
     def test_backend_before_validate_remains_authoritative_over_smart_queries(self):
         operations = (APP / "education" / "assessment_operations.py").read_text(encoding="utf-8")
         for token in (
