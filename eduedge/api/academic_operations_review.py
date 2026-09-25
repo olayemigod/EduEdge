@@ -395,10 +395,10 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	rows = frappe.get_list(
 		"Course",
 		filters=course_filters,
-		or_filters={"name": ["like", f"%{txt}%"], "course_name": ["like", f"%{txt}%"], "course_code": ["like", f"%{txt}%"]},
-		fields=["name", "course_name", "course_code"],
+		or_filters={"name": ["like", f"%{txt}%"], "course_name": ["like", f"%{txt}%"]},
+		fields=["name", "course_name"],
 		start=int(start),
 		page_length=int(page_len),
 		order_by="course_name asc, name asc",
 	)
-	return [[row.name, row.course_name or row.name, row.course_code or "", program_row.department or ""] for row in rows]
+	return [[row.name, row.course_name or row.name, "", program_row.department or ""] for row in rows]
