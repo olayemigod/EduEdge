@@ -23,6 +23,9 @@ ADMIN_ROLES = {
 	"School Administrator",
 	"Academic Administrator",
 }
+RUNTIME_SECURITY_EVENTS = {
+	"Concurrent Tab Detected": "Concurrent browser tab detected for this attempt.",
+}
 
 
 @contextmanager
@@ -58,6 +61,47 @@ def _review_reason(existing: str | None, reason: str) -> str:
 	if reason not in rows:
 		rows.append(reason)
 	return "\n".join(rows)
+
+
+def _record_runtime_security_event(attempt, event_name: str | None) -> None:
+	event = str(event_name or "").strip()
+	if not event:
+		return
+	reason = RUNTIME_SECURITY_EVENTS.get(event)
+	if not reason:
+		frappe.throw(_("Unsupported CBT runtime security event."), frappe.ValidationError)
+	review_reasons = _review_reason(attempt.review_reasons, reason)
+	frappe.db.set_value(
+		"EduEdge CBT Attempt",
+		attempt.name,
+		{"requires_review": 1, "review_reasons": review_reasons},
+		update_modified=False,
+	)
+	attempt.requires_review = 1
+	attempt.review_reasons = review_reasons
+	if frappe.db.exists(
+		"EduEdge CBT Lifecycle Log",
+		{
+			"reference_doctype": "EduEdge CBT Attempt",
+			"reference_name": attempt.name,
+			"event_type": event,
+		},
+	):
+		return
+	from eduedge.cbt.schedule_governance import write_lifecycle_log
+
+	write_lifecycle_log(
+		reference_doctype="EduEdge CBT Attempt",
+		reference_name=attempt.name,
+		exam_schedule=attempt.exam_schedule,
+		candidate_assignment=attempt.candidate_assignment,
+		exam_scope=attempt.exam_scope,
+		school_branch=attempt.school_branch,
+		event_type=event,
+		from_status=attempt.attempt_status,
+		to_status=attempt.attempt_status,
+		reason=reason,
+	)
 
 
 def _assert_manager(assignment) -> None:
@@ -599,6 +643,7 @@ def record_heartbeat(
 	launch_token: str,
 	client_session_id: str,
 	reported_pending_count: int = 0,
+	runtime_event: str | None = None,
 ) -> dict:
 	_lock("EduEdge CBT Attempt", attempt_name)
 	attempt = _load(attempt_name, launch_token)
@@ -606,6 +651,7 @@ def record_heartbeat(
 	if attempt.attempt_status == "In Progress" and _remaining(attempt) <= 0:
 		_finalize_timeout(attempt.name)
 		attempt.reload()
+	_record_runtime_security_event(attempt, runtime_event)
 	current = now_datetime()
 	frappe.db.set_value(
 		"EduEdge CBT Attempt",
