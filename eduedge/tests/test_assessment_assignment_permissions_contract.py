@@ -115,7 +115,9 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
         source = self._source()
         for token in (
             "def has_assessment_plan_permission",
-            'capability = "can_create_assessment_plans" if permission_type in PLAN_MUTATION_TYPES else "can_view_subject_content"',
+            '"can_create_assessment_plans"',
+            "resolved_permission_type in PLAN_MUTATION_TYPES",
+            '"can_view_subject_content"',
             "user_has_instructor_assignment_capability(",
             'on_date=context["on_date"]',
         ):
@@ -135,7 +137,7 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
     def test_limited_teacher_delete_cancel_and_other_destructive_actions_remain_blocked(self):
         source = self._source()
         self.assertIn('BLOCKED_MUTATION_TYPES = {"delete", "cancel", "amend", "share", "import"}', source)
-        self.assertGreaterEqual(source.count("if permission_type in BLOCKED_MUTATION_TYPES"), 2)
+        self.assertGreaterEqual(source.count("resolved_permission_type in BLOCKED_MUTATION_TYPES"), 2)
 
     def test_existing_branch_permission_remains_a_prerequisite(self):
         source = self._source()
