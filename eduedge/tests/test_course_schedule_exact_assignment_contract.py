@@ -68,6 +68,35 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             self.assertIn(token, source)
 
 
+    def test_first_schedule_student_group_selector_uses_assignment_not_existing_schedule(self):
+        source = (APP / "api" / "academic_operations_review.py").read_text(encoding="utf-8")
+        helper = source.split("def _limited_schedule_student_group_rows", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef student_group_query",
+            1,
+        )[0]
+        for token in (
+            "resolve_exact_instructor_for_user()",
+            "eligibility_covers_period(",
+            "from `tabEduEdge Instructor Assignment` assignment",
+            "assignment.instructor = %(exact_instructor)s",
+            "assignment.program_offering = group_row.",
+            "assignment.assignment_type in %(assignment_types)s",
+            "assignment.enabled = 1",
+            "assignment.valid_from is null",
+            "assignment.valid_to is null",
+            "assignment.student_group = group_row.name",
+        ):
+            self.assertIn(token, helper)
+        self.assertNotIn("Course Schedule", helper)
+
+        query = source.split("def student_group_query", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef course_query",
+            1,
+        )[0]
+        self.assertIn("if is_limited_instructor_user():", query)
+        self.assertIn("rows = _limited_schedule_student_group_rows(", query)
+
+
     def test_course_schedule_form_cascades_subject_context_into_instructor_options(self):
         source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         self.assertIn("eduedge.api.teaching_assignment_options.course_schedule_instructor_query", source)
