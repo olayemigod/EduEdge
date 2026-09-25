@@ -35,13 +35,13 @@
 						</label>
 					</div>
 					<template #actions>
-						<button type="button" class="edge-button" @click="openRoute('/app/eduedge-teaching-schedule')">Teaching Schedule</button>
+						<button type="button" class="edge-button" :disabled="saving" @click="openRoute('/app/eduedge-teaching-schedule')">Teaching Schedule</button>
 						<button type="button" class="edge-button edge-button--primary" :disabled="loading || branchSwitching || saving" @click="loadContext">Refresh</button>
 					</template>
 				</EdgeFilterBar>
 
 				<div class="attendance-tabs" role="tablist" aria-label="Attendance views">
-					<button v-for="tab in tabs" :key="tab.key" type="button" class="edge-button" :class="{ 'edge-button--primary': activeTab === tab.key }" @click="activeTab = tab.key">{{ tab.label }}</button>
+					<button v-for="tab in tabs" :key="tab.key" type="button" class="edge-button" :class="{ 'edge-button--primary': activeTab === tab.key }" :disabled="saving" @click="activeTab = tab.key">{{ tab.label }}</button>
 				</div>
 
 				<EdgeDashboardLayout min-column-width="11rem">
@@ -189,7 +189,7 @@ export default {
 			this.register = emptyRegister();
 		},
 		async changeBranch() {
-			if (!this.filters.branch || this.branchSwitching) return;
+			if (this.saving || !this.filters.branch || this.branchSwitching) return;
 			const selectedBranch = this.filters.branch;
 			const previousBranch = this.context.filters?.branch
 				|| this.context.selected_branch?.name
@@ -209,10 +209,12 @@ export default {
 			}
 		},
 		async dateChanged() {
+			if (this.saving) return;
 			this.filters.course_schedule = ""; this.filters.student_group = ""; this.invalidateRegister();
 			await this.loadContext();
 		},
 		async scheduleChanged() {
+			if (this.saving) return;
 			const schedule = this.context.schedules.find((row) => row.name === this.filters.course_schedule);
 			this.filters.student_group = schedule?.student_group || "";
 			if (schedule) await this.loadRegister(); else this.invalidateRegister();
@@ -281,6 +283,7 @@ export default {
 			}
 		},
 		async openCoverage(row) {
+			if (this.saving) return;
 			this.activeTab = "take";
 			this.filters.course_schedule = row.course_schedule;
 			this.filters.student_group = row.student_group;
