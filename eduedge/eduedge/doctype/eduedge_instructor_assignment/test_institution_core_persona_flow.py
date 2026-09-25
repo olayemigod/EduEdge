@@ -12,7 +12,10 @@ from eduedge.api.academic_operations_safe import (
 )
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
-from eduedge.api.teaching_assignment_options import course_schedule_instructor_query
+from eduedge.api.teaching_assignment_options import (
+    course_schedule_instructor_query,
+    course_schedule_student_group_query,
+)
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -328,6 +331,18 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             offering=offering_b.name,
             students=[],
         )
+        class_first_schedule = save_class_arm(
+            display_name=f"QA Core First Schedule {self.suffix}",
+            branch=branch_a.name,
+            offering=offering_a.name,
+            students=[],
+        )
+        class_peer_only = save_class_arm(
+            display_name=f"QA Core Peer Only {self.suffix}",
+            branch=branch_a.name,
+            offering=offering_a.name,
+            students=[],
+        )
 
         assignment_a = self._make_subject_assignment(
             instructor_a,
@@ -338,6 +353,14 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             course,
         )
         self._grant_assignment_capabilities(assignment_a)
+        self._make_subject_assignment(
+            instructor_a,
+            institution,
+            branch_a,
+            offering_a,
+            class_first_schedule["name"],
+            course,
+        )
 
         peer_instructor = self._make_instructor(institution, "Peer")
         self._make_eligibility(peer_instructor, branch_a)
@@ -347,6 +370,14 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             branch_a,
             offering_a,
             class_a["name"],
+            course,
+        )
+        self._make_subject_assignment(
+            peer_instructor,
+            institution,
+            branch_a,
+            offering_a,
+            class_peer_only["name"],
             course,
         )
 
@@ -369,6 +400,58 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             room_name=f"QA Core B Room {self.suffix}",
             **{BRANCH_FIELD: branch_b.name},
         )
+
+        frappe.set_user(instructor_user.name)
+        first_schedule_group_rows = course_schedule_student_group_query(
+            "Student Group",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "reference_date": "2094-10-05",
+            },
+        )
+        first_schedule_group_names = {row[0] for row in first_schedule_group_rows}
+        self.assertIn(class_a["name"], first_schedule_group_names)
+        self.assertIn(class_first_schedule["name"], first_schedule_group_names)
+        self.assertNotIn(class_peer_only["name"], first_schedule_group_names)
+
+        first_schedule = frappe.get_doc(
+            {
+                "doctype": "Course Schedule",
+                "naming_series": "EDU-CSH-.YYYY.-",
+                "student_group": class_first_schedule["name"],
+                "instructor": instructor_a.name,
+                "course": course.name,
+                "schedule_date": "2094-10-05",
+                "room": room_a.name,
+                "from_time": "13:00:00",
+                "to_time": "14:00:00",
+                BRANCH_FIELD: branch_a.name,
+            }
+        ).insert()
+        self.assertEqual(first_schedule.student_group, class_first_schedule["name"])
+
+        frappe.set_user(school_admin.name)
+        manager_group_rows = course_schedule_student_group_query(
+            "Student Group",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "reference_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            {row[0] for row in manager_group_rows},
+            {class_a["name"], class_first_schedule["name"], class_peer_only["name"]},
+        )
+
+        frappe.set_user("Administrator")
         schedule_a = self._make_schedule(
             student_group=class_a["name"],
             instructor=instructor_a,
