@@ -1,6 +1,6 @@
 function setCourseScheduleQueries(frm) {
 	frm.set_query("student_group", () => ({
-		query: "eduedge.api.academic_operations.student_group_query",
+		query: "eduedge.api.teaching_assignment_options.course_schedule_student_group_query",
 		filters: {
 			eduedge_school_branch: frm.doc.eduedge_school_branch,
 			reference_date: frm.doc.schedule_date,
