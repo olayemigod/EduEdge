@@ -126,6 +126,39 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         self.assertNotIn("ignore_permissions", block)
 
 
+    def test_edgesuite_attendance_ignores_stale_context_and_register_responses(self):
+        source = (APP / "public" / "js" / "eduedge_attendance" / "EduEdgeAttendance.vue").read_text(encoding="utf-8")
+
+        for token in (
+            "contextRequestId: 0",
+            "registerRequestId: 0",
+            "branchSwitching: false",
+            "const requestId = ++this.contextRequestId",
+            "if (requestId !== this.contextRequestId) return",
+            "if (requestId === this.contextRequestId) this.loading = false",
+            "invalidateRegister()",
+            "this.registerRequestId += 1",
+            "const requestId = ++this.registerRequestId",
+            "this.filters.student_group !== requestedGroup",
+            "this.filters.date !== requestedDate",
+            "this.filters.course_schedule !== requestedSchedule",
+            "if (requestId === this.registerRequestId) this.registerLoading = false",
+            ':disabled="loading || branchSwitching"',
+            "if (!this.filters.branch || this.branchSwitching) return",
+        ):
+            self.assertIn(token, source)
+
+        date_handler = source.split("async dateChanged()", 1)[1].split(
+            "async scheduleChanged()", 1
+        )[0]
+        self.assertIn("this.invalidateRegister()", date_handler)
+
+        schedule_handler = source.split("async scheduleChanged()", 1)[1].split(
+            "async loadRegister()", 1
+        )[0]
+        self.assertIn("else this.invalidateRegister()", schedule_handler)
+
+
     def test_live_attendance_routes_use_safe_runtime_overrides(self):
         hooks = HOOKS.read_text(encoding="utf-8")
         for token in (
