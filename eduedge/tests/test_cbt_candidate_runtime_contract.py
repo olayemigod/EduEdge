@@ -121,6 +121,27 @@ class TestCBTCandidateRuntimeContract(unittest.TestCase):
 			self.assertIn(token, candidate)
 
 
+	def test_local_timeout_flushes_then_confirms_zero_pending_submission(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		timeout_block = candidate.split("async handleLocalTimeout()", 1)[1].split(
+			"renderTerminal(syncPending)", 1
+		)[0]
+		for token in (
+			"this.submissionRequested = true",
+			"await this.heartbeat()",
+			"await this.flushSync()",
+			"await this.refreshState()",
+		):
+			self.assertIn(token, timeout_block)
+		flush_block = candidate.split("async flushSync()", 1)[1].split(
+			"enterSyncConflict(questionKey", 1
+		)[0]
+		self.assertIn(
+			"if (this.submissionRequested && this.pendingCount === 0) await this.completeQueuedSubmission()",
+			flush_block,
+		)
+
+
 	def test_runtime_security_event_is_heartbeat_only(self):
 		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
 		submit_block = candidate.split("async completeQueuedSubmission()", 1)[1].split(
