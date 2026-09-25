@@ -14,6 +14,7 @@ from eduedge.api.assessment_assignment_options import (
     assessment_plan_course_query,
     assessment_plan_student_group_query,
 )
+from eduedge.api.assessment_operations import get_assessment_context
 from eduedge.api.attendance_tool_safe import get_student_attendance_records
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
@@ -206,6 +207,26 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             enabled=1,
         )
 
+    def _make_class_responsibility_assignment(
+        self,
+        instructor,
+        institution,
+        branch,
+        offering,
+        student_group: str,
+    ):
+        return self._insert(
+            "EduEdge Instructor Assignment",
+            instructor=instructor.name,
+            assignment_type="Class Teacher",
+            assignment_scope="Class Arm",
+            institution=institution.name,
+            school_branch=branch.name,
+            program_offering=offering.name,
+            student_group=student_group,
+            enabled=1,
+        )
+
     def _grant_assignment_capabilities(self, assignment) -> None:
         doc = frappe.get_doc("EduEdge Instructor Assignment", assignment.name)
         doc.can_view_subject_content = 1
@@ -256,7 +277,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             year_start_date="2094-09-01",
             year_end_date="2095-08-31",
         )
-        self._insert(
+        term = self._insert(
             "Academic Term",
             academic_year=year.name,
             term_name=f"QA Core Term {self.suffix}",
@@ -407,6 +428,13 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             offering_a,
             class_peer["name"],
             course,
+        )
+        self._make_class_responsibility_assignment(
+            instructor_a,
+            institution,
+            branch_a,
+            offering_a,
+            class_peer["name"],
         )
 
         self._make_subject_assignment(
@@ -670,6 +698,36 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         self.assertEqual(
             [row["name"] for row in teaching_context["schedules"]],
             [schedule_a.name],
+        )
+
+        assessment_context = get_assessment_context(
+            branch=branch_a.name,
+            academic_year=year.name,
+            academic_term=term.name,
+            result_mode="Terminal",
+        )
+        self.assertEqual(
+            {row["name"] for row in assessment_context["student_groups"]},
+            {class_a["name"], class_peer["name"]},
+        )
+        self.assertFalse(
+            assessment_context["can_view_publication_scope"],
+        )
+        self.assertEqual(
+            [row[0] for row in assessment_plan_student_group_query(
+                "Student Group",
+                "",
+                "name",
+                0,
+                20,
+                {
+                    BRANCH_FIELD: branch_a.name,
+                    "academic_year": year.name,
+                    "academic_term": term.name,
+                    "schedule_date": "2094-10-05",
+                },
+            )],
+            [class_a["name"]],
         )
 
         self.assertEqual(
