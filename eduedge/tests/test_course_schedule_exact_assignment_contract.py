@@ -120,6 +120,9 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         query = source.split("def course_query", 1)[1]
         self.assertIn("if is_limited_instructor_user():", query)
         self.assertIn("course_names = _limited_schedule_course_names(", query)
+        self.assertIn('fields=["name", "course_name"]', query)
+        self.assertNotIn('"course_code": ["like"', query)
+        self.assertNotIn('fields=["name", "course_name", "course_code"]', query)
 
         form = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         course_query = form.split('frm.set_query("course"', 1)[1].split('frm.set_query("instructor"', 1)[0]
