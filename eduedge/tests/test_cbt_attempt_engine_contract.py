@@ -121,8 +121,24 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			'"last_heartbeat_at": server_time',
 			'cint(answer_count) + max(0, cint(reported_pending_count))',
 			'"sync_status": "Conflict"',
+			"base.ANSWER_SYNC_CONFLICT_REASON",
+			'"answer_sync_conflict": base._answer_sync_conflict_active(attempt)',
 		):
 			self.assertIn(token, guard)
+
+
+	def test_sync_conflict_state_survives_reload_and_heartbeat_until_review_resolution(self):
+		attempts = (APP / "cbt" / "attempts.py").read_text()
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		for token in (
+			'ANSWER_SYNC_CONFLICT_REASON = "Answer revision conflict detected during browser synchronisation."',
+			"def _answer_sync_conflict_active(attempt)",
+			"cint(attempt.requires_review)",
+			'"answer_sync_conflict": _answer_sync_conflict_active(attempt)',
+		):
+			self.assertIn(token, attempts)
+		self.assertIn('"answer_sync_conflict": False', guard)
+		self.assertIn('"answer_sync_conflict": base._answer_sync_conflict_active(attempt)', guard)
 
 
 	def test_runtime_guard_hides_prestart_and_terminal_questions_and_audits_late_answers(self):
