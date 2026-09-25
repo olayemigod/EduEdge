@@ -26,8 +26,8 @@ from eduedge.education.instructor_scope import (
 )
 from eduedge.education.teaching_assignments import COURSE_REQUIRED_TYPES
 from eduedge.services.academic_calendar import resolve_academic_defaults
-from eduedge.services.instructor_branch_governance import eligibility_covers_period
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 VALID_VIEWS = {"day", "week", "upcoming", "rooms"}
 MAX_LINK_RESULTS = 50
@@ -295,9 +295,9 @@ def search_teaching_schedule_courses(
 	branch: str,
 	program_offering: str,
 	reference_date: str,
-	student_group: str | None = None,
 	query: str = "",
 	page_length: int | str = 20,
+	student_group: str | None = None,
 ) -> list[dict]:
 	"""Return only Subjects that are actually configured on the selected Class."""
 	_require_schedule_read()
