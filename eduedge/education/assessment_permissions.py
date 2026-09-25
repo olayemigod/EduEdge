@@ -175,9 +175,15 @@ def _has_context_branch_permission(doc, branch: str, user: str, permission_type=
     return has_education_branch_permission(proxy, user, permission_type)
 
 
-def has_assessment_plan_permission(doc, user=None, permission_type=None) -> bool:
+def has_assessment_plan_permission(
+    doc,
+    user=None,
+    permission_type=None,
+    ptype=None,
+) -> bool:
     resolved_user = user or frappe.session.user
-    if permission_type in BLOCKED_MUTATION_TYPES and is_limited_instructor_user(resolved_user):
+    resolved_permission_type = ptype or permission_type
+    if resolved_permission_type in BLOCKED_MUTATION_TYPES and is_limited_instructor_user(resolved_user):
         return False
     if not doc:
         return True
@@ -187,14 +193,18 @@ def has_assessment_plan_permission(doc, user=None, permission_type=None) -> bool
         doc,
         context.get("school_branch") or "",
         resolved_user,
-        permission_type,
+        resolved_permission_type,
     ):
         return False
     if not assignment_capability_enforcement_enabled() or not is_limited_instructor_user(resolved_user):
         return True
     if not all(context.get(key) for key in ("school_branch", "program_offering", "course")):
         return False
-    capability = "can_create_assessment_plans" if permission_type in PLAN_MUTATION_TYPES else "can_view_subject_content"
+    capability = (
+        "can_create_assessment_plans"
+        if resolved_permission_type in PLAN_MUTATION_TYPES
+        else "can_view_subject_content"
+    )
     return user_has_instructor_assignment_capability(
         capability,
         user=resolved_user,
@@ -206,9 +216,15 @@ def has_assessment_plan_permission(doc, user=None, permission_type=None) -> bool
     )
 
 
-def has_assessment_result_permission(doc, user=None, permission_type=None) -> bool:
+def has_assessment_result_permission(
+    doc,
+    user=None,
+    permission_type=None,
+    ptype=None,
+) -> bool:
     resolved_user = user or frappe.session.user
-    if permission_type in BLOCKED_MUTATION_TYPES and is_limited_instructor_user(resolved_user):
+    resolved_permission_type = ptype or permission_type
+    if resolved_permission_type in BLOCKED_MUTATION_TYPES and is_limited_instructor_user(resolved_user):
         return False
     if not doc:
         return True
@@ -218,14 +234,14 @@ def has_assessment_result_permission(doc, user=None, permission_type=None) -> bo
         doc,
         context.get("school_branch") or "",
         resolved_user,
-        permission_type,
+        resolved_permission_type,
     ):
         return False
     if not assignment_capability_enforcement_enabled() or not is_limited_instructor_user(resolved_user):
         return True
     if not all(context.get(key) for key in ("school_branch", "program_offering", "course")):
         return False
-    mutation = permission_type in RESULT_MUTATION_TYPES
+    mutation = resolved_permission_type in RESULT_MUTATION_TYPES
     capability = "can_enter_marks" if mutation else "can_view_subject_content"
     # Historical result visibility follows the assignment that covered the assessment
     # date. Mark entry remains a current operational permission, matching the server
