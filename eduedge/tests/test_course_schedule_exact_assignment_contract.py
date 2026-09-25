@@ -97,6 +97,32 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         self.assertIn("rows = _limited_schedule_student_group_rows(", query)
 
 
+    def test_limited_instructor_course_selector_is_exact_assignment_scoped(self):
+        source = (APP / "api" / "academic_operations_review.py").read_text(encoding="utf-8")
+        block = source.split("def course_query", 1)[1]
+        for token in (
+            "student_group = str(filters.get(\"student_group\") or \"\").strip()",
+            'reference_date = filters.get("reference_date")',
+            "if limited_instructor and (not student_group or not reference_date):",
+            "resolve_exact_instructor_for_user()",
+            "eligibility_covers_period(",
+            "from `tabEduEdge Instructor Assignment` assignment",
+            "assignment.instructor = %(instructor)s",
+            "assignment.program_offering = %(program_offering)s",
+            "assignment.course in %(course_names)s",
+            "assignment.assignment_type in %(assignment_types)s",
+            "assignment.student_group = %(student_group)s",
+            "assignment.valid_from is null",
+            "assignment.valid_to is null",
+        ):
+            self.assertIn(token, block)
+
+        form = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
+        course_query = form.split('frm.set_query("course"', 1)[1].split('frm.set_query("instructor"', 1)[0]
+        self.assertIn("student_group: frm.doc.student_group", course_query)
+        self.assertIn("reference_date: frm.doc.schedule_date", course_query)
+
+
     def test_course_schedule_form_cascades_subject_context_into_instructor_options(self):
         source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         self.assertIn("eduedge.api.teaching_assignment_options.course_schedule_instructor_query", source)
