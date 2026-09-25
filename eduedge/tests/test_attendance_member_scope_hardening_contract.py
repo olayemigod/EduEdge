@@ -268,6 +268,34 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         self.assertIn("await this.loadContext()", save_block)
 
 
+    def test_unsafe_upstream_attendance_reports_are_platform_admin_only(self):
+        source = (APP / "education" / "upstream_report_governance.py").read_text(encoding="utf-8")
+        install = (APP / "install.py").read_text(encoding="utf-8")
+
+        for report_name in (
+            "Absent Student Report",
+            "Student Batch-Wise Attendance",
+            "Student Monthly Attendance Sheet",
+        ):
+            self.assertIn(f'"{report_name}"', source)
+
+        for token in (
+            "SAFE_REPORT_ROLES = PLATFORM_MANAGERS",
+            'frappe.db.get_value(',
+            '"Custom Role"',
+            'doc.set("roles", [])',
+            'doc.append("roles", {"role": role})',
+            "doc.insert(ignore_permissions=True)",
+            "doc.save(ignore_permissions=True)",
+        ):
+            self.assertIn(token, source)
+        self.assertNotIn('"Academics User"', source)
+        self.assertGreaterEqual(
+            install.count("ensure_safe_attendance_report_roles()"),
+            2,
+        )
+
+
     def test_live_attendance_routes_use_safe_runtime_overrides(self):
         hooks = HOOKS.read_text(encoding="utf-8")
         for token in (
