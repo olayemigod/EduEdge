@@ -191,12 +191,17 @@ export default {
 		async changeBranch() {
 			if (!this.filters.branch || this.branchSwitching) return;
 			const selectedBranch = this.filters.branch;
+			const previousBranch = this.context.filters?.branch
+				|| this.context.selected_branch?.name
+				|| this.context.current_branch?.name
+				|| "";
 			this.branchSwitching = true;
 			try {
 				await frappe.call("eduedge.api.branch_context.switch_school_branch", { branch: selectedBranch });
 				this.filters.course_schedule = ""; this.filters.student_group = ""; this.invalidateRegister();
 				await this.loadContext();
 			} catch (error) {
+				this.filters.branch = previousBranch;
 				frappe.msgprint({ title: __("Unable to switch Branch"), message: error?.message || __("The selected Branch could not be activated."), indicator: "red" });
 				await this.loadContext();
 			} finally {
