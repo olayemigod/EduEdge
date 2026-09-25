@@ -22,7 +22,19 @@ class TestEducationBranchContract(unittest.TestCase):
 		text = (ROOT / "eduedge" / "hooks.py").read_text()
 		self.assertIn("doc_events", text)
 		self.assertIn("permission_query_conditions", text)
-		self.assertNotIn('"education.', text)
+		education_overrides = [
+			line.strip().split('":', 1)[0].strip('"')
+			for line in text.splitlines()
+			if line.strip().startswith('"education.')
+		]
+		self.assertEqual(
+			set(education_overrides),
+			{
+				"education.education.doctype.student_attendance_tool.student_attendance_tool.get_student_attendance_records",
+				"education.education.api.mark_attendance",
+			},
+		)
+		self.assertNotIn("education.education.api.enroll_student", education_overrides)
 		self.assertNotIn('"erpnext.', text)
 		self.assertIn('"eduedge.api.resource_center.get_resource_page"', text)
 
