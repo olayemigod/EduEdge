@@ -5,6 +5,10 @@ from education.education.test_utils import before_tests
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import cint, now_datetime
 
+from eduedge.api.assessment_assignment_options import (
+    assessment_plan_course_query,
+    assessment_plan_student_group_query,
+)
 from eduedge.api.academic_operations_safe import (
     get_attendance_register,
     get_operations_context,
@@ -201,6 +205,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
     def _grant_assignment_capabilities(self, assignment) -> None:
         doc = frappe.get_doc("EduEdge Instructor Assignment", assignment.name)
         doc.can_view_subject_content = 1
+        doc.can_create_assessment_plans = 1
         doc.can_enter_marks = 1
         doc.capabilities_updated_on = now_datetime()
         doc.capabilities_updated_by = "Administrator"
@@ -299,7 +304,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             institution, "Alpha", employee=instructor_employee
         )
         instructor_b = self._make_instructor(institution, "Beta")
-        self._make_eligibility(instructor_a, branch_a, primary=1)
+        eligibility_a = self._make_eligibility(instructor_a, branch_a, primary=1)
         self._make_eligibility(instructor_b, branch_b, primary=1)
         self._grant_branch(instructor_user, branch_a)
 
@@ -399,6 +404,76 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
 
         frappe.set_user(instructor_user.name)
+        first_assessment_groups = assessment_plan_student_group_query(
+            "Student Group",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "academic_year": year.name,
+                "schedule_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in first_assessment_groups],
+            [class_a["name"]],
+        )
+        first_assessment_courses = assessment_plan_course_query(
+            "Course",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "student_group": class_a["name"],
+                "schedule_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in first_assessment_courses],
+            [course.name],
+        )
+
+        # Assessment smart selectors must lose access immediately when Branch
+        # Eligibility no longer covers the assessment date, even though the
+        # Subject Assignment itself remains enabled.
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Branch Assignment",
+            eligibility_a.name,
+            "enabled",
+            0,
+            update_modified=False,
+        )
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            assessment_plan_student_group_query(
+                "Student Group",
+                "",
+                "name",
+                0,
+                20,
+                {
+                    BRANCH_FIELD: branch_a.name,
+                    "academic_year": year.name,
+                    "schedule_date": "2094-10-05",
+                },
+            ),
+            [],
+        )
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Branch Assignment",
+            eligibility_a.name,
+            "enabled",
+            1,
+            update_modified=False,
+        )
+        frappe.set_user(instructor_user.name)
+
         first_schedule_groups = schedule_student_group_query(
             "Student Group",
             "",
