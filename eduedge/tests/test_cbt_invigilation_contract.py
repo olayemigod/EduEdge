@@ -15,6 +15,7 @@ class TestCBTInvigilationContract(unittest.TestCase):
 			"get_invigilation_schedules",
 			"get_invigilation_context",
 			"reported_pending_sync_count",
+			"reconciliation_deadline",
 			"heartbeat_age_seconds",
 			"seconds_remaining",
 			"result_readiness",
