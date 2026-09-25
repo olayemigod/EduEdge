@@ -53,17 +53,17 @@ frappe.ui.form.on("Assessment Plan", {
 		frm.set_value("course", null);
 	},
 	student_group(frm) {
+		// Class changes invalidate Subject and Subject-specific Examiner only.
+		// Room and Supervisor are Branch-scoped and remain valid when Branch is unchanged.
 		frm.set_value("course", null);
-		frm.set_value("room", null);
 		frm.set_value("examiner", null);
-		frm.set_value("supervisor", null);
 	},
 	course(frm) {
 		frm.set_value("examiner", null);
 	},
 	schedule_date(frm) {
-		frm.set_value("student_group", null);
-		frm.set_value("course", null);
+		// Date changes revalidate personnel eligibility without destroying stable
+		// Class, Subject or Room context. Backend validation remains authoritative.
 		frm.set_value("examiner", null);
 		frm.set_value("supervisor", null);
 	},
