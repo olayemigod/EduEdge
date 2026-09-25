@@ -49,6 +49,10 @@ override_whitelisted_methods = {
 	"eduedge.api.academic_operations.student_group_query": "eduedge.api.academic_operations_review.student_group_query",
 	"education.education.doctype.student_attendance_tool.student_attendance_tool.get_student_attendance_records": "eduedge.api.attendance_tool_safe.get_student_attendance_records",
 	"education.education.api.mark_attendance": "eduedge.api.attendance_tool_safe.mark_attendance",
+	"education.education.api.get_assessment_students": "eduedge.api.assessment_result_tool_safe.get_assessment_students",
+	"education.education.api.get_assessment_details": "eduedge.api.assessment_result_tool_safe.get_assessment_details",
+	"education.education.api.mark_assessment_result": "eduedge.api.assessment_result_tool_safe.mark_assessment_result",
+	"education.education.api.submit_assessment_results": "eduedge.api.assessment_result_tool_safe.submit_assessment_results",
 	"eduedge.api.programme_offerings.get_programme_offerings_page": "eduedge.api.programme_offerings_safe.get_programme_offerings_page",
 	"eduedge.api.programme_offerings.get_programme_offering_options": "eduedge.api.programme_offerings_safe.get_programme_offering_options",
 	"eduedge.api.programme_offerings.save_programme_offering": "eduedge.api.programme_offerings_safe.save_programme_offering",
@@ -90,6 +94,7 @@ doctype_js = {
 	"Student Attendance": "public/js/education/student_attendance.js",
 	"Assessment Plan": "public/js/education/assessment_plan.js",
 	"Assessment Result": "public/js/education/assessment_result.js",
+	"Assessment Result Tool": "public/js/education/assessment_result_tool.js",
 	"EduEdge Institution Academic Calendar": "eduedge/doctype/eduedge_institution_academic_calendar/eduedge_institution_academic_calendar.js",
 }
 
