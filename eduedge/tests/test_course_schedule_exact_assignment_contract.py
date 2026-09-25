@@ -145,6 +145,32 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_student_group_change_clears_only_invalid_dependents(self):
+        source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
+        group_handler = source.split("async function applyStudentGroupChange(frm)", 1)[1].split(
+            "frappe.ui.form.on", 1
+        )[0]
+
+        empty_group = group_handler.split("if (!frm.doc.student_group)", 1)[1].split(
+            "const message = await getStudentGroupContext(frm);", 1
+        )[0]
+        self.assertIn("await frm.set_value({ course: null, instructor: null })", empty_group)
+        self.assertNotIn("eduedge_school_branch: null", empty_group)
+        self.assertNotIn("room: null", empty_group)
+
+        selected_group = group_handler.split("const message = await getStudentGroupContext(frm);", 1)[1]
+        for token in (
+            "const nextBranch = message.eduedge_school_branch || null",
+            "const branchChanged = (frm.doc.eduedge_school_branch || null) !== nextBranch",
+            "eduedge_school_branch: nextBranch",
+            "course: fixedCourse",
+            "instructor: null",
+            "if (branchChanged) values.room = null",
+            "await frm.set_value(values)",
+        ):
+            self.assertIn(token, selected_group)
+
+
     def test_schedule_date_change_preserves_stable_context_and_reselects_instructor(self):
         source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         date_handler = source.split("async schedule_date(frm)", 1)[1].split(
