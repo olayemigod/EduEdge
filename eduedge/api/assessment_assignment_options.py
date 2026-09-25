@@ -80,7 +80,10 @@ def _capability_group_names(branch: str, reference_date) -> set[str]:
     fields = ["name", "program", "academic_year", "academic_term", BRANCH_FIELD]
     if meta.has_field(OFFERING_FIELD):
         fields.append(OFFERING_FIELD)
-    groups = frappe.get_list(
+    # Capability rows already fail closed on exact Instructor identity and Branch
+    # Eligibility. Use an explicit Branch-scoped metadata read here so first-plan
+    # creation does not depend on an already-owned Course Schedule.
+    groups = frappe.get_all(
         "Student Group",
         filters={BRANCH_FIELD: branch, "disabled": 0},
         fields=fields,
@@ -115,7 +118,7 @@ def assessment_plan_student_group_query(doctype, txt, searchfield, start, page_l
     group_filters: dict = {"name": ["in", sorted(allowed_groups)], BRANCH_FIELD: branch, "disabled": 0}
     if filters.get("academic_year"):
         group_filters["academic_year"] = filters["academic_year"]
-    rows = frappe.get_list(
+    rows = frappe.get_all(
         "Student Group",
         filters=group_filters,
         or_filters={
@@ -196,7 +199,12 @@ def assessment_plan_course_query(doctype, txt, searchfield, start, page_len, fil
     if not curriculum_courses:
         return []
     pattern = f"%{txt or ''}%"
-    return frappe.get_list(
+    course_reader = (
+        frappe.get_all
+        if is_teacher_user() and assignment_capability_enforcement_enabled()
+        else frappe.get_list
+    )
+    return course_reader(
         "Course",
         filters={"name": ["in", sorted(curriculum_courses)]},
         or_filters={"name": ["like", pattern], "course_name": ["like", pattern]},
