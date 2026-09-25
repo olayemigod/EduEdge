@@ -172,11 +172,11 @@
 											<span>{{ heartbeatLabel(candidate) }}</span>
 										</td>
 										<td><strong>{{ candidate.answered_count }}/{{ candidate.question_count }}</strong><span>server-saved</span></td>
-										<td><strong :class="{ attention: candidate.reported_pending_sync_count || candidate.attempt_status === \"Pending Sync\" }">{{ candidate.reported_pending_sync_count }}</strong></td>
+										<td><strong :class="{ attention: candidate.reported_pending_sync_count || candidate.attempt_status === 'Pending Sync' }">{{ candidate.reported_pending_sync_count }}</strong></td>
 										<td>
-											<template v-if="candidate.attempt_status === \"Pending Sync\"">
+											<template v-if="candidate.attempt_status === 'Pending Sync'">
 												<strong>{{ formatDateTime(candidate.reconciliation_deadline) }}</strong>
-												<span>{{ candidate.reported_pending_sync_count ? \"Browser answers still pending\" : \"Awaiting browser zero-pending confirmation\" }}</span>
+												<span>{{ candidate.reported_pending_sync_count ? 'Browser answers still pending' : 'Awaiting browser zero-pending confirmation' }}</span>
 											</template>
 											<span v-else>—</span>
 										</td>
