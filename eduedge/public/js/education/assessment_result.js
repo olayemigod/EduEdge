@@ -7,10 +7,10 @@ frappe.ui.form.on("Assessment Result", {
 			},
 		}));
 		frm.set_query("student", () => ({
-			query: "eduedge.api.academic_operations.student_query",
+			query: "eduedge.api.assessment_assignment_options.assessment_result_student_query",
 			filters: {
 				eduedge_school_branch: frm.doc.eduedge_school_branch,
-				student_group: frm.doc.student_group,
+				assessment_plan: frm.doc.assessment_plan,
 			},
 		}));
 	},
