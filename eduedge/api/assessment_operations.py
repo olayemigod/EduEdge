@@ -10,6 +10,8 @@ from eduedge.education.assessment_operations import (
 	get_publication_readiness,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import is_limited_instructor_user
+from eduedge.education.teaching_assignments import has_class_responsibility_assignment
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.result_snapshots import create_publication_snapshots
 from eduedge.education.result_profile import (
@@ -62,6 +64,36 @@ def _resolve_branch(branch: str | None = None) -> str:
 		frappe.throw(_("Select a School Branch / Campus first."), frappe.ValidationError)
 	assert_branch_access(resolved)
 	return resolved
+
+
+def _can_view_publication_scope(
+	student_group: str | None,
+	academic_year: str | None,
+	academic_term: str | None,
+) -> bool:
+	if not is_limited_instructor_user(frappe.session.user):
+		return True
+	if not student_group:
+		return False
+	return has_class_responsibility_assignment(
+		student_group,
+		user=frappe.session.user,
+		academic_year=academic_year,
+		academic_term=academic_term,
+	)
+
+
+def _assert_publication_scope_access(
+	student_group: str | None,
+	academic_year: str | None,
+	academic_term: str | None,
+) -> None:
+	if _can_view_publication_scope(student_group, academic_year, academic_term):
+		return
+	frappe.throw(
+		_("Whole-class result publication is limited to the effective Class/Form responsibility."),
+		frappe.PermissionError,
+	)
 
 
 
@@ -148,6 +180,18 @@ def get_assessment_context(
 	)
 	if student_group and student_group not in {row.name for row in groups}:
 		frappe.throw(_("Selected Student Group is not available in this branch."), frappe.PermissionError)
+	can_view_publication_scope = _can_view_publication_scope(
+		student_group,
+		academic_year,
+		academic_term,
+	)
+	can_manage_publication = bool(
+		can_view_publication_scope
+		and (
+			frappe.has_permission(PUBLICATION_DOCTYPE, "create")
+			or frappe.has_permission(PUBLICATION_DOCTYPE, "write")
+		)
+	)
 
 	assessment_groups = frappe.get_list(
 		"Assessment Group",
@@ -199,7 +243,12 @@ def get_assessment_context(
 
 	publication = None
 	readiness = None
-	if student_group and academic_year and (assessment_group or result_profile):
+	if (
+		can_view_publication_scope
+		and student_group
+		and academic_year
+		and (assessment_group or result_profile)
+	):
 		publication_rows = frappe.get_all(
 			PUBLICATION_DOCTYPE,
 			filters=_publication_scope_filters(
@@ -265,6 +314,8 @@ def get_assessment_context(
 		"current_branch": current_branch,
 		"allowed_branches": get_allowed_school_branches(),
 		"can_approve": bool(APPROVER_ROLES.intersection(frappe.get_roles(frappe.session.user))),
+		"can_view_publication_scope": can_view_publication_scope,
+		"can_manage_publication": can_manage_publication,
 		"filters": {
 			"branch": resolved_branch,
 			"academic_year": academic_year,
@@ -304,6 +355,7 @@ def ensure_result_publication(
 ) -> dict:
 	_require_operator()
 	branch = _resolve_branch(school_branch)
+	_assert_publication_scope_access(student_group, academic_year, academic_term)
 	locked_group = frappe.db.sql(
 		"select name from `tabStudent Group` where name=%s for update",
 		(student_group,),
@@ -587,6 +639,7 @@ def get_report_card_readiness(
 	_require_login()
 	branch = frappe.db.get_value("Student Group", student_group, BRANCH_FIELD)
 	assert_branch_access(branch)
+	_assert_publication_scope_access(student_group, academic_year, academic_term)
 	publication_rows = frappe.get_all(
 		PUBLICATION_DOCTYPE,
 		filters={
