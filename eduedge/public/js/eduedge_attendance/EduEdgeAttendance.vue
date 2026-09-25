@@ -25,7 +25,7 @@
 					<div class="attendance-filter-grid">
 						<label>
 							<span>Branch / Campus</span>
-							<select v-model="filters.branch" class="form-control" @change="changeBranch">
+							<select v-model="filters.branch" class="form-control" :disabled="loading || branchSwitching" @change="changeBranch">
 								<option v-for="branch in context.allowed_branches" :key="branch.name" :value="branch.name">{{ branch.branch_name }}</option>
 							</select>
 						</label>
@@ -125,6 +125,7 @@ export default {
 		const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
 		return {
 			loading: true, error: "", registerLoading: false, registerError: "", saving: false,
+			branchSwitching: false, contextRequestId: 0, registerRequestId: 0,
 			menuItems: EDUEDGE_MENU_ITEMS,
 			activeTab: "take",
 			tabs: [{ key: "take", label: "Take Attendance" }, { key: "registers", label: "Registers" }, { key: "missing", label: "Missing Registers" }],
@@ -152,9 +153,13 @@ export default {
 		formatTime(value) { return String(value || "").slice(0, 5) || "—"; },
 		scheduleLabel(row) { return `${this.formatTime(row.from_time)} · ${row.course || 'Subject'} · ${row.student_group || 'Class'} · ${row.instructor_name || row.instructor || 'No Instructor'}`; },
 		async loadContext() {
+			const requestId = ++this.contextRequestId;
+			const requestedBranch = this.filters.branch || undefined;
+			const requestedDate = this.filters.date;
 			this.loading = true; this.error = "";
 			try {
-				const response = await frappe.call("eduedge.api.academic_operations.get_operations_context", { branch: this.filters.branch || undefined, date: this.filters.date });
+				const response = await frappe.call("eduedge.api.academic_operations.get_operations_context", { branch: requestedBranch, date: requestedDate });
+				if (requestId !== this.contextRequestId) return;
 				this.context = response.message || emptyContext();
 				this.filters.branch = this.context.filters?.branch || this.filters.branch;
 				this.filters.date = this.context.filters?.date || this.filters.date;
@@ -166,36 +171,70 @@ export default {
 						this.filters.student_group = schedule.student_group || "";
 						if (this.activeTab === "take") await this.loadRegister();
 					} else {
-						this.filters.course_schedule = ""; this.filters.student_group = ""; this.register = emptyRegister();
+						this.filters.course_schedule = ""; this.filters.student_group = ""; this.invalidateRegister();
 					}
 				} else if (!this.context.schedules.some((row) => row.name === this.filters.course_schedule)) {
-					this.filters.course_schedule = ""; this.filters.student_group = ""; this.register = emptyRegister();
+					this.filters.course_schedule = ""; this.filters.student_group = ""; this.invalidateRegister();
 				}
-			} catch (error) { this.error = error?.message || "Attendance context could not be loaded."; }
-			finally { this.loading = false; }
+			} catch (error) {
+				if (requestId === this.contextRequestId) this.error = error?.message || "Attendance context could not be loaded.";
+			} finally {
+				if (requestId === this.contextRequestId) this.loading = false;
+			}
+		},
+		invalidateRegister() {
+			this.registerRequestId += 1;
+			this.registerLoading = false;
+			this.registerError = "";
+			this.register = emptyRegister();
 		},
 		async changeBranch() {
-			if (!this.filters.branch) return;
+			if (!this.filters.branch || this.branchSwitching) return;
+			const selectedBranch = this.filters.branch;
+			this.branchSwitching = true;
 			try {
-				await frappe.call("eduedge.api.branch_context.switch_school_branch", { branch: this.filters.branch });
-				this.filters.course_schedule = ""; this.filters.student_group = ""; this.register = emptyRegister();
+				await frappe.call("eduedge.api.branch_context.switch_school_branch", { branch: selectedBranch });
+				this.filters.course_schedule = ""; this.filters.student_group = ""; this.invalidateRegister();
 				await this.loadContext();
-			} catch (error) { frappe.msgprint({ title: __("Unable to switch Branch"), message: error?.message || __("The selected Branch could not be activated."), indicator: "red" }); }
+			} catch (error) {
+				frappe.msgprint({ title: __("Unable to switch Branch"), message: error?.message || __("The selected Branch could not be activated."), indicator: "red" });
+				await this.loadContext();
+			} finally {
+				this.branchSwitching = false;
+			}
 		},
-		async dateChanged() { this.filters.course_schedule = ""; this.filters.student_group = ""; this.register = emptyRegister(); await this.loadContext(); },
+		async dateChanged() {
+			this.filters.course_schedule = ""; this.filters.student_group = ""; this.invalidateRegister();
+			await this.loadContext();
+		},
 		async scheduleChanged() {
 			const schedule = this.context.schedules.find((row) => row.name === this.filters.course_schedule);
 			this.filters.student_group = schedule?.student_group || "";
-			if (schedule) await this.loadRegister(); else this.register = emptyRegister();
+			if (schedule) await this.loadRegister(); else this.invalidateRegister();
 		},
 		async loadRegister() {
 			if (!this.filters.student_group || !this.filters.course_schedule) return;
+			const requestId = ++this.registerRequestId;
+			const requestedGroup = this.filters.student_group;
+			const requestedDate = this.filters.date;
+			const requestedSchedule = this.filters.course_schedule;
 			this.registerLoading = true; this.registerError = "";
 			try {
-				const response = await frappe.call("eduedge.api.academic_operations.get_attendance_register", { student_group: this.filters.student_group, date: this.filters.date, course_schedule: this.filters.course_schedule });
+				const response = await frappe.call("eduedge.api.academic_operations.get_attendance_register", { student_group: requestedGroup, date: requestedDate, course_schedule: requestedSchedule });
+				if (
+					requestId !== this.registerRequestId
+					|| this.filters.student_group !== requestedGroup
+					|| this.filters.date !== requestedDate
+					|| this.filters.course_schedule !== requestedSchedule
+				) return;
 				this.register = response.message || emptyRegister();
-			} catch (error) { this.register = emptyRegister(); this.registerError = error?.message || "The attendance register could not be loaded."; }
-			finally { this.registerLoading = false; }
+			} catch (error) {
+				if (requestId !== this.registerRequestId) return;
+				this.register = emptyRegister();
+				this.registerError = error?.message || "The attendance register could not be loaded.";
+			} finally {
+				if (requestId === this.registerRequestId) this.registerLoading = false;
+			}
 		},
 		async saveRegister(submit) {
 			if (!this.canManageAttendance || !this.register.students.length || !this.filters.course_schedule) return;
