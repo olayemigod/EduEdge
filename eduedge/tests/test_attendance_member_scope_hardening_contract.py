@@ -47,6 +47,46 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         self.assertIn("student_group: frm.doc.student_group", source)
 
 
+    def test_native_attendance_course_schedule_picker_is_permission_aware_and_bounded(self):
+        review = REVIEW.read_text(encoding="utf-8")
+        block = review.split("def student_attendance_course_schedule_query", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef student_group_query",
+            1,
+        )[0]
+
+        for token in (
+            "safe._require_operations_read()",
+            'branch = safe.base._resolve_branch(branch)',
+            'group_doc = frappe.get_doc("Student Group", student_group)',
+            'group_doc.check_permission("read")',
+            'query_filters["student_group"] = student_group',
+            'query_filters["schedule_date"] = str(getdate(reference_date))',
+            'rows = frappe.get_list(',
+            '"Course Schedule"',
+            'fields=["name", "schedule_date", "from_time", "course", "student_group"]',
+            "start=int(start)",
+            "page_length=int(page_len)",
+        ):
+            self.assertIn(token, block)
+        self.assertNotIn('frappe.get_all(', block)
+
+        form = FORM.read_text(encoding="utf-8")
+        for token in (
+            "eduedge.api.academic_operations_review.student_attendance_course_schedule_query",
+            "eduedge_school_branch: frm.doc.eduedge_school_branch",
+            "student_group: frm.doc.student_group",
+            "reference_date: frm.doc.date",
+            "async function applyAttendanceScheduleContext(frm)",
+            "student_group: nextGroup",
+            "date: message.schedule_date || null",
+            "eduedge_school_branch: message.eduedge_school_branch || null",
+            "if (groupChanged) await frm.set_value('student', null)",
+            "async function clearInvalidAttendanceSchedule(frm, fieldname)",
+            "if (invalid) await frm.set_value('course_schedule', null)",
+        ):
+            self.assertIn(token, form)
+
+
     def test_native_attendance_hook_revalidates_exact_schedule_ownership(self):
         source = (APP / "education" / "academic_operations.py").read_text(encoding="utf-8")
         hook = source.split("def before_validate_student_attendance", 1)[1].split(
