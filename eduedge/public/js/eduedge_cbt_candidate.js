@@ -868,6 +868,13 @@
 					client_session_id: this.clientSession,
 				});
 				this.setConnection("online");
+				if (this.syncConflict && state.status === "In Progress") {
+					this.updateServerClock(state.server_time);
+					if (Number.isFinite(Number(state.seconds_remaining))) {
+						this.setTimer(Number(state.seconds_remaining));
+					}
+					return;
+				}
 				await this.applyServerState(state, false);
 			} catch (error) {
 				this.setConnection(navigator.onLine ? "degraded" : "offline");
