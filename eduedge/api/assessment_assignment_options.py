@@ -80,7 +80,11 @@ def _capability_group_names(branch: str, reference_date) -> set[str]:
     fields = ["name", "program", "academic_year", "academic_term", BRANCH_FIELD]
     if meta.has_field(OFFERING_FIELD):
         fields.append(OFFERING_FIELD)
-    groups = frappe.get_list(
+    # Capability rows already prove exact Instructor identity, Branch Eligibility,
+    # effective Subject Assignment and Class/Class Arm scope. Use a metadata read
+    # here so creating the first Assessment Plan does not depend on an existing
+    # Course Schedule merely to satisfy Student Group list permission.
+    groups = frappe.get_all(
         "Student Group",
         filters={BRANCH_FIELD: branch, "disabled": 0},
         fields=fields,
@@ -115,7 +119,9 @@ def assessment_plan_student_group_query(doctype, txt, searchfield, start, page_l
     group_filters: dict = {"name": ["in", sorted(allowed_groups)], BRANCH_FIELD: branch, "disabled": 0}
     if filters.get("academic_year"):
         group_filters["academic_year"] = filters["academic_year"]
-    rows = frappe.get_list(
+    # allowed_groups is already capability-authorized above. Keep this selector
+    # bootstrap-safe instead of re-applying schedule-derived Student Group list scope.
+    rows = frappe.get_all(
         "Student Group",
         filters=group_filters,
         or_filters={
