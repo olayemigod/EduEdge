@@ -124,10 +124,16 @@ def _group_offering(student_group: str | None) -> str:
 
 
 def _plan_context(doc) -> dict:
+    student_group = str(doc.get("student_group") or "")
+    derived_branch = (
+        frappe.db.get_value("Student Group", student_group, BRANCH_FIELD)
+        if student_group and not doc.get(BRANCH_FIELD)
+        else None
+    )
     return {
-        "school_branch": str(doc.get(BRANCH_FIELD) or ""),
-        "program_offering": _group_offering(doc.get("student_group")),
-        "student_group": str(doc.get("student_group") or ""),
+        "school_branch": str(doc.get(BRANCH_FIELD) or derived_branch or ""),
+        "program_offering": _group_offering(student_group),
+        "student_group": student_group,
         "course": str(doc.get("course") or ""),
         "on_date": doc.get("schedule_date") or nowdate(),
     }
@@ -153,17 +159,39 @@ def _result_context(doc) -> dict:
     }
 
 
+def _has_context_branch_permission(doc, branch: str, user: str, permission_type=None) -> bool:
+    if not doc:
+        return True
+    if doc.get(BRANCH_FIELD):
+        return has_education_branch_permission(doc, user, permission_type)
+    if not branch:
+        return False
+    proxy = frappe._dict(
+        {
+            "doctype": doc.doctype,
+            BRANCH_FIELD: branch,
+        }
+    )
+    return has_education_branch_permission(proxy, user, permission_type)
+
+
 def has_assessment_plan_permission(doc, user=None, permission_type=None) -> bool:
     resolved_user = user or frappe.session.user
-    if not has_education_branch_permission(doc, resolved_user, permission_type):
+    if permission_type in BLOCKED_MUTATION_TYPES and is_limited_instructor_user(resolved_user):
+        return False
+    if not doc:
+        return True
+
+    context = _plan_context(doc)
+    if not _has_context_branch_permission(
+        doc,
+        context.get("school_branch") or "",
+        resolved_user,
+        permission_type,
+    ):
         return False
     if not assignment_capability_enforcement_enabled() or not is_limited_instructor_user(resolved_user):
         return True
-    if permission_type in BLOCKED_MUTATION_TYPES:
-        return False
-    if not doc:
-        return permission_type in READ_TYPES
-    context = _plan_context(doc)
     if not all(context.get(key) for key in ("school_branch", "program_offering", "course")):
         return False
     capability = "can_create_assessment_plans" if permission_type in PLAN_MUTATION_TYPES else "can_view_subject_content"
@@ -180,15 +208,21 @@ def has_assessment_plan_permission(doc, user=None, permission_type=None) -> bool
 
 def has_assessment_result_permission(doc, user=None, permission_type=None) -> bool:
     resolved_user = user or frappe.session.user
-    if not has_education_branch_permission(doc, resolved_user, permission_type):
+    if permission_type in BLOCKED_MUTATION_TYPES and is_limited_instructor_user(resolved_user):
+        return False
+    if not doc:
+        return True
+
+    context = _result_context(doc)
+    if not _has_context_branch_permission(
+        doc,
+        context.get("school_branch") or "",
+        resolved_user,
+        permission_type,
+    ):
         return False
     if not assignment_capability_enforcement_enabled() or not is_limited_instructor_user(resolved_user):
         return True
-    if permission_type in BLOCKED_MUTATION_TYPES:
-        return False
-    if not doc:
-        return permission_type in READ_TYPES
-    context = _result_context(doc)
     if not all(context.get(key) for key in ("school_branch", "program_offering", "course")):
         return False
     mutation = permission_type in RESULT_MUTATION_TYPES
