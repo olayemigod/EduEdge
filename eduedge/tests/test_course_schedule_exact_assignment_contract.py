@@ -118,8 +118,10 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             self.assertIn(token, helper)
 
         query = source.split("def course_query", 1)[1]
-        self.assertIn("if is_limited_instructor_user():", query)
+        self.assertIn("limited_instructor = is_limited_instructor_user()", query)
+        self.assertIn("if limited_instructor:", query)
         self.assertIn("course_names = _limited_schedule_course_names(", query)
+        self.assertIn("course_reader = frappe.get_all if limited_instructor else frappe.get_list", query)
         self.assertIn('fields=["name", "course_name"]', query)
         self.assertNotIn('"course_code": ["like"', query)
         self.assertNotIn('fields=["name", "course_name", "course_code"]', query)
