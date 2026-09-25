@@ -93,6 +93,18 @@ class TestCBTCandidateRuntimeContract(unittest.TestCase):
 		self.assertIn("if (!(await this.acquireTabLease())) return", candidate)
 
 
+	def test_runtime_security_event_is_heartbeat_only(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		submit_block = candidate.split("async completeQueuedSubmission()", 1)[1].split(
+			"async refreshState()", 1
+		)[0]
+		heartbeat_block = candidate.split('async heartbeat(runtimeEvent = "")', 1)[1].split(
+			"async handleLocalTimeout()", 1
+		)[0]
+		self.assertNotIn("runtime_event", submit_block)
+		self.assertIn("runtime_event: runtimeEvent || undefined", heartbeat_block)
+
+
 	def test_candidate_payload_never_requests_or_renders_scoring_keys(self):
 		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
 		for forbidden in (
