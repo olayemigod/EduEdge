@@ -205,6 +205,57 @@ def _limited_schedule_student_group_rows(
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
+def student_attendance_course_schedule_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Return permission-aware Course Schedules for native Student Attendance."""
+	safe._require_operations_read()
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	query_filters: dict = {}
+	branch = str(filters.get(BRANCH_FIELD) or "").strip()
+	student_group = str(filters.get("student_group") or "").strip()
+	reference_date = filters.get("reference_date")
+
+	if branch:
+		branch = safe.base._resolve_branch(branch)
+		query_filters[BRANCH_FIELD] = branch
+	if student_group:
+		group_doc = frappe.get_doc("Student Group", student_group)
+		group_doc.check_permission("read")
+		group_branch = group_doc.get(BRANCH_FIELD)
+		if branch and group_branch and group_branch != branch:
+			return []
+		if group_branch and not branch:
+			query_filters[BRANCH_FIELD] = group_branch
+		query_filters["student_group"] = student_group
+	if reference_date:
+		query_filters["schedule_date"] = str(getdate(reference_date))
+
+	rows = frappe.get_list(
+		"Course Schedule",
+		filters=query_filters,
+		or_filters={
+			"name": ["like", f"%{txt or ''}%"],
+			"student_group": ["like", f"%{txt or ''}%"],
+			"course": ["like", f"%{txt or ''}%"],
+		},
+		fields=["name", "schedule_date", "from_time", "course", "student_group"],
+		start=int(start),
+		page_length=int(page_len),
+		order_by="schedule_date desc, from_time asc, name asc",
+	)
+	return [
+		[
+			row.name,
+			str(row.schedule_date or ""),
+			str(row.from_time or "")[:5],
+			row.course or "",
+			row.student_group or "",
+		]
+		for row in rows
+	]
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
 def student_group_query(doctype, txt, searchfield, start, page_len, filters):
 	"""Return only Student Groups valid for the Branch and selected lesson date."""
 	safe.base._require_academic_operator()
