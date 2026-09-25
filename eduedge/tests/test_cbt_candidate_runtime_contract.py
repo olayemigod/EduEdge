@@ -73,6 +73,26 @@ class TestCBTCandidateRuntimeContract(unittest.TestCase):
 		):
 			self.assertIn(token, candidate)
 
+	def test_candidate_runtime_enforces_one_active_tab_per_attempt(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		for token in (
+			'TAB_LEASE_REFRESH_MS = 4000',
+			'TAB_LEASE_TTL_MS = 15000',
+			'CONCURRENT_TAB_EVENT = "Concurrent Tab Detected"',
+			'eduedge:cbt:tab-instance:',
+			'eduedge:cbt:active-tab:',
+			'window.sessionStorage.setItem(key, value)',
+			'async acquireTabLease()',
+			'refreshTabLease()',
+			'window.addEventListener("storage"',
+			'async handleTabConflict()',
+			'runtime_event: eventName',
+			'Continue in the original tab',
+		):
+			self.assertIn(token, candidate)
+		self.assertIn("if (!(await this.acquireTabLease())) return", candidate)
+
+
 	def test_candidate_payload_never_requests_or_renders_scoring_keys(self):
 		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
 		for forbidden in (
