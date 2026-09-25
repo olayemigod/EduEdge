@@ -62,6 +62,22 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("context.can_manage_publication", vue)
 		self.assertIn("Class-level result control", vue)
 
+	def test_instructor_can_read_branch_scoped_result_profiles_without_manage_rights(self):
+		payload = json.loads(
+			(APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.json").read_text()
+		)
+		rows = [row for row in payload.get("permissions") or [] if row.get("role") == "Instructor"]
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0].get("read"), 1)
+		for right in ("create", "write", "delete", "share", "import"):
+			self.assertFalse(rows[0].get(right))
+
+		permissions = (APP / "education" / "result_profile_permissions.py").read_text()
+		self.assertIn("def result_profile_query", permissions)
+		self.assertIn("get_allowed_school_branches", permissions)
+		self.assertIn("def has_result_profile_permission", permissions)
+
+
 	def test_assessment_context_unions_class_responsibility_without_broadening_plan_scope(self):
 		teaching = (APP / "education" / "teaching_assignments.py").read_text()
 		api = (APP / "api" / "assessment_operations.py").read_text()
