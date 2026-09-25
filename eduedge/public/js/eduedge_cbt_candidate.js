@@ -272,6 +272,9 @@
 		}
 
 		async applyServerState(state, fromCache) {
+			const hadSyncConflict = this.syncConflict;
+			this.syncConflict = Boolean(state?.answer_sync_conflict);
+			if (!this.syncConflict) this.syncConflictQuestion = "";
 			this.serverState = { ...(state || {}) };
 			this.updateServerClock(state.server_time);
 			if (Array.isArray(state.questions) && state.questions.length) this.questions = state.questions;
@@ -292,6 +295,7 @@
 					answers: {},
 					reported_pending_sync_count: state.reported_pending_sync_count || 0,
 					last_sync_at: state.last_sync_at || null,
+					answer_sync_conflict: Boolean(state.answer_sync_conflict),
 				});
 			} else {
 				const deadlineEpoch = Number(await this.storage.getMeta("timer_deadline_epoch", Date.now()));
@@ -301,7 +305,12 @@
 			this.currentIndex = Math.max(0, Math.min(this.currentIndex, Math.max(0, this.questions.length - 1)));
 			this.setTimer(Number(this.serverState.seconds_remaining || 0));
 			this.renderForStatus();
-			if (this.submissionRequested && navigator.onLine) this.queueSync(0);
+			if (hadSyncConflict && !this.syncConflict && this.serverState.status === "In Progress") {
+				this.restartPeriodicSync();
+				this.showNotice("Synchronisation conflict cleared by the invigilator. Pending browser answers will resume syncing.", "success");
+				if (navigator.onLine && this.pendingCount) this.queueSync(0);
+			}
+			if (this.submissionRequested && navigator.onLine && !this.syncConflict) this.queueSync(0);
 		}
 
 		async reloadLocalAnswers() {
@@ -868,7 +877,7 @@
 					client_session_id: this.clientSession,
 				});
 				this.setConnection("online");
-				if (this.syncConflict && state.status === "In Progress") {
+				if (this.syncConflict && state.status === "In Progress" && state.answer_sync_conflict) {
 					this.updateServerClock(state.server_time);
 					if (Number.isFinite(Number(state.seconds_remaining))) {
 						this.setTimer(Number(state.seconds_remaining));
@@ -895,7 +904,14 @@
 				this.updateServerClock(result.server_time);
 				this.setConnection("online");
 				if (Number.isFinite(Number(result.seconds_remaining))) this.setTimer(Number(result.seconds_remaining));
-				if (result.status !== this.serverState.status) await this.refreshState();
+				const serverConflict = Boolean(result.answer_sync_conflict);
+				if (this.syncConflict && !serverConflict && result.status === "In Progress") {
+					await this.refreshState();
+				} else if (!this.syncConflict && serverConflict) {
+					this.enterSyncConflict("");
+				} else if (result.status !== this.serverState.status) {
+					await this.refreshState();
+				}
 			} catch (error) {
 				this.setConnection(navigator.onLine ? "degraded" : "offline");
 			}
@@ -1022,13 +1038,20 @@
 			if (remaining <= 0) this.handleLocalTimeout();
 		}
 
+		restartPeriodicSync() {
+			window.clearInterval(this.periodicSyncInterval);
+			this.periodicSyncInterval = null;
+			if (!this.syncConflict) {
+				this.periodicSyncInterval = window.setInterval(() => this.flushSync(), PERIODIC_SYNC_MS);
+			}
+		}
+
 		startBackgroundWork() {
 			window.clearInterval(this.timerInterval);
-			window.clearInterval(this.periodicSyncInterval);
 			window.clearInterval(this.heartbeatInterval);
 			window.clearInterval(this.tabLeaseInterval);
 			this.timerInterval = window.setInterval(() => this.updateTimerUI(), 1000);
-			this.periodicSyncInterval = window.setInterval(() => this.flushSync(), PERIODIC_SYNC_MS);
+			this.restartPeriodicSync();
 			this.heartbeatInterval = window.setInterval(() => this.heartbeat(), HEARTBEAT_MS);
 			this.tabLeaseInterval = window.setInterval(() => this.refreshTabLease(), TAB_LEASE_REFRESH_MS);
 		}
@@ -1036,8 +1059,12 @@
 		installLifecycleHandlers() {
 			window.addEventListener("online", async () => {
 				this.setConnection("checking");
+				if (this.syncConflict) {
+					await this.refreshState();
+					return;
+				}
 				await this.flushSync();
-				if (!this.syncConflict) await this.refreshState();
+				await this.refreshState();
 			});
 			window.addEventListener("offline", () => this.setConnection("offline"));
 			window.addEventListener("storage", (event) => {
