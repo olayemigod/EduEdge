@@ -104,6 +104,7 @@ def _prepared_state(attempt) -> dict:
 		"answers": {},
 		"reported_pending_sync_count": 0,
 		"last_sync_at": None,
+		"answer_sync_conflict": False,
 	}
 
 
@@ -122,6 +123,7 @@ def _candidate_state(attempt) -> dict:
 		"answers": base._answers(attempt.name),
 		"reported_pending_sync_count": cint(attempt.reported_pending_sync_count),
 		"last_sync_at": attempt.last_sync_at,
+		"answer_sync_conflict": base._answer_sync_conflict_active(attempt),
 		"reconciliation_deadline": _reconciliation_deadline(attempt),
 	}
 
@@ -222,7 +224,7 @@ def _record_conflict(
 	)
 	reason = base._review_reason(
 		attempt.review_reasons,
-		"Answer revision conflict detected during browser synchronisation.",
+		base.ANSWER_SYNC_CONFLICT_REASON,
 	)
 	frappe.db.set_value(
 		"EduEdge CBT Attempt",
