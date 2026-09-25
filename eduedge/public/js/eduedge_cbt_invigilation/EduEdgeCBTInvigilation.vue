@@ -155,6 +155,7 @@
 										<th>Connection</th>
 										<th>Progress</th>
 										<th>Pending</th>
+										<th>Reconciliation</th>
 										<th>Time Left</th>
 										<th>Review</th>
 									</tr>
@@ -171,7 +172,14 @@
 											<span>{{ heartbeatLabel(candidate) }}</span>
 										</td>
 										<td><strong>{{ candidate.answered_count }}/{{ candidate.question_count }}</strong><span>server-saved</span></td>
-										<td><strong :class="{ attention: candidate.reported_pending_sync_count }">{{ candidate.reported_pending_sync_count }}</strong></td>
+										<td><strong :class="{ attention: candidate.reported_pending_sync_count || candidate.attempt_status === \"Pending Sync\" }">{{ candidate.reported_pending_sync_count }}</strong></td>
+										<td>
+											<template v-if="candidate.attempt_status === \"Pending Sync\"">
+												<strong>{{ formatDateTime(candidate.reconciliation_deadline) }}</strong>
+												<span>{{ candidate.reported_pending_sync_count ? \"Browser answers still pending\" : \"Awaiting browser zero-pending confirmation\" }}</span>
+											</template>
+											<span v-else>—</span>
+										</td>
 										<td><strong>{{ formatDuration(candidate.seconds_remaining) }}</strong></td>
 										<td><EdgeStatusBadge :label="candidate.requires_review ? 'Required' : 'Clear'" :status="candidate.requires_review ? 'required' : 'clear'" :tone="candidate.requires_review ? 'warning' : 'success'" /></td>
 									</tr>
@@ -223,6 +231,8 @@ export default {
 					return Boolean(
 						candidate.requires_review ||
 						candidate.reported_pending_sync_count ||
+						candidate.attempt_status === "Pending Sync" ||
+						candidate.connection.code === "PENDING_SYNC" ||
 						["STALE", "NO_HEARTBEAT", "TIMED_OUT"].includes(candidate.connection.code)
 					);
 				}
