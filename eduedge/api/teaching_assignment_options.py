@@ -17,12 +17,12 @@ from eduedge.education.instructor_scope import (
 	resolve_exact_instructor_for_user,
 )
 from eduedge.education.offerings import assert_branch_access
-from eduedge.services.instructor_branch_governance import eligibility_covers_period
 from eduedge.education.teaching_assignments import (
 	CLASS_ARM_SCOPE,
 	CLASS_SCOPE,
 	COURSE_REQUIRED_TYPES,
 )
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 ASSIGNMENT_DOCTYPE = "EduEdge Instructor Assignment"
 
