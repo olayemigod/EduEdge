@@ -281,10 +281,22 @@ def _limited_schedule_course_names(
 	):
 		return []
 
+	assignment_mode = (
+		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.db.exists(
+			"EduEdge Instructor Assignment",
+			{"school_branch": branch},
+		)
+	)
+	group_fields = ["name", BRANCH_FIELD, "program", "disabled"]
+	if assignment_mode:
+		if not frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+			return []
+		group_fields.append(OFFERING_FIELD)
 	group = frappe.db.get_value(
 		"Student Group",
 		student_group,
-		["name", BRANCH_FIELD, OFFERING_FIELD, "program", "disabled"],
+		group_fields,
 		as_dict=True,
 	)
 	if (
@@ -294,14 +306,6 @@ def _limited_schedule_course_names(
 		or group.program != program
 	):
 		return []
-
-	assignment_mode = (
-		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
-		and frappe.db.exists(
-			"EduEdge Instructor Assignment",
-			{"school_branch": branch},
-		)
-	)
 	if not assignment_mode:
 		return program_course_names
 	if not group.get(OFFERING_FIELD):
