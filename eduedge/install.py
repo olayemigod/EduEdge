@@ -20,6 +20,7 @@ from eduedge.education.result_fields import ensure_result_engine_custom_fields
 from eduedge.education.teaching_assignments import ensure_teaching_assignment_foundation
 from eduedge.permissions_baseline import (
 	ensure_eduedge_page_role_baseline,
+	ensure_legacy_assessment_report_role_guard,
 	ensure_legacy_attendance_report_role_guard,
 )
 from eduedge.security.permission_policy import apply_safe_default_permission_baseline
@@ -67,6 +68,7 @@ def after_install() -> None:
 	apply_safe_default_permission_baseline()
 	ensure_eduedge_page_role_baseline()
 	ensure_legacy_attendance_report_role_guard()
+	ensure_legacy_assessment_report_role_guard()
 	backfill_education_branch_context()
 
 
@@ -87,6 +89,7 @@ def after_migrate() -> None:
 	ensure_program_enrollment_branch_selector()
 	ensure_eduedge_page_role_baseline()
 	ensure_legacy_attendance_report_role_guard()
+	ensure_legacy_assessment_report_role_guard()
 	backfill_education_branch_context()
 
 
