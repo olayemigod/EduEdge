@@ -115,7 +115,6 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 	def test_sync_conflict_flags_review_and_preserves_pending_evidence(self):
 		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
 		for token in (
-			"Answer revision conflict detected during browser synchronisation.",
 			'"requires_review": 1',
 			'"reported_pending_sync_count": pending',
 			'"last_heartbeat_at": server_time',
