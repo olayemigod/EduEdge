@@ -68,6 +68,27 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertNotIn("apply_default_permission_baseline", after_migrate)
 		self.assertIn("ensure_eduedge_page_role_baseline", after_migrate)
 
+	def test_legacy_raw_sql_attendance_reports_are_system_only(self):
+		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
+		install = (EDUEDGE / "install.py").read_text()
+
+		for report in (
+			"Student Batch-Wise Attendance",
+			"Student Monthly Attendance Sheet",
+			"Absent Student Report",
+		):
+			self.assertIn(f'"{report}"', baseline)
+		self.assertIn('LEGACY_ATTENDANCE_REPORT_ROLES = ("System Manager",)', baseline)
+		self.assertIn('frappe.db.get_value("Custom Role", {"report": report_name}, "name")', baseline)
+		self.assertIn('doc.set("roles", [{"role": role} for role in desired_roles])', baseline)
+		self.assertIn("doc.insert(ignore_permissions=True)", baseline)
+		self.assertIn("doc.save(ignore_permissions=True)", baseline)
+		self.assertIn("ensure_legacy_attendance_report_role_guard()", install)
+
+		after_migrate = install.split("def after_migrate", 1)[1].split("def ensure_roles", 1)[0]
+		self.assertIn("ensure_legacy_attendance_report_role_guard()", after_migrate)
+
+
 	def test_instructor_people_permissions_are_in_baseline_and_reconciled_once(self):
 		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
 		patches = (EDUEDGE / "patches.txt").read_text()
