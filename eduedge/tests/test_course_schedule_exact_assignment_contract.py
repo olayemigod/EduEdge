@@ -68,6 +68,35 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             self.assertIn(token, source)
 
 
+    def test_first_schedule_class_selector_uses_assignment_not_existing_schedule(self):
+        source = (APP / "api" / "teaching_assignment_options.py").read_text(encoding="utf-8")
+        form = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
+
+        for token in (
+            "def course_schedule_student_group_query",
+            "def _limited_course_schedule_group_rows",
+            "assignment.program_offering = student_group.",
+            "assignment.instructor = %(instructor)s",
+            "assignment.assignment_type in %(assignment_types)s",
+            "assignment.enabled = 1",
+            "assignment.assignment_scope = %(class_scope)s",
+            "assignment.student_group = student_group.name",
+            "eligibility.enabled = 1",
+            "exact_mode = bool(",
+            "legacy_student_group_query",
+        ):
+            self.assertIn(token, source)
+
+        self.assertIn(
+            "eduedge.api.teaching_assignment_options.course_schedule_student_group_query",
+            form,
+        )
+        selector = source.split("def course_schedule_student_group_query", 1)[1].split(
+            "def course_schedule_instructor_query", 1
+        )[0]
+        self.assertNotIn("Course Schedule", selector)
+
+
     def test_course_schedule_form_cascades_subject_context_into_instructor_options(self):
         source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         self.assertIn("eduedge.api.teaching_assignment_options.course_schedule_instructor_query", source)
