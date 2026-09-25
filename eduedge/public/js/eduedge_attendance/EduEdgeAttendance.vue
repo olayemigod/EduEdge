@@ -25,18 +25,18 @@
 					<div class="attendance-filter-grid">
 						<label>
 							<span>Branch / Campus</span>
-							<select v-model="filters.branch" class="form-control" :disabled="loading || branchSwitching" @change="changeBranch">
+							<select v-model="filters.branch" class="form-control" :disabled="loading || branchSwitching || saving" @change="changeBranch">
 								<option v-for="branch in context.allowed_branches" :key="branch.name" :value="branch.name">{{ branch.branch_name }}</option>
 							</select>
 						</label>
 						<label>
 							<span>Date</span>
-							<input v-model="filters.date" type="date" class="form-control" @change="dateChanged" />
+							<input v-model="filters.date" type="date" class="form-control" :disabled="loading || branchSwitching || saving" @change="dateChanged" />
 						</label>
 					</div>
 					<template #actions>
 						<button type="button" class="edge-button" @click="openRoute('/app/eduedge-teaching-schedule')">Teaching Schedule</button>
-						<button type="button" class="edge-button edge-button--primary" @click="loadContext">Refresh</button>
+						<button type="button" class="edge-button edge-button--primary" :disabled="loading || branchSwitching || saving" @click="loadContext">Refresh</button>
 					</template>
 				</EdgeFilterBar>
 
@@ -56,7 +56,7 @@
 					<div class="attendance-select-grid">
 						<label>
 							<span>Scheduled Session</span>
-							<select v-model="filters.course_schedule" class="form-control" @change="scheduleChanged">
+							<select v-model="filters.course_schedule" class="form-control" :disabled="registerLoading || saving" @change="scheduleChanged">
 								<option value="">Select a schedule</option>
 								<option v-for="row in context.schedules" :key="row.name" :value="row.name">{{ scheduleLabel(row) }}</option>
 							</select>
@@ -125,7 +125,7 @@ export default {
 		const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
 		return {
 			loading: true, error: "", registerLoading: false, registerError: "", saving: false,
-			branchSwitching: false, contextRequestId: 0, registerRequestId: 0,
+			branchSwitching: false, contextRequestId: 0, registerRequestId: 0, saveRequestId: 0,
 			menuItems: EDUEDGE_MENU_ITEMS,
 			activeTab: "take",
 			tabs: [{ key: "take", label: "Take Attendance" }, { key: "registers", label: "Registers" }, { key: "missing", label: "Missing Registers" }],
@@ -242,21 +242,43 @@ export default {
 			}
 		},
 		async saveRegister(submit) {
-			if (!this.canManageAttendance || !this.register.students.length || !this.filters.course_schedule) return;
+			if (this.saving || !this.canManageAttendance || !this.register.students.length || !this.filters.course_schedule) return;
+			const requestId = ++this.saveRequestId;
+			const requestedGroup = this.filters.student_group;
+			const requestedDate = this.register.date || this.filters.date;
+			const requestedSchedule = this.filters.course_schedule;
+			const entries = this.register.students.map((row) => ({ student: row.student, status: row.status }));
 			this.saving = true;
 			try {
 				const response = await frappe.call("eduedge.api.academic_operations.save_attendance_register", {
-					student_group: this.filters.student_group,
-					date: this.register.date || this.filters.date,
-					course_schedule: this.filters.course_schedule,
-					entries: this.register.students.map((row) => ({ student: row.student, status: row.status })),
+					student_group: requestedGroup,
+					date: requestedDate,
+					course_schedule: requestedSchedule,
+					entries,
 					submit: submit ? 1 : 0,
 				});
+				if (requestId !== this.saveRequestId) return;
 				const result = response.message || {};
 				frappe.show_alert({ message: submit ? `${result.submitted || 0} attendance records submitted` : `${(result.created || 0) + (result.updated || 0)} draft records saved`, indicator: "green" });
-				await this.loadRegister(); await this.loadContext();
-			} catch (error) { frappe.msgprint({ title: __("Attendance could not be saved"), message: error?.message || __("Review the register and try again."), indicator: "red" }); }
-			finally { this.saving = false; }
+				if (
+					this.filters.student_group !== requestedGroup
+					|| this.filters.date !== requestedDate
+					|| this.filters.course_schedule !== requestedSchedule
+				) return;
+				await this.loadRegister();
+				if (
+					this.filters.student_group !== requestedGroup
+					|| this.filters.date !== requestedDate
+					|| this.filters.course_schedule !== requestedSchedule
+				) return;
+				await this.loadContext();
+			} catch (error) {
+				if (requestId === this.saveRequestId) {
+					frappe.msgprint({ title: __("Attendance could not be saved"), message: error?.message || __("Review the register and try again."), indicator: "red" });
+				}
+			} finally {
+				if (requestId === this.saveRequestId) this.saving = false;
+			}
 		},
 		async openCoverage(row) {
 			this.activeTab = "take";
