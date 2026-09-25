@@ -346,6 +346,10 @@
   {
    "read": 1,
    "role": "Teacher"
+  },
+  {
+   "read": 1,
+   "role": "Instructor"
   }
  ],
  "search_fields": "profile_name,institution,school_branch",
