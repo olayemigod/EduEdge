@@ -127,7 +127,12 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
 
     def test_existing_branch_permission_remains_a_prerequisite(self):
         source = self._source()
-        self.assertGreaterEqual(source.count("if not has_education_branch_permission(doc, resolved_user, permission_type):"), 2)
+        helper = source.split("def _has_context_branch_permission", 1)[1].split(
+            "def has_assessment_plan_permission", 1
+        )[0]
+        self.assertIn("has_education_branch_permission(doc, user, permission_type)", helper)
+        self.assertIn("has_education_branch_permission(proxy, user, permission_type)", helper)
+        self.assertGreaterEqual(source.count("if not _has_context_branch_permission("), 2)
 
     def test_hooks_use_exact_assessment_permission_layer(self):
         hooks = (APP / "hooks.py").read_text(encoding="utf-8")
