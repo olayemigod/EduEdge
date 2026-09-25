@@ -76,6 +76,15 @@ LEGACY_UNSCOPED_ATTENDANCE_REPORTS = (
 )
 LEGACY_ATTENDANCE_REPORT_ROLES = ("System Manager",)
 
+# These upstream assessment reports use raw SQL or frappe.get_all without
+# consuming EduEdge Assessment Plan/Result permission-query conditions.
+LEGACY_UNSCOPED_ASSESSMENT_REPORTS = (
+	"Assessment Plan Status",
+	"Course wise Assessment Report",
+	"Final Assessment Grades",
+)
+LEGACY_ASSESSMENT_REPORT_ROLES = ("System Manager",)
+
 EDUEDGE_DESK_ROLES = tuple(
 	dict.fromkeys(
 		PLATFORM_MANAGERS
@@ -333,13 +342,17 @@ def ensure_eduedge_page_role_baseline() -> dict:
 	return {"changed_pages": changed_pages}
 
 
-def ensure_legacy_attendance_report_role_guard() -> dict:
-	"""Keep raw-SQL upstream attendance reports outside school/operator scope."""
+def _ensure_legacy_report_role_guard(
+	report_names: tuple[str, ...],
+	roles: tuple[str, ...],
+	*,
+	ref_doctype: str,
+) -> dict:
 	if not frappe.db.exists("DocType", "Custom Role") or not frappe.db.exists("DocType", "Report"):
 		return {"changed_reports": []}
 
 	changed_reports = []
-	for report_name in LEGACY_UNSCOPED_ATTENDANCE_REPORTS:
+	for report_name in report_names:
 		if not frappe.db.exists("Report", report_name):
 			continue
 		custom_role_name = frappe.db.get_value("Custom Role", {"report": report_name}, "name")
@@ -350,13 +363,11 @@ def ensure_legacy_attendance_report_role_guard() -> dict:
 				{
 					"doctype": "Custom Role",
 					"report": report_name,
-					"ref_doctype": "Student Attendance",
+					"ref_doctype": ref_doctype,
 				}
 			)
 
-		desired_roles = [
-			role for role in LEGACY_ATTENDANCE_REPORT_ROLES if frappe.db.exists("Role", role)
-		]
+		desired_roles = [role for role in roles if frappe.db.exists("Role", role)]
 		if {row.role for row in doc.roles} == set(desired_roles):
 			continue
 		doc.set("roles", [{"role": role} for role in desired_roles])
@@ -369,6 +380,24 @@ def ensure_legacy_attendance_report_role_guard() -> dict:
 	if changed_reports:
 		frappe.clear_cache()
 	return {"changed_reports": changed_reports}
+
+
+def ensure_legacy_attendance_report_role_guard() -> dict:
+	"""Keep raw-SQL upstream attendance reports outside school/operator scope."""
+	return _ensure_legacy_report_role_guard(
+		LEGACY_UNSCOPED_ATTENDANCE_REPORTS,
+		LEGACY_ATTENDANCE_REPORT_ROLES,
+		ref_doctype="Student Attendance",
+	)
+
+
+def ensure_legacy_assessment_report_role_guard() -> dict:
+	"""Keep unscoped upstream assessment reports outside school/operator scope."""
+	return _ensure_legacy_report_role_guard(
+		LEGACY_UNSCOPED_ASSESSMENT_REPORTS,
+		LEGACY_ASSESSMENT_REPORT_ROLES,
+		ref_doctype="Assessment Result",
+	)
 
 
 def _role_classification(role: str, managed_roles: set[str]) -> str:
