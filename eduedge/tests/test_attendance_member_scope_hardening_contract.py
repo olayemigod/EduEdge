@@ -145,6 +145,8 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
             "if (requestId === this.registerRequestId) this.registerLoading = false",
             ':disabled="loading || branchSwitching"',
             "if (!this.filters.branch || this.branchSwitching) return",
+            "const previousBranch = this.context.filters?.branch",
+            "this.filters.branch = previousBranch",
         ):
             self.assertIn(token, source)
 
