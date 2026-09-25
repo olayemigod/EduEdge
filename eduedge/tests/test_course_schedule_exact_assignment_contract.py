@@ -145,6 +145,24 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_schedule_date_change_preserves_stable_context_and_reselects_instructor(self):
+        source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
+        date_handler = source.split("async schedule_date(frm)", 1)[1].split(
+            "async eduedge_school_branch(frm)", 1
+        )[0]
+
+        self.assertIn("getStudentGroupContext(frm)", date_handler)
+        self.assertIn('await frm.set_value("instructor", null)', date_handler)
+        self.assertIn("setCourseScheduleQueries(frm)", date_handler)
+        for forbidden in (
+            "student_group: null",
+            "course: null",
+            "room: null",
+            "eduedge_school_branch: null",
+        ):
+            self.assertNotIn(forbidden, date_handler)
+
+
     def test_refresh_hydrates_saved_schedule_without_clearing_schedule_fields(self):
         source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         self.assertIn("async function hydrateStudentGroupContext(frm)", source)
