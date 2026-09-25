@@ -52,6 +52,18 @@ class TestCBTCandidateRequestSecurityContract(unittest.TestCase):
 		):
 			self.assertIn(expected, security)
 
+	def test_heartbeat_validates_real_pending_count_and_runtime_event(self):
+		security = (APP / "security/cbt_candidate_requests.py").read_text()
+		heartbeat = security.split('if action == "heartbeat":', 1)[1].split(
+			"_enforce_rate_limit", 1
+		)[0]
+		self.assertIn('args.get("reported_pending_count")', heartbeat)
+		self.assertNotIn('args.get("pending_sync_count")', heartbeat)
+		self.assertIn('ALLOWED_HEARTBEAT_RUNTIME_EVENTS = {"Concurrent Tab Detected"}', security)
+		self.assertIn('args.get("runtime_event")', heartbeat)
+		self.assertIn("Unsupported CBT runtime security event.", heartbeat)
+
+
 	def test_request_hook_forces_candidate_tokens_into_post_body(self):
 		guard = (APP / "security/request_method.py").read_text()
 		for expected in (
