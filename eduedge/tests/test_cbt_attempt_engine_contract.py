@@ -96,6 +96,22 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			self.assertIn(token, service)
 		self.assertNotIn('"is_correct":', service)
 
+	def test_heartbeat_flags_and_audits_concurrent_tab_detection(self):
+		service = (APP / "cbt" / "attempts.py").read_text()
+		for token in (
+			'RUNTIME_SECURITY_EVENTS = {',
+			'"Concurrent Tab Detected": "Concurrent browser tab detected for this attempt."',
+			"def _record_runtime_security_event",
+			'"requires_review": 1',
+			'"EduEdge CBT Lifecycle Log"',
+			'event_type=event',
+			'def record_heartbeat(',
+			'runtime_event: str | None = None',
+			'_record_runtime_security_event(attempt, runtime_event)',
+		):
+			self.assertIn(token, service)
+
+
 	def test_runtime_guard_hides_prestart_and_terminal_questions_and_audits_late_answers(self):
 		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
 		for token in (
