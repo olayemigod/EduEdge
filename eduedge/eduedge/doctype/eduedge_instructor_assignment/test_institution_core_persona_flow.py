@@ -17,6 +17,10 @@ from eduedge.api.academic_operations_review import (
     course_query as schedule_course_query,
     student_group_query as schedule_student_group_query,
 )
+from eduedge.api.assessment_assignment_options import (
+    assessment_plan_course_query,
+    assessment_plan_student_group_query,
+)
 from eduedge.api.teaching_assignment_options import course_schedule_instructor_query
 from eduedge.api.teaching_schedule import (
     get_teaching_schedule_context,
@@ -201,6 +205,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
     def _grant_assignment_capabilities(self, assignment) -> None:
         doc = frappe.get_doc("EduEdge Instructor Assignment", assignment.name)
         doc.can_view_subject_content = 1
+        doc.can_create_assessment_plans = 1
         doc.can_enter_marks = 1
         doc.capabilities_updated_on = now_datetime()
         doc.capabilities_updated_by = "Administrator"
@@ -430,6 +435,42 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
         self.assertEqual(
             [row[0] for row in limited_schedule_courses],
+            [course.name],
+        )
+
+        # Assessment planning must bootstrap directly from exact capability +
+        # Branch Eligibility before any Course Schedule or Assessment Plan exists.
+        first_plan_groups = assessment_plan_student_group_query(
+            "Student Group",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "academic_year": year.name,
+                "schedule_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in first_plan_groups],
+            [class_a["name"]],
+        )
+        first_plan_courses = assessment_plan_course_query(
+            "Course",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "student_group": class_a["name"],
+                "academic_year": year.name,
+                "schedule_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in first_plan_courses],
             [course.name],
         )
 
