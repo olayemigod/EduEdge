@@ -195,6 +195,8 @@
 			this.pendingCount = 0;
 			this.syncing = false;
 			this.syncPromise = null;
+			this.syncConflict = false;
+			this.syncConflictQuestion = "";
 			this.syncTimer = null;
 			this.timerInterval = null;
 			this.periodicSyncInterval = null;
@@ -453,7 +455,7 @@
 				return;
 			}
 			if (status === "In Progress") {
-				this.locallyLocked = false;
+				this.locallyLocked = this.syncConflict;
 				this.renderExam();
 				return;
 			}
@@ -547,7 +549,13 @@
 			this.updateConnectionUI();
 			this.updatePendingUI();
 			this.updateTimerUI();
-			if (this.submissionRequested) {
+			if (this.syncConflict) {
+				this.locallyLocked = true;
+				this.showNotice(
+					"Synchronisation is paused because EduEdge detected an answer revision conflict. Stop editing and contact the invigilator. Do not reload this page unless instructed.",
+					"danger"
+				);
+			} else if (this.submissionRequested) {
 				this.locallyLocked = true;
 				this.showNotice("Submission is saved in this browser and will complete after pending answers synchronise.", "warning");
 			}
@@ -708,6 +716,7 @@
 		}
 
 		queueSync(delay = SYNC_DEBOUNCE_MS) {
+			if (this.syncConflict) return;
 			window.clearTimeout(this.syncTimer);
 			this.syncTimer = window.setTimeout(() => this.flushSync(), delay);
 		}
@@ -738,6 +747,7 @@
 		}
 
 		async flushSync() {
+			if (this.syncConflict) return false;
 			if (this.syncing) return this.syncPromise;
 			if (!navigator.onLine) {
 				this.setConnection("offline");
@@ -763,7 +773,7 @@
 							reported_pending_count: remaining,
 						});
 						if (result.status === "Conflict") {
-							this.showNotice("EduEdge detected an answer revision conflict. Stop and contact the invigilator.", "danger");
+							this.enterSyncConflict(result.conflict_question || "");
 							return false;
 						}
 						await this.storage.markBatchSynced(batch);
@@ -786,7 +796,31 @@
 			return this.syncPromise;
 		}
 
+		enterSyncConflict(questionKey = "") {
+			if (this.syncConflict) return;
+			this.syncConflict = true;
+			this.syncConflictQuestion = questionKey || "";
+			this.locallyLocked = true;
+			window.clearTimeout(this.syncTimer);
+			window.clearInterval(this.periodicSyncInterval);
+			this.renderCurrentQuestion();
+			this.renderPalette();
+			this.showNotice(
+				"Synchronisation is paused because EduEdge detected an answer revision conflict. Stop editing and contact the invigilator. Do not reload this page unless instructed.",
+				"danger"
+			);
+			this.updatePendingUI();
+			this.updateFooterStatus("Synchronisation paused — invigilator review required");
+		}
+
 		async requestSubmission() {
+			if (this.syncConflict) {
+				this.showNotice(
+					"Submission is blocked until the answer synchronisation conflict is reviewed by the invigilator.",
+					"danger"
+				);
+				return;
+			}
 			if (this.submissionRequested) return;
 			const unanswered = this.questions.filter((question) => !answerIsFilled(this.answers.get(question.snapshot_key)?.answer)).length;
 			const warning = unanswered
@@ -807,7 +841,7 @@
 		}
 
 		async completeQueuedSubmission() {
-			if (!this.submissionRequested) return;
+			if (!this.submissionRequested || this.syncConflict) return;
 			try {
 				const result = await apiCall(API.submit, {
 					attempt_name: this.launch.attempt,
@@ -939,12 +973,14 @@
 		updatePendingUI() {
 			const badge = this.root.querySelector(".cbt-sync-badge");
 			if (badge) {
-				badge.className = `cbt-sync-badge ${this.pendingCount ? "pending" : "synced"}`;
-				badge.textContent = this.syncing
-					? "Synchronising…"
-					: this.pendingCount
-						? `${this.pendingCount} pending`
-						: "All answers synced";
+				badge.className = `cbt-sync-badge ${this.pendingCount || this.syncConflict ? "pending" : "synced"}`;
+				badge.textContent = this.syncConflict
+					? "Sync conflict"
+					: this.syncing
+						? "Synchronising…"
+						: this.pendingCount
+							? `${this.pendingCount} pending`
+							: "All answers synced";
 			}
 			const terminal = this.root.querySelector(".cbt-terminal-pending");
 			if (terminal) terminal.textContent = String(this.pendingCount);
@@ -957,6 +993,10 @@
 			if (!footer) return;
 			if (message) {
 				footer.textContent = message;
+				return;
+			}
+			if (this.syncConflict) {
+				footer.textContent = "Synchronisation paused — invigilator review required";
 				return;
 			}
 			footer.textContent = this.pendingCount
@@ -990,7 +1030,7 @@
 			window.addEventListener("online", async () => {
 				this.setConnection("checking");
 				await this.flushSync();
-				await this.refreshState();
+				if (!this.syncConflict) await this.refreshState();
 			});
 			window.addEventListener("offline", () => this.setConnection("offline"));
 			window.addEventListener("storage", (event) => {
