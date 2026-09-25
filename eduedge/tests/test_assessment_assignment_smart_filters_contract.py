@@ -126,6 +126,34 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         self.assertNotIn("docstatus: 1", client)
 
 
+    def test_assessment_result_student_selector_is_plan_anchored(self):
+        source = self._api()
+        query = source.split("def assessment_result_student_query", 1)[1]
+        for token in (
+            'assessment_plan = str(filters.get("assessment_plan")',
+            '"Assessment Plan"',
+            '["name", "student_group", "course", BRANCH_FIELD, "docstatus"]',
+            "int(plan.docstatus or 0) != 1",
+            "plan.get(BRANCH_FIELD) != branch",
+            "group_student.parent = %(student_group)s",
+            "group_student.active = 1",
+            "student.enabled = 1",
+            '"can_enter_marks"',
+            "user_has_instructor_assignment_capability(",
+            "on_date=nowdate()",
+            'plan_doc.check_permission("read")',
+        ):
+            self.assertIn(token, query)
+
+        client = (APP / "public" / "js" / "education" / "assessment_result.js").read_text(encoding="utf-8")
+        self.assertIn(
+            'query: "eduedge.api.assessment_assignment_options.assessment_result_student_query"',
+            client,
+        )
+        self.assertIn("assessment_plan: frm.doc.assessment_plan", client)
+        self.assertNotIn("eduedge.api.academic_operations.student_query", client)
+
+
     def test_client_cascade_filters_and_clears_invalid_children(self):
         source = self._client()
         for token in (
