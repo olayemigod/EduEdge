@@ -365,10 +365,11 @@ export default {
 			});
 		},
 		searchCourses(query) {
-			if (!this.branch || !this.draft.program_offering || !this.draft.reference_date) return [];
+			if (!this.branch || !this.draft.program_offering || !this.draft.student_group || !this.draft.reference_date) return [];
 			return call("eduedge.api.teaching_schedule.search_teaching_schedule_courses", {
 				branch: this.branch,
 				program_offering: this.draft.program_offering,
+				student_group: this.draft.student_group,
 				reference_date: this.draft.reference_date,
 				query: query || "",
 				page_length: 20,
