@@ -149,7 +149,7 @@ def get_result_readiness(exam_schedule: str, *, check_permission: bool = True) -
 				"PENDING_SYNC",
 				"Attempts with unresolved browser answers",
 				len(pending_sync_attempts),
-				"Reconnect the candidate browser or complete an audited manual sync resolution.",
+				"Reconnect the candidate browser before the reconciliation deadline. After expiry, use the governed Attempt Review workflow for a zero-pending server snapshot; non-zero pending answers must still be resolved.",
 			)
 		)
 	if review_attempts:
