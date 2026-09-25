@@ -91,9 +91,9 @@
 				<EdgeDashboardLayout min-column-width="12rem">
 					<EdgeStatCard label="Assessment Plans" :value="context.counts.plans" helper="Plans in the selected scope" />
 					<EdgeStatCard label="Submitted Plans" :value="context.counts.submitted_plans" helper="Ready for result entry" />
-					<EdgeStatCard label="Expected Results" :value="context.counts.expected_results" helper="Students × submitted plans" />
-					<EdgeStatCard label="Submitted Results" :value="context.counts.submitted_results" helper="Final result records" />
-					<EdgeStatCard label="Missing Results" :value="context.counts.missing_results" helper="Blocking approval" />
+					<EdgeStatCard v-if="context.can_view_publication_scope" label="Expected Results" :value="context.counts.expected_results" helper="Students × submitted plans" />
+					<EdgeStatCard v-if="context.can_view_publication_scope" label="Submitted Results" :value="context.counts.submitted_results" helper="Final result records" />
+					<EdgeStatCard v-if="context.can_view_publication_scope" label="Missing Results" :value="context.counts.missing_results" helper="Blocking approval" />
 				</EdgeDashboardLayout>
 
 				<section class="eduedge-assessment-grid">
@@ -133,7 +133,7 @@
 						</div>
 					</article>
 
-					<article class="eduedge-panel">
+					<article v-if="context.can_view_publication_scope" class="eduedge-panel">
 						<div class="eduedge-panel-heading">
 							<div>
 								<p class="edge-eyebrow">Approval and publication</p>
@@ -182,17 +182,17 @@
 							</div>
 
 							<div class="eduedge-publication-actions">
-								<button type="button" class="edge-button" @click="openRoute('/app/eduedge-result-profile')">
+								<button v-if="context.can_manage_publication" type="button" class="edge-button" @click="openRoute('/app/eduedge-result-profile')">
 									Manage result profiles
 								</button>
-								<button v-if="!context.publication" type="button" class="edge-button edge-button--primary" :disabled="working" @click="ensurePublication">
+								<button v-if="context.can_manage_publication && !context.publication" type="button" class="edge-button edge-button--primary" :disabled="working" @click="ensurePublication">
 									Create publication control
 								</button>
-								<button v-if="context.publication" type="button" class="edge-button" :disabled="working" @click="refreshPublication">
+								<button v-if="context.can_manage_publication && context.publication" type="button" class="edge-button" :disabled="working" @click="refreshPublication">
 									Refresh completeness
 								</button>
 								<button
-									v-if="['Draft', 'Rejected'].includes(context.publication?.status)"
+									v-if="context.can_manage_publication && ['Draft', 'Rejected'].includes(context.publication?.status)"
 									type="button"
 									class="edge-button edge-button--primary"
 									:disabled="working || !context.readiness?.ready"
@@ -246,6 +246,17 @@
 							</p>
 						</template>
 					</article>
+					<article v-else class="eduedge-panel">
+						<div class="eduedge-panel-heading">
+							<div>
+								<p class="edge-eyebrow">Approval and publication</p>
+								<h2>Class-level result control</h2>
+							</div>
+						</div>
+						<div class="eduedge-scope-note">
+							Whole-class readiness and publication are available only to the effective Class/Form responsibility or authorized academic managers.
+						</div>
+					</article>
 				</section>
 			</template>
 		</EdgePageLayout>
@@ -284,6 +295,8 @@ export default {
 				publication: null,
 				readiness: null,
 				can_approve: false,
+				can_view_publication_scope: false,
+				can_manage_publication: false,
 			},
 		};
 	},
