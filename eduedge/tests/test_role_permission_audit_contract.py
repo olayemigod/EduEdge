@@ -89,6 +89,25 @@ class TestRolePermissionAuditContract(unittest.TestCase):
 		self.assertIn("ensure_legacy_attendance_report_role_guard()", after_migrate)
 
 
+	def test_legacy_unscoped_assessment_reports_are_system_only(self):
+		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
+		install = (EDUEDGE / "install.py").read_text()
+
+		for report in (
+			"Assessment Plan Status",
+			"Course wise Assessment Report",
+			"Final Assessment Grades",
+		):
+			self.assertIn(f'"{report}"', baseline)
+		self.assertIn('LEGACY_ASSESSMENT_REPORT_ROLES = ("System Manager",)', baseline)
+		self.assertIn("def ensure_legacy_assessment_report_role_guard", baseline)
+		self.assertIn('ref_doctype="Assessment Result"', baseline)
+		self.assertIn("ensure_legacy_assessment_report_role_guard()", install)
+
+		after_migrate = install.split("def after_migrate", 1)[1].split("def ensure_roles", 1)[0]
+		self.assertIn("ensure_legacy_assessment_report_role_guard()", after_migrate)
+
+
 	def test_instructor_people_permissions_are_in_baseline_and_reconciled_once(self):
 		baseline = (EDUEDGE / "permissions_baseline.py").read_text()
 		patches = (EDUEDGE / "patches.txt").read_text()
