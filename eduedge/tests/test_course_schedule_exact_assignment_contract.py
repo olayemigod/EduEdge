@@ -97,6 +97,36 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         self.assertIn("rows = _limited_schedule_student_group_rows(", query)
 
 
+    def test_limited_subject_selector_matches_exact_assignment_scope(self):
+        source = (APP / "api" / "academic_operations_review.py").read_text(encoding="utf-8")
+        helper = source.split("def _limited_schedule_course_names", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef course_query",
+            1,
+        )[0]
+        for token in (
+            "resolve_exact_instructor_for_user()",
+            "eligibility_covers_period(",
+            '"program_offering": group.get(OFFERING_FIELD)',
+            '"course": ["in", program_course_names]',
+            '"assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)]',
+            '"enabled": 1',
+            "scope == CLASS_SCOPE",
+            "scope == CLASS_ARM_SCOPE and row.student_group == student_group",
+            "row.valid_from",
+            "row.valid_to",
+        ):
+            self.assertIn(token, helper)
+
+        query = source.split("def course_query", 1)[1]
+        self.assertIn("if is_limited_instructor_user():", query)
+        self.assertIn("course_names = _limited_schedule_course_names(", query)
+
+        form = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
+        course_query = form.split('frm.set_query("course"', 1)[1].split('frm.set_query("instructor"', 1)[0]
+        self.assertIn("student_group: frm.doc.student_group", course_query)
+        self.assertIn("reference_date: frm.doc.schedule_date", course_query)
+
+
     def test_course_schedule_form_cascades_subject_context_into_instructor_options(self):
         source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         self.assertIn("eduedge.api.teaching_assignment_options.course_schedule_instructor_query", source)
