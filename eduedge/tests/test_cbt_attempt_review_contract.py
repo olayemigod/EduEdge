@@ -64,7 +64,10 @@ class TestCBTAttemptReviewContract(unittest.TestCase):
 			"Decision Note is required for every CBT Attempt review",
 			"Pending browser answers must be resolved before accepting",
 			"A CBT Result already exists",
-			'status_after = "Auto Submitted" if attempt.attempt_status == "Timed Out"',
+			'attempt.attempt_status == "Pending Sync"',
+			"attempt_service.reconciliation_deadline(attempt)",
+			"browser reconciliation window is still open",
+			'status_after = "Auto Submitted"',
 			'"assignment_status",\n\t\t\t"Disqualified"',
 			'"doctype": "EduEdge CBT Attempt Review"',
 		):
@@ -78,6 +81,32 @@ class TestCBTAttemptReviewContract(unittest.TestCase):
 			"marking_guide",
 		):
 			self.assertNotIn(forbidden, service)
+
+	def test_pending_sync_review_queue_exposes_deadline_and_only_accepts_after_expiry(self):
+		service = (APP / "cbt" / "attempt_review.py").read_text()
+		component = (
+			APP
+			/ "public"
+			/ "js"
+			/ "eduedge_cbt_attempt_review"
+			/ "EduEdgeCBTAttemptReview.vue"
+		).read_text()
+		for token in (
+			'attempt.attempt_status == "Pending Sync"',
+			'"reconciliation_deadline": deadline',
+			'"reconciliation_window_open": window_open',
+			"pending_sync_expired",
+			'if cint(attempt.requires_review) or attempt.attempt_status == "Pending Sync"',
+		):
+			self.assertIn(token, service)
+		for token in (
+			"Reconciliation Until",
+			"row.reconciliation_window_open",
+			"Browser reconciliation is open until",
+			'row.attempt_status === "Pending Sync"',
+		):
+			self.assertIn(token, component)
+
 
 	def test_acceptance_clears_review_disqualification_resolves_assignment_and_keep_flagged_does_not_clear(self):
 		service = (APP / "cbt" / "attempt_review.py").read_text()
