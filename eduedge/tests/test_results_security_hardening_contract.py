@@ -62,6 +62,41 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		self.assertIn("context.can_manage_publication", vue)
 		self.assertIn("Class-level result control", vue)
 
+	def test_assessment_context_unions_class_responsibility_without_broadening_plan_scope(self):
+		teaching = (APP / "education" / "teaching_assignments.py").read_text()
+		api = (APP / "api" / "assessment_operations.py").read_text()
+		plan_options = (APP / "api" / "assessment_assignment_options.py").read_text()
+
+		for token in (
+			"def class_responsibility_group_names",
+			"get_active_instructor_names_for_user",
+			"if len(instructors) != 1:",
+			"active_assignment_rows(",
+			"branch=branch",
+			"row.get(\"assignment_type\") in CLASS_RESPONSIBILITY_TYPES",
+			"not row.get(\"course\")",
+			"scope == CLASS_SCOPE",
+			"scope == CLASS_ARM_SCOPE",
+		):
+			self.assertIn(token, teaching)
+
+		for token in (
+			"def _assessment_context_groups",
+			'groups = frappe.get_list(',
+			'candidates = frappe.get_all(',
+			"class_responsibility_group_names(",
+			"if row.name not in responsibility_names or row.name in merged:",
+			"groups = _assessment_context_groups(",
+		):
+			self.assertIn(token, api)
+
+		# Planning remains subject/capability-specific; class responsibility is only
+		# an additional publication/review discovery path on the mixed operations page.
+		self.assertIn("def assessment_plan_student_group_query", plan_options)
+		self.assertIn("can_create_assessment_plans", plan_options)
+		self.assertNotIn("class_responsibility_group_names", plan_options)
+
+
 	def test_report_card_service_rejects_unassigned_teacher_class(self):
 		service = (APP / "education" / "report_cards.py").read_text()
 		self.assertIn("is_limited_instructor_user", service)
