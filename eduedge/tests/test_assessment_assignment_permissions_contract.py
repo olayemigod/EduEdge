@@ -110,12 +110,6 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-        frappe_permissions = (
-            "Frappe v16 controller permission hooks call has_permission methods with ptype; "
-            "Assessment permission hooks must not silently fall back to read capability."
-        )
-        self.assertTrue(frappe_permissions)
-
 
     def test_plan_mutation_requires_create_assessment_plan_capability(self):
         source = self._source()
