@@ -240,9 +240,12 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
             "def report_card_review_query", 1
         )[0]
         self.assertIn(
-            '_owned_student_group_condition("publication.student_group", resolved_user)',
+            "_class_responsibility_assignment_condition(",
             result_log,
         )
+        self.assertIn('student_group_expr="publication.student_group"', result_log)
+        self.assertIn('branch_expr="publication.school_branch"', result_log)
+        self.assertNotIn("_owned_student_group_condition(", result_log)
         self.assertNotIn("schedule.instructor in", result_log)
 
         guardian = source.split("def guardian_query", 1)[1].split(
