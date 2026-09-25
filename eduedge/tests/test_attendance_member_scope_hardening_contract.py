@@ -143,8 +143,8 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
             "this.filters.date !== requestedDate",
             "this.filters.course_schedule !== requestedSchedule",
             "if (requestId === this.registerRequestId) this.registerLoading = false",
-            ':disabled="loading || branchSwitching"',
-            "if (!this.filters.branch || this.branchSwitching) return",
+            ':disabled="loading || branchSwitching || saving"',
+            "if (this.saving || !this.filters.branch || this.branchSwitching) return",
             "const previousBranch = this.context.filters?.branch",
             "this.filters.branch = previousBranch",
         ):
@@ -182,6 +182,9 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
             "if (requestId === this.saveRequestId) this.saving = false",
             ':disabled="loading || branchSwitching || saving"',
             ':disabled="registerLoading || saving"',
+            'if (this.saving) return',
+            ':disabled="saving" @click="openRoute',
+            ':disabled="saving" @click="activeTab = tab.key"',
         ):
             self.assertIn(token, source)
 
