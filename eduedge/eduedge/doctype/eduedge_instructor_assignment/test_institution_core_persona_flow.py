@@ -17,6 +17,11 @@ from eduedge.api.academic_operations_review import (
     student_group_query as schedule_student_group_query,
 )
 from eduedge.api.teaching_assignment_options import course_schedule_instructor_query
+from eduedge.api.teaching_schedule import (
+    get_teaching_schedule_context,
+    search_teaching_schedule_class_arms,
+    search_teaching_schedule_courses,
+)
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -412,6 +417,26 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [course.name],
         )
 
+        guided_class_arms = search_teaching_schedule_class_arms(
+            branch=branch_a.name,
+            program_offering=offering_a.name,
+            reference_date="2094-10-05",
+        )
+        self.assertEqual(
+            [row["value"] for row in guided_class_arms],
+            [class_a["name"]],
+        )
+        guided_courses = search_teaching_schedule_courses(
+            branch=branch_a.name,
+            program_offering=offering_a.name,
+            student_group=class_a["name"],
+            reference_date="2094-10-05",
+        )
+        self.assertEqual(
+            [row["value"] for row in guided_courses],
+            [course.name],
+        )
+
         frappe.set_user(school_admin.name)
         manager_schedule_groups = schedule_student_group_query(
             "Student Group",
@@ -520,6 +545,15 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             page_length=10,
         )
         self.assertEqual(visible_schedules, [schedule_a.name])
+        teaching_context = get_teaching_schedule_context(
+            branch=branch_a.name,
+            reference_date="2094-10-05",
+            view="day",
+        )
+        self.assertEqual(
+            [row["name"] for row in teaching_context["schedules"]],
+            [schedule_a.name],
+        )
 
         self.assertEqual(
             frappe.get_list(
