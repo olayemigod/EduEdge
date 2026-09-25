@@ -31,7 +31,7 @@ class TestAssessmentResultToolSafeContract(unittest.TestCase):
             "def _active_roster",
             "group_student.active = 1",
             "student.enabled = 1",
-            "student.\`{BRANCH_FIELD}\` = %(branch)s",
+            "student.`{BRANCH_FIELD}` = %(branch)s",
             "def _assert_active_student",
             "result.save()",
             "doc.submit()",
