@@ -432,6 +432,18 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             update_modified=False,
         )
         frappe.set_user(instructor_user.name)
+        pending_plan = frappe.new_doc("Assessment Plan")
+        pending_plan.student_group = class_a["name"]
+        pending_plan.course = course.name
+        pending_plan.academic_year = year.name
+        pending_plan.schedule_date = "2094-10-05"
+        self.assertFalse(pending_plan.get(BRANCH_FIELD))
+        # Frappe Document.insert() checks create permission before before_validate.
+        # The permission hook must derive Branch from the selected Class instead of
+        # rejecting the draft because the read-only Branch has not been assigned yet.
+        pending_plan.check_permission("create")
+        self.assertFalse(pending_plan.get(BRANCH_FIELD))
+
         first_assessment_courses = assessment_plan_course_query(
             "Course",
             "",
