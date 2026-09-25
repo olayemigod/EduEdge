@@ -66,6 +66,16 @@ NO_EDUEDGE_DEFAULT_GRANTS = (
 )
 PORTAL_ONLY_ROLES = ("Student", "Guardian", "EduEdge Parent")
 
+# Frappe Education v16 ships these Script Reports with raw SQL that bypasses
+# EduEdge Branch/record permission conditions. Keep them as system-level legacy
+# compatibility surfaces; school users use governed EduEdge Attendance instead.
+LEGACY_UNSCOPED_ATTENDANCE_REPORTS = (
+	"Student Batch-Wise Attendance",
+	"Student Monthly Attendance Sheet",
+	"Absent Student Report",
+)
+LEGACY_ATTENDANCE_REPORT_ROLES = ("System Manager",)
+
 EDUEDGE_DESK_ROLES = tuple(
 	dict.fromkeys(
 		PLATFORM_MANAGERS
@@ -321,6 +331,44 @@ def ensure_eduedge_page_role_baseline() -> dict:
 	if changed_pages:
 		frappe.clear_cache()
 	return {"changed_pages": changed_pages}
+
+
+def ensure_legacy_attendance_report_role_guard() -> dict:
+	"""Keep raw-SQL upstream attendance reports outside school/operator scope."""
+	if not frappe.db.exists("DocType", "Custom Role") or not frappe.db.exists("DocType", "Report"):
+		return {"changed_reports": []}
+
+	changed_reports = []
+	for report_name in LEGACY_UNSCOPED_ATTENDANCE_REPORTS:
+		if not frappe.db.exists("Report", report_name):
+			continue
+		custom_role_name = frappe.db.get_value("Custom Role", {"report": report_name}, "name")
+		if custom_role_name:
+			doc = frappe.get_doc("Custom Role", custom_role_name)
+		else:
+			doc = frappe.get_doc(
+				{
+					"doctype": "Custom Role",
+					"report": report_name,
+					"ref_doctype": "Student Attendance",
+				}
+			)
+
+		desired_roles = [
+			role for role in LEGACY_ATTENDANCE_REPORT_ROLES if frappe.db.exists("Role", role)
+		]
+		if {row.role for row in doc.roles} == set(desired_roles):
+			continue
+		doc.set("roles", [{"role": role} for role in desired_roles])
+		if doc.is_new():
+			doc.insert(ignore_permissions=True)
+		else:
+			doc.save(ignore_permissions=True)
+		changed_reports.append(report_name)
+
+	if changed_reports:
+		frappe.clear_cache()
+	return {"changed_reports": changed_reports}
 
 
 def _role_classification(role: str, managed_roles: set[str]) -> str:
