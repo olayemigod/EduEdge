@@ -10,6 +10,7 @@ from eduedge.api.academic_operations_safe import (
     get_operations_context,
     save_attendance_register,
 )
+from eduedge.api.attendance_tool_safe import get_student_attendance_records
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
 from eduedge.api.academic_operations_review import (
@@ -626,6 +627,30 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [row["student"] for row in register["students"]],
             [student.name],
         )
+
+        legacy_tool_rows = get_student_attendance_records(
+            "Course Schedule",
+            course_schedule=schedule_a.name,
+        )
+        self.assertEqual(
+            [row["student"] for row in legacy_tool_rows],
+            [student.name],
+        )
+        legacy_group_rows = get_student_attendance_records(
+            "Student Group",
+            date="2094-10-05",
+            student_group=class_a["name"],
+        )
+        self.assertEqual(
+            [row["student"] for row in legacy_group_rows],
+            [student.name],
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_student_attendance_records(
+                "Course Schedule",
+                course_schedule=schedule_b.name,
+            )
+
         save_result = save_attendance_register(
             class_a["name"],
             "2094-10-05",
