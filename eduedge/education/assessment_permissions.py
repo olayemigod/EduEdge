@@ -69,6 +69,15 @@ def _assignment_exists_sql(*, table: str, capability: str, user: str, result_mod
                 and assignment.course = {course_expr}
                 and (assignment.valid_from is null or assignment.valid_from <= {date_expr})
                 and (assignment.valid_to is null or assignment.valid_to >= {date_expr})
+                and exists (
+                    select 1
+                    from `tabEduEdge Instructor Branch Assignment` eligibility
+                    where eligibility.instructor = assignment.instructor
+                        and eligibility.school_branch = {branch_expr}
+                        and eligibility.enabled = 1
+                        and (eligibility.valid_from is null or eligibility.valid_from <= {date_expr})
+                        and (eligibility.valid_to is null or eligibility.valid_to >= {date_expr})
+                )
                 and (
                     assignment.assignment_scope = {frappe.db.escape(CLASS_SCOPE)}
                     or (
