@@ -106,8 +106,16 @@ class TestCBTCandidateRuntimeContract(unittest.TestCase):
 			"Submission is blocked until the answer synchronisation conflict is reviewed",
 			'badge.textContent = this.syncConflict',
 			"if (!this.syncConflict) await this.refreshState()",
-			'if (this.syncConflict && state.status === "In Progress")',
+			'if (this.syncConflict && state.status === "In Progress" && state.answer_sync_conflict)',
 			"this.updateServerClock(state.server_time)",
+			"this.syncConflict = Boolean(state?.answer_sync_conflict)",
+			"answer_sync_conflict: Boolean(state.answer_sync_conflict)",
+			"const serverConflict = Boolean(result.answer_sync_conflict)",
+			"this.syncConflict && !serverConflict",
+			"!this.syncConflict && serverConflict",
+			"restartPeriodicSync()",
+			"if (!this.syncConflict)",
+			"Synchronisation conflict cleared by the invigilator.",
 		):
 			self.assertIn(token, candidate)
 
