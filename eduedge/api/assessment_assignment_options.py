@@ -175,8 +175,9 @@ def assessment_plan_course_query(doctype, txt, searchfield, start, page_len, fil
             limit_page_length=0,
         )
     )
+    capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()
     if is_teacher_user():
-        if assignment_capability_enforcement_enabled():
+        if capability_scoped:
             reference_date = getdate(filters.get("schedule_date") or nowdate())
             capability_rows = get_user_capability_assignment_rows(
                 "can_create_assessment_plans",
@@ -202,7 +203,12 @@ def assessment_plan_course_query(doctype, txt, searchfield, start, page_len, fil
     if not curriculum_courses:
         return []
     pattern = f"%{txt or ''}%"
-    return frappe.get_list(
+    # In enforced Instructor mode, curriculum_courses has already been narrowed by
+    # the exact can_create_assessment_plans capability, Branch Eligibility, Offering,
+    # Class scope and assessment date. Do not re-apply generic Course visibility,
+    # which is governed by the independent can_view_subject_content capability.
+    course_reader = frappe.get_all if capability_scoped else frappe.get_list
+    return course_reader(
         "Course",
         filters={"name": ["in", sorted(curriculum_courses)]},
         or_filters={"name": ["like", pattern], "course_name": ["like", pattern]},
