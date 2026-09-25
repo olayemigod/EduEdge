@@ -56,8 +56,9 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
 
         for token in (
             "safe._require_operations_read()",
-            'branch = safe.base._resolve_branch(branch)',
             'group_doc = frappe.get_doc("Student Group", student_group)',
+            'branch = safe.base._resolve_branch(branch or group_branch or None)',
+            'query_filters[BRANCH_FIELD] = branch',
             'group_doc.check_permission("read")',
             'query_filters["student_group"] = student_group',
             'query_filters["schedule_date"] = str(getdate(reference_date))',
