@@ -52,6 +52,22 @@ class TestCourseScheduleExactAssignmentContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_limited_instructor_selector_is_self_scoped_in_exact_and_legacy_modes(self):
+        source = (APP / "api" / "teaching_assignment_options.py").read_text(encoding="utf-8")
+        for token in (
+            "is_limited_instructor_user()",
+            "resolve_exact_instructor_for_user()",
+            "if limited_instructor and not exact_instructor:",
+            '"exact_instructor": exact_instructor or None',
+            "and instructor.name = %(exact_instructor)s",
+            "def _limited_legacy_instructor_query",
+            "eligibility_covers_period(",
+            "if limited_instructor:",
+            "return _limited_legacy_instructor_query(",
+        ):
+            self.assertIn(token, source)
+
+
     def test_course_schedule_form_cascades_subject_context_into_instructor_options(self):
         source = (APP / "public" / "js" / "education" / "course_schedule.js").read_text(encoding="utf-8")
         self.assertIn("eduedge.api.teaching_assignment_options.course_schedule_instructor_query", source)
