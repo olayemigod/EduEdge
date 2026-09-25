@@ -88,6 +88,38 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
             self.assertIn(token, form)
 
 
+    def test_legacy_attendance_tool_is_routed_through_safe_register_engine(self):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        source = (APP / "api" / "attendance_tool_safe.py").read_text(encoding="utf-8")
+
+        self.assertIn(
+            '"education.education.doctype.student_attendance_tool.student_attendance_tool.get_student_attendance_records": "eduedge.api.attendance_tool_safe.get_student_attendance_records"',
+            hooks,
+        )
+        self.assertIn(
+            '"education.education.api.mark_attendance": "eduedge.api.attendance_tool_safe.mark_attendance"',
+            hooks,
+        )
+        for token in (
+            "safe._get_schedule_row(course_schedule)",
+            "safe.get_attendance_register(",
+            '"disabled": bool(row.get("locked"))',
+            "safe.save_attendance_register(",
+            "submit=1",
+            '{"student": row.get("student"), "status": "Present"}',
+            '{"student": row.get("student"), "status": "Absent"}',
+        ):
+            self.assertIn(token, source)
+        for forbidden in (
+            'frappe.get_all("Student Group Student"',
+            'frappe.db.get_value("Course Schedule"',
+            "frappe.qb.from_",
+            'frappe.new_doc("Student Attendance")',
+            ".submit()",
+        ):
+            self.assertNotIn(forbidden, source)
+
+
     def test_native_attendance_hook_revalidates_exact_schedule_ownership(self):
         source = (APP / "education" / "academic_operations.py").read_text(encoding="utf-8")
         hook = source.split("def before_validate_student_attendance", 1)[1].split(
