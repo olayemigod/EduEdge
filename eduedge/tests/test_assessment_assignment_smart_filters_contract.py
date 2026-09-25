@@ -71,6 +71,21 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_enforced_subject_selector_does_not_require_independent_view_capability(self):
+        source = self._api()
+        query = source.split("def assessment_plan_course_query", 1)[1]
+        for token in (
+            "capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()",
+            '"can_create_assessment_plans"',
+            "curriculum_courses &= set(allowed_courses)",
+            "course_reader = frappe.get_all if capability_scoped else frappe.get_list",
+            "return course_reader(",
+        ):
+            self.assertIn(token, query)
+        self.assertIn("can_view_subject_content", query)
+        self.assertIn("independent can_view_subject_content capability", query)
+
+
     def test_default_off_teacher_course_query_still_uses_existing_assignment_scope(self):
         source = self._api()
         for token in (
