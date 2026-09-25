@@ -23,6 +23,20 @@ ADMIN_ROLES = {
 	"School Administrator",
 	"Academic Administrator",
 }
+ANSWER_SYNC_CONFLICT_REASON = "Answer revision conflict detected during browser synchronisation."
+
+
+def _answer_sync_conflict_active(attempt) -> bool:
+	return bool(
+		cint(attempt.requires_review)
+		and ANSWER_SYNC_CONFLICT_REASON in {
+			row.strip()
+			for row in str(attempt.review_reasons or "").splitlines()
+			if row.strip()
+		}
+	)
+
+
 RUNTIME_SECURITY_EVENTS = {
 	"Concurrent Tab Detected": "Concurrent browser tab detected for this attempt.",
 }
@@ -659,7 +673,13 @@ def record_heartbeat(
 		{"last_heartbeat_at": current, "reported_pending_sync_count": max(0, cint(reported_pending_count))},
 		update_modified=False,
 	)
-	return {"attempt": attempt.name, "status": attempt.attempt_status, "server_time": current, "seconds_remaining": _remaining(attempt)}
+	return {
+		"attempt": attempt.name,
+		"status": attempt.attempt_status,
+		"server_time": current,
+		"seconds_remaining": _remaining(attempt),
+		"answer_sync_conflict": _answer_sync_conflict_active(attempt),
+	}
 
 
 @frappe.whitelist(allow_guest=True)
