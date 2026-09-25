@@ -36,6 +36,26 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_enforced_class_selector_bootstraps_before_any_course_schedule_exists(self):
+        source = self._api()
+        helper = source.split("def _capability_group_names", 1)[1].split(
+            "@frappe.whitelist()",
+            1,
+        )[0]
+        self.assertIn("get_user_capability_assignment_rows(", helper)
+        self.assertIn("eligibility", (APP / "education" / "instructor_assignment_capabilities.py").read_text(encoding="utf-8"))
+        self.assertIn('groups = frappe.get_all(', helper)
+        self.assertNotIn('groups = frappe.get_list(', helper)
+
+        selector = source.split("def assessment_plan_student_group_query", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_plan_course_query",
+            1,
+        )[0]
+        self.assertIn("allowed_groups = _capability_group_names(", selector)
+        self.assertIn('rows = frappe.get_all(', selector)
+        self.assertNotIn('rows = frappe.get_list(', selector)
+
+
     def test_course_query_cascades_from_group_offering_curriculum_and_exact_capability(self):
         source = self._api()
         for token in (
