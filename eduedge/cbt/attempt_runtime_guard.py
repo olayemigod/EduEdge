@@ -215,15 +215,38 @@ def _record_conflict(
 	answer_count: int,
 	reported_pending_count: int,
 ) -> None:
+	server_time = now_datetime()
+	pending = max(
+		cint(attempt.reported_pending_sync_count),
+		cint(answer_count) + max(0, cint(reported_pending_count)),
+	)
+	reason = base._review_reason(
+		attempt.review_reasons,
+		"Answer revision conflict detected during browser synchronisation.",
+	)
+	frappe.db.set_value(
+		"EduEdge CBT Attempt",
+		attempt.name,
+		{
+			"requires_review": 1,
+			"review_reasons": reason,
+			"reported_pending_sync_count": pending,
+			"last_heartbeat_at": server_time,
+		},
+		update_modified=False,
+	)
+	attempt.requires_review = 1
+	attempt.review_reasons = reason
+	attempt.reported_pending_sync_count = pending
 	base._sync_log(
 		{
 			"attempt": attempt.name,
 			"client_session_id": client_session_id,
 			"idempotency_key": idempotency_key,
 			"payload_hash": request_hash,
-			"server_received_at": now_datetime(),
+			"server_received_at": server_time,
 			"answer_count": answer_count,
-			"reported_pending_count": reported_pending_count,
+			"reported_pending_count": pending,
 			"sync_status": "Conflict",
 			"error_details": "Client revision reused with different content.",
 		}
