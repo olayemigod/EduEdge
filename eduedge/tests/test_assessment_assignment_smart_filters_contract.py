@@ -36,6 +36,24 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_enforced_student_group_query_can_bootstrap_before_any_schedule_exists(self):
+        source = self._api()
+        helper = source.split("def _capability_group_names", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_plan_student_group_query",
+            1,
+        )[0]
+        self.assertIn("groups = frappe.get_all(", helper)
+        self.assertNotIn("groups = frappe.get_list(", helper)
+
+        query = source.split("def assessment_plan_student_group_query", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_plan_course_query",
+            1,
+        )[0]
+        self.assertIn("rows = frappe.get_all(", query)
+        self.assertNotIn("rows = frappe.get_list(", query)
+        self.assertIn("allowed_groups = _capability_group_names(branch, reference_date)", query)
+
+
     def test_course_query_cascades_from_group_offering_curriculum_and_exact_capability(self):
         source = self._api()
         for token in (
