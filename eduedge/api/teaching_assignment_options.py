@@ -172,7 +172,7 @@ def _limited_course_schedule_group_rows(
 		"academic_year": str(academic_year or "").strip(),
 	}
 	conditions = [
-		f"student_group.\`{BRANCH_FIELD}\` = %(branch)s",
+		f"student_group.`{BRANCH_FIELD}` = %(branch)s",
 		"student_group.disabled = 0",
 	]
 	if params["program"]:
@@ -192,9 +192,9 @@ def _limited_course_schedule_group_rows(
 		if not frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
 			return []
 		from_sql = f"""
-			from \`tabStudent Group\` student_group
-			inner join \`tabEduEdge Instructor Assignment\` assignment
-				on assignment.program_offering = student_group.\`{OFFERING_FIELD}\`
+			from `tabStudent Group` student_group
+			inner join `tabEduEdge Instructor Assignment` assignment
+				on assignment.program_offering = student_group.`{OFFERING_FIELD}`
 		"""
 		conditions.extend(
 			[
@@ -213,7 +213,7 @@ def _limited_course_schedule_group_rows(
 				)""",
 				"""exists (
 					select 1
-					from \`tabEduEdge Instructor Branch Assignment\` eligibility
+					from `tabEduEdge Instructor Branch Assignment` eligibility
 					where eligibility.instructor = assignment.instructor
 						and eligibility.school_branch = assignment.school_branch
 						and eligibility.enabled = 1
@@ -230,7 +230,7 @@ def _limited_course_schedule_group_rows(
 			reference_date,
 		):
 			return []
-		from_sql = "from \`tabStudent Group\` student_group"
+		from_sql = "from `tabStudent Group` student_group"
 
 	return frappe.db.sql(
 		f"""
