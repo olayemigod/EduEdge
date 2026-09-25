@@ -12,7 +12,10 @@ from eduedge.api.academic_operations_safe import (
 )
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
-from eduedge.api.academic_operations_review import student_group_query as schedule_student_group_query
+from eduedge.api.academic_operations_review import (
+    course_query as schedule_course_query,
+    student_group_query as schedule_student_group_query,
+)
 from eduedge.api.teaching_assignment_options import course_schedule_instructor_query
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
@@ -391,6 +394,24 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [class_a["name"]],
         )
 
+        limited_schedule_courses = schedule_course_query(
+            "Course",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "student_group": class_a["name"],
+                "program": program.name,
+                "reference_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in limited_schedule_courses],
+            [course.name],
+        )
+
         frappe.set_user(school_admin.name)
         manager_schedule_groups = schedule_student_group_query(
             "Student Group",
@@ -406,6 +427,23 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         self.assertEqual(
             {row[0] for row in manager_schedule_groups},
             {class_a["name"], class_peer["name"]},
+        )
+        manager_schedule_courses = schedule_course_query(
+            "Course",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "student_group": class_a["name"],
+                "program": program.name,
+                "reference_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            {row[0] for row in manager_schedule_courses},
+            {course.name, extra_course.name},
         )
 
         frappe.set_user("Administrator")
