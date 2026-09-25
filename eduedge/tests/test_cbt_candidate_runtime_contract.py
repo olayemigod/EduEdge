@@ -93,6 +93,23 @@ class TestCBTCandidateRuntimeContract(unittest.TestCase):
 		self.assertIn("if (!(await this.acquireTabLease())) return", candidate)
 
 
+	def test_sync_conflict_pauses_automatic_retry_and_locks_candidate(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		for token in (
+			"this.syncConflict = false",
+			"if (this.syncConflict) return false",
+			"if (this.syncConflict) return;",
+			"this.enterSyncConflict(result.conflict_question || \"\")",
+			"enterSyncConflict(questionKey = \"\")",
+			"window.clearInterval(this.periodicSyncInterval)",
+			"Synchronisation paused — invigilator review required",
+			"Submission is blocked until the answer synchronisation conflict is reviewed",
+			'badge.textContent = this.syncConflict',
+			"if (!this.syncConflict) await this.refreshState()",
+		):
+			self.assertIn(token, candidate)
+
+
 	def test_runtime_security_event_is_heartbeat_only(self):
 		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
 		submit_block = candidate.split("async completeQueuedSubmission()", 1)[1].split(
