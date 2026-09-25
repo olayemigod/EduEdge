@@ -214,17 +214,16 @@ def student_attendance_course_schedule_query(doctype, txt, searchfield, start, p
 	student_group = str(filters.get("student_group") or "").strip()
 	reference_date = filters.get("reference_date")
 
-	if branch:
-		branch = safe.base._resolve_branch(branch)
-		query_filters[BRANCH_FIELD] = branch
+	group_branch = ""
 	if student_group:
 		group_doc = frappe.get_doc("Student Group", student_group)
 		group_doc.check_permission("read")
-		group_branch = group_doc.get(BRANCH_FIELD)
-		if branch and group_branch and group_branch != branch:
-			return []
-		if group_branch and not branch:
-			query_filters[BRANCH_FIELD] = group_branch
+		group_branch = str(group_doc.get(BRANCH_FIELD) or "").strip()
+	branch = safe.base._resolve_branch(branch or group_branch or None)
+	query_filters[BRANCH_FIELD] = branch
+	if group_branch and group_branch != branch:
+		return []
+	if student_group:
 		query_filters["student_group"] = student_group
 	if reference_date:
 		query_filters["schedule_date"] = str(getdate(reference_date))
