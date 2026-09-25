@@ -161,6 +161,37 @@ class TestAttendanceMemberScopeHardeningContract(unittest.TestCase):
         self.assertIn("else this.invalidateRegister()", schedule_handler)
 
 
+    def test_attendance_save_is_context_bound_and_controls_are_locked(self):
+        source = (APP / "public" / "js" / "eduedge_attendance" / "EduEdgeAttendance.vue").read_text(encoding="utf-8")
+
+        for token in (
+            "saveRequestId: 0",
+            "if (this.saving || !this.canManageAttendance",
+            "const requestId = ++this.saveRequestId",
+            "const requestedGroup = this.filters.student_group",
+            "const requestedDate = this.register.date || this.filters.date",
+            "const requestedSchedule = this.filters.course_schedule",
+            "const entries = this.register.students.map",
+            "student_group: requestedGroup",
+            "date: requestedDate",
+            "course_schedule: requestedSchedule",
+            "if (requestId !== this.saveRequestId) return",
+            "this.filters.student_group !== requestedGroup",
+            "this.filters.date !== requestedDate",
+            "this.filters.course_schedule !== requestedSchedule",
+            "if (requestId === this.saveRequestId) this.saving = false",
+            ':disabled="loading || branchSwitching || saving"',
+            ':disabled="registerLoading || saving"',
+        ):
+            self.assertIn(token, source)
+
+        save_block = source.split("async saveRegister(submit)", 1)[1].split(
+            "async openCoverage(row)", 1
+        )[0]
+        self.assertIn("await this.loadRegister()", save_block)
+        self.assertIn("await this.loadContext()", save_block)
+
+
     def test_live_attendance_routes_use_safe_runtime_overrides(self):
         hooks = HOOKS.read_text(encoding="utf-8")
         for token in (
