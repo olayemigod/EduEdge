@@ -99,6 +99,24 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
         self.assertGreaterEqual(source.count("if not doc:\n        return True"), 2)
 
 
+    def test_frappe_v16_ptype_is_normalized_for_mutation_capabilities(self):
+        source = self._source()
+        for token in (
+            "ptype=None",
+            "resolved_permission_type = ptype or permission_type",
+            "resolved_permission_type in PLAN_MUTATION_TYPES",
+            "resolved_permission_type in RESULT_MUTATION_TYPES",
+            "resolved_permission_type in BLOCKED_MUTATION_TYPES",
+        ):
+            self.assertIn(token, source)
+
+        frappe_permissions = (
+            "Frappe v16 controller permission hooks call has_permission methods with ptype; "
+            "Assessment permission hooks must not silently fall back to read capability."
+        )
+        self.assertTrue(frappe_permissions)
+
+
     def test_plan_mutation_requires_create_assessment_plan_capability(self):
         source = self._source()
         for token in (
