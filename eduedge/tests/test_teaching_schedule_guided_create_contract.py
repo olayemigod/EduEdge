@@ -43,6 +43,27 @@ class TestTeachingScheduleGuidedCreateContract(unittest.TestCase):
         self.assertNotIn("/app/instructor/", dialog.lower())
         self.assertNotIn("frappe.new_doc", dialog)
 
+    def test_limited_guided_selectors_reuse_exact_assignment_governance(self):
+        api = (APP / "api" / "teaching_schedule.py").read_text(encoding="utf-8")
+        dialog = (APP / "public/js/eduedge_teaching_schedule/TeachingScheduleCreateDialog.vue").read_text(encoding="utf-8")
+
+        for token in (
+            "def _limited_teaching_schedule_offering_names",
+            "resolve_exact_instructor_for_user(required=True)",
+            "eligibility_covers_period(",
+            '"assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)]',
+            "schedule_student_group_query(",
+            "schedule_course_query(",
+            "_group_offering(row[0]) != program_offering",
+        ):
+            self.assertIn(token, api)
+        self.assertIn("student_group: this.draft.student_group", dialog)
+        self.assertIn(
+            "!this.draft.program_offering || !this.draft.student_group || !this.draft.reference_date",
+            dialog,
+        )
+
+
     def test_room_can_be_created_and_selected_without_leaving_schedule_dialog(self):
         dialog = (APP / "public/js/eduedge_teaching_schedule/TeachingScheduleCreateDialog.vue").read_text(encoding="utf-8")
         room_api = (APP / "api/teaching_schedule_rooms.py").read_text(encoding="utf-8")
