@@ -220,6 +220,7 @@ def assessment_plan_course_query(doctype, txt, searchfield, start, page_len, fil
         as_list=True,
     )
 
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def assessment_result_plan_query(doctype, txt, searchfield, start, page_len, filters):
@@ -264,7 +265,7 @@ def assessment_result_plan_query(doctype, txt, searchfield, start, page_len, fil
         if not offering or not course:
             continue
         condition = (
-            f"(student_group.\`{OFFERING_FIELD}\` = {frappe.db.escape(offering)} "
+            f"(student_group.`{OFFERING_FIELD}` = {frappe.db.escape(offering)} "
             f"and plan.course = {frappe.db.escape(course)}"
         )
         if row.get("assignment_scope") == CLASS_ARM_SCOPE:
@@ -286,9 +287,9 @@ def assessment_result_plan_query(doctype, txt, searchfield, start, page_len, fil
             plan.student_group,
             plan.course,
             plan.schedule_date
-        from \`tabAssessment Plan\` plan
-        inner join \`tabStudent Group\` student_group on student_group.name = plan.student_group
-        where plan.\`{BRANCH_FIELD}\` = %(branch)s
+        from `tabAssessment Plan` plan
+        inner join `tabStudent Group` student_group on student_group.name = plan.student_group
+        where plan.`{BRANCH_FIELD}` = %(branch)s
             and plan.docstatus = 1
             and ({" or ".join(conditions)})
             and (
