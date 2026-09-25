@@ -24,6 +24,7 @@ ADMIN_ROLES = {
 	"Academic Administrator",
 }
 ANSWER_SYNC_CONFLICT_REASON = "Answer revision conflict detected during browser synchronisation."
+SYNC_RECONCILIATION_HOURS = 24
 
 
 def _answer_sync_conflict_active(attempt) -> bool:
@@ -341,6 +342,14 @@ def _remaining(attempt) -> int:
 	if not attempt.expires_at:
 		return 0
 	return max(0, int((get_datetime(attempt.expires_at) - now_datetime()).total_seconds()))
+
+
+def reconciliation_deadline(attempt):
+	"""Return the final server-authoritative window for pre-cutoff browser reconciliation."""
+	anchor = attempt.expires_at or attempt.launch_token_expires_at
+	if not anchor:
+		return None
+	return get_datetime(anchor) + timedelta(hours=SYNC_RECONCILIATION_HOURS)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -723,13 +732,21 @@ def _finalize_timeout(attempt_name: str) -> None:
 		return
 	pending = cint(attempt.reported_pending_sync_count)
 	if cint(attempt.auto_submit_on_timeout):
-		status = "Pending Sync" if pending else "Auto Submitted"
+		# A server timeout cannot prove that an offline browser has no newer local
+		# answers. Hold every auto-timeout in Pending Sync until the active browser
+		# confirms a zero-pending queue or the reconciliation window expires.
+		status = "Pending Sync"
 		source = "Server Timeout Auto-submit"
 	else:
 		status, source = "Timed Out", "Server Timeout"
 	reasons = attempt.review_reasons
 	if status == "Pending Sync":
-		reasons = _review_reason(reasons, "Timeout reached with pending browser answers.")
+		timeout_reason = (
+			"Timeout reached with reported pending browser answers."
+			if pending
+			else "Server timeout entered the browser reconciliation window."
+		)
+		reasons = _review_reason(reasons, timeout_reason)
 	if status == "Timed Out":
 		reasons = _review_reason(reasons, "Attempt timed out without automatic submission.")
 	frappe.db.set_value(
@@ -739,7 +756,7 @@ def _finalize_timeout(attempt_name: str) -> None:
 			"attempt_status": status,
 			"submitted_at": now_datetime() if status != "Timed Out" else None,
 			"submission_source": source,
-			"requires_review": 1 if status in {"Pending Sync", "Timed Out"} else cint(attempt.requires_review),
+			"requires_review": 1 if status == "Timed Out" else cint(attempt.requires_review),
 			"review_reasons": reasons,
 		},
 		update_modified=False,
