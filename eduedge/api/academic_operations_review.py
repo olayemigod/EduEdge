@@ -261,6 +261,90 @@ def student_group_query(doctype, txt, searchfield, start, page_len, filters):
 	]
 
 
+def _limited_schedule_course_names(
+	*,
+	branch: str,
+	student_group: str,
+	program: str,
+	reference_date,
+	program_course_names: list[str],
+) -> list[str]:
+	"""Return only Program subjects the limited Instructor may schedule for this class."""
+	exact_instructor = resolve_exact_instructor_for_user()
+	if not exact_instructor:
+		return []
+	if not eligibility_covers_period(
+		exact_instructor,
+		branch,
+		reference_date,
+		reference_date,
+	):
+		return []
+
+	group = frappe.db.get_value(
+		"Student Group",
+		student_group,
+		["name", BRANCH_FIELD, OFFERING_FIELD, "program", "disabled"],
+		as_dict=True,
+	)
+	if (
+		not group
+		or group.disabled
+		or group.get(BRANCH_FIELD) != branch
+		or group.program != program
+	):
+		return []
+
+	assignment_mode = (
+		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.db.exists(
+			"EduEdge Instructor Assignment",
+			{"school_branch": branch},
+		)
+	)
+	if not assignment_mode:
+		return program_course_names
+	if not group.get(OFFERING_FIELD):
+		return []
+
+	rows = frappe.get_all(
+		"EduEdge Instructor Assignment",
+		filters={
+			"instructor": exact_instructor,
+			"school_branch": branch,
+			"program_offering": group.get(OFFERING_FIELD),
+			"course": ["in", program_course_names],
+			"assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)],
+			"enabled": 1,
+		},
+		fields=[
+			"course",
+			"assignment_scope",
+			"student_group",
+			"valid_from",
+			"valid_to",
+		],
+		limit_page_length=0,
+	)
+	target_date = getdate(reference_date)
+	allowed: list[str] = []
+	for row in rows:
+		scope = row.assignment_scope or CLASS_ARM_SCOPE
+		if scope == CLASS_SCOPE:
+			pass
+		elif scope == CLASS_ARM_SCOPE and row.student_group == student_group:
+			pass
+		else:
+			continue
+		if row.valid_from and getdate(row.valid_from) > target_date:
+			continue
+		if row.valid_to and getdate(row.valid_to) < target_date:
+			continue
+		if row.course and row.course not in allowed:
+			allowed.append(row.course)
+	return allowed
+
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def course_query(doctype, txt, searchfield, start, page_len, filters):
@@ -271,6 +355,8 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	program = str(filters.get("program") or "").strip()
 	branch = str(filters.get(BRANCH_FIELD) or "").strip()
+	student_group = str(filters.get("student_group") or "").strip()
+	reference_date = getdate(filters.get("reference_date") or nowdate())
 	if not program or not branch:
 		return []
 	branch = safe.base._resolve_branch(branch)
@@ -286,6 +372,18 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	)
 	if not course_names:
 		return []
+	if is_limited_instructor_user():
+		if not student_group:
+			return []
+		course_names = _limited_schedule_course_names(
+			branch=branch,
+			student_group=student_group,
+			program=program,
+			reference_date=reference_date,
+			program_course_names=course_names,
+		)
+		if not course_names:
+			return []
 	course_filters = {"name": ["in", course_names]}
 	course_meta = frappe.get_meta("Course")
 	if course_meta.has_field(INSTITUTION_FIELD):
