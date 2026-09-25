@@ -10,7 +10,10 @@ from eduedge.api.academic_operations_safe import (
     get_operations_context,
     save_attendance_register,
 )
-from eduedge.api.assessment_assignment_options import assessment_plan_student_group_query
+from eduedge.api.assessment_assignment_options import (
+    assessment_plan_course_query,
+    assessment_plan_student_group_query,
+)
 from eduedge.api.attendance_tool_safe import get_student_attendance_records
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
@@ -417,6 +420,43 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [row[0] for row in first_assessment_groups],
             [class_a["name"]],
         )
+
+        # Assessment Plan creation is governed by can_create_assessment_plans,
+        # independently from generic Subject-content visibility.
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            assignment_a.name,
+            "can_view_subject_content",
+            0,
+            update_modified=False,
+        )
+        frappe.set_user(instructor_user.name)
+        first_assessment_courses = assessment_plan_course_query(
+            "Course",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "student_group": class_a["name"],
+                "schedule_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in first_assessment_courses],
+            [course.name],
+        )
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            assignment_a.name,
+            "can_view_subject_content",
+            1,
+            update_modified=False,
+        )
+        frappe.set_user(instructor_user.name)
 
         first_schedule_groups = schedule_student_group_query(
             "Student Group",
