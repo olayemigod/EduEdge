@@ -12,6 +12,7 @@ from eduedge.api.academic_operations_safe import (
 )
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
+from eduedge.api.academic_operations_review import student_group_query as schedule_student_group_query
 from eduedge.api.teaching_assignment_options import course_schedule_instructor_query
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
@@ -328,6 +329,12 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             offering=offering_b.name,
             students=[],
         )
+        class_peer = save_class_arm(
+            display_name=f"QA Core Peer {self.suffix}",
+            branch=branch_a.name,
+            offering=offering_a.name,
+            students=[],
+        )
 
         assignment_a = self._make_subject_assignment(
             instructor_a,
@@ -349,6 +356,14 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             class_a["name"],
             course,
         )
+        self._make_subject_assignment(
+            peer_instructor,
+            institution,
+            branch_a,
+            offering_a,
+            class_peer["name"],
+            course,
+        )
 
         self._make_subject_assignment(
             instructor_b,
@@ -359,6 +374,41 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             course,
         )
 
+        frappe.set_user(instructor_user.name)
+        first_schedule_groups = schedule_student_group_query(
+            "Student Group",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "reference_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in first_schedule_groups],
+            [class_a["name"]],
+        )
+
+        frappe.set_user(school_admin.name)
+        manager_schedule_groups = schedule_student_group_query(
+            "Student Group",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "reference_date": "2094-10-05",
+            },
+        )
+        self.assertEqual(
+            {row[0] for row in manager_schedule_groups},
+            {class_a["name"], class_peer["name"]},
+        )
+
+        frappe.set_user("Administrator")
         room_a = self._insert(
             "Room",
             room_name=f"QA Core A Room {self.suffix}",
