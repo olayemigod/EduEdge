@@ -376,7 +376,8 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	)
 	if not course_names:
 		return []
-	if is_limited_instructor_user():
+	limited_instructor = is_limited_instructor_user()
+	if limited_instructor:
 		if not student_group:
 			return []
 		course_names = _limited_schedule_course_names(
@@ -392,7 +393,8 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	course_meta = frappe.get_meta("Course")
 	if course_meta.has_field(INSTITUTION_FIELD):
 		course_filters[INSTITUTION_FIELD] = institution
-	rows = frappe.get_list(
+	course_reader = frappe.get_all if limited_instructor else frappe.get_list
+	rows = course_reader(
 		"Course",
 		filters=course_filters,
 		or_filters={"name": ["like", f"%{txt}%"], "course_name": ["like", f"%{txt}%"]},
