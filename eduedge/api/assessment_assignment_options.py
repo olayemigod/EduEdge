@@ -12,6 +12,7 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import (
     assignment_capability_enforcement_enabled,
     get_user_capability_assignment_rows,
+    user_has_instructor_assignment_capability,
 )
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, assigned_courses
 
@@ -308,5 +309,76 @@ def assessment_result_plan_query(doctype, txt, searchfield, start, page_len, fil
             "page_len": min(max(int(page_len), 1), MAX_PLAN_OPTIONS),
         },
         as_dict=False,
+    )
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def assessment_result_student_query(doctype, txt, searchfield, start, page_len, filters):
+    """Return active students from the selected submitted Assessment Plan roster."""
+    _require_academic_operator()
+    filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+    assessment_plan = str(filters.get("assessment_plan") or "").strip()
+    if not assessment_plan:
+        return []
+
+    plan = frappe.db.get_value(
+        "Assessment Plan",
+        assessment_plan,
+        ["name", "student_group", "course", BRANCH_FIELD, "docstatus"],
+        as_dict=True,
+    )
+    if not plan or int(plan.docstatus or 0) != 1 or not plan.student_group:
+        return []
+
+    branch = _resolve_branch(filters.get(BRANCH_FIELD) or plan.get(BRANCH_FIELD))
+    if plan.get(BRANCH_FIELD) != branch:
+        frappe.throw(_("The selected Assessment Plan belongs to another Branch / Campus."), frappe.ValidationError)
+
+    group = _group_record(plan.student_group)
+    if not group or group.disabled or group.get(BRANCH_FIELD) != branch:
+        return []
+
+    capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()
+    if capability_scoped:
+        offering = _resolve_group_offering(group)
+        if not offering or not user_has_instructor_assignment_capability(
+            "can_enter_marks",
+            user=frappe.session.user,
+            school_branch=branch,
+            program_offering=offering,
+            student_group=plan.student_group,
+            course=plan.course,
+            on_date=nowdate(),
+        ):
+            return []
+    else:
+        plan_doc = frappe.get_doc("Assessment Plan", assessment_plan)
+        plan_doc.check_permission("read")
+
+    return frappe.db.sql(
+        f"""
+        select student.name, student.student_name
+        from `tabStudent Group Student` group_student
+        inner join `tabStudent` student on student.name = group_student.student
+        where group_student.parent = %(student_group)s
+            and group_student.parenttype = 'Student Group'
+            and group_student.active = 1
+            and student.enabled = 1
+            and student.`{BRANCH_FIELD}` = %(branch)s
+            and (
+                student.name like %(txt)s
+                or student.student_name like %(txt)s
+                or coalesce(student.student_email_id, '') like %(txt)s
+            )
+        order by group_student.group_roll_number asc, student.student_name asc
+        limit %(start)s, %(page_len)s
+        """,
+        {
+            "student_group": plan.student_group,
+            "branch": branch,
+            "txt": f"%{txt or ''}%",
+            "start": max(int(start), 0),
+            "page_len": max(int(page_len), 1),
+        },
     )
 
