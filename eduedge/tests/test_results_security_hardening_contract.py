@@ -19,12 +19,48 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		):
 			self.assertIn(f'"{doctype}"', hooks)
 			self.assertIn(handler, hooks)
-		self.assertIn("def _governed_result_query", permissions)
-		self.assertIn("def _owned_student_group_condition", permissions)
-		self.assertIn("schedule.student_group", permissions)
-		self.assertIn("def _schedule_assignment_condition", permissions)
-		self.assertIn('ownership = _schedule_assignment_condition("schedule", user)', permissions)
-		self.assertIn("assignment.instructor =", permissions)
+		self.assertIn(
+			'return _class_responsibility_result_query("EduEdge Result Publication", user)',
+			permissions,
+		)
+		self.assertIn(
+			"return _has_class_responsibility_result_permission(doc, user, permission_type)",
+			permissions,
+		)
+		self.assertIn("def _class_responsibility_assignment_condition", permissions)
+		self.assertIn("assignment.instructor in", permissions)
+
+	def test_class_responsibility_list_scope_requires_branch_eligibility(self):
+		permissions = (APP / "education" / "permissions.py").read_text()
+		helper = permissions.split("def _class_responsibility_assignment_condition", 1)[1].split(
+			"def _class_responsibility_result_query", 1
+		)[0]
+		for token in (
+			"from `tabEduEdge Instructor Branch Assignment` eligibility",
+			"eligibility.instructor = assignment.instructor",
+			"eligibility.school_branch = assignment.school_branch",
+			"eligibility.enabled = 1",
+			"eligibility.valid_from is null",
+			"eligibility.valid_to is null",
+		):
+			self.assertIn(token, helper)
+
+	def test_subject_teacher_cannot_receive_whole_class_publication_readiness(self):
+		api = (APP / "api" / "assessment_operations.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_assessment_operations" / "EduEdgeAssessmentOperations.vue").read_text()
+		for token in (
+			"def _can_view_publication_scope",
+			"is_limited_instructor_user(frappe.session.user)",
+			"has_class_responsibility_assignment(",
+			"def _assert_publication_scope_access",
+			"can_view_publication_scope",
+			"can_manage_publication",
+			"_assert_publication_scope_access(student_group, academic_year, academic_term)",
+		):
+			self.assertIn(token, api)
+		self.assertIn('v-if="context.can_view_publication_scope"', vue)
+		self.assertIn("context.can_manage_publication", vue)
+		self.assertIn("Class-level result control", vue)
 
 	def test_report_card_service_rejects_unassigned_teacher_class(self):
 		service = (APP / "education" / "report_cards.py").read_text()
