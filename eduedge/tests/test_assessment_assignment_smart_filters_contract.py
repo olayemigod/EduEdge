@@ -97,6 +97,35 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_assessment_result_plan_selector_uses_current_mark_entry_capability(self):
+        source = self._api()
+        query = source.split("def assessment_result_plan_query", 1)[1]
+        for token in (
+            "_resolve_branch(filters.get(BRANCH_FIELD))",
+            'base_filters = {BRANCH_FIELD: branch, "docstatus": 1}',
+            "capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()",
+            '"can_enter_marks"',
+            "school_branch=branch",
+            "on_date=nowdate()",
+            "assignment_scope",
+            "program_offering",
+            "plan.student_group",
+            "plan.course",
+            "plan.docstatus = 1",
+            "return frappe.db.sql(",
+        ):
+            self.assertIn(token, query)
+        self.assertNotIn('"can_view_subject_content"', query)
+
+        client = (APP / "public" / "js" / "education" / "assessment_result.js").read_text(encoding="utf-8")
+        self.assertIn(
+            'query: "eduedge.api.assessment_assignment_options.assessment_result_plan_query"',
+            client,
+        )
+        self.assertIn("eduedge_school_branch: frm.doc.eduedge_school_branch", client)
+        self.assertNotIn("docstatus: 1", client)
+
+
     def test_client_cascade_filters_and_clears_invalid_children(self):
         source = self._client()
         for token in (
