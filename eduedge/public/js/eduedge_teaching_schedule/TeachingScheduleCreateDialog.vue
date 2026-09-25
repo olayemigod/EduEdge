@@ -265,7 +265,10 @@ export default {
 			try {
 				const offering = this.draft.program_offering;
 				const offeringRows = await this.searchOfferings(offering);
-				if (this.draft.reference_date !== selectedDate) return;
+				if (
+					this.draft.reference_date !== selectedDate
+					|| this.draft.program_offering !== offering
+				) return;
 				if (!offeringRows.some((row) => row?.value === offering)) {
 					this.clearOffering();
 					return;
@@ -274,7 +277,11 @@ export default {
 				if (!this.draft.student_group) return;
 				const studentGroup = this.draft.student_group;
 				const groupRows = await this.searchClassArms(studentGroup);
-				if (this.draft.reference_date !== selectedDate) return;
+				if (
+					this.draft.reference_date !== selectedDate
+					|| this.draft.program_offering !== offering
+					|| this.draft.student_group !== studentGroup
+				) return;
 				if (!groupRows.some((row) => row?.value === studentGroup)) {
 					this.clearStudentGroup();
 					return;
@@ -283,7 +290,12 @@ export default {
 				if (!this.draft.course) return;
 				const course = this.draft.course;
 				const courseRows = await this.searchCourses(course);
-				if (this.draft.reference_date !== selectedDate) return;
+				if (
+					this.draft.reference_date !== selectedDate
+					|| this.draft.program_offering !== offering
+					|| this.draft.student_group !== studentGroup
+					|| this.draft.course !== course
+				) return;
 				if (!courseRows.some((row) => row?.value === course)) {
 					this.clearCourse();
 				}
