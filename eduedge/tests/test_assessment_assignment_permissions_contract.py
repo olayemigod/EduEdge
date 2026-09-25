@@ -29,12 +29,31 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
             "assignment.course =",
             "assignment.valid_from is null",
             "assignment.valid_to is null",
+            "from `tabEduEdge Instructor Branch Assignment` eligibility",
+            "eligibility.instructor = assignment.instructor",
+            "eligibility.school_branch =",
+            "eligibility.enabled = 1",
+            "eligibility.valid_from is null",
+            "eligibility.valid_to is null",
             "assignment.assignment_scope",
             "CLASS_SCOPE",
             "CLASS_ARM_SCOPE",
             "assignment.student_group =",
         ):
             self.assertIn(token, source)
+
+    def test_list_query_requires_branch_eligibility_on_same_effective_date(self):
+        source = self._source()
+        helper = source.split("def _assignment_exists_sql", 1)[1].split(
+            "def assessment_plan_query", 1
+        )[0]
+        self.assertIn("from `tabEduEdge Instructor Branch Assignment` eligibility", helper)
+        self.assertIn("eligibility.instructor = assignment.instructor", helper)
+        self.assertIn("eligibility.school_branch = {branch_expr}", helper)
+        self.assertIn("eligibility.enabled = 1", helper)
+        self.assertIn("eligibility.valid_from is null or eligibility.valid_from <= {date_expr}", helper)
+        self.assertIn("eligibility.valid_to is null or eligibility.valid_to >= {date_expr}", helper)
+
 
     def test_query_fails_closed_for_missing_or_ambiguous_instructor_identity(self):
         source = self._source()
