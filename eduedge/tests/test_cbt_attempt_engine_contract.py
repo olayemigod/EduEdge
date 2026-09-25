@@ -140,12 +140,43 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 		self.assertIn('"answer_sync_conflict": base._answer_sync_conflict_active(attempt)', guard)
 
 
+	def test_server_timeout_waits_for_browser_reconciliation_before_scoring(self):
+		attempts = (APP / "cbt" / "attempts.py").read_text()
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		scoring = (APP / "cbt" / "scoring.py").read_text()
+
+		self.assertIn("SYNC_RECONCILIATION_HOURS = 24", attempts)
+		self.assertIn("def reconciliation_deadline(attempt)", attempts)
+		finalize = attempts.split("def _finalize_timeout", 1)[1].split(
+			"def finalize_expired_attempts", 1
+		)[0]
+		for token in (
+			'status = "Pending Sync"',
+			'"Server Timeout Auto-submit"',
+			'"Server timeout entered the browser reconciliation window."',
+		):
+			self.assertIn(token, finalize)
+		self.assertNotIn('status = "Auto Submitted"', finalize)
+
+		for token in (
+			"deadline = base.reconciliation_deadline(attempt)",
+			'attempt.attempt_status == "Pending Sync"',
+			'str(attempt.submission_source or "").startswith("Server Timeout")',
+			"not client_pending",
+			"not cint(attempt.reported_pending_sync_count)",
+			'"attempt_status": "Auto Submitted"',
+		):
+			self.assertIn(token, guard)
+		self.assertIn('SCOREABLE_ATTEMPT_STATUSES = {"Submitted", "Auto Submitted"}', scoring)
+		self.assertIn("Pending browser answers must be resolved before scoring.", scoring)
+
+
 	def test_runtime_guard_hides_prestart_and_terminal_questions_and_audits_late_answers(self):
 		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
 		for token in (
 			'"questions": []',
 			'"answers": {}',
-			'SYNC_RECONCILIATION_HOURS = 24',
+			'base.reconciliation_deadline(attempt)',
 			'Post-submission sync accepts only answers saved before the server cutoff',
 			'Answers were reconciled after submission or timeout',
 			'attempt.attempt_status == "In Progress" and base._remaining(attempt) <= 0',
