@@ -11,7 +11,9 @@ function setCourseScheduleQueries(frm) {
 		query: "eduedge.api.academic_operations_review.course_query",
 		filters: {
 			eduedge_school_branch: frm.doc.eduedge_school_branch,
+			student_group: frm.doc.student_group,
 			program: frm.__eduedge_student_group_program || "",
+			reference_date: frm.doc.schedule_date,
 		},
 	}));
 	frm.set_query("instructor", () => ({
