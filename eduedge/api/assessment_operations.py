@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.assessment_operations import (
 	PUBLICATION_DOCTYPE,
 	append_publication_log,
@@ -11,7 +12,10 @@ from eduedge.education.assessment_operations import (
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_scope import is_limited_instructor_user
-from eduedge.education.teaching_assignments import has_class_responsibility_assignment
+from eduedge.education.teaching_assignments import (
+	class_responsibility_group_names,
+	has_class_responsibility_assignment,
+)
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.result_snapshots import create_publication_snapshots
 from eduedge.education.result_profile import (
@@ -97,6 +101,62 @@ def _assert_publication_scope_access(
 
 
 
+def _assessment_context_groups(
+	resolved_branch: str,
+	group_filters: dict,
+	*,
+	academic_year: str | None,
+	academic_term: str | None,
+) -> list:
+	"""Union ordinary subject-visible Classes with exact class-responsibility Classes."""
+	public_fields = [
+		"name",
+		"student_group_name",
+		"program",
+		"course",
+		"academic_year",
+		"academic_term",
+	]
+	groups = frappe.get_list(
+		"Student Group",
+		filters=group_filters,
+		fields=public_fields,
+		order_by="student_group_name asc",
+		page_length=200,
+	)
+	if not is_limited_instructor_user(frappe.session.user):
+		return groups
+	if not frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+		return groups
+
+	candidates = frappe.get_all(
+		"Student Group",
+		filters=group_filters,
+		fields=public_fields + [BRANCH_FIELD, OFFERING_FIELD],
+		order_by="student_group_name asc",
+		page_length=200,
+	)
+	responsibility_names = class_responsibility_group_names(
+		candidates,
+		user=frappe.session.user,
+		branch=resolved_branch,
+		academic_year=academic_year,
+		academic_term=academic_term,
+	)
+	if not responsibility_names:
+		return groups
+
+	merged = {row.name: row for row in groups}
+	for row in candidates:
+		if row.name not in responsibility_names or row.name in merged:
+			continue
+		merged[row.name] = frappe._dict({field: row.get(field) for field in public_fields})
+	return sorted(
+		merged.values(),
+		key=lambda row: ((row.student_group_name or "").lower(), row.name),
+	)
+
+
 def _publication_scope_filters(
 	*,
 	school_branch: str,
@@ -171,12 +231,11 @@ def get_assessment_context(
 		group_filters["academic_term"] = ["is", "not set"]
 	elif academic_term:
 		group_filters["academic_term"] = ["in", [academic_term, ""]]
-	groups = frappe.get_list(
-		"Student Group",
-		filters=group_filters,
-		fields=["name", "student_group_name", "program", "course", "academic_year", "academic_term"],
-		order_by="student_group_name asc",
-		page_length=200,
+	groups = _assessment_context_groups(
+		resolved_branch,
+		group_filters,
+		academic_year=academic_year,
+		academic_term=academic_term,
 	)
 	if student_group and student_group not in {row.name for row in groups}:
 		frappe.throw(_("Selected Student Group is not available in this branch."), frappe.PermissionError)
