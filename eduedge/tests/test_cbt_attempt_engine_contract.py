@@ -112,6 +112,19 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			self.assertIn(token, service)
 
 
+	def test_sync_conflict_flags_review_and_preserves_pending_evidence(self):
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		for token in (
+			"Answer revision conflict detected during browser synchronisation.",
+			'"requires_review": 1',
+			'"reported_pending_sync_count": pending',
+			'"last_heartbeat_at": server_time',
+			'cint(answer_count) + max(0, cint(reported_pending_count))',
+			'"sync_status": "Conflict"',
+		):
+			self.assertIn(token, guard)
+
+
 	def test_runtime_guard_hides_prestart_and_terminal_questions_and_audits_late_answers(self):
 		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
 		for token in (
