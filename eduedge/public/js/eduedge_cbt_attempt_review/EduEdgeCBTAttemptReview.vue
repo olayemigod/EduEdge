@@ -66,7 +66,7 @@
 				<template v-else>
 					<EdgeDashboardLayout min-column-width="12rem">
 						<EdgeStatCard label="Review Queue" :value="queue.total || 0" helper="Attempts currently flagged" />
-						<EdgeStatCard label="Pending Sync" :value="pendingSyncCount" helper="Cannot be accepted yet" />
+						<EdgeStatCard label="Pending Sync" :value="pendingSyncCount" helper="Awaiting browser reconciliation or reviewed expiry" />
 						<EdgeStatCard label="Timed Out" :value="timedOutCount" helper="Requires explicit acceptance or disqualification" />
 						<EdgeStatCard label="With Interventions" :value="interventionAttemptCount" helper="Has operational intervention evidence" />
 						<EdgeStatCard label="Prior Decisions" :value="priorDecisionCount" helper="Append-only review history" />
@@ -126,6 +126,7 @@
 									<div><span>Attempt</span><button type="button" @click="openAttempt(row)">{{ row.attempt }}</button></div>
 									<div><span>Submission Source</span><strong>{{ row.submission_source || '—' }}</strong></div>
 									<div><span>Last Sync</span><strong>{{ formatDateTime(row.last_sync_at) }}</strong></div>
+									<div><span>Reconciliation Until</span><strong>{{ formatDateTime(row.reconciliation_deadline) }}</strong></div>
 									<div><span>Interventions</span><strong>{{ row.intervention_count }}</strong></div>
 									<div><span>Prior Decisions</span><strong>{{ row.previous_review_count }}</strong></div>
 									<div><span>Result Exists</span><strong>{{ row.result_exists ? 'Yes' : 'No' }}</strong></div>
@@ -226,7 +227,7 @@ export default {
 			});
 		},
 		pendingSyncCount() {
-			return (this.queue.rows || []).filter((row) => row.reported_pending_sync_count).length;
+			return (this.queue.rows || []).filter((row) => row.reported_pending_sync_count || row.attempt_status === "Pending Sync").length;
 		},
 		timedOutCount() {
 			return (this.queue.rows || []).filter((row) => row.attempt_status === "Timed Out").length;
@@ -330,12 +331,15 @@ export default {
 		acceptDisabledReason(row) {
 			if (row.result_exists) return "A CBT Result already exists.";
 			if (row.reported_pending_sync_count) return "Resolve pending browser answers first.";
-			if (!row.can_accept) return "Only Submitted, Auto Submitted, or Timed Out attempts can be accepted.";
+			if (row.attempt_status === "Pending Sync" && row.reconciliation_window_open) {
+				return `Browser reconciliation is open until ${this.formatDateTime(row.reconciliation_deadline)}.`;
+			}
+			if (!row.can_accept) return "Only Submitted, Auto Submitted, Timed Out, or expired Pending Sync attempts can be accepted.";
 			return "";
 		},
 		promptDecision(row, decision) {
 			const descriptions = {
-				"Accept for Scoring": "Clears the review flag. A Timed Out attempt becomes Auto Submitted. Candidate answers are not changed.",
+				"Accept for Scoring": "Clears the review flag. Timed Out and expired zero-pending Pending Sync attempts become Auto Submitted. Candidate answers are not changed.",
 				"Keep Flagged": "Records the review decision but leaves the attempt blocked from scoring.",
 				"Disqualify Candidate": "Cancels the attempt and marks the Candidate Assignment as Disqualified. This cannot be used after a Result exists.",
 			};
