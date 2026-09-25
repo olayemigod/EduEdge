@@ -219,10 +219,10 @@ export default {
 	watch: {
 		open(value) { if (value) this.reset(); },
 		branch() { if (this.open) this.reset(); },
-		referenceDate(value) {
+		async referenceDate(value) {
 			if (this.open && value && value !== this.draft.reference_date) {
 				this.draft.reference_date = value;
-				this.clearOffering();
+				await this.revalidateDateContext();
 			}
 		},
 	},
@@ -251,9 +251,45 @@ export default {
 		close() {
 			if (!this.saving && !this.savingRoom) this.$emit("close");
 		},
-		dateChanged() {
+		async dateChanged() {
+			await this.revalidateDateContext();
+		},
+		async revalidateDateContext() {
 			this.error = "";
-			this.clearOffering();
+			// Date always invalidates Instructor eligibility, but stable Branch/Room
+			// context and still-valid Offering/Class/Subject selections should survive.
+			this.clearInstructor();
+			const selectedDate = this.draft.reference_date;
+			if (!selectedDate || !this.draft.program_offering) return;
+
+			try {
+				const offering = this.draft.program_offering;
+				const offeringRows = await this.searchOfferings(offering);
+				if (this.draft.reference_date !== selectedDate) return;
+				if (!offeringRows.some((row) => row?.value === offering)) {
+					this.clearOffering();
+					return;
+				}
+
+				if (!this.draft.student_group) return;
+				const studentGroup = this.draft.student_group;
+				const groupRows = await this.searchClassArms(studentGroup);
+				if (this.draft.reference_date !== selectedDate) return;
+				if (!groupRows.some((row) => row?.value === studentGroup)) {
+					this.clearStudentGroup();
+					return;
+				}
+
+				if (!this.draft.course) return;
+				const course = this.draft.course;
+				const courseRows = await this.searchCourses(course);
+				if (this.draft.reference_date !== selectedDate) return;
+				if (!courseRows.some((row) => row?.value === course)) {
+					this.clearCourse();
+				}
+			} catch (error) {
+				this.error = error?.message || __("The selected teaching context could not be revalidated for this date.");
+			}
 		},
 		updateOffering(value) {
 			if (!value && this.draft.program_offering) this.clearOffering();
