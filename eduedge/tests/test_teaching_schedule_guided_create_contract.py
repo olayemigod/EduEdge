@@ -83,6 +83,9 @@ class TestTeachingScheduleGuidedCreateContract(unittest.TestCase):
             "this.clearStudentGroup()",
             "this.clearCourse()",
             "this.draft.reference_date !== selectedDate",
+            "this.draft.program_offering !== offering",
+            "this.draft.student_group !== studentGroup",
+            "this.draft.course !== course",
         ):
             self.assertIn(token, block)
         self.assertNotIn("this.clearRoom()", block)
