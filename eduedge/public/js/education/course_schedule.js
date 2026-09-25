@@ -109,8 +109,14 @@ frappe.ui.form.on("Course Schedule", {
 		setCourseScheduleQueries(frm);
 	},
 	async schedule_date(frm) {
-		frm.__eduedge_student_group_program = "";
-		await frm.set_value({ student_group: null, course: null, instructor: null, room: null, eduedge_school_branch: null });
+		// Date affects eligibility and exact teaching responsibility, but it should not
+		// destroy stable class/branch/subject/room context. Force the date-sensitive
+		// Instructor choice to be reselected and refresh all dependent queries.
+		if (frm.doc.student_group) {
+			const message = await getStudentGroupContext(frm);
+			if (message) frm.__eduedge_student_group_program = message.program || "";
+		}
+		await frm.set_value("instructor", null);
 		setCourseScheduleQueries(frm);
 	},
 	async eduedge_school_branch(frm) {
