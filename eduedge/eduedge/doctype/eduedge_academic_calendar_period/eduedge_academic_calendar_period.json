@@ -10,7 +10,7 @@
   {"description":"Optional Institution-specific label used on report cards, for example Alpha, Rapha, Omega, First Term or Semester 1.","fieldname":"report_label","fieldtype":"Data","in_list_view":1,"label":"Report Label"},
   {"fieldname":"start_date","fieldtype":"Date","in_list_view":1,"label":"Start Date","reqd":1},
   {"fieldname":"end_date","fieldtype":"Date","in_list_view":1,"label":"End Date","reqd":1},
-  {"default":"10","fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence"},
+  {"default":"10","description":"Controls period ordering and must increase with chronological period dates (for example 10, 20, 30).","fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence"},
   {"default":"1","description":"Include this academic period when EduEdge calculates cumulative/yearly results.","fieldname":"include_in_result_aggregation","fieldtype":"Check","in_list_view":1,"label":"Include in Result Aggregation"},
   {"default":"0","description":"Institution-specific weight used only by Result Profiles configured for Weighted Average. Leave zero for non-weighted profiles.","fieldname":"annual_result_weight","fieldtype":"Percent","in_list_view":1,"label":"Annual Result Weight"},
   {"fieldname":"result_publication_date","fieldtype":"Date","label":"Result Publication Date"}
