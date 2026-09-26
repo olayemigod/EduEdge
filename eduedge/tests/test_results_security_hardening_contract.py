@@ -209,6 +209,30 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 			self.assertNotIn("Teacher", roles)
 			self.assertNotIn("Instructor", roles)
 
+	def test_result_publication_controller_guards_server_managed_workflow_state(self):
+		controller = (
+			APP
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_result_publication"
+			/ "eduedge_result_publication.py"
+		).read_text()
+		self.assertIn("SERVER_MANAGED_FIELDS", controller)
+		self.assertIn("in_eduedge_result_publication_transition", controller)
+		for fieldname in (
+			"status",
+			"result_profile_config_hash",
+			"approved_academic_payload_hash",
+			"report_card_ready",
+			"approved_by",
+			"published_by",
+		):
+			self.assertIn(f'"{fieldname}"', controller)
+		self.assertIn(
+			"Result Publication workflow and readiness fields can change only through EduEdge result actions.",
+			controller,
+		)
+
 	def test_publication_and_review_transitions_lock_source_rows(self):
 		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
 		report_api = (APP / "api" / "report_cards.py").read_text()
