@@ -11,7 +11,7 @@ class TestResultRoundingAndBranchDefaultsContract(unittest.TestCase):
 		engine = (APP / "education" / "result_engine.py").read_text()
 		self.assertIn("ROUND_HALF_UP", engine)
 		self.assertIn("def round_result_value", engine)
-		self.assertIn("Decimal(str(flt(value)))", engine)
+		self.assertIn("Decimal(str(value or 0)).quantize", engine)
 		self.assertIn("rounded = round_result_value(value, precision)", engine)
 
 	def test_stale_default_warehouse_is_only_cleared_for_new_cross_company_default(self):
