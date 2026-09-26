@@ -16,6 +16,7 @@ class TestCBTCandidateRequestSecurityContract(unittest.TestCase):
 			"eduedge.cbt.attempts.sync_answers",
 			"eduedge.cbt.attempts.submit_attempt",
 			"eduedge.cbt.attempt_runtime_guard.get_attempt_state",
+			"eduedge.cbt.attempt_runtime_guard.record_heartbeat",
 			"eduedge.cbt.attempt_runtime_guard.sync_answers",
 			"eduedge.cbt.attempt_runtime_guard.submit_attempt",
 		):
