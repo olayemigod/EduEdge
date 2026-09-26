@@ -344,6 +344,43 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 			hidden_second = build_publication_approval_fingerprint(publication)
 		self.assertEqual(hidden_first, hidden_second)
 
+	def test_approval_fingerprint_tracks_visible_academic_term_label(self):
+		publication = frappe._dict({"name": "PUB-1"})
+		base_payload = {
+			"STU-1": {
+				"student": {"student_name": "Student One"},
+				"source_result_names": ["RES-1"],
+				"payload": {
+					"publication": {"academic_term_label": "First Term"},
+					"profile": {"presentation": {"show_attendance": 0}},
+					"result": {"summary": {"overall_percentage": 72.5}},
+					"attendance": {},
+					"source_assessment_results": ["RES-1"],
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=base_payload,
+		):
+			approved = build_publication_approval_fingerprint(publication)
+
+		changed_label = {
+			"STU-1": {
+				**base_payload["STU-1"],
+				"payload": {
+					**base_payload["STU-1"]["payload"],
+					"publication": {"academic_term_label": "Autumn Term"},
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=changed_label,
+		):
+			changed = build_publication_approval_fingerprint(publication)
+		self.assertNotEqual(approved["hash"], changed["hash"])
+
 	def test_approval_fingerprint_tracks_only_visible_snapshot_derived_values(self):
 		publication = frappe._dict({"name": "PUB-1"})
 		base_payload = {
