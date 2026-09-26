@@ -18,6 +18,32 @@ class TestResultProfileFreezeContract(unittest.TestCase):
 			self.assertEqual(fields[fieldname].get("hidden"), 1)
 			self.assertEqual(fields[fieldname].get("no_copy"), 1)
 
+	def test_approval_stores_hidden_result_payload_fingerprint(self):
+		path = APP / "eduedge" / "doctype" / "eduedge_result_publication" / "eduedge_result_publication.json"
+		payload = json.loads(path.read_text())
+		fields = {row["fieldname"]: row for row in payload["fields"]}
+		field = fields["approved_payload_hash"]
+		self.assertEqual(field.get("read_only"), 1)
+		self.assertEqual(field.get("hidden"), 1)
+		self.assertEqual(field.get("no_copy"), 1)
+
+		snapshots = (APP / "education" / "result_snapshots.py").read_text()
+		api = (APP / "api" / "assessment_operations.py").read_text()
+		controller = (
+			APP
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_result_publication"
+			/ "eduedge_result_publication.py"
+		).read_text()
+		self.assertIn("def build_publication_payload_digest", snapshots)
+		self.assertIn("def assert_approved_publication_payload_unchanged", snapshots)
+		self.assertIn("approved_payload_hash = build_publication_payload_digest(doc)", api)
+		self.assertIn("assert_approved_publication_payload_unchanged(doc)", api)
+		self.assertGreaterEqual(api.count('"approved_payload_hash": None'), 2)
+		self.assertIn("def _validate_approval_payload_hash", controller)
+		self.assertIn("Approved result payload fingerprint is managed by the EduEdge publication workflow.", controller)
+
 	def test_approval_freezes_current_profile_but_revision_preserves_source_profile(self):
 		api = (APP / "api" / "assessment_operations.py").read_text()
 		self.assertIn("freeze_publication_result_profile_config", api)
