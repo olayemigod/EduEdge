@@ -240,7 +240,10 @@ def save_report_card_review(
 	if progression_recommendation is not None:
 		doc.progression_recommendation = progression_recommendation
 	if last_review_note is not None:
-		doc.last_review_note = (last_review_note or "").strip()
+		frappe.throw(
+			_("Last Review Note is managed by the governed reopen action."),
+			frappe.ValidationError,
+		)
 	refresh_review_metrics(doc)
 	doc.save()
 	return _review_payload(doc.name)
