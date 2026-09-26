@@ -31,6 +31,7 @@ from eduedge.api.teaching_schedule import (
 )
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
+from eduedge.education.assessment_operations import before_validate_assessment_plan
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.assessment_permissions import has_assessment_plan_permission
 from eduedge.education.instructor_assignment_capabilities import (
@@ -493,6 +494,30 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
         pending_plan.check_permission("create")
         self.assertFalse(pending_plan.get(BRANCH_FIELD))
+
+        # Subject Assignment and capability checks must evaluate the same
+        # assessment date. A future-effective exact assignment should therefore
+        # validate a future Assessment Plan even though it is not active today.
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            assignment_a.name,
+            "valid_from",
+            "2094-09-01",
+            update_modified=False,
+        )
+        frappe.set_user(instructor_user.name)
+        before_validate_assessment_plan(pending_plan)
+        self.assertEqual(pending_plan.get(BRANCH_FIELD), branch_a.name)
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            assignment_a.name,
+            "valid_from",
+            None,
+            update_modified=False,
+        )
+        frappe.set_user(instructor_user.name)
 
         first_assessment_courses = assessment_plan_course_query(
             "Course",
