@@ -36,6 +36,27 @@ def build_publication_payload_digest(publication_doc) -> str:
 	return hashlib.sha256(_canonical_json(canonical).encode("utf-8")).hexdigest()
 
 
+def assert_approved_publication_payload_unchanged(publication_doc) -> str:
+	approved_payload_hash = str(publication_doc.get("approved_payload_hash") or "").strip()
+	if not approved_payload_hash:
+		frappe.throw(
+			_(
+				"This approval predates result-content fingerprinting or has no approved payload fingerprint. "
+				"Reject it and request approval again before publishing."
+			),
+			frappe.ValidationError,
+		)
+	current_payload_hash = build_publication_payload_digest(publication_doc)
+	if current_payload_hash != approved_payload_hash:
+		frappe.throw(
+			_(
+				"Result content changed after approval. Reject this approval and request approval again before publishing."
+			),
+			frappe.ValidationError,
+		)
+	return current_payload_hash
+
+
 def create_publication_snapshots(publication: str) -> list[str]:
 	doc = frappe.get_doc("EduEdge Result Publication", publication)
 	if not doc.result_profile:
