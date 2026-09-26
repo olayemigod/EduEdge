@@ -96,6 +96,40 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			self.assertIn(token, service)
 		self.assertNotIn('"is_correct":', service)
 
+	def test_reconciliation_mutations_share_absolute_deadline_guard(self):
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+
+		for token in (
+			"def _assert_reconciliation_window_open(attempt)",
+			'attempt.attempt_status not in {"Pending Sync", "Auto Submitted", "Timed Out"}',
+			"deadline = base.reconciliation_deadline(attempt)",
+			"now_datetime() > deadline",
+			"The browser reconciliation window has expired.",
+			"def record_heartbeat(",
+			"_assert_reconciliation_window_open(attempt)",
+		):
+			self.assertIn(token, guard)
+
+		sync_block = guard.split("def sync_answers(", 1)[1].split(
+			"@frappe.whitelist(allow_guest=True)\ndef record_heartbeat", 1
+		)[0]
+		self.assertIn("_assert_reconciliation_window_open(attempt)", sync_block)
+
+		submit_block = guard.split("def submit_attempt(", 1)[1]
+		self.assertIn("_assert_reconciliation_window_open(attempt)", submit_block)
+
+		hooks = (APP / "hooks.py").read_text()
+		candidate = (APP / "public" / "js" / "eduedge_cbt_candidate.js").read_text()
+		self.assertIn(
+			'"eduedge.cbt.attempts.record_heartbeat": "eduedge.cbt.attempt_runtime_guard.record_heartbeat"',
+			hooks,
+		)
+		self.assertIn(
+			'heartbeat: "eduedge.cbt.attempt_runtime_guard.record_heartbeat"',
+			candidate,
+		)
+
+
 	def test_heartbeat_flags_and_audits_concurrent_tab_detection(self):
 		service = (APP / "cbt" / "attempts.py").read_text()
 		for token in (
