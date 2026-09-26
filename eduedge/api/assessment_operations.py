@@ -8,6 +8,7 @@ from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.assessment_operations import (
 	PUBLICATION_DOCTYPE,
 	append_publication_log,
+	assert_profile_backed_publication,
 	get_publication_readiness,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -530,6 +531,7 @@ def request_result_approval(publication: str) -> dict:
 	_require_operator()
 	doc = _get_publication(publication, for_update=True)
 	_assert_publication_mutation_scope(doc.student_group)
+	assert_profile_backed_publication(doc)
 	if doc.status not in {"Draft", "Rejected"}:
 		frappe.throw(_("Only Draft or Rejected publications can be submitted for approval."))
 	freeze_publication_result_profile_config(
@@ -566,6 +568,7 @@ def request_result_approval(publication: str) -> dict:
 def approve_results(publication: str) -> dict:
 	_require_approver()
 	doc = _get_publication(publication, for_update=True)
+	assert_profile_backed_publication(doc)
 	if doc.status != "Pending Approval":
 		frappe.throw(_("Only publications pending approval can be approved."))
 	readiness = _refresh_readiness(doc)
@@ -611,6 +614,7 @@ def reject_results(publication: str, reason: str) -> dict:
 def publish_results(publication: str) -> dict:
 	_require_approver()
 	doc = _get_publication(publication, for_update=True)
+	assert_profile_backed_publication(doc)
 	if doc.status != "Approved":
 		frappe.throw(_("Results must be approved before publication."))
 	readiness = _refresh_readiness(doc)
@@ -637,6 +641,7 @@ def publish_results(publication: str) -> dict:
 def create_result_publication_revision(publication: str) -> dict:
 	_require_approver()
 	source = _get_publication(publication, for_update=True)
+	assert_profile_backed_publication(source)
 	if source.status != "Published":
 		frappe.throw(_("Only a Published Result Publication can be revised."), frappe.ValidationError)
 
