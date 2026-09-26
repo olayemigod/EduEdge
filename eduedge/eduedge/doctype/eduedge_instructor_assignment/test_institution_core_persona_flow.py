@@ -5,7 +5,7 @@ from unittest.mock import patch
 import frappe
 from education.education.test_utils import before_tests
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import cint, now_datetime
+from frappe.utils import add_days, cint, now_datetime
 
 from eduedge.api.academic_operations_safe import (
     get_attendance_register,
@@ -510,9 +510,22 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
                 "academic_term": term.name,
             }
         )
+        assignment_valid_to = frappe.db.get_value(
+            "EduEdge Instructor Assignment",
+            class_responsibility.name,
+            "valid_to",
+        )
+        self.assertTrue(assignment_valid_to)
+        historical_only_date = str(add_days(assignment_valid_to, 1))
         with (
-            patch("eduedge.education.report_cards.nowdate", return_value="2095-09-10"),
-            patch("eduedge.education.permissions.nowdate", return_value="2095-09-10"),
+            patch(
+                "eduedge.education.report_cards.nowdate",
+                return_value=historical_only_date,
+            ),
+            patch(
+                "eduedge.education.permissions.nowdate",
+                return_value=historical_only_date,
+            ),
         ):
             self.assertTrue(can_view_report_card_scope(instructor_publication))
             self.assertFalse(can_manage_report_card_reviews(instructor_publication))
