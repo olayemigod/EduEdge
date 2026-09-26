@@ -746,6 +746,8 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
                 "maximum_score": 100,
             },
         )
+        before_validate_assessment_plan(pending_plan)
+        self.assertEqual(pending_plan.get(BRANCH_FIELD), branch_a.name)
 
         frappe.set_user("Administrator")
         frappe.db.set_value(
