@@ -496,6 +496,14 @@
 			return true;
 		}
 
+		handleReconciliationMutationError(error) {
+			const message = String(error?.message || error || "");
+			if (!message.toLowerCase().includes("browser reconciliation window has expired")) return false;
+			this.reconciliationDeadlineEpoch = Date.now() - 1;
+			this.enterReconciliationExpired();
+			return true;
+		}
+
 		renderForStatus() {
 			const status = this.serverState?.status;
 			if (status === "Prepared") {
@@ -764,6 +772,10 @@
 		}
 
 		queueSync(delay = SYNC_DEBOUNCE_MS) {
+			if (this.reconciliationWindowExpired()) {
+				this.enterReconciliationExpired();
+				return;
+			}
 			if (this.syncConflict) return;
 			window.clearTimeout(this.syncTimer);
 			this.syncTimer = window.setTimeout(() => this.flushSync(), delay);
@@ -836,6 +848,7 @@
 					if (this.submissionRequested && this.pendingCount === 0) await this.completeQueuedSubmission();
 					return true;
 				} catch (error) {
+					if (this.handleReconciliationMutationError(error)) return false;
 					this.setConnection(navigator.onLine ? "degraded" : "offline");
 					this.updateFooterStatus("Saved in browser; waiting to synchronise");
 					return false;
@@ -911,6 +924,7 @@
 				this.submissionRequested = false;
 				await this.refreshState();
 			} catch (error) {
+				if (this.handleReconciliationMutationError(error)) return;
 				this.setConnection(navigator.onLine ? "degraded" : "offline");
 				this.updateFooterStatus("Submission saved locally; retrying automatically");
 			}
@@ -964,6 +978,7 @@
 					await this.refreshState();
 				}
 			} catch (error) {
+				if (this.handleReconciliationMutationError(error)) return;
 				this.setConnection(navigator.onLine ? "degraded" : "offline");
 			}
 		}
