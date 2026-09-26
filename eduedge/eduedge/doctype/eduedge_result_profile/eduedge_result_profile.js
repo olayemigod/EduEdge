@@ -1,3 +1,47 @@
+const TERMINAL_METRIC_BASES = new Set([
+	"Current Term Raw Score",
+	"Current Term Percentage",
+	"Year-to-Date Cumulative Raw Score",
+	"Year-to-Date Cumulative Percentage",
+]);
+
+const ANNUAL_METRIC_BASES = new Set([
+	"Year-to-Date Cumulative Raw Score",
+	"Year-to-Date Cumulative Percentage",
+	"Annual Cumulative Raw Score",
+	"Annual Cumulative Percentage",
+	"Annual Average Percentage",
+]);
+
+function reconcileMetricSurfaces(frm, cdt, cdn) {
+	const row = locals[cdt]?.[cdn];
+	if (!row?.calculation_basis) return;
+
+	const updates = [];
+	if (row.show_on_terminal && !TERMINAL_METRIC_BASES.has(row.calculation_basis)) {
+		updates.push(
+			frappe.model.set_value(cdt, cdn, "show_on_terminal", 0)
+		);
+	}
+	if (row.show_on_annual && !ANNUAL_METRIC_BASES.has(row.calculation_basis)) {
+		updates.push(
+			frappe.model.set_value(cdt, cdn, "show_on_annual", 0)
+		);
+	}
+	if (!updates.length) return;
+
+	Promise.all(updates).then(() => {
+		frm.refresh_field("metrics");
+		frappe.show_alert({
+			message: __(
+				"Metric visibility was adjusted because {0} is not available on every selected report surface.",
+				[row.calculation_basis]
+			),
+			indicator: "orange",
+		});
+	});
+}
+
 function refreshComponentKeyOptions(frm) {
 	const keys = (frm.doc.components || [])
 		.map((row) => (row.component_key || "").trim().toLowerCase())
@@ -76,5 +120,17 @@ frappe.ui.form.on("EduEdge Result Profile", {
 frappe.ui.form.on("EduEdge Result Component", {
 	component_key(frm) {
 		refreshComponentKeyOptions(frm);
+	},
+});
+
+frappe.ui.form.on("EduEdge Result Metric", {
+	calculation_basis(frm, cdt, cdn) {
+		reconcileMetricSurfaces(frm, cdt, cdn);
+	},
+	show_on_terminal(frm, cdt, cdn) {
+		reconcileMetricSurfaces(frm, cdt, cdn);
+	},
+	show_on_annual(frm, cdt, cdn) {
+		reconcileMetricSurfaces(frm, cdt, cdn);
 	},
 });
