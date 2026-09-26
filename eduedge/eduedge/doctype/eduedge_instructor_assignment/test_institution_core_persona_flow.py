@@ -511,8 +511,8 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             }
         )
         with (
-            patch("eduedge.education.report_cards.nowdate", return_value="2095-01-10"),
-            patch("eduedge.education.permissions.nowdate", return_value="2095-01-10"),
+            patch("eduedge.education.report_cards.nowdate", return_value="2095-09-10"),
+            patch("eduedge.education.permissions.nowdate", return_value="2095-09-10"),
         ):
             self.assertTrue(can_view_report_card_scope(instructor_publication))
             self.assertFalse(can_manage_report_card_reviews(instructor_publication))
