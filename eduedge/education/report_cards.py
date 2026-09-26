@@ -189,7 +189,7 @@ def assert_report_card_access(publication, student: str, *, write: bool = False)
 		frappe.throw(_("Student is outside the published class scope."), frappe.PermissionError)
 
 
-def can_manage_report_card_reviews(publication, user: str | None = None) -> bool:
+def can_view_report_card_scope(publication, user: str | None = None) -> bool:
 	resolved_user = user or frappe.session.user
 	roles = set(frappe.get_roles(resolved_user))
 	if not OPERATIONAL_ROLES.intersection(roles):
@@ -201,6 +201,16 @@ def can_manage_report_card_reviews(publication, user: str | None = None) -> bool
 		user=resolved_user,
 		academic_term=publication.academic_term,
 		academic_year=publication.academic_year,
+	)
+
+
+def can_manage_report_card_reviews(publication, user: str | None = None) -> bool:
+	resolved_user = user or frappe.session.user
+	if not can_view_report_card_scope(publication, resolved_user):
+		return False
+	return bool(
+		frappe.has_permission(REVIEW_DOCTYPE, "create", user=resolved_user)
+		and frappe.has_permission(REVIEW_DOCTYPE, "write", user=resolved_user)
 	)
 
 
@@ -218,20 +228,14 @@ def assert_report_card_review_management(publication, user: str | None = None) -
 def _assert_publication_operator_scope(publication) -> None:
 	assert_branch_access(publication.school_branch)
 	user = frappe.session.user
-	if not is_limited_instructor_user(user):
+	if can_view_report_card_scope(publication, user):
 		return
-	if not has_class_responsibility_assignment(
-		publication.student_group,
-		user=user,
-		academic_term=publication.academic_term,
-		academic_year=publication.academic_year,
-	):
-		frappe.throw(
-			_(
-				"Full report-card access is limited to the effective Class Teacher, Form Teacher, Head of Class / Level, or an authorized academic administrator."
-			),
-			frappe.PermissionError,
-		)
+	frappe.throw(
+		_(
+			"Full report-card access is limited to the effective Class Teacher, Form Teacher, Head of Class / Level, or an authorized academic administrator."
+		),
+		frappe.PermissionError,
+	)
 
 
 def get_publication_student_summaries(publication_name: str) -> list[dict]:
