@@ -15,6 +15,29 @@ class TestEduEdgeResultPublication(FrappeTestCase):
 			}
 		)
 
+	def test_new_publication_cannot_prepopulate_workflow_state(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "EduEdge Result Publication",
+				"status": "Published",
+			}
+		)
+		with self.assertRaises(frappe.ValidationError):
+			doc._validate_server_managed_change()
+
+	def test_new_revision_can_receive_source_frozen_profile_config(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "EduEdge Result Publication",
+				"status": "Draft",
+				"supersedes_publication": "PUB-OLD",
+				"result_profile": "PROFILE-1",
+				"result_profile_config_hash": "source-hash",
+				"result_profile_config_json": "{}",
+			}
+		)
+		doc._validate_server_managed_change()
+
 	def test_direct_server_managed_change_is_blocked(self):
 		doc = self._publication()
 		with (
