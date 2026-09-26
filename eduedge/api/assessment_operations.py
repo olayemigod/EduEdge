@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import now_datetime, nowdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.assessment_operations import (
@@ -87,6 +87,18 @@ def _can_view_publication_scope(
 	)
 
 
+def _can_manage_publication_scope(student_group: str | None) -> bool:
+	if not is_limited_instructor_user(frappe.session.user):
+		return True
+	if not student_group:
+		return False
+	return has_class_responsibility_assignment(
+		student_group,
+		user=frappe.session.user,
+		on_date=nowdate(),
+	)
+
+
 def _assert_publication_scope_access(
 	student_group: str | None,
 	academic_year: str | None,
@@ -96,6 +108,15 @@ def _assert_publication_scope_access(
 		return
 	frappe.throw(
 		_("Whole-class result publication is limited to the effective Class/Form responsibility."),
+		frappe.PermissionError,
+	)
+
+
+def _assert_publication_mutation_scope(student_group: str | None) -> None:
+	if _can_manage_publication_scope(student_group):
+		return
+	frappe.throw(
+		_("Current Class/Form responsibility is required to change result publication state."),
 		frappe.PermissionError,
 	)
 
@@ -245,7 +266,7 @@ def get_assessment_context(
 		academic_term,
 	)
 	can_manage_publication = bool(
-		can_view_publication_scope
+		_can_manage_publication_scope(student_group)
 		and (
 			frappe.has_permission(PUBLICATION_DOCTYPE, "create")
 			or frappe.has_permission(PUBLICATION_DOCTYPE, "write")
@@ -415,6 +436,7 @@ def ensure_result_publication(
 	_require_operator()
 	branch = _resolve_branch(school_branch)
 	_assert_publication_scope_access(student_group, academic_year, academic_term)
+	_assert_publication_mutation_scope(student_group)
 	locked_group = frappe.db.sql(
 		"select name from `tabStudent Group` where name=%s for update",
 		(student_group,),
@@ -497,6 +519,7 @@ def ensure_result_publication(
 def refresh_result_publication(publication: str) -> dict:
 	_require_operator()
 	doc = _get_publication(publication)
+	_assert_publication_mutation_scope(doc.student_group)
 	_refresh_readiness(doc)
 	return _publication_payload(doc.name)
 
@@ -506,6 +529,7 @@ def refresh_result_publication(publication: str) -> dict:
 def request_result_approval(publication: str) -> dict:
 	_require_operator()
 	doc = _get_publication(publication, for_update=True)
+	_assert_publication_mutation_scope(doc.student_group)
 	if doc.status not in {"Draft", "Rejected"}:
 		frappe.throw(_("Only Draft or Rejected publications can be submitted for approval."))
 	freeze_publication_result_profile_config(
