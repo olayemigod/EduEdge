@@ -233,7 +233,7 @@
 									<strong>{{ item.assignment_title || item.assignment_type }}</strong>
 									<small>{{ institutionForBranch(item.school_branch) }} · {{ branchLabel(item.school_branch) }} · {{ offeringLabel(item.program_offering) }} · {{ item.student_group || 'All Class Arms' }} · {{ courseName(item.course) || 'Whole class' }}</small>
 									<small>{{ item.valid_from || 'No start restriction' }} → {{ item.valid_to || 'Open ended' }}</small>
-									<small v-if="item.ended_on">Ended {{ item.ended_on }}{{ item.ended_by ? ` by ${item.ended_by}` : '' }}{{ item.end_reason ? ` · ${item.end_reason}` : '' }}</small>
+									<small v-if="item.ended_on">Final responsibility date {{ item.ended_on }}{{ item.ended_by ? ` · recorded by ${item.ended_by}` : '' }}{{ item.end_reason ? ` · ${item.end_reason}` : '' }}</small>
 								</span>
 								<div class="assignment-actions">
 									<EdgeStatusBadge :label="assignmentStatus(item).label" :status="assignmentStatus(item).status" :tone="assignmentStatus(item).tone" />
@@ -556,8 +556,11 @@ export default {
 			const label = item.lifecycle_status || "Unavailable";
 			if (label === "Current") return { label, status: "current", tone: "success" };
 			if (label === "Scheduled") return { label, status: "scheduled", tone: "warning" };
+			if (label === "Ending") return { label, status: "ending", tone: "warning" };
 			if (label === "Disabled") return { label, status: "disabled", tone: "danger" };
 			if (label === "Ended") return { label, status: "ended", tone: "neutral" };
+			if (label === "Replaced") return { label, status: "replaced", tone: "neutral" };
+			if (label === "Transferred") return { label, status: "transferred", tone: "neutral" };
 			return { label: "Status unavailable", status: "unavailable", tone: "neutral" };
 		},
 		canEndAssignment(item) { return Boolean(this.canManage && item.can_end); },
