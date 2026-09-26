@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import add_days, cint, getdate, nowdate
 
 from eduedge.api.instructor_assignments import _period_dates, _require_assignment_manager
+from eduedge.education.instructor_assignment_capabilities import successor_capability_review_state
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import (
     CLASS_ARM_SCOPE,
@@ -285,6 +286,10 @@ def _replacement_plan(source, replacement_instructor: str, handover_date: str | 
         "reason": resolved_reason,
         "incoming_branch_eligibility": branch_access,
         "outgoing_branch_eligibility_changed": False,
+        "capability_review": successor_capability_review_state(
+            assignment_type=source.assignment_type,
+            course=source.course,
+        ),
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
     }
@@ -315,6 +320,7 @@ def _already_replaced(source, replacement_instructor: str, handover_date: str | 
             "handover_date": str(source.ended_on),
             "successor_valid_from": str(successor.valid_from),
             "successor_valid_to": str(successor.valid_to or ""),
+            "capability_review": successor_capability_review_state(successor),
             "outgoing_branch_eligibility_changed": False,
         }
     frappe.throw(
@@ -463,6 +469,7 @@ def replace_instructor_assignment(
             "replacement_instructor": successor.instructor,
             "reason": resolved_reason,
             "incoming_branch_eligibility": branch_result,
+            "capability_review": successor_capability_review_state(successor),
             "outgoing_branch_eligibility_changed": False,
         }
     except Exception:
