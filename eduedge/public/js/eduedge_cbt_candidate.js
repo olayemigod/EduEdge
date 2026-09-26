@@ -5,7 +5,7 @@
 		state: "eduedge.cbt.attempt_runtime_guard.get_attempt_state",
 		start: "eduedge.cbt.attempts.start_attempt",
 		sync: "eduedge.cbt.attempt_runtime_guard.sync_answers",
-		heartbeat: "eduedge.cbt.attempts.record_heartbeat",
+		heartbeat: "eduedge.cbt.attempt_runtime_guard.record_heartbeat",
 		submit: "eduedge.cbt.attempt_runtime_guard.submit_attempt",
 	});
 	const TERMINAL_STATUSES = new Set([
