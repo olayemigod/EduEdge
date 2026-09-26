@@ -175,6 +175,49 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(blockers[0]["student"], "STU-1")
 		self.assertEqual(blockers[0]["course"], "CRS")
 
+	def test_annual_average_metric_is_independent_of_weighted_annual_result(self):
+		profile = _profile()
+		profile["annual_aggregation_method"] = "Weighted Average"
+		profile["metrics"] = [
+			{
+				"metric_key": "Class Average",
+				"display_label": "Annual Average %",
+				"calculation_basis": "Annual Average Percentage",
+				"display_as": "Percentage",
+				"decimal_places": 2,
+				"sequence": 10,
+				"show_on_terminal": False,
+				"show_on_annual": True,
+			}
+		]
+		periods = [
+			{"academic_term": "Alpha", "display_label": "Alpha", "sequence": 10, "weight": 80},
+			{"academic_term": "Rapha", "display_label": "Rapha", "sequence": 20, "weight": 20},
+		]
+		payload = compose_cumulative_subject_results(
+			profile,
+			[
+				_row("Alpha", "CA", 40, 40),
+				_row("Alpha", "EXAM", 60, 60),
+				_row("Rapha", "CA", 20, 40),
+				_row("Rapha", "EXAM", 30, 60),
+			],
+			periods,
+		)
+		self.assertFalse(payload["blockers"])
+		subject = payload["subjects"][0]
+		self.assertEqual(subject["annual_percentage"], 90)
+		self.assertEqual(subject["annual_average_percentage"], 75)
+
+		metrics = build_configured_class_metrics(
+			profile,
+			[subject],
+			result_mode="Annual",
+		)
+		self.assertEqual(metrics[0]["calculation_basis"], "Annual Average Percentage")
+		self.assertEqual(metrics[0]["value"], 75)
+		self.assertEqual(metrics[0]["display_value"], "75.00%")
+
 	def test_not_offered_period_is_excluded_not_converted_to_zero(self):
 		periods = [
 			{"academic_term": "Alpha", "display_label": "Alpha", "sequence": 10, "weight": 0},
