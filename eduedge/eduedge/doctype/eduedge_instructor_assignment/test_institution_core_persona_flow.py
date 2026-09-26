@@ -15,6 +15,7 @@ from eduedge.api.assessment_assignment_options import (
     assessment_plan_student_group_query,
 )
 from eduedge.api.assessment_operations import get_assessment_context
+from eduedge.api.assessment_workbenches import get_marks_entry_context
 from eduedge.api.assessment_operations_sessional import (
     get_assessment_context as get_legacy_sessional_assessment_context,
 )
@@ -546,6 +547,94 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             1,
             update_modified=False,
         )
+        frappe.set_user(instructor_user.name)
+
+        # Marks Entry is a current operational surface. A Teacher may retain
+        # historical read access to a plan whose assignment is effective on the
+        # assessment date, but that must not make the plan available for mark entry
+        # before the assignment is operational today.
+        frappe.set_user("Administrator")
+        mark_plan = frappe.get_doc(
+            {
+                "doctype": "Assessment Plan",
+                "student_group": class_a["name"],
+                "assessment_name": f"QA Core Mathematics Assessment {self.suffix}",
+                "course": course.name,
+                "academic_year": year.name,
+                "academic_term": term.name,
+                "schedule_date": "2094-10-05",
+                "maximum_assessment_score": 0,
+                BRANCH_FIELD: branch_a.name,
+            }
+        )
+        mark_plan.insert(ignore_permissions=True, ignore_mandatory=True)
+        frappe.db.set_value(
+            "Assessment Plan",
+            mark_plan.name,
+            "docstatus",
+            1,
+            update_modified=False,
+        )
+
+        frappe.set_user(instructor_user.name)
+        active_marks_context = get_marks_entry_context(branch=branch_a.name)
+        self.assertIn(
+            mark_plan.name,
+            {row["name"] for row in active_marks_context["plans"]},
+        )
+        selected_marks_context = get_marks_entry_context(
+            branch=branch_a.name,
+            assessment_plan=mark_plan.name,
+        )
+        self.assertEqual(
+            selected_marks_context["selected_plan"]["name"],
+            mark_plan.name,
+        )
+        self.assertEqual(
+            [row["student"] for row in selected_marks_context["students"]],
+            [student.name],
+        )
+
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            assignment_a.name,
+            "valid_from",
+            "2094-09-01",
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+
+        frappe.set_user(instructor_user.name)
+        self.assertEqual(
+            frappe.get_list(
+                "Assessment Plan",
+                filters={"name": mark_plan.name},
+                pluck="name",
+                page_length=10,
+            ),
+            [mark_plan.name],
+        )
+        future_marks_context = get_marks_entry_context(branch=branch_a.name)
+        self.assertNotIn(
+            mark_plan.name,
+            {row["name"] for row in future_marks_context["plans"]},
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_marks_entry_context(
+                branch=branch_a.name,
+                assessment_plan=mark_plan.name,
+            )
+
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            assignment_a.name,
+            "valid_from",
+            None,
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
         frappe.set_user(instructor_user.name)
 
         first_schedule_groups = schedule_student_group_query(
