@@ -41,6 +41,10 @@ from eduedge.education.assessment_permissions import has_assessment_plan_permiss
 from eduedge.education.instructor_assignment_capabilities import (
     get_instructor_assignment_capability_state,
 )
+from eduedge.education.report_cards import (
+    can_manage_report_card_reviews,
+    can_view_report_card_scope,
+)
 from eduedge.permissions_baseline import (
     ensure_legacy_assessment_report_role_guard,
     ensure_legacy_attendance_report_role_guard,
@@ -441,6 +445,37 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             offering_a,
             class_peer["name"],
         )
+
+        # Report-card visibility and mutation authority are separate contracts.
+        # Academics User remains a read-only operational viewer, while an Instructor
+        # with exact Class/Form responsibility and actual Review create/write DocPerm
+        # may manage the review workflow.
+        academics_publication = frappe._dict(
+            {
+                "student_group": class_a["name"],
+                "academic_year": year.name,
+                "academic_term": term.name,
+            }
+        )
+        frappe.set_user(academics_user.name)
+        self.assertTrue(can_view_report_card_scope(academics_publication))
+        self.assertFalse(frappe.has_permission("EduEdge Report Card Review", "create"))
+        self.assertFalse(frappe.has_permission("EduEdge Report Card Review", "write"))
+        self.assertFalse(can_manage_report_card_reviews(academics_publication))
+
+        instructor_publication = frappe._dict(
+            {
+                "student_group": class_peer["name"],
+                "academic_year": year.name,
+                "academic_term": term.name,
+            }
+        )
+        frappe.set_user(instructor_user.name)
+        self.assertTrue(can_view_report_card_scope(instructor_publication))
+        self.assertTrue(frappe.has_permission("EduEdge Report Card Review", "create"))
+        self.assertTrue(frappe.has_permission("EduEdge Report Card Review", "write"))
+        self.assertTrue(can_manage_report_card_reviews(instructor_publication))
+        frappe.set_user("Administrator")
 
         self._make_subject_assignment(
             instructor_b,
