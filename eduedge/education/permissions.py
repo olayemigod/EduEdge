@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import frappe
+from frappe.utils import nowdate
 
 from eduedge.access_control import user_has_role_permission
 from eduedge.education.academic_fields import OFFERING_FIELD
@@ -457,11 +458,20 @@ def _has_class_responsibility_result_permission(doc, user=None, permission_type=
 			student_group = student_group or publication.student_group
 			academic_year = academic_year or publication.academic_year
 			academic_term = academic_term or publication.academic_term
+	mutation_permission = permission_type in {
+		"create",
+		"write",
+		"delete",
+		"submit",
+		"cancel",
+		"amend",
+	}
 	return has_class_responsibility_assignment(
 		student_group,
 		user=resolved_user,
-		academic_term=academic_term,
-		academic_year=academic_year,
+		academic_term=None if mutation_permission else academic_term,
+		academic_year=None if mutation_permission else academic_year,
+		on_date=nowdate() if mutation_permission else None,
 	)
 
 
