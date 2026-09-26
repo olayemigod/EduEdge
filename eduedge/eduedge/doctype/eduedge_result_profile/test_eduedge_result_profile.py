@@ -223,7 +223,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		):
 			first = build_publication_approval_fingerprint(publication)
 
-		cosmetic = frappe.copy_doc(frappe._dict(base_payload)) if False else {
+		cosmetic = {
 			"STU-1": {
 				"student": {"student_name": "Renamed Student", "image": "/private/b.png"},
 				"source_result_names": ["RES-1"],
