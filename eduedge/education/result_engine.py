@@ -106,6 +106,55 @@ def get_result_periods(profile: str | dict, academic_year: str) -> list[dict]:
 
 
 
+def build_missing_result_blockers(
+	profile: str | dict,
+	plan_rows: list,
+	result_rows: list,
+	student_names: list[str],
+) -> list[dict]:
+	"""Fail closed when missing-result exclusion would hide an entire planned subject.
+
+	"Exclude from Denominator" may omit individual missing assessment components,
+	but an entire subject must never disappear silently. Schools should use the
+	explicit Not Offered / Exempt score states when a whole subject does not apply.
+	"""
+	config = get_result_profile_config(profile) if isinstance(profile, str) else profile
+	if config.get("missing_result_policy") != "Exclude from Denominator":
+		return []
+
+	plan_course = {
+		str(_value(row, "name") or ""): str(_value(row, "course") or _("Unspecified Course"))
+		for row in (plan_rows or [])
+		if _value(row, "name")
+	}
+	if not plan_course or not student_names:
+		return []
+
+	submitted_subjects = {
+		(str(_value(row, "student") or ""), plan_course.get(str(_value(row, "assessment_plan") or "")))
+		for row in (result_rows or [])
+		if cint(_value(row, "docstatus")) == 1
+		and plan_course.get(str(_value(row, "assessment_plan") or ""))
+	}
+	blockers = []
+	for student in sorted(set(student_names)):
+		for course in sorted(set(plan_course.values())):
+			if (student, course) in submitted_subjects:
+				continue
+			blockers.append(
+				{
+					"code": "MISSING_SUBJECT_RESULTS",
+					"reason": _(
+						"Missing-result exclusion cannot remove an entire planned subject. "
+						"Enter at least one submitted result, or use Not Offered / Exempt explicitly."
+					),
+					"student": student,
+					"course": course,
+				}
+			)
+	return blockers
+
+
 def build_component_plan_maximum_blockers(profile: str | dict, plan_rows: list) -> list[dict]:
 	"""Validate native Assessment Plan maxima against configured Result Component targets.
 
