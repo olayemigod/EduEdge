@@ -46,6 +46,65 @@ def assignment_capability_enforcement_enabled() -> bool:
         return False
 
 
+def successor_capability_review_state(
+    assignment=None,
+    *,
+    assignment_type: str | None = None,
+    course: str | None = None,
+) -> dict:
+    """Describe explicit capability review required for a lifecycle successor.
+
+    Lifecycle actions never inherit operational capabilities from the source
+    assignment. Subject-bearing successors therefore remain fail-closed until a
+    manager explicitly reviews their capabilities.
+    """
+    if assignment is not None:
+        resolved_type = str(
+            (assignment.get("assignment_type") if hasattr(assignment, "get") else getattr(assignment, "assignment_type", ""))
+            or assignment_type
+            or ""
+        ).strip()
+        resolved_course = str(
+            (assignment.get("course") if hasattr(assignment, "get") else getattr(assignment, "course", ""))
+            or course
+            or ""
+        ).strip()
+        reviewed_on = (
+            assignment.get("capabilities_updated_on")
+            if hasattr(assignment, "get")
+            else getattr(assignment, "capabilities_updated_on", None)
+        )
+    else:
+        resolved_type = str(assignment_type or "").strip()
+        resolved_course = str(course or "").strip()
+        reviewed_on = None
+
+    applicable = bool(resolved_type in COURSE_REQUIRED_TYPES and resolved_course)
+    pending = bool(applicable and not reviewed_on)
+    enforcement_enabled = assignment_capability_enforcement_enabled()
+    message = ""
+    if pending:
+        message = _(
+            "Operational capabilities are not inherited from the source assignment. "
+            "Review this successor's capabilities explicitly before capability-gated Subject operations are used."
+        )
+        if not enforcement_enabled:
+            message = _(
+                "Operational capabilities are not inherited from the source assignment. "
+                "Review this successor's capabilities explicitly before capability enforcement is enabled."
+            )
+
+    return {
+        "applicable": applicable,
+        "pending": pending,
+        "reviewed": bool(applicable and reviewed_on),
+        "capabilities_inherited": False,
+        "enforcement_enabled": enforcement_enabled,
+        "reviewed_on": str(reviewed_on or ""),
+        "message": message,
+    }
+
+
 def _blank_state(*, user: str, school_branch: str, program_offering: str, course: str, student_group: str = "") -> dict:
     return {
         "user": user,
