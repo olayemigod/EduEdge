@@ -598,7 +598,8 @@ def save_candidate(values: str | dict, name: str | None = None) -> dict:
 		reference_name=name,
 	)
 	if doc.is_new():
-		doc.insert()
+		with controlled_cbt_operation("eduedge_controlled_status_action"):
+			doc.insert()
 	else:
 		doc.save()
 	return {"name": doc.name, "values": _assignment_values(doc)}
