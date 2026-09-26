@@ -106,5 +106,12 @@ class TestResultEngineFoundationContract(unittest.TestCase):
 		self.assertIn('"overall_percentage": rounded_overall_percentage', engine)
 
 
+	def test_number_metric_uses_configured_precision(self):
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn('if display_as == "Number":', engine)
+		self.assertIn('return f"{rounded:.{precision}f}"', engine)
+		self.assertNotIn('quantize(Decimal("1")', engine)
+
+
 if __name__ == "__main__":
 	unittest.main()
