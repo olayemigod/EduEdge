@@ -32,6 +32,7 @@
   "requested_on",
   "approved_by",
   "approved_on",
+  "approved_payload_hash",
   "column_break_workflow",
   "rejected_by",
   "rejected_on",
@@ -222,6 +223,14 @@
    "fieldtype": "Datetime",
    "label": "Approved On",
    "read_only": 1
+  },
+  {
+   "fieldname": "approved_payload_hash",
+   "fieldtype": "Data",
+   "label": "Approved Result Payload Hash",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
   },
   {
    "fieldname": "column_break_workflow",
