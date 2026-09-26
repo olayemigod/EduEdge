@@ -20,13 +20,18 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             "program_offering=program_offering or \"\"",
             "student_group=doc.student_group",
             "course=doc.course",
-            "on_date=doc.schedule_date or nowdate()",
+            "assessment_date = doc.schedule_date or nowdate()",
+            "on_date=assessment_date",
         ):
             self.assertIn(token, source)
 
     def test_plan_capability_is_evaluated_on_assessment_schedule_date(self):
         source = self._source()
-        self.assertIn("on_date=doc.schedule_date or nowdate()", source)
+        self.assertIn("assessment_date = doc.schedule_date or nowdate()", source)
+        validator = source.split("def before_validate_assessment_plan", 1)[1].split(
+            "def _validate_examiner_and_supervisor", 1
+        )[0]
+        self.assertGreaterEqual(validator.count("on_date=assessment_date"), 2)
         self.assertIn("Assessment date must lie within the Student Group academic period.", source)
 
     def test_mark_entry_requires_current_exact_capability_for_limited_teacher(self):
