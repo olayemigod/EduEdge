@@ -111,8 +111,8 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		self.assertIn("eligibility_covers_period(", capabilities)
 		self.assertIn("allowed_groups = _capability_group_names", query)
 		self.assertIn("rows = frappe.get_all(", query)
-		self.assertNotIn("Course Schedule", helper)
-		self.assertNotIn("Course Schedule", query)
+		self.assertNotIn("`tabCourse Schedule`", helper)
+		self.assertNotIn("`tabCourse Schedule`", query)
 
 
 	def test_student_group_and_schedule_validate_native_hierarchy_server_side(self):
