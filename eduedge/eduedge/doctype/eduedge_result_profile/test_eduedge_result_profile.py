@@ -9,6 +9,7 @@ from eduedge.education.result_engine import (
 	build_component_plan_maximum_blockers,
 	build_configured_class_metrics,
 	build_missing_result_blockers,
+	calculate_overall_summary,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 )
@@ -300,6 +301,24 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		):
 			hidden_second = build_publication_approval_fingerprint(publication)
 		self.assertEqual(hidden_first, hidden_second)
+
+	def test_overall_grade_uses_same_rounded_percentage_shown_to_user(self):
+		config = _profile()
+		config["score_precision"] = 0
+		config["grading_scale"] = "TEST-SCALE"
+		subjects = [
+			{"eligible": True, "total_score": 49.6, "maximum_score": 100, "percentage": 49.6},
+		]
+		with (
+			patch("eduedge.education.result_engine.get_grade", return_value="P") as grade_mock,
+			patch("eduedge.education.result_engine.get_grade_remark", return_value="Pass") as remark_mock,
+		):
+			summary = calculate_overall_summary(subjects, config)
+		self.assertEqual(summary["overall_percentage"], 50)
+		grade_mock.assert_called_once_with("TEST-SCALE", 50)
+		remark_mock.assert_called_once_with("TEST-SCALE", 50)
+		self.assertEqual(summary["overall_grade"], "P")
+		self.assertEqual(summary["overall_remark"], "Pass")
 
 	def test_zero_score_precision_is_preserved(self):
 		profile = _profile()
