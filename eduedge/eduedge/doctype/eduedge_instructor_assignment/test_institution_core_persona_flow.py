@@ -10,6 +10,7 @@ from eduedge.api.academic_operations_safe import (
     get_operations_context,
     save_attendance_register,
 )
+from eduedge.api.assessment_assignment_options import assessment_plan_student_group_query
 from eduedge.api.attendance_tool_safe import get_student_attendance_records
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
@@ -201,6 +202,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
     def _grant_assignment_capabilities(self, assignment) -> None:
         doc = frappe.get_doc("EduEdge Instructor Assignment", assignment.name)
         doc.can_view_subject_content = 1
+        doc.can_create_assessment_plans = 1
         doc.can_enter_marks = 1
         doc.capabilities_updated_on = now_datetime()
         doc.capabilities_updated_by = "Administrator"
@@ -399,6 +401,35 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
 
         frappe.set_user(instructor_user.name)
+        # Before any Course Schedule exists, normal Student Group list scope is still
+        # schedule-derived. Assessment planning must bootstrap from exact assignment
+        # capability instead of depending on that future schedule record.
+        self.assertEqual(
+            frappe.get_list(
+                "Student Group",
+                filters={"name": class_a["name"]},
+                pluck="name",
+                page_length=10,
+            ),
+            [],
+        )
+        first_assessment_groups = assessment_plan_student_group_query(
+            "Student Group",
+            "",
+            "name",
+            0,
+            20,
+            {
+                BRANCH_FIELD: branch_a.name,
+                "schedule_date": "2094-10-05",
+                "academic_year": year.name,
+            },
+        )
+        self.assertEqual(
+            [row[0] for row in first_assessment_groups],
+            [class_a["name"]],
+        )
+
         first_schedule_groups = schedule_student_group_query(
             "Student Group",
             "",
