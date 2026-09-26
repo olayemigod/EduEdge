@@ -584,6 +584,9 @@ def approve_results(publication: str) -> dict:
 		doc,
 		"Approved",
 		action="Approved",
+		remarks=_("Approved payload fingerprint: {0}").format(
+			approved_payload_hash[:16].upper()
+		),
 		updates={
 			"approved_by": frappe.session.user,
 			"approved_on": now_datetime(),
