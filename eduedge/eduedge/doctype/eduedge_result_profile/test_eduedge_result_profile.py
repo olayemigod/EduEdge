@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -11,6 +13,7 @@ from eduedge.education.result_engine import (
 	compose_terminal_subject_results,
 )
 from eduedge.education.result_profile import _validate_metrics
+from eduedge.education.result_snapshots import build_publication_approval_fingerprint
 
 
 def _profile() -> dict:
@@ -199,6 +202,65 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(subject["cumulative_score"], 163)
 		self.assertEqual(subject["cumulative_maximum_score"], 200)
 		self.assertEqual(subject["annual_percentage"], 81.5)
+
+	def test_approval_fingerprint_ignores_cosmetic_identity_but_tracks_academic_payload(self):
+		publication = frappe._dict({"name": "PUB-1"})
+		base_payload = {
+			"STU-1": {
+				"student": {"student_name": "Student One", "image": "/private/a.png"},
+				"source_result_names": ["RES-1"],
+				"payload": {
+					"student": {"student_name": "Student One", "image": "/private/a.png"},
+					"result": {"summary": {"overall_percentage": 72.5}},
+					"attendance": {"present": 42, "absent": 3},
+					"source_assessment_results": ["RES-1"],
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=base_payload,
+		):
+			first = build_publication_approval_fingerprint(publication)
+
+		cosmetic = frappe.copy_doc(frappe._dict(base_payload)) if False else {
+			"STU-1": {
+				"student": {"student_name": "Renamed Student", "image": "/private/b.png"},
+				"source_result_names": ["RES-1"],
+				"payload": {
+					"student": {"student_name": "Renamed Student", "image": "/private/b.png"},
+					"result": {"summary": {"overall_percentage": 72.5}},
+					"attendance": {"present": 42, "absent": 3},
+					"source_assessment_results": ["RES-1"],
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=cosmetic,
+		):
+			second = build_publication_approval_fingerprint(publication)
+		self.assertEqual(first, second)
+
+		changed = {
+			"STU-1": {
+				"student": {"student_name": "Student One", "image": "/private/a.png"},
+				"source_result_names": ["RES-1"],
+				"payload": {
+					"student": {"student_name": "Student One", "image": "/private/a.png"},
+					"result": {"summary": {"overall_percentage": 73.5}},
+					"attendance": {"present": 42, "absent": 3},
+					"source_assessment_results": ["RES-1"],
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=changed,
+		):
+			third = build_publication_approval_fingerprint(publication)
+		self.assertNotEqual(first["hash"], third["hash"])
+		self.assertEqual(first["student_count"], 1)
 
 	def test_zero_score_precision_is_preserved(self):
 		profile = _profile()
