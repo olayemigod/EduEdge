@@ -45,6 +45,13 @@ class TestResultProfileReadinessContract(unittest.TestCase):
 		self.assertIn("build_missing_result_blockers", snapshots)
 		self.assertIn("if not exclude_missing or missing_subject_blockers", snapshots)
 
+	def test_missing_subject_guard_is_academic_period_aware(self):
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn("planned_subject_periods", engine)
+		self.assertIn("submitted_subject_periods", engine)
+		self.assertIn('"academic_term": academic_term or None', engine)
+		self.assertIn("for an academic period", engine)
+
 	def test_publication_api_accepts_profile_and_mode_but_keeps_defaults(self):
 		text = (APP / "api" / "assessment_operations.py").read_text()
 		self.assertIn("result_profile: str | None = None", text)
