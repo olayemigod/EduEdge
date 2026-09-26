@@ -219,6 +219,8 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 		).read_text()
 		self.assertIn("SERVER_MANAGED_FIELDS", controller)
 		self.assertIn("in_eduedge_result_publication_transition", controller)
+		self.assertIn("New Result Publications must start in Draft status.", controller)
+		self.assertIn("New Result Publications cannot pre-populate workflow or readiness state.", controller)
 		for fieldname in (
 			"status",
 			"result_profile_config_hash",
@@ -232,6 +234,12 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 			"Result Publication workflow and readiness fields can change only through EduEdge result actions.",
 			controller,
 		)
+
+	def test_governed_publication_updates_own_server_managed_saves(self):
+		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
+		self.assertIn("def _save_governed_publication_update", assessment_api)
+		self.assertIn("_save_governed_publication_update(doc)", assessment_api)
+		self.assertIn("in_eduedge_result_publication_transition", assessment_api)
 
 	def test_publication_and_review_transitions_lock_source_rows(self):
 		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
