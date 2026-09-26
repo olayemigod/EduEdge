@@ -53,8 +53,10 @@ def _authorized_plan(assessment_plan: str):
 			"name",
 			"assessment_name",
 			"student_group",
+			"assessment_group",
 			"course",
 			"schedule_date",
+			"maximum_assessment_score",
 			"docstatus",
 			BRANCH_FIELD,
 		],
@@ -210,6 +212,7 @@ def get_assessment_students(assessment_plan, student_group=None):
 			for detail in details_by_result.get(result.name, [])
 		}
 		student_result["total_score"] = [cstr(result.total_score), result.grade]
+		student_result["comment"] = result.comment
 		row.update(
 			{
 				"assessment_details": student_result,
