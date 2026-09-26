@@ -13,6 +13,7 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.result_engine import (
 	build_component_plan_maximum_blockers,
 	build_configured_class_metrics,
+	build_missing_result_blockers,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 	get_result_periods,
@@ -334,11 +335,23 @@ def _get_complete_period_result_rows(publication_doc, config: dict, students: li
 	rows = _get_submitted_result_rows(publication_doc.school_branch, plan_names, students)
 	expected = len(plan_names) * len(students)
 	pairs = {(row.assessment_plan, row.student) for row in rows}
-	if not plan_names or len(pairs) != expected:
+	if not plan_names:
 		frappe.throw(
-			_("Year-to-Date statistics are incomplete. Complete and submit prior-period results before publication."),
+			_("Year-to-Date statistics require submitted Assessment Plans in the configured periods."),
 			frappe.ValidationError,
 		)
+	if len(pairs) != expected:
+		exclude_missing = config.get("missing_result_policy") == "Exclude from Denominator"
+		missing_subject_blockers = (
+			build_missing_result_blockers(config, plans, rows, students)
+			if exclude_missing
+			else []
+		)
+		if not exclude_missing or missing_subject_blockers:
+			frappe.throw(
+				_("Year-to-Date statistics are incomplete. Complete and submit prior-period results before publication."),
+				frappe.ValidationError,
+			)
 	return rows
 
 
