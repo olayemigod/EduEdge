@@ -636,10 +636,11 @@ def _component_status(component: dict) -> str:
 def _component_status_code(status: str) -> str:
 	return {
 		"Absent": "ABS",
+		"Partially Absent": "P-ABS",
 		"Exempt": "EX",
 		"Not Offered": "N/O",
 		"Missing": "-",
-		"Excluded": "-",
+		"Excluded": "EXC",
 	}.get(status, "")
 
 
