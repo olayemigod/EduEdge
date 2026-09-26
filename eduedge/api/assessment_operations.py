@@ -19,6 +19,7 @@ from eduedge.education.teaching_assignments import (
 )
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.result_snapshots import (
+	assert_approved_publication_payload_unchanged,
 	build_publication_payload_digest,
 	create_publication_snapshots,
 )
@@ -630,23 +631,7 @@ def publish_results(publication: str) -> dict:
 	readiness = _refresh_readiness(doc)
 	if not readiness["ready"]:
 		frappe.throw(_("Result completeness changed. Publication is blocked."), frappe.ValidationError)
-	approved_payload_hash = str(doc.get("approved_payload_hash") or "").strip()
-	if not approved_payload_hash:
-		frappe.throw(
-			_(
-				"This approval predates result-content fingerprinting or has no approved payload fingerprint. "
-				"Reject it and request approval again before publishing."
-			),
-			frappe.ValidationError,
-		)
-	current_payload_hash = build_publication_payload_digest(doc)
-	if current_payload_hash != approved_payload_hash:
-		frappe.throw(
-			_(
-				"Result content changed after approval. Reject this approval and request approval again before publishing."
-			),
-			frappe.ValidationError,
-		)
+	assert_approved_publication_payload_unchanged(doc)
 	_transition(
 		doc,
 		"Published",
