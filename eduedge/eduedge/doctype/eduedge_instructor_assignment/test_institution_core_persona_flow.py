@@ -37,7 +37,10 @@ from eduedge.api.teaching_schedule import (
 )
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.academic_operations import before_validate_student_attendance
-from eduedge.education.assessment_operations import before_validate_assessment_plan
+from eduedge.education.assessment_operations import (
+    before_validate_assessment_plan,
+    before_validate_assessment_result,
+)
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.assessment_permissions import has_assessment_plan_permission
 from eduedge.education.instructor_assignment_capabilities import (
@@ -713,6 +716,15 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             }
         )
         mark_plan.insert(ignore_permissions=True, ignore_mandatory=True)
+
+        # Direct/native result creation must share the same submitted-plan
+        # prerequisite as Marks Entry, the legacy Result Tool and CBT sync.
+        native_result = frappe.new_doc("Assessment Result")
+        native_result.assessment_plan = mark_plan.name
+        native_result.student = student.name
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(native_result)
+
         frappe.db.set_value(
             "Assessment Plan",
             mark_plan.name,
@@ -720,6 +732,8 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             1,
             update_modified=False,
         )
+        before_validate_assessment_result(native_result)
+        self.assertEqual(native_result.get(BRANCH_FIELD), branch_a.name)
 
         frappe.set_user(instructor_user.name)
         active_marks_context = get_marks_entry_context(branch=branch_a.name)
