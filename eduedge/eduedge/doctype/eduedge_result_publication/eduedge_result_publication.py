@@ -12,6 +12,29 @@ from eduedge.education.result_profile import (
 )
 
 
+SERVER_MANAGED_FIELDS = (
+	"result_profile_config_hash",
+	"result_profile_config_json",
+	"approved_academic_payload_hash",
+	"approved_academic_student_count",
+	"status",
+	"expected_results",
+	"submitted_results",
+	"draft_results",
+	"missing_results",
+	"report_card_ready",
+	"requested_by",
+	"requested_on",
+	"approved_by",
+	"approved_on",
+	"rejected_by",
+	"rejected_on",
+	"rejection_reason",
+	"published_by",
+	"published_on",
+)
+
+
 class EduEdgeResultPublication(Document):
 	def before_naming(self) -> None:
 		if not self.publication_version:
@@ -25,6 +48,7 @@ class EduEdgeResultPublication(Document):
 		validate_publication_scope(self)
 		validate_publication_profile(self)
 		self._validate_revision_identity()
+		self._validate_server_managed_change()
 		self._validate_scope_change()
 		self._validate_duplicate_scope()
 
@@ -84,6 +108,20 @@ class EduEdgeResultPublication(Document):
 					_("Result Publication revision identity cannot change after creation."),
 					frappe.ValidationError,
 				)
+
+
+	def _validate_server_managed_change(self) -> None:
+		if self.is_new() or getattr(
+			frappe.flags,
+			"in_eduedge_result_publication_transition",
+			False,
+		):
+			return
+		if any(self.has_value_changed(fieldname) for fieldname in SERVER_MANAGED_FIELDS):
+			frappe.throw(
+				_("Result Publication workflow and readiness fields can change only through EduEdge result actions."),
+				frappe.ValidationError,
+			)
 
 
 	def _validate_scope_change(self) -> None:
