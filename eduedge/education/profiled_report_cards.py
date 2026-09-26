@@ -122,7 +122,7 @@ def summary_from_snapshot_payload(payload: dict) -> dict:
 	courses = _prepare_courses(result.get("subjects") or [], profile, mode)
 	visible_components = _visible_components(profile, mode)
 	average_percent = flt(result_summary.get("overall_percentage"))
-	suggested = _suggested_progression(mode, average_percent, bool(courses))
+	suggested = _suggested_progression(mode, average_percent, bool(courses), profile)
 	school_opened = int(attendance.get("school_opened") or 0)
 	return {
 		"student": student.get("name"),
@@ -256,11 +256,22 @@ def _visible_metrics(profile: dict, mode: str) -> list[dict]:
 	]
 
 
-def _suggested_progression(mode: str, average_percent: float, has_courses: bool) -> str:
+def _suggested_progression(
+	mode: str,
+	average_percent: float,
+	has_courses: bool,
+	profile: dict | None = None,
+) -> str:
 	if mode != "Annual" or not has_courses:
 		return "Pending Review"
-	settings = frappe.get_single("EduEdge Settings")
-	pass_average = flt(settings.promotion_pass_average or 0)
+	configured = (profile or {}).get("promotion_pass_average")
+	if configured in (None, ""):
+		# Backward compatibility for historical snapshots created before the
+		# promotion threshold became part of frozen Result Profile configuration.
+		settings = frappe.get_single("EduEdge Settings")
+		pass_average = flt(settings.promotion_pass_average or 0)
+	else:
+		pass_average = flt(configured)
 	return "Promote" if average_percent >= pass_average else "Repeat"
 
 
