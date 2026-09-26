@@ -158,6 +158,27 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
         ):
             self.assertIn(token, hooks)
 
+    def test_native_result_validation_requires_submitted_assessment_plan(self):
+        operations = (APP / "education" / "assessment_operations.py").read_text(
+            encoding="utf-8"
+        )
+        plan_helper = operations.split("def _get_assessment_plan", 1)[1].split(
+            "def before_validate_assessment_result", 1
+        )[0]
+        validator = operations.split("def before_validate_assessment_result", 1)[1].split(
+            "def validate_publication_scope", 1
+        )[0]
+        self.assertIn('"docstatus"', plan_helper)
+        self.assertIn("cint(plan.docstatus) != 1", validator)
+        self.assertIn(
+            "Assessment Results can only be created against a submitted Assessment Plan.",
+            validator,
+        )
+        self.assertLess(
+            validator.index("cint(plan.docstatus) != 1"),
+            validator.index('frappe.db.get_value("Student", doc.student, BRANCH_FIELD)'),
+        )
+
     def test_plan_subject_assignment_and_capability_share_assessment_date(self):
         operations = (APP / "education" / "assessment_operations.py").read_text(
             encoding="utf-8"
