@@ -112,44 +112,54 @@ def build_missing_result_blockers(
 	result_rows: list,
 	student_names: list[str],
 ) -> list[dict]:
-	"""Fail closed when missing-result exclusion would hide an entire planned subject.
+	"""Fail closed when missing-result exclusion hides a whole subject-period.
 
 	"Exclude from Denominator" may omit individual missing assessment components,
-	but an entire subject must never disappear silently. Schools should use the
-	explicit Not Offered / Exempt score states when a whole subject does not apply.
+	but an entire planned subject for an academic period must never disappear
+	silently. Schools should use the explicit Not Offered / Exempt score states
+	when a whole subject does not apply for that period.
 	"""
 	config = get_result_profile_config(profile) if isinstance(profile, str) else profile
 	if config.get("missing_result_policy") != "Exclude from Denominator":
 		return []
 
-	plan_course = {
-		str(_value(row, "name") or ""): str(_value(row, "course") or _("Unspecified Course"))
+	plan_scope = {
+		str(_value(row, "name") or ""): (
+			str(_value(row, "course") or _("Unspecified Course")),
+			str(_value(row, "academic_term") or ""),
+		)
 		for row in (plan_rows or [])
 		if _value(row, "name")
 	}
-	if not plan_course or not student_names:
+	if not plan_scope or not student_names:
 		return []
 
-	submitted_subjects = {
-		(str(_value(row, "student") or ""), plan_course.get(str(_value(row, "assessment_plan") or "")))
+	submitted_subject_periods = {
+		(
+			str(_value(row, "student") or ""),
+			*(plan_scope.get(str(_value(row, "assessment_plan") or "")) or ("", "")),
+		)
 		for row in (result_rows or [])
 		if cint(_value(row, "docstatus")) == 1
-		and plan_course.get(str(_value(row, "assessment_plan") or ""))
+		and plan_scope.get(str(_value(row, "assessment_plan") or ""))
 	}
+	planned_subject_periods = sorted(set(plan_scope.values()))
 	blockers = []
 	for student in sorted(set(student_names)):
-		for course in sorted(set(plan_course.values())):
-			if (student, course) in submitted_subjects:
+		for course, academic_term in planned_subject_periods:
+			if (student, course, academic_term) in submitted_subject_periods:
 				continue
 			blockers.append(
 				{
 					"code": "MISSING_SUBJECT_RESULTS",
 					"reason": _(
-						"Missing-result exclusion cannot remove an entire planned subject. "
-						"Enter at least one submitted result, or use Not Offered / Exempt explicitly."
+						"Missing-result exclusion cannot remove an entire planned subject "
+						"for an academic period. Enter at least one submitted result, or "
+						"use Not Offered / Exempt explicitly."
 					),
 					"student": student,
 					"course": course,
+					"academic_term": academic_term or None,
 				}
 			)
 	return blockers
