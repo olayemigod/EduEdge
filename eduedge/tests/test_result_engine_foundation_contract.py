@@ -113,5 +113,13 @@ class TestResultEngineFoundationContract(unittest.TestCase):
 		self.assertNotIn('quantize(Decimal("1")', engine)
 
 
+	def test_result_periods_use_calendar_dates_before_sequence(self):
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn(
+			'order_by="start_date asc, end_date asc, sequence asc, idx asc"',
+			engine,
+		)
+
+
 if __name__ == "__main__":
 	unittest.main()
