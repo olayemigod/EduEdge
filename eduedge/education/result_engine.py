@@ -45,7 +45,7 @@ BASIS_VALUE_FIELDS = {
 	"Year-to-Date Cumulative Percentage": "cumulative_percentage",
 	"Annual Cumulative Raw Score": "cumulative_score",
 	"Annual Cumulative Percentage": "cumulative_percentage",
-	"Annual Average Percentage": "annual_percentage",
+	"Annual Average Percentage": "annual_average_percentage",
 }
 
 
@@ -435,9 +435,12 @@ def compose_cumulative_subject_results(
 			else 0.0
 		)
 
+		annual_average_percentage = average_result_values(
+			[row["percentage"] for row in eligible_periods]
+		)
 		method = config["annual_aggregation_method"]
 		if method == "Equal Average of Eligible Terms":
-			annual_percentage = average_result_values([row["percentage"] for row in eligible_periods])
+			annual_percentage = annual_average_percentage
 		elif method == "Weighted Average":
 			missing_weights = [
 				row["academic_term"] for row in eligible_periods if flt(row.get("weight")) <= 0
@@ -465,7 +468,10 @@ def compose_cumulative_subject_results(
 			frappe.throw(_("Unsupported annual aggregation method."), frappe.ValidationError)
 
 		subject["annual_percentage"] = round_result_value(annual_percentage, precision)
-		subject["annual_average_percentage"] = subject["annual_percentage"]
+		subject["annual_average_percentage"] = round_result_value(
+			annual_average_percentage,
+			precision,
+		)
 		subject["eligible"] = bool(eligible_periods)
 		grading_scale = config.get("grading_scale") or subject.get("grading_scale")
 		if grading_scale and subject["eligible"]:
