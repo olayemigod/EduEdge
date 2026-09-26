@@ -13,6 +13,8 @@
   "result_profile",
   "result_profile_config_hash",
   "result_profile_config_json",
+  "approved_academic_payload_hash",
+  "approved_academic_student_count",
   "result_mode",
   "publication_version",
   "supersedes_publication",
@@ -94,6 +96,22 @@
    "fieldname": "result_profile_config_json",
    "fieldtype": "Long Text",
    "label": "Approved Result Profile Configuration",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "approved_academic_payload_hash",
+   "fieldtype": "Data",
+   "label": "Approved Academic Payload Hash",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "approved_academic_student_count",
+   "fieldtype": "Int",
+   "label": "Approved Academic Student Count",
    "read_only": 1,
    "hidden": 1,
    "no_copy": 1
