@@ -434,10 +434,12 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             assessment_parent = root_group.name
         legacy_group = self._insert(
             "Assessment Group",
-            assessment_group_name=f"QA Core Legacy {self.suffix}",
-            parent_assessment_group=assessment_parent,
-            is_group=0,
-            **{INSTITUTION_FIELD: institution.name},
+            **{
+                "assessment_group_name": f"QA Core Legacy {self.suffix}",
+                "parent_assessment_group": assessment_parent,
+                "is_group": 0,
+                INSTITUTION_FIELD: institution.name,
+            },
         )
         legacy_publication = frappe.get_doc(
             {
