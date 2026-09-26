@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate
+from frappe.utils import flt, getdate, nowdate
 
 from education.education.api import get_grade
 from education.education.report.course_wise_assessment_report.course_wise_assessment_report import (
@@ -207,6 +207,12 @@ def can_view_report_card_scope(publication, user: str | None = None) -> bool:
 def can_manage_report_card_reviews(publication, user: str | None = None) -> bool:
 	resolved_user = user or frappe.session.user
 	if not can_view_report_card_scope(publication, resolved_user):
+		return False
+	if is_limited_instructor_user(resolved_user) and not has_class_responsibility_assignment(
+		publication.student_group,
+		user=resolved_user,
+		on_date=nowdate(),
+	):
 		return False
 	return bool(
 		frappe.has_permission(REVIEW_DOCTYPE, "create", user=resolved_user)
