@@ -53,7 +53,7 @@ def _lifecycle_status(row, today) -> str:
     if row.transferred_to_assignment:
         return "Transferred"
     if row.ended_on:
-        return "Ended"
+        return "Ending" if getdate(row.ended_on) >= today else "Ended"
     if row.valid_from and getdate(row.valid_from) > today:
         return "Scheduled"
     if row.valid_to and getdate(row.valid_to) < today:
