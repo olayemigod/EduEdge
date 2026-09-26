@@ -145,6 +145,28 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 			3,
 		)
 
+	def test_historical_class_scope_is_read_only_without_current_responsibility(self):
+		permissions = (APP / "education" / "permissions.py").read_text()
+		report_cards = (APP / "education" / "report_cards.py").read_text()
+		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
+
+		for token in (
+			'"create"',
+			'"write"',
+			'"delete"',
+			'"submit"',
+			'"cancel"',
+			'"amend"',
+			"on_date=nowdate() if mutation_permission else None",
+		):
+			self.assertIn(token, permissions)
+		self.assertIn("def can_view_report_card_scope", report_cards)
+		self.assertIn("def can_manage_report_card_reviews", report_cards)
+		self.assertIn("on_date=nowdate()", report_cards)
+		self.assertIn("def _can_manage_publication_scope", assessment_api)
+		self.assertIn("def _assert_publication_mutation_scope", assessment_api)
+		self.assertIn("Current Class/Form responsibility is required", assessment_api)
+
 	def test_generic_student_read_does_not_grant_report_card_access(self):
 		service = (APP / "education" / "report_cards.py").read_text()
 		self.assertIn("You are not permitted to access governed report cards.", service)
