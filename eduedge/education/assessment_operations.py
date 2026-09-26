@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, nowdate
+from frappe.utils import cint, getdate, nowdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.academic_operations import assert_instructor_assignment
