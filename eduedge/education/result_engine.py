@@ -75,7 +75,7 @@ def get_result_periods(profile: str | dict, academic_year: str) -> list[dict]:
 			"sequence",
 			"annual_result_weight",
 		],
-		order_by="sequence asc, start_date asc, idx asc",
+		order_by="start_date asc, end_date asc, sequence asc, idx asc",
 	)
 	output = []
 	for row in rows:
