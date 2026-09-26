@@ -33,6 +33,7 @@ class TestEduEdgeResultPublication(FrappeTestCase):
 						**values,
 					}
 				)
+				doc.set("__islocal", True)
 				with self.assertRaises(frappe.ValidationError):
 					doc._validate_server_managed_change()
 
@@ -47,6 +48,7 @@ class TestEduEdgeResultPublication(FrappeTestCase):
 				"result_profile_config_json": "{}",
 			}
 		)
+		doc.set("__islocal", True)
 		doc._validate_server_managed_change()
 
 	def test_direct_server_managed_change_is_blocked(self):
