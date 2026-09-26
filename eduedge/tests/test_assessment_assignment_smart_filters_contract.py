@@ -86,6 +86,47 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         self.assertIn("independent can_view_subject_content capability", query)
 
 
+    def test_assessment_criteria_api_fails_closed_without_exact_context_and_reloads_safely(self):
+        source = self._api()
+        criteria = source.split("def get_assessment_plan_criteria", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_result_plan_query",
+            1,
+        )[0]
+        for token in (
+            "capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()",
+            "if not group_name or not branch:",
+            "return []",
+            '"can_create_assessment_plans"',
+            "require_instructor_assignment_capability(",
+            "student_group=group_name",
+            "on_date=getdate(schedule_date or nowdate())",
+            'frappe.get_doc("Course", subject).check_permission("read")',
+            '"Course Assessment Criteria"',
+        ):
+            self.assertIn(token, criteria)
+
+        hooks = (APP / "hooks.py").read_text(encoding="utf-8")
+        self.assertIn(
+            '"education.education.api.get_assessment_criteria": "eduedge.api.assessment_assignment_options.get_assessment_plan_criteria"',
+            hooks,
+        )
+
+        client = self._client()
+        for token in (
+            "function load_eduedge_assessment_criteria(frm)",
+            "frappe.after_ajax(() =>",
+            '"eduedge.api.assessment_assignment_options.get_assessment_plan_criteria"',
+            "school_branch: context.school_branch",
+            "student_group: context.student_group",
+            "schedule_date: context.schedule_date",
+            'frm.clear_table("assessment_criteria")',
+            'frm.add_child("assessment_criteria")',
+            "criterion.weightage",
+            "load_eduedge_assessment_criteria(frm);",
+        ):
+            self.assertIn(token, client)
+
+
     def test_default_off_teacher_course_query_still_uses_existing_assignment_scope(self):
         source = self._api()
         for token in (
