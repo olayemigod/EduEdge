@@ -12,6 +12,7 @@ from eduedge.education.result_engine import (
 	calculate_overall_summary,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
+	format_metric_value,
 )
 from eduedge.education.profiled_report_cards import _suggested_progression
 from eduedge.education.result_profile import (
@@ -463,6 +464,11 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 			]
 		)
 		_validate_metrics(valid_both)
+
+	def test_number_metric_respects_configured_decimal_places(self):
+		self.assertEqual(format_metric_value(78.42, "Number", 0), "78")
+		self.assertEqual(format_metric_value(78.42, "Number", 1), "78.4")
+		self.assertEqual(format_metric_value(78.42, "Number", 2), "78.42")
 
 	def test_class_statistics_label_and_representation_are_profile_driven(self):
 		profile = _profile()
