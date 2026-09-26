@@ -16,14 +16,25 @@ class TestEduEdgeResultPublication(FrappeTestCase):
 		)
 
 	def test_new_publication_cannot_prepopulate_workflow_state(self):
-		doc = frappe.get_doc(
+		unsafe_values = (
+			{"status": "Published"},
+			{"status": "Draft", "approved_by": "Administrator"},
 			{
-				"doctype": "EduEdge Result Publication",
-				"status": "Published",
-			}
+				"status": "Draft",
+				"result_profile_config_hash": "injected-hash",
+				"result_profile_config_json": "{}",
+			},
 		)
-		with self.assertRaises(frappe.ValidationError):
-			doc._validate_server_managed_change()
+		for values in unsafe_values:
+			with self.subTest(values=values):
+				doc = frappe.get_doc(
+					{
+						"doctype": "EduEdge Result Publication",
+						**values,
+					}
+				)
+				with self.assertRaises(frappe.ValidationError):
+					doc._validate_server_managed_change()
 
 	def test_new_revision_can_receive_source_frozen_profile_config(self):
 		doc = frappe.get_doc(
