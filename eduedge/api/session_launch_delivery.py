@@ -18,6 +18,7 @@ from eduedge.api.session_launch import _allowed_branches, _get_launch_by_name, _
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE
 from eduedge.services.academic_calendar import CALENDAR_DOCTYPE, PERIOD_DOCTYPE, get_enabled_institution_calendar
+from eduedge.services.instructor_branch_governance import assignment_eligibility_covers_period
 
 MAX_TEACHING_CONTEXTS = 3000
 MAX_SCHEDULE_ROWS = 5000
@@ -271,16 +272,25 @@ def _responsibility_rows(groups: list[dict], assignments: list[dict], offerings:
 		offering = offerings.get(group.get("resolved_offering")) or {}
 		period_start = offering.get("period_start_date")
 		period_end = offering.get("period_end_date")
+		branch = group.get(BRANCH_FIELD) or offering.get("school_branch") or ""
 		matched = [
 			row
 			for row in by_group.get(group["name"], [])
 			if readiness._date_overlap(row.get("valid_from"), row.get("valid_to"), period_start, period_end)
+			and readiness._assignment_branch_governance_covers_period(
+				row,
+				branch,
+				period_start,
+				period_end,
+			)
 		]
 		result.append(
 			{
-				"branch": group.get(BRANCH_FIELD) or offering.get("school_branch") or "",
+				"branch": branch,
 				"program_offering": group.get("resolved_offering") or "",
 				"offering_label": offering.get("offering_title") or group.get("program") or "",
+				"period_start_date": period_start,
+				"period_end_date": period_end,
 				"student_group": group["name"],
 				"student_group_label": group.get("label") or group.get("student_group_name") or group["name"],
 				"assigned": bool(matched),
@@ -573,16 +583,99 @@ def assign_guided_class_teacher(launch: str, instructor: str, student_groups, as
 	return {"result": result, "context": _context(doc)}
 
 
+def _query_list(value) -> list[str]:
+	if not value:
+		return []
+	if isinstance(value, str):
+		try:
+			value = frappe.parse_json(value)
+		except Exception:
+			value = [value]
+	if not isinstance(value, list):
+		return []
+	return [str(item or "").strip() for item in value if str(item or "").strip()]
+
+
+def _guided_governance_windows(doc, filters: dict) -> list[dict]:
+	context = _context(doc)
+	teaching = {
+		row["context_key"]: row
+		for branch in context["branches"]
+		for row in branch["teaching_contexts"]
+	}
+	responsibilities = {
+		row["student_group"]: row
+		for branch in context["branches"]
+		for row in branch["class_responsibilities"]
+	}
+	windows: list[dict] = []
+	seen: set[tuple[str, str, str]] = set()
+
+	for key in _query_list(filters.get("teaching_contexts")):
+		row = teaching.get(key)
+		if not row:
+			continue
+		branch = str(row.get("school_branch") or row.get("branch") or "").strip()
+		start_date = str(row.get("period_start_date") or "").strip()
+		end_date = str(row.get("period_end_date") or "").strip()
+		identity = (branch, start_date, end_date)
+		if branch and identity not in seen:
+			seen.add(identity)
+			windows.append({"branch": branch, "valid_from": start_date, "valid_to": end_date})
+
+	for name in _query_list(filters.get("student_groups")):
+		row = responsibilities.get(name)
+		if not row:
+			continue
+		branch = str(row.get("branch") or "").strip()
+		start_date = str(row.get("period_start_date") or "").strip()
+		end_date = str(row.get("period_end_date") or "").strip()
+		identity = (branch, start_date, end_date)
+		if branch and identity not in seen:
+			seen.add(identity)
+			windows.append({"branch": branch, "valid_from": start_date, "valid_to": end_date})
+
+	return windows
+
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def guided_instructor_query(doctype, txt, searchfield, start, page_len, filters):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
-	_launch(filters.get("launch"), "guided_instructor_query")
-	rows = search_instructors(query=txt or "", page_length=page_len)
-	return [
-		[row.get("value"), row.get("label"), row.get("description") or ""]
+	doc = _launch(filters.get("launch"), "guided_instructor_query")
+	windows = _guided_governance_windows(doc, filters)
+	if not windows:
+		return []
+	rows = search_instructors(query=txt or "", page_length=50)
+	eligible = [
+		row
 		for row in rows
 		if row.get("value")
+		and all(
+			assignment_eligibility_covers_period(
+				row["value"],
+				window["branch"],
+				window.get("valid_from"),
+				window.get("valid_to"),
+			)
+			for window in windows
+		)
+	]
+	limit = min(max(cint(page_len) or 20, 1), 50)
+	return [
+		[
+			row.get("value"),
+			row.get("label"),
+			" · ".join(
+				value
+				for value in (
+					row.get("description") or "",
+					_("Branch Governance eligible for selected responsibility"),
+				)
+				if value
+			),
+		]
+		for row in eligible[:limit]
 	]
 
 

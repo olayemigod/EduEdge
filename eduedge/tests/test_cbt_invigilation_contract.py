@@ -15,6 +15,7 @@ class TestCBTInvigilationContract(unittest.TestCase):
 			"get_invigilation_schedules",
 			"get_invigilation_context",
 			"reported_pending_sync_count",
+			"reconciliation_deadline",
 			"heartbeat_age_seconds",
 			"seconds_remaining",
 			"result_readiness",
@@ -43,6 +44,31 @@ class TestCBTInvigilationContract(unittest.TestCase):
 		):
 			self.assertIn(token, service)
 		self.assertIn('RESULT_APPROVAL_STATUSES = {"Scored"}', service)
+
+	def test_zero_count_pending_sync_remains_visible_to_invigilators(self):
+		service = (APP / "cbt" / "result_readiness.py").read_text()
+		component = (
+			APP
+			/ "public"
+			/ "js"
+			/ "eduedge_cbt_invigilation"
+			/ "EduEdgeCBTInvigilation.vue"
+		).read_text()
+
+		for token in (
+			"<th>Reconciliation</th>",
+			"candidate.attempt_status === 'Pending Sync'",
+			'candidate.connection.code === "PENDING_SYNC"',
+			"candidate.reconciliation_deadline",
+			"Awaiting browser zero-pending confirmation",
+		):
+			self.assertIn(token, component)
+		self.assertIn(
+			"Reconnect the candidate browser before the reconciliation deadline.",
+			service,
+		)
+		self.assertIn("governed Attempt Review workflow", service)
+
 
 	def test_invigilation_page_uses_edgesuite_auto_refresh_and_actionable_blockers(self):
 		loader = (

@@ -75,12 +75,17 @@ class TestInstructorAssignmentReplacementContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-    def test_replacement_preserves_outgoing_branch_access_and_only_ensures_incoming(self):
+    def test_replacement_preserves_outgoing_branch_access_and_requires_incoming_governance(self):
         source = (APP / "api" / "instructor_assignment_replacement.py").read_text(encoding="utf-8")
-        self.assertIn("_ensure_incoming_branch_access", source)
+        self.assertIn("_require_incoming_branch_access", source)
+        self.assertIn("_branch_governance_conflict", source)
+        self.assertIn("assert_instructor_branch_eligibility", source)
         self.assertIn('"outgoing_branch_eligibility_changed": False', source)
         self.assertIn("_branch_access_preview(incoming.name, source.school_branch", source)
-        self.assertNotIn("_save_branch_period(\n        source.instructor", source)
+        self.assertIn('"branch-governance-required"', source)
+        self.assertNotIn("_ensure_incoming_branch_access", source)
+        self.assertNotIn("_save_branch_period", source)
+        self.assertNotIn("_branch_periods", source)
 
     def test_existing_identity_stays_immutable_during_lifecycle_actions(self):
         controller = (

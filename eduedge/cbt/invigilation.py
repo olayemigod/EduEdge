@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, get_datetime, now_datetime
 
+from eduedge.cbt import attempts as attempt_service
 from eduedge.cbt.result_readiness import get_result_readiness
 from eduedge.services.branch_context import get_allowed_school_branches
 
@@ -162,6 +163,7 @@ def get_invigilation_context(exam_schedule: str) -> dict:
 				"last_heartbeat_at": attempt.last_heartbeat_at if attempt else None,
 				"heartbeat_age_seconds": _seconds_since(attempt.last_heartbeat_at) if attempt else None,
 				"last_sync_at": attempt.last_sync_at if attempt else None,
+				"reconciliation_deadline": attempt_service.reconciliation_deadline(attempt) if attempt else None,
 				"seconds_remaining": _remaining_seconds(attempt),
 				"requires_review": cint(attempt.requires_review) if attempt else 0,
 				"review_reasons": attempt.review_reasons if attempt else "",

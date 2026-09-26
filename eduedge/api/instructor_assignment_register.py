@@ -16,13 +16,18 @@ from eduedge.api.instructor_assignments import (
     SUBJECT_REQUIRED_TYPES,
     _all_options,
     _can_manage_assignments,
+    _filter_planner_options_by_instructor,
     _instructors,
+)
+from eduedge.services.instructor_branch_governance import (
+    eligible_branch_names,
+    get_instructor_branch_eligibility_rows,
 )
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
 MAX_FILTER_SCAN = 5000
-LIFECYCLE_STATUSES = ("Current", "Scheduled", "Ended", "Replaced", "Transferred", "Disabled")
+LIFECYCLE_STATUSES = ("Current", "Scheduled", "Ending", "Ended", "Replaced", "Transferred", "Disabled")
 ORIGINS = ("Normal", "Prepared", "Replacement", "Transfer")
 PRESETS = (
     "current_upcoming",
@@ -148,7 +153,7 @@ def _preset_matches(status: str, origin: str, preset: str) -> bool:
     if preset == "all":
         return True
     if preset == "current_upcoming":
-        return status in {"Current", "Scheduled"}
+        return status in {"Current", "Scheduled", "Ending"}
     if preset == "prepared":
         return origin == "Prepared"
     mapping = {
@@ -300,44 +305,85 @@ def get_instructor_assignment_register_page(
     register_page: int | str | None = None,
     register_page_size: int | str | None = None,
 ) -> dict:
-    """Return the Instructor Assignment page with a permission-aware paged register.
+    """Return governed planner options plus permission-scoped assignment history.
 
-    The planner still receives its complete permission-scoped option data, while the
-    historical assignment register is filtered and paged on the server. Lifecycle
-    actions remain authoritative in instructor_assignment_lifecycle.py and are enriched
-    by the existing page loader after this endpoint returns.
+    Branch Governance is upstream of the planner: current Instructor Branch
+    Eligibility limits where new responsibilities may be created. Historical
+    assignment filters intentionally retain every Branch visible to the manager so
+    withdrawing eligibility never hides academic history.
     """
     core._require_read()
-    allowed = core._allowed_branches()
-    allowed_names = [_row_name(row) for row in allowed if _row_name(row)]
+    permitted = core._allowed_branches()
+    permitted_names = [_row_name(row) for row in permitted if _row_name(row)]
 
-    selected = core._list_values(branches)
-    if selected and any(name not in allowed_names for name in selected):
-        frappe.throw(_("One or more selected Branches are not available to your user."), frappe.PermissionError)
-    if not selected:
-        current = str((core.get_current_school_branch() or {}).get("name") or "").strip()
-        selected = [current] if current else (allowed_names[:] if len(allowed_names) == 1 else [])
-
-    instructors = _instructors()
+    instructors = _instructors(include_history=True)
     if not instructor and not _can_manage_assignments() and len(instructors) == 1:
         instructor = _row_name(instructors[0])
     selected_instructor = next((row for row in instructors if _row_name(row) == instructor), None)
     if instructor and not selected_instructor:
         frappe.throw(_("The selected Instructor is not available to your user."), frappe.PermissionError)
+    authoring_available = bool(
+        not selected_instructor or str(selected_instructor.get("status") or "") == "Active"
+    )
 
-    offering_rows, groups, courses, course_map, configured_course_map = _all_options(allowed)
-    requested_offerings = core._list_values(offerings)
+    governed_names = eligible_branch_names(
+        instructor,
+        within=permitted_names,
+    ) if instructor and authoring_available else set()
+    governed = [row for row in permitted if _row_name(row) in governed_names]
+    governed_name_list = [_row_name(row) for row in governed if _row_name(row)]
+
+    selected = core._list_values(branches) if authoring_available else []
+    if selected and any(name not in governed_name_list for name in selected):
+        frappe.throw(
+            _("One or more selected Branches are not covered by this Instructor's Branch Governance eligibility."),
+            frappe.PermissionError,
+        )
+    if not selected:
+        current = str((core.get_current_school_branch() or {}).get("name") or "").strip()
+        selected = [current] if current in governed_name_list else (
+            governed_name_list[:] if len(governed_name_list) == 1 else []
+        )
+
+    # Planner data is governed by current Instructor eligibility.
+    offering_rows, groups, courses, course_map, configured_course_map = _all_options(governed)
+    offering_rows, groups, courses, course_map, configured_course_map = _filter_planner_options_by_instructor(
+        instructor,
+        offering_rows,
+        groups,
+        courses,
+        course_map,
+        configured_course_map,
+    )
+    requested_offerings = core._list_values(offerings) if authoring_available else []
     offering_names = {_row_name(row) for row in offering_rows if _row_name(row)}
     if requested_offerings and any(name not in offering_names for name in requested_offerings):
-        frappe.throw(_("One or more selected Classes are not available to your user."), frappe.PermissionError)
+        frappe.throw(
+            _("One or more selected Classes are outside this Instructor's Branch Governance eligibility."),
+            frappe.PermissionError,
+        )
 
+    # Historical register options use the manager's full permitted scope so old
+    # responsibilities remain findable even after eligibility is withdrawn.
+    register_offerings, register_groups, register_courses, _, register_configured_course_map = _all_options(permitted)
     filters = _parse_filters(register_filters)
-    _validate_filter_context(filters, allowed, offering_rows, groups, courses)
-    register_allowed_names = allowed_names
+    _validate_filter_context(
+        filters,
+        permitted,
+        register_offerings,
+        register_groups,
+        register_courses,
+    )
+    register_allowed_names = permitted_names
     if filters.get("branch"):
         register_allowed_names = [filters["branch"]]
 
-    maps = _label_maps(allowed, offering_rows, groups, courses)
+    maps = _label_maps(
+        permitted,
+        register_offerings,
+        register_groups,
+        register_courses,
+    )
     filtered_rows, counts, scan_truncated = _filter_register_rows(
         instructor or "",
         register_allowed_names,
@@ -352,32 +398,43 @@ def get_instructor_assignment_register_page(
     start = (page - 1) * page_size
     assignments = filtered_rows[start : start + page_size]
 
-    # The shell/header Branch is navigation context and selected Branches seed the
-    # assignment planner only. Branch Eligibility belongs to the Instructor, so its
-    # visible history spans every Branch this manager is permitted to see. This keeps
-    # Instructor eligibility distinct from User Branch Access / Branch Governance.
-    eligibility_branches = allowed_names
-    can_manage_branch_eligibility = bool(
-        frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
-        or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
-    )
+    eligibility_rows = []
+    if instructor and _can_manage_assignments():
+        eligibility_rows = [
+            row
+            for row in get_instructor_branch_eligibility_rows(instructor, enabled_only=False)
+            if row.get("school_branch") in permitted_names
+        ]
 
     return {
-        "allowed_branches": allowed,
+        "allowed_branches": governed,
+        "permitted_branches": permitted,
         "selected_branches": selected,
         "instructors": instructors,
         "selected_instructor": selected_instructor,
+        "authoring_available": authoring_available,
         "offerings": offering_rows,
         "groups": groups,
         "courses": courses,
         "course_map": {key: sorted(values) for key, values in course_map.items()},
         "configured_course_map": {key: sorted(values) for key, values in configured_course_map.items()},
+        "register_offerings": register_offerings,
+        "register_groups": register_groups,
+        "register_courses": register_courses,
+        "register_configured_course_map": {
+            key: sorted(values) for key, values in register_configured_course_map.items()
+        },
         "assignments": assignments,
-        "branch_assignments": core._branch_assignment_rows(instructor, eligibility_branches) if _can_manage_assignments() else [],
+        "branch_assignments": eligibility_rows,
         "assignment_types": list(ASSIGNMENT_TYPES),
         "assignment_scopes": list(BULK_SCOPES),
         "subject_required_types": sorted(SUBJECT_REQUIRED_TYPES),
         "class_responsibility_types": sorted(CLASS_RESPONSIBILITY_TYPES),
+        "governance": {
+            "route": "/app/eduedge-branch-governance",
+            "eligible_branch_count": len(governed_names),
+            "eligibility_period_count": len(eligibility_rows),
+        },
         "assignment_register": {
             "filters": filters,
             "preset": filters["preset"],
@@ -397,9 +454,10 @@ def get_instructor_assignment_register_page(
             "can_manage": _can_manage_assignments(),
             "can_create": frappe.has_permission("EduEdge Instructor Assignment", "create"),
             "can_write": frappe.has_permission("EduEdge Instructor Assignment", "write"),
-            "can_manage_branch_eligibility": can_manage_branch_eligibility,
-            # Compatibility alias for older page/runtime code. This does not refer
-            # to EduEdge User Branch Access and may be removed after consolidation.
-            "can_manage_branch_access": can_manage_branch_eligibility,
+            "can_view_branch_governance": frappe.has_permission(
+                "EduEdge Instructor Branch Assignment",
+                "read",
+            ),
         },
     }
+

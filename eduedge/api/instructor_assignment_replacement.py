@@ -4,12 +4,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, getdate, nowdate
 
-from eduedge.api.instructor_assignments import (
-    _branch_periods,
-    _period_dates,
-    _require_assignment_manager,
-    _save_branch_period,
-)
+from eduedge.api.instructor_assignments import _period_dates, _require_assignment_manager
+from eduedge.education.instructor_assignment_capabilities import successor_capability_review_state
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import (
     CLASS_ARM_SCOPE,
@@ -18,6 +14,10 @@ from eduedge.education.teaching_assignments import (
     UNIQUE_PRIMARY_ASSIGNMENT_TYPES,
 )
 from eduedge.platform.access import require_eduedge_access
+from eduedge.services.instructor_branch_governance import (
+    assert_instructor_branch_eligibility,
+    assignment_eligibility_covers_period,
+)
 
 
 def _clean_reason(reason: str | None) -> str:
@@ -204,74 +204,45 @@ def _replacement_conflicts(source, replacement_instructor: str, successor_start,
     return conflicts
 
 
-def _period_covers(row, start, end) -> bool:
-    start_ok = not row.valid_from or getdate(row.valid_from) <= getdate(start)
-    if end:
-        end_ok = not row.valid_to or getdate(row.valid_to) >= getdate(end)
-    else:
-        end_ok = not row.valid_to
-    return bool(start_ok and end_ok)
-
-
 def _branch_access_preview(instructor: str, branch: str, start, end) -> dict:
-    periods = _branch_periods(instructor, branch)
-    covering = next(
-        (row for row in periods if cint(row.enabled) and _period_covers(row, start, end)),
-        None,
-    )
-    if covering:
-        return {
-            "action": "existing",
-            "name": covering.name,
-            "school_branch": branch,
-            "valid_from": str(covering.valid_from or ""),
-            "valid_to": str(covering.valid_to or ""),
-            "changed": False,
-        }
-    exact_disabled = next(
-        (
-            row
-            for row in periods
-            if not cint(row.enabled)
-            and _same_date(row.valid_from, start)
-            and _same_date(row.valid_to, end)
-        ),
-        None,
-    )
-    if exact_disabled:
-        return {
-            "action": "enable",
-            "name": exact_disabled.name,
-            "school_branch": branch,
-            "valid_from": str(start or ""),
-            "valid_to": str(end or ""),
-            "changed": True,
-        }
-    overlapping = next(
-        (
-            row
-            for row in periods
-            if cint(row.enabled) and _overlap(start, end, row.valid_from, row.valid_to)
-        ),
-        None,
-    )
-    if overlapping:
-        return {
-            "action": "extend",
-            "name": overlapping.name,
-            "school_branch": branch,
-            "valid_from": str(start or ""),
-            "valid_to": str(end or ""),
-            "changed": True,
-        }
+    covered = assignment_eligibility_covers_period(instructor, branch, start, end)
     return {
-        "action": "create",
-        "name": None,
+        "action": "existing" if covered else "required",
         "school_branch": branch,
         "valid_from": str(start or ""),
         "valid_to": str(end or ""),
-        "changed": True,
+        "changed": False,
+        "covered": covered,
+        "reason": (
+            ""
+            if covered
+            else _(
+                "Branch Governance does not cover the full responsibility period for this Instructor and Branch. "
+                "Update the Instructor profile or Branch Governance first, then preview this lifecycle action again."
+            )
+        ),
     }
+
+
+def _branch_governance_conflict(branch_access: dict) -> dict | None:
+    if branch_access.get("covered"):
+        return None
+    return {
+        "type": "branch-governance-required",
+        "reason": branch_access.get("reason")
+        or _("Branch Governance must cover the full successor responsibility period before this action can continue."),
+    }
+
+
+def _require_incoming_branch_access(instructor: str, branch: str, start, end, *, label: str) -> dict:
+    assert_instructor_branch_eligibility(
+        instructor,
+        branch,
+        start,
+        end,
+        label=label,
+    )
+    return _branch_access_preview(instructor, branch, start, end)
 
 
 def _replacement_plan(source, replacement_instructor: str, handover_date: str | None, reason: str | None) -> dict:
@@ -281,6 +252,9 @@ def _replacement_plan(source, replacement_instructor: str, handover_date: str | 
     successor_start, successor_end = _successor_dates(source, handover)
     conflicts = _replacement_conflicts(source, incoming.name, successor_start, successor_end)
     branch_access = _branch_access_preview(incoming.name, source.school_branch, successor_start, successor_end)
+    branch_conflict = _branch_governance_conflict(branch_access)
+    if branch_conflict:
+        conflicts.append(branch_conflict)
     return {
         "source": {
             "name": source.name,
@@ -312,6 +286,10 @@ def _replacement_plan(source, replacement_instructor: str, handover_date: str | 
         "reason": resolved_reason,
         "incoming_branch_eligibility": branch_access,
         "outgoing_branch_eligibility_changed": False,
+        "capability_review": successor_capability_review_state(
+            assignment_type=source.assignment_type,
+            course=source.course,
+        ),
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
     }
@@ -342,31 +320,13 @@ def _already_replaced(source, replacement_instructor: str, handover_date: str | 
             "handover_date": str(source.ended_on),
             "successor_valid_from": str(successor.valid_from),
             "successor_valid_to": str(successor.valid_to or ""),
+            "capability_review": successor_capability_review_state(successor),
             "outgoing_branch_eligibility_changed": False,
         }
     frappe.throw(
         _("This Instructor Assignment was already replaced. Its replacement history will not be rewritten."),
         frappe.ValidationError,
     )
-
-
-def _ensure_incoming_branch_access(instructor: str, branch: str, start, end) -> dict:
-    preview = _branch_access_preview(instructor, branch, start, end)
-    if preview["action"] == "existing":
-        return preview
-    result = _save_branch_period(
-        instructor,
-        branch,
-        start,
-        end,
-        enabled=1,
-        make_primary=False,
-    )
-    return {
-        **result,
-        "school_branch": branch,
-        "changed": True,
-    }
 
 
 @frappe.whitelist(methods=["POST"])
@@ -437,6 +397,14 @@ def replace_instructor_assignment(
         successor_end = getdate(plan["successor"]["valid_to"]) if plan["successor"]["valid_to"] else None
         resolved_reason = plan["reason"]
 
+        branch_result = _require_incoming_branch_access(
+            plan["successor"]["instructor"],
+            source.school_branch,
+            successor_start,
+            successor_end,
+            label=_("Replacement Instructor Assignment"),
+        )
+
         source.valid_to = handover
         source.ended_on = handover
         source.ended_by = frappe.session.user
@@ -446,13 +414,6 @@ def replace_instructor_assignment(
             source.save()
         finally:
             frappe.flags.in_eduedge_assignment_lifecycle = False
-
-        branch_result = _ensure_incoming_branch_access(
-            plan["successor"]["instructor"],
-            source.school_branch,
-            successor_start,
-            successor_end,
-        )
 
         successor = frappe.new_doc("EduEdge Instructor Assignment")
         successor.instructor = plan["successor"]["instructor"]
@@ -508,6 +469,7 @@ def replace_instructor_assignment(
             "replacement_instructor": successor.instructor,
             "reason": resolved_reason,
             "incoming_branch_eligibility": branch_result,
+            "capability_review": successor_capability_review_state(successor),
             "outgoing_branch_eligibility_changed": False,
         }
     except Exception:

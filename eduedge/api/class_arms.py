@@ -535,6 +535,14 @@ def save_class_arm(
 	if class_arm:
 		doc = frappe.get_doc("Student Group", class_arm)
 		doc.check_permission("write")
+		if str(doc.group_based_on or "") != group_based_on or str(doc.course or "") != str(course or ""):
+			frappe.throw(
+				_(
+					"Existing Class Arm grouping basis and Course / Subject cannot be changed. "
+					"Create or carry forward a new session Class Arm for a different grouping structure."
+				),
+				frappe.ValidationError,
+			)
 		if doc.academic_term:
 			frappe.throw(
 				_("Legacy term-bound Class Arms are historical. Create or prepare the sessional Class Arm instead of editing this period record."),

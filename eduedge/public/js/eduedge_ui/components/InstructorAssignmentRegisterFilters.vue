@@ -228,7 +228,7 @@
 </template>
 
 <script>
-const STATUSES = ["Current", "Scheduled", "Ended", "Replaced", "Transferred", "Disabled"];
+const STATUSES = ["Current", "Scheduled", "Ending", "Ended", "Replaced", "Transferred", "Disabled"];
 const PRESETS = [
 	{ value: "current_upcoming", label: "Current + Upcoming" },
 	{ value: "current", label: "Current" },
@@ -280,10 +280,10 @@ export default {
 		statuses() { return STATUSES; },
 		presets() { return PRESETS; },
 		instructors() { return this.controller.data?.instructors || []; },
-		branches() { return this.controller.data?.allowed_branches || []; },
-		offerings() { return this.controller.data?.offerings || []; },
-		groups() { return this.controller.data?.groups || []; },
-		courses() { return this.controller.data?.courses || []; },
+		branches() { return this.controller.data?.permitted_branches || this.controller.data?.allowed_branches || []; },
+		offerings() { return this.controller.data?.register_offerings || this.controller.data?.offerings || []; },
+		groups() { return this.controller.data?.register_groups || this.controller.data?.groups || []; },
+		courses() { return this.controller.data?.register_courses || this.controller.data?.courses || []; },
 		assignmentTypes() { return this.controller.data?.assignment_types || []; },
 		assignmentScopes() { return (this.controller.data?.assignment_scopes || []).filter((value) => value !== "Branch Access Only"); },
 		academicYears() {
@@ -320,7 +320,11 @@ export default {
 		},
 		courseOptions() {
 			if (!this.selectedOffering) return [];
-			const configured = new Set(this.controller.data?.configured_course_map?.[this.selectedOffering.program] || []);
+			const configured = new Set(
+				this.controller.data?.register_configured_course_map?.[this.selectedOffering.program]
+				|| this.controller.data?.configured_course_map?.[this.selectedOffering.program]
+				|| [],
+			);
 			return this.courses.filter((row) => configured.has(row.name));
 		},
 		activeChips() {

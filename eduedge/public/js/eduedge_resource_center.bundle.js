@@ -8,6 +8,10 @@ const FULL_FORM_ROUTES = Object.freeze({
 	students: "/app/student",
 	programs: "/app/program",
 	program_offerings: "/app/eduedge-program-offering",
+	assessment_plans: "/app/assessment-plan",
+	assessment_results: "/app/assessment-result",
+	result_profiles: "/app/eduedge-result-profile",
+	result_audit: "/app/eduedge-result-publication-log",
 });
 
 EduEdgeResourceCenter.methods.openFullForm = function openFullForm(row) {

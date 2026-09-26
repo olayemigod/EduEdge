@@ -21,6 +21,10 @@ RESOURCE_FEATURES = {
 	"students": "student_management",
 	"programs": "academics",
 	"program_offerings": "academics",
+	"assessment_plans": "assessment",
+	"assessment_results": "assessment",
+	"result_profiles": "assessment",
+	"result_audit": "assessment",
 }
 
 RESOURCE_TITLE_TERMS = {
@@ -33,6 +37,10 @@ RESOURCE_SINGULAR_TITLES = {
 	"admissions": _("Admission"),
 	"applicants": _("Applicant"),
 	"students": _("Student"),
+	"assessment_plans": _("Assessment Plan"),
+	"assessment_results": _("Assessment Result"),
+	"result_profiles": _("Result Profile"),
+	"result_audit": _("Audit Entry"),
 }
 
 RESOURCE_SINGULAR_TERMS = {
@@ -162,10 +170,14 @@ def _empty_page(resource: str, config: dict, page_length: int | str = 20) -> dic
 		"page_length": min(base.MAX_PAGE_LENGTH, max(5, int(page_length or 20))),
 		"has_more": False,
 		"advanced_note": config.get("advanced_note", ""),
+		"quick_create": config.get("quick_create", True),
+		"quick_edit": config.get("quick_edit", True),
+		"create_route": config.get("create_route", ""),
+		"create_label": config.get("create_label", ""),
 		"permissions": {
-			"can_create": bool(frappe.has_permission(doctype, "create")),
-			"can_write": bool(frappe.has_permission(doctype, "write")),
-			"can_delete": bool(frappe.has_permission(doctype, "delete")),
+			"can_create": bool(not config.get("read_only") and frappe.has_permission(doctype, "create")),
+			"can_write": bool(not config.get("read_only") and frappe.has_permission(doctype, "write")),
+			"can_delete": bool(not config.get("read_only") and frappe.has_permission(doctype, "delete")),
 		},
 	}
 	return _apply_terminology(result, resource, get_effective_institution_context())
@@ -260,6 +272,12 @@ def get_resource_page(
 	result["full_form_route"] = config["full_form_route"]
 	result["title_field"] = config.get("title_field") or "name"
 	result["branch_field"] = config.get("branch_field") or ""
+	result["quick_create"] = config.get("quick_create", True)
+	result["quick_edit"] = config.get("quick_edit", True)
+	result["create_route"] = config.get("create_route", "")
+	result["create_label"] = config.get("create_label", "")
+	if config.get("read_only"):
+		result["permissions"] = {"can_create": False, "can_write": False, "can_delete": False}
 	result["filters"] = _smart_filters(config, allowed_branches)
 	return _apply_terminology(result, resource, _context_from_payload(parsed_filters))
 

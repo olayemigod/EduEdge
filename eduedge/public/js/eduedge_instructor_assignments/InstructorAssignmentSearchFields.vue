@@ -13,7 +13,7 @@
 			/>
 		</label>
 
-		<label v-if="row && row.assignment_scope !== branchOnlyScope" class="assignment-search-field wide">
+		<label v-if="row" class="assignment-search-field wide">
 			<span>Class / Programme Offering *</span>
 			<EdgeLinkField
 				:model-value="row.program_offering"
@@ -68,7 +68,7 @@ export default {
 		instructor: { type: String, default: "" },
 		row: { type: Object, default: null },
 		showInstructor: { type: Boolean, default: false },
-		branchOnlyScope: { type: String, required: true },
+		includeInstructorHistory: { type: Boolean, default: false },
 		classArmScope: { type: String, required: true },
 		requiresSubjects: { type: Boolean, default: false },
 		subjectLabel: { type: String, default: "Subjects / Courses" },
@@ -90,12 +90,14 @@ export default {
 			return call("eduedge.api.instructor_assignment_link_search.search_instructors", {
 				query: query || "",
 				page_length: 20,
+				include_history: this.includeInstructorHistory ? 1 : 0,
 			});
 		},
 		searchOfferings(row, query) {
 			if (!row?.branch) return [];
 			return call("eduedge.api.instructor_assignment_link_search.search_assignment_offerings", {
 				branch: row.branch,
+				instructor: this.instructor || "",
 				query: query || "",
 				page_length: 20,
 			});
@@ -105,6 +107,7 @@ export default {
 			return call("eduedge.api.instructor_assignment_link_search.search_assignment_class_arms", {
 				branch: row.branch,
 				program_offering: row.program_offering,
+				instructor: this.instructor || "",
 				query: query || "",
 				page_length: 20,
 			});
@@ -114,6 +117,7 @@ export default {
 			return call("eduedge.api.instructor_assignment_link_search.search_assignment_courses", {
 				branch: row.branch,
 				program_offering: row.program_offering,
+				instructor: this.instructor || "",
 				query: query || "",
 				page_length: 20,
 			});

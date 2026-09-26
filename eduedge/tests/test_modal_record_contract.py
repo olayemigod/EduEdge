@@ -40,7 +40,8 @@ class TestModalRecordContract(unittest.TestCase):
 		self.assertIn("MAX_OPTIONS = 30", api)
 		self.assertIn("get_allowed_institutions(company=company)", api)
 		self.assertIn("get_allowed_school_branches(company=company, institution=institution)", api)
-		self.assertIn('filters={"enabled": 1, "user_type": "System User"}', api)
+		self.assertIn('{"enabled": 1, "user_type": "System User"}', api)
+		self.assertIn("manageable_user_names(company=company)", api)
 		self.assertIn('filters = {"academic_year": values.get("academic_year")}', api)
 		self.assertIn("limit_page_length=MAX_OPTIONS", api)
 

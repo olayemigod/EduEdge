@@ -6,6 +6,7 @@ from frappe.utils import getdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 from eduedge.education.teaching_assignments import (
 	CLASS_ARM_SCOPE,
 	CLASS_SCOPE,
@@ -73,6 +74,18 @@ def assert_schedule_instructor_assignment(doc) -> dict | None:
 		)
 
 	reference_date = getdate(doc.schedule_date) if doc.get("schedule_date") else None
+	if reference_date and not eligibility_covers_period(
+		instructor,
+		branch,
+		reference_date,
+		reference_date,
+	):
+		frappe.throw(
+			_(
+				"Instructor {0} is not eligible to work in Branch {1} on the selected Schedule Date. Update Branch Governance first."
+			).format(instructor, branch),
+			frappe.ValidationError,
+		)
 	filters = {
 		"school_branch": branch,
 		"program_offering": program_offering,

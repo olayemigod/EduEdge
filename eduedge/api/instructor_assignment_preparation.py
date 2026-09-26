@@ -6,7 +6,8 @@ from frappe.utils import cint, getdate
 
 from eduedge.api.instructor_assignment_replacement import (
     _branch_access_preview,
-    _ensure_incoming_branch_access,
+    _branch_governance_conflict,
+    _require_incoming_branch_access,
     _same_date,
     _type_variants,
 )
@@ -14,6 +15,7 @@ from eduedge.api.instructor_assignment_transfer import _destination_conflicts, _
 from eduedge.api.instructor_assignments import _period_dates, _require_assignment_manager
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_assignment_capabilities import successor_capability_review_state
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import (
     CLASS_ARM_SCOPE,
@@ -270,6 +272,8 @@ def _existing_preparation(source, destination: dict, reason: str) -> dict | None
             "valid_from",
             "valid_to",
             "preparation_reason",
+            "assignment_type",
+            "capabilities_updated_on",
         ],
         limit_page_length=0,
     )
@@ -289,6 +293,7 @@ def _existing_preparation(source, destination: dict, reason: str) -> dict | None
                 "prepared_title": row.assignment_title or "",
                 "prepared_valid_from": str(row.valid_from or ""),
                 "prepared_valid_to": str(row.valid_to or ""),
+                "capability_review": successor_capability_review_state(row),
                 "source_changed": False,
                 "source_branch_eligibility_changed": False,
             }
@@ -338,6 +343,9 @@ def _preparation_plan(
             "branch_name": destination["branch_name"],
         }
     )
+    branch_conflict = _branch_governance_conflict(branch_access)
+    if branch_conflict:
+        conflicts.append(branch_conflict)
     return {
         "source": {
             "name": source.name,
@@ -358,6 +366,10 @@ def _preparation_plan(
         "destination_branch_eligibility": branch_access,
         "source_changed": False,
         "source_branch_eligibility_changed": False,
+        "capability_review": successor_capability_review_state(
+            assignment_type=destination.get("assignment_type"),
+            course=destination.get("course"),
+        ),
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
     }
@@ -441,11 +453,12 @@ def prepare_instructor_assignment_for_next_period(
         destination = plan["destination"]
         start = getdate(destination["valid_from"])
         end = getdate(destination["valid_to"])
-        branch_result = _ensure_incoming_branch_access(
+        branch_result = _require_incoming_branch_access(
             source.instructor,
             destination["school_branch"],
             start,
             end,
+            label=_("Prepared Instructor Assignment"),
         )
 
         prepared = frappe.new_doc("EduEdge Instructor Assignment")
@@ -489,6 +502,7 @@ def prepare_instructor_assignment_for_next_period(
             "instructor": prepared.instructor,
             "reason": plan["reason"],
             "destination_branch_eligibility": branch_result,
+            "capability_review": successor_capability_review_state(prepared),
             "source_changed": False,
             "source_branch_eligibility_changed": False,
         }

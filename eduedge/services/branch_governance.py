@@ -6,6 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, getdate, nowdate
 
+from eduedge.education.academic_fields import INSTITUTION_FIELD
+
 from eduedge.services.branch_accounting import ACCOUNTING_FIELDS, get_missing_core_defaults
 from eduedge.services.branch_context import (
 	ASSIGNMENT_SCOPE_BRANCH,
@@ -44,6 +46,7 @@ def get_branch_governance_context(
 	*,
 	company: str | None = None,
 	include_assignment_details: bool = False,
+	include_instructor_eligibility: bool = False,
 	include_all_branches: bool = False,
 ) -> dict:
 	allowed_branch_names = None
@@ -53,13 +56,33 @@ def get_branch_governance_context(
 	branches = _get_branch_rows(company=company, allowed_branch_names=allowed_branch_names)
 	allowed_companies = {row["company"] for row in branches if row.get("company")}
 	allowed_institutions = {row["institution"] for row in branches if row.get("institution")}
-	assignments = _get_access_rows(
+	coverage_assignments = _get_access_rows(
 		company=company,
 		allowed_branch_names=allowed_branch_names,
 		allowed_companies=allowed_companies,
 		allowed_institutions=allowed_institutions,
+		permission_aware=False,
 	)
-	active_assignments = [row for row in assignments if row["status"] == "Active"]
+	assignments = (
+		_get_access_rows(
+			company=company,
+			allowed_branch_names=allowed_branch_names,
+			allowed_companies=allowed_companies,
+			allowed_institutions=allowed_institutions,
+			permission_aware=True,
+		)
+		if include_assignment_details
+		else []
+	)
+	active_assignments = [row for row in coverage_assignments if row["status"] == "Active"]
+	instructor_eligibility = (
+		_get_instructor_eligibility_rows(branches)
+		if include_instructor_eligibility
+		else []
+	)
+	active_instructor_eligibility = [
+		row for row in instructor_eligibility if row["status"] == "Active"
+	]
 
 	company_scopes = {
 		row["company"]
@@ -141,6 +164,7 @@ def get_branch_governance_context(
 		"selected_company": company,
 		"branches": branches,
 		"assignments": assignments if include_assignment_details else [],
+		"instructor_eligibility": instructor_eligibility,
 		"settings": {
 			"enforcement_enabled": is_branch_access_enforced(),
 			"hq_all_branch_view_enabled": is_hq_all_branch_view_enabled(),
@@ -150,6 +174,13 @@ def get_branch_governance_context(
 			"active_assignments": len(active_assignments),
 			"covered_branches": covered_branch_count,
 			"accounting_ready_branches": accounting_ready_count,
+			"active_instructor_eligibility": len(active_instructor_eligibility),
+			"instructors_with_active_eligibility": len({
+				row["instructor"] for row in active_instructor_eligibility if row.get("instructor")
+			}),
+			"instructor_eligibility_review_required": sum(
+				1 for row in instructor_eligibility if row.get("reconciliation_review_required")
+			),
 		},
 		"activation_checks": activation_checks,
 		"can_enable_enforcement": not blocking_failures,
@@ -283,12 +314,168 @@ def _get_branch_rows(
 	return rows
 
 
+def _ranges_overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
+	minimum = getdate("1900-01-01")
+	maximum = getdate("2999-12-31")
+	a_start = getdate(start_a) if start_a else minimum
+	a_end = getdate(end_a) if end_a else maximum
+	b_start = getdate(start_b) if start_b else minimum
+	b_end = getdate(end_b) if end_b else maximum
+	return a_start <= b_end and b_start <= a_end
+
+
+def _get_instructor_eligibility_rows(branches: list[dict]) -> list[dict]:
+	branch_names = {row["name"] for row in branches if row.get("name")}
+	if not branch_names or not frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment"):
+		return []
+
+	rows = frappe.get_all(
+		"EduEdge Instructor Branch Assignment",
+		filters={"school_branch": ["in", sorted(branch_names)]},
+		fields=[
+			"name",
+			"instructor",
+			"instructor_name",
+			"school_branch",
+			"branch_name",
+			"enabled",
+			"is_primary",
+			"valid_from",
+			"valid_to",
+			"modified",
+		],
+		order_by="enabled desc, instructor_name asc, school_branch asc, valid_from asc",
+		limit_page_length=0,
+	)
+	branch_institution = {row["name"]: row.get("institution") for row in branches if row.get("name")}
+	instructor_names = sorted({row.instructor for row in rows if row.instructor})
+	instructor_fields = ["name", "instructor_name", "status", "employee"]
+	if frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
+		instructor_fields.append(INSTITUTION_FIELD)
+	instructors = {
+		row.name: dict(row)
+		for row in frappe.get_all(
+			"Instructor",
+			filters={"name": ["in", instructor_names]},
+			fields=instructor_fields,
+			limit_page_length=0,
+		)
+	} if instructor_names else {}
+	home_institution_names = sorted({
+		str(row.get(INSTITUTION_FIELD) or "").strip()
+		for row in instructors.values()
+		if str(row.get(INSTITUTION_FIELD) or "").strip()
+	})
+	enabled_home_institutions = set(
+		frappe.get_all(
+			"EduEdge Institution",
+			filters={"name": ["in", home_institution_names], "enabled": 1},
+			pluck="name",
+			limit_page_length=0,
+		)
+	) if home_institution_names else set()
+
+	can_reconcile_instructor_eligibility = bool(
+		frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
+		or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
+	)
+	can_read_academic_assignments = bool(
+		can_reconcile_instructor_eligibility
+		and frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.has_permission("EduEdge Instructor Assignment", "read")
+	)
+	academic_rows = frappe.get_list(
+		"EduEdge Instructor Assignment",
+		filters={"school_branch": ["in", sorted(branch_names)]},
+		fields=["name", "instructor", "school_branch", "enabled", "valid_from", "valid_to", "ended_on"],
+		limit_page_length=0,
+	) if can_read_academic_assignments else []
+
+	today = getdate(nowdate())
+	result = []
+	for source in rows:
+		row = dict(source)
+		instructor = instructors.get(row.get("instructor"), {})
+		home_institution = str(instructor.get(INSTITUTION_FIELD) or "").strip()
+		row_branch_institution = str(branch_institution.get(row.get("school_branch")) or "").strip()
+		if not cint(row.get("enabled")):
+			status = "Disabled"
+		elif instructor and instructor.get("status") != "Active":
+			status = "Instructor Inactive"
+		elif not home_institution:
+			status = "Needs Home Institution"
+		elif home_institution not in enabled_home_institutions:
+			status = "Home Institution Disabled"
+		elif not row_branch_institution:
+			status = "Branch Missing Institution"
+		elif home_institution != row_branch_institution:
+			status = "Institution Mismatch"
+		elif row.get("valid_from") and getdate(row["valid_from"]) > today:
+			status = "Scheduled"
+		elif row.get("valid_to") and getdate(row["valid_to"]) < today:
+			status = "Expired"
+		else:
+			status = "Active"
+
+		governance_note = ""
+		if status == "Needs Home Institution":
+			governance_note = "Update the Instructor Home Institution before creating new academic responsibilities."
+		elif status == "Home Institution Disabled":
+			governance_note = "The Instructor Home Institution is disabled. Correct the Instructor profile or re-enable the Institution before creating new academic responsibilities."
+		elif status == "Branch Missing Institution":
+			governance_note = "The School Branch / Campus has no Institution linkage. Correct Branch setup before creating new academic responsibilities."
+		elif status == "Institution Mismatch":
+			governance_note = "This eligibility is outside the Instructor Home Institution. Preserve history, then correct the profile or create eligibility in a valid campus."
+
+		support = [
+			assignment
+			for assignment in academic_rows
+			if assignment.instructor == row.get("instructor")
+			and assignment.school_branch == row.get("school_branch")
+			and _ranges_overlap(
+				row.get("valid_from"),
+				row.get("valid_to"),
+				assignment.valid_from,
+				assignment.valid_to,
+			)
+		]
+		reconciliation_review_required = bool(
+			can_read_academic_assignments and cint(row.get("enabled")) and not support
+		)
+		if reconciliation_review_required and not governance_note:
+			governance_note = (
+				"No academic assignment currently supports this eligibility period. "
+				"Review whether it is intentional before changing it."
+			)
+
+		row.update(
+			{
+				"instructor_name": row.get("instructor_name")
+				or instructor.get("instructor_name")
+				or row.get("instructor"),
+				"instructor_status": instructor.get("status"),
+				"employee": instructor.get("employee"),
+				"home_institution": home_institution,
+				"branch_institution": row_branch_institution,
+				"academic_assignment_count": len(support) if can_read_academic_assignments else None,
+				"academic_assignment_support_visible": can_read_academic_assignments,
+				"reconciliation_review_required": reconciliation_review_required,
+				"status": status,
+				"governance_note": governance_note,
+			}
+		)
+		result.append(row)
+	return result
+
+
+
 def _get_access_rows(
 	*,
 	company: str | None = None,
 	allowed_branch_names: set[str] | None = None,
 	allowed_companies: set[str] | None = None,
 	allowed_institutions: set[str] | None = None,
+	permission_aware: bool = False,
 ) -> list[dict]:
 	if (
 		allowed_branch_names is not None
@@ -298,7 +485,8 @@ def _get_access_rows(
 	):
 		return []
 	filters = {"company": company} if company else {}
-	rows = frappe.get_all(
+	getter = frappe.get_list if permission_aware else frappe.get_all
+	rows = getter(
 		"EduEdge User Branch Access",
 		filters=filters,
 		fields=[

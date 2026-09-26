@@ -48,6 +48,11 @@ def _assignment_names(names: str | list | tuple | None) -> list[str]:
 def _lifecycle_status(row, today) -> str:
     if not cint(row.enabled):
         return "Disabled"
+    # End/Replace/Transfer all keep the source responsibility operational through
+    # its final responsibility date. Successor links describe the eventual historical
+    # outcome, but must not make the source disappear from active scope too early.
+    if row.ended_on and getdate(row.ended_on) >= today:
+        return "Ending"
     if row.replaced_by_assignment:
         return "Replaced"
     if row.transferred_to_assignment:
@@ -281,84 +286,93 @@ def end_instructor_assignment(
     if not assignment_name:
         frappe.throw(_("Select an Instructor Assignment to end."), frappe.ValidationError)
 
-    doc = frappe.get_doc("EduEdge Instructor Assignment", assignment_name)
-    doc.check_permission("write")
-    assert_branch_access(doc.school_branch)
-
     resolved_reason = _clean_reason(reason)
     resolved_end = _end_date(end_date)
-    today = getdate(nowdate())
-
-    if not doc.enabled:
-        frappe.throw(
-            _("Disabled Instructor Assignments cannot be ended. Re-enable or manage the disabled assignment separately."),
-            frappe.ValidationError,
-        )
-    if doc.valid_from and getdate(doc.valid_from) > today:
-        frappe.throw(
-            _("This Instructor Assignment has not started yet. Scheduled assignments should be disabled or replaced rather than ended."),
-            frappe.ValidationError,
-        )
-    if doc.valid_from and resolved_end < getdate(doc.valid_from):
-        frappe.throw(
-            _("End Date cannot be earlier than Valid From."),
-            frappe.ValidationError,
-        )
-    if doc.valid_to and getdate(doc.valid_to) < today:
-        frappe.throw(
-            _("This Instructor Assignment has already ended by its validity period and will not be rewritten."),
-            frappe.ValidationError,
-        )
-    if doc.valid_to and resolved_end > getdate(doc.valid_to):
-        frappe.throw(
-            _("End Assignment can shorten an existing validity period but cannot extend it."),
-            frappe.ValidationError,
-        )
-
-    if doc.ended_on:
-        same_date = getdate(doc.ended_on) == resolved_end
-        same_reason = str(doc.end_reason or "").strip() == resolved_reason
-        if same_date and same_reason:
-            return {
-                "name": doc.name,
-                "action": "already-ended",
-                "ended_on": str(doc.ended_on),
-                "ended_by": doc.ended_by,
-                "end_reason": doc.end_reason,
-                "branch_eligibility_changed": False,
-            }
-        frappe.throw(
-            _("This Instructor Assignment already has an End lifecycle action. Use a later lifecycle action instead of rewriting its history."),
-            frappe.ValidationError,
-        )
-
-    previous_valid_to = doc.valid_to
-    doc.valid_to = resolved_end
-    doc.ended_on = resolved_end
-    doc.ended_by = frappe.session.user
-    doc.end_reason = resolved_reason
-
-    frappe.flags.in_eduedge_assignment_lifecycle = True
+    savepoint = "eduedge_instructor_assignment_end"
+    frappe.db.savepoint(savepoint)
     try:
-        doc.save()
-    finally:
-        frappe.flags.in_eduedge_assignment_lifecycle = False
+        frappe.db.sql(
+            "select name from `tabEduEdge Instructor Assignment` where name = %s for update",
+            (assignment_name,),
+        )
+        doc = frappe.get_doc("EduEdge Instructor Assignment", assignment_name)
+        doc.check_permission("write")
+        assert_branch_access(doc.school_branch)
+        today = getdate(nowdate())
 
-    doc.add_comment(
-        "Info",
-        _("Instructor Assignment ended. Final responsibility date: {0}. Reason: {1}").format(
-            resolved_end,
-            resolved_reason,
-        ),
-    )
+        if not doc.enabled:
+            frappe.throw(
+                _("Disabled Instructor Assignments cannot be ended. Re-enable or manage the disabled assignment separately."),
+                frappe.ValidationError,
+            )
+        if doc.valid_from and getdate(doc.valid_from) > today:
+            frappe.throw(
+                _("This Instructor Assignment has not started yet. Scheduled assignments should be disabled or replaced rather than ended."),
+                frappe.ValidationError,
+            )
+        if doc.valid_from and resolved_end < getdate(doc.valid_from):
+            frappe.throw(
+                _("End Date cannot be earlier than Valid From."),
+                frappe.ValidationError,
+            )
+        if doc.valid_to and getdate(doc.valid_to) < today:
+            frappe.throw(
+                _("This Instructor Assignment has already ended by its validity period and will not be rewritten."),
+                frappe.ValidationError,
+            )
+        if doc.valid_to and resolved_end > getdate(doc.valid_to):
+            frappe.throw(
+                _("End Assignment can shorten an existing validity period but cannot extend it."),
+                frappe.ValidationError,
+            )
 
-    return {
-        "name": doc.name,
-        "action": "ended",
-        "previous_valid_to": str(previous_valid_to or ""),
-        "ended_on": str(doc.ended_on),
-        "ended_by": doc.ended_by,
-        "end_reason": doc.end_reason,
-        "enabled": doc.enabled,
-        "branch_eligibility_changed": False,
-    }
+        if doc.ended_on:
+            same_date = getdate(doc.ended_on) == resolved_end
+            same_reason = str(doc.end_reason or "").strip() == resolved_reason
+            if same_date and same_reason:
+                return {
+                    "name": doc.name,
+                    "action": "already-ended",
+                    "ended_on": str(doc.ended_on),
+                    "ended_by": doc.ended_by,
+                    "end_reason": doc.end_reason,
+                    "branch_eligibility_changed": False,
+                }
+            frappe.throw(
+                _("This Instructor Assignment already has an End lifecycle action. Use a later lifecycle action instead of rewriting its history."),
+                frappe.ValidationError,
+            )
+
+        previous_valid_to = doc.valid_to
+        doc.valid_to = resolved_end
+        doc.ended_on = resolved_end
+        doc.ended_by = frappe.session.user
+        doc.end_reason = resolved_reason
+
+        frappe.flags.in_eduedge_assignment_lifecycle = True
+        try:
+            doc.save()
+        finally:
+            frappe.flags.in_eduedge_assignment_lifecycle = False
+
+        doc.add_comment(
+            "Info",
+            _("Instructor Assignment ended. Final responsibility date: {0}. Reason: {1}").format(
+                resolved_end,
+                resolved_reason,
+            ),
+        )
+
+        return {
+            "name": doc.name,
+            "action": "ended",
+            "previous_valid_to": str(previous_valid_to or ""),
+            "ended_on": str(doc.ended_on),
+            "ended_by": doc.ended_by,
+            "end_reason": doc.end_reason,
+            "enabled": doc.enabled,
+            "branch_eligibility_changed": False,
+        }
+    except Exception:
+        frappe.db.rollback(save_point=savepoint)
+        raise

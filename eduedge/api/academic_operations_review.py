@@ -5,9 +5,19 @@ from frappe import _
 from frappe.utils import getdate, nowdate
 
 from eduedge.api import academic_operations_safe as safe
-from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import (
+	is_limited_instructor_user,
+	resolve_exact_instructor_for_user,
+)
+from eduedge.education.teaching_assignments import (
+	CLASS_ARM_SCOPE,
+	CLASS_SCOPE,
+	COURSE_REQUIRED_TYPES,
+)
 from eduedge.services.academic_calendar import resolve_academic_defaults
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 
 @frappe.whitelist()
@@ -72,6 +82,177 @@ def _annotate_group_hierarchy(groups: list[dict]) -> None:
 		group["hierarchy_label"] = " → ".join(value for value in (group["department"], group["program_name"], row.student_group_name or row.name) if value)
 
 
+def _limited_schedule_student_group_rows(
+	*,
+	branch: str,
+	reference_date,
+	academic_year: str | None,
+	academic_term: str | None,
+	program: str | None,
+	txt: str,
+	start: int,
+	page_len: int,
+) -> list[dict]:
+	"""Expose only classes the current limited Instructor can actually schedule.
+
+	This deliberately does not relax the normal Student Group permission query.
+	It only breaks the first-schedule bootstrap cycle on the Course Schedule Link
+	selector by using exact teaching responsibility as the source of truth.
+	"""
+	exact_instructor = resolve_exact_instructor_for_user()
+	if not exact_instructor:
+		return []
+	if not eligibility_covers_period(
+		exact_instructor,
+		branch,
+		reference_date,
+		reference_date,
+	):
+		return []
+
+	params = {
+		"branch": branch,
+		"exact_instructor": exact_instructor,
+		"reference_date": getdate(reference_date),
+		"academic_year": academic_year or "",
+		"academic_term": academic_term or "",
+		"program": program or "",
+		"txt": f"%{txt or ''}%",
+		"start": int(start),
+		"page_len": int(page_len),
+		"class_scope": CLASS_SCOPE,
+		"arm_scope": CLASS_ARM_SCOPE,
+		"assignment_types": tuple(sorted(COURSE_REQUIRED_TYPES)),
+	}
+	conditions = [
+		f"group_row.`{BRANCH_FIELD}` = %(branch)s",
+		"group_row.disabled = 0",
+	]
+	if academic_year:
+		conditions.append("group_row.academic_year = %(academic_year)s")
+	if academic_term:
+		conditions.append(
+			"(coalesce(group_row.academic_term, '') = '' or group_row.academic_term = %(academic_term)s)"
+		)
+	if program:
+		conditions.append("group_row.program = %(program)s")
+	conditions.append(
+		"""(
+			group_row.name like %(txt)s
+			or coalesce(group_row.student_group_name, '') like %(txt)s
+			or coalesce(group_row.program, '') like %(txt)s
+			or coalesce(group_row.course, '') like %(txt)s
+		)"""
+	)
+
+	assignment_mode = (
+		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.db.exists(
+			"EduEdge Instructor Assignment",
+			{"school_branch": branch},
+		)
+	)
+	if assignment_mode:
+		if not frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+			return []
+		conditions.append(
+			f"""
+			exists (
+				select 1
+				from `tabEduEdge Instructor Assignment` assignment
+				where assignment.instructor = %(exact_instructor)s
+					and assignment.school_branch = %(branch)s
+					and assignment.program_offering = group_row.`{OFFERING_FIELD}`
+					and assignment.assignment_type in %(assignment_types)s
+					and assignment.enabled = 1
+					and (
+						assignment.assignment_scope = %(class_scope)s
+						or (
+							assignment.assignment_scope = %(arm_scope)s
+							and assignment.student_group = group_row.name
+						)
+					)
+					and (
+						assignment.valid_from is null
+						or assignment.valid_from <= %(reference_date)s
+					)
+					and (
+						assignment.valid_to is null
+						or assignment.valid_to >= %(reference_date)s
+					)
+			)
+			"""
+		)
+
+	return frappe.db.sql(
+		f"""
+		select
+			group_row.name,
+			group_row.student_group_name,
+			group_row.program,
+			group_row.course,
+			group_row.academic_year,
+			group_row.academic_term
+		from `tabStudent Group` group_row
+		where {" and ".join(conditions)}
+		order by group_row.student_group_name asc
+		limit %(start)s, %(page_len)s
+		""",
+		params,
+		as_dict=True,
+	)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def student_attendance_course_schedule_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Return permission-aware Course Schedules for native Student Attendance."""
+	safe._require_operations_read()
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	query_filters: dict = {}
+	branch = str(filters.get(BRANCH_FIELD) or "").strip()
+	student_group = str(filters.get("student_group") or "").strip()
+	reference_date = filters.get("reference_date")
+
+	group_branch = ""
+	if student_group:
+		group_doc = frappe.get_doc("Student Group", student_group)
+		group_doc.check_permission("read")
+		group_branch = str(group_doc.get(BRANCH_FIELD) or "").strip()
+	branch = safe.base._resolve_branch(branch or group_branch or None)
+	query_filters[BRANCH_FIELD] = branch
+	if group_branch and group_branch != branch:
+		return []
+	if student_group:
+		query_filters["student_group"] = student_group
+	if reference_date:
+		query_filters["schedule_date"] = str(getdate(reference_date))
+
+	rows = frappe.get_list(
+		"Course Schedule",
+		filters=query_filters,
+		or_filters={
+			"name": ["like", f"%{txt or ''}%"],
+			"student_group": ["like", f"%{txt or ''}%"],
+			"course": ["like", f"%{txt or ''}%"],
+		},
+		fields=["name", "schedule_date", "from_time", "course", "student_group"],
+		start=int(start),
+		page_length=int(page_len),
+		order_by="schedule_date desc, from_time asc, name asc",
+	)
+	return [
+		[
+			row.name,
+			str(row.schedule_date or ""),
+			str(row.from_time or "")[:5],
+			row.course or "",
+			row.student_group or "",
+		]
+		for row in rows
+	]
+
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def student_group_query(doctype, txt, searchfield, start, page_len, filters):
@@ -91,15 +272,27 @@ def student_group_query(doctype, txt, searchfield, start, page_len, filters):
 		group_filters["academic_year"] = academic_year
 	if filters.get("program"):
 		group_filters["program"] = filters.get("program")
-	rows = frappe.get_list(
-		"Student Group",
-		filters=group_filters,
-		or_filters={"name": ["like", f"%{txt}%"], "student_group_name": ["like", f"%{txt}%"], "program": ["like", f"%{txt}%"], "course": ["like", f"%{txt}%"]},
-		fields=["name", "student_group_name", "program", "course", "academic_year", "academic_term"],
-		start=int(start),
-		page_length=int(page_len),
-		order_by="student_group_name asc",
-	)
+	if is_limited_instructor_user():
+		rows = _limited_schedule_student_group_rows(
+			branch=branch,
+			reference_date=reference_date,
+			academic_year=academic_year,
+			academic_term=academic_term,
+			program=filters.get("program"),
+			txt=str(txt or ""),
+			start=int(start),
+			page_len=int(page_len),
+		)
+	else:
+		rows = frappe.get_list(
+			"Student Group",
+			filters=group_filters,
+			or_filters={"name": ["like", f"%{txt}%"], "student_group_name": ["like", f"%{txt}%"], "program": ["like", f"%{txt}%"], "course": ["like", f"%{txt}%"]},
+			fields=["name", "student_group_name", "program", "course", "academic_year", "academic_term"],
+			start=int(start),
+			page_length=int(page_len),
+			order_by="student_group_name asc",
+		)
 	if academic_term:
 		rows = [row for row in rows if not row.academic_term or row.academic_term == academic_term]
 	program_names = list({row.program for row in rows if row.program})
@@ -118,6 +311,94 @@ def student_group_query(doctype, txt, searchfield, start, page_len, filters):
 	]
 
 
+def _limited_schedule_course_names(
+	*,
+	branch: str,
+	student_group: str,
+	program: str,
+	reference_date,
+	program_course_names: list[str],
+) -> list[str]:
+	"""Return only Program subjects the limited Instructor may schedule for this class."""
+	exact_instructor = resolve_exact_instructor_for_user()
+	if not exact_instructor:
+		return []
+	if not eligibility_covers_period(
+		exact_instructor,
+		branch,
+		reference_date,
+		reference_date,
+	):
+		return []
+
+	assignment_mode = (
+		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.db.exists(
+			"EduEdge Instructor Assignment",
+			{"school_branch": branch},
+		)
+	)
+	group_fields = ["name", BRANCH_FIELD, "program", "disabled"]
+	if assignment_mode:
+		if not frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+			return []
+		group_fields.append(OFFERING_FIELD)
+	group = frappe.db.get_value(
+		"Student Group",
+		student_group,
+		group_fields,
+		as_dict=True,
+	)
+	if (
+		not group
+		or group.disabled
+		or group.get(BRANCH_FIELD) != branch
+		or group.program != program
+	):
+		return []
+	if not assignment_mode:
+		return program_course_names
+	if not group.get(OFFERING_FIELD):
+		return []
+
+	rows = frappe.get_all(
+		"EduEdge Instructor Assignment",
+		filters={
+			"instructor": exact_instructor,
+			"school_branch": branch,
+			"program_offering": group.get(OFFERING_FIELD),
+			"course": ["in", program_course_names],
+			"assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)],
+			"enabled": 1,
+		},
+		fields=[
+			"course",
+			"assignment_scope",
+			"student_group",
+			"valid_from",
+			"valid_to",
+		],
+		limit_page_length=0,
+	)
+	target_date = getdate(reference_date)
+	allowed: list[str] = []
+	for row in rows:
+		scope = row.assignment_scope or CLASS_ARM_SCOPE
+		if scope == CLASS_SCOPE:
+			pass
+		elif scope == CLASS_ARM_SCOPE and row.student_group == student_group:
+			pass
+		else:
+			continue
+		if row.valid_from and getdate(row.valid_from) > target_date:
+			continue
+		if row.valid_to and getdate(row.valid_to) < target_date:
+			continue
+		if row.course and row.course not in allowed:
+			allowed.append(row.course)
+	return allowed
+
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def course_query(doctype, txt, searchfield, start, page_len, filters):
@@ -128,6 +409,8 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	program = str(filters.get("program") or "").strip()
 	branch = str(filters.get(BRANCH_FIELD) or "").strip()
+	student_group = str(filters.get("student_group") or "").strip()
+	reference_date = getdate(filters.get("reference_date") or nowdate())
 	if not program or not branch:
 		return []
 	branch = safe.base._resolve_branch(branch)
@@ -143,17 +426,31 @@ def course_query(doctype, txt, searchfield, start, page_len, filters):
 	)
 	if not course_names:
 		return []
+	limited_instructor = is_limited_instructor_user()
+	if limited_instructor:
+		if not student_group:
+			return []
+		course_names = _limited_schedule_course_names(
+			branch=branch,
+			student_group=student_group,
+			program=program,
+			reference_date=reference_date,
+			program_course_names=course_names,
+		)
+		if not course_names:
+			return []
 	course_filters = {"name": ["in", course_names]}
 	course_meta = frappe.get_meta("Course")
 	if course_meta.has_field(INSTITUTION_FIELD):
 		course_filters[INSTITUTION_FIELD] = institution
-	rows = frappe.get_list(
+	course_reader = frappe.get_all if limited_instructor else frappe.get_list
+	rows = course_reader(
 		"Course",
 		filters=course_filters,
-		or_filters={"name": ["like", f"%{txt}%"], "course_name": ["like", f"%{txt}%"], "course_code": ["like", f"%{txt}%"]},
-		fields=["name", "course_name", "course_code"],
+		or_filters={"name": ["like", f"%{txt}%"], "course_name": ["like", f"%{txt}%"]},
+		fields=["name", "course_name"],
 		start=int(start),
 		page_length=int(page_len),
 		order_by="course_name asc, name asc",
 	)
-	return [[row.name, row.course_name or row.name, row.course_code or "", program_row.department or ""] for row in rows]
+	return [[row.name, row.course_name or row.name, "", program_row.department or ""] for row in rows]

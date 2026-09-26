@@ -36,6 +36,26 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_enforced_class_selector_bootstraps_before_any_course_schedule_exists(self):
+        source = self._api()
+        helper = source.split("def _capability_group_names", 1)[1].split(
+            "@frappe.whitelist()",
+            1,
+        )[0]
+        self.assertIn("get_user_capability_assignment_rows(", helper)
+        self.assertIn("eligibility", (APP / "education" / "instructor_assignment_capabilities.py").read_text(encoding="utf-8"))
+        self.assertIn('groups = frappe.get_all(', helper)
+        self.assertNotIn('groups = frappe.get_list(', helper)
+
+        selector = source.split("def assessment_plan_student_group_query", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_plan_course_query",
+            1,
+        )[0]
+        self.assertIn("allowed_groups = _capability_group_names(", selector)
+        self.assertIn('rows = frappe.get_all(', selector)
+        self.assertNotIn('rows = frappe.get_list(', selector)
+
+
     def test_course_query_cascades_from_group_offering_curriculum_and_exact_capability(self):
         source = self._api()
         for token in (
@@ -51,6 +71,21 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_enforced_subject_selector_does_not_require_independent_view_capability(self):
+        source = self._api()
+        query = source.split("def assessment_plan_course_query", 1)[1]
+        for token in (
+            "capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()",
+            '"can_create_assessment_plans"',
+            "curriculum_courses &= set(allowed_courses)",
+            "course_reader = frappe.get_all if capability_scoped else frappe.get_list",
+            "return course_reader(",
+        ):
+            self.assertIn(token, query)
+        self.assertIn("can_view_subject_content", query)
+        self.assertIn("independent can_view_subject_content capability", query)
+
+
     def test_default_off_teacher_course_query_still_uses_existing_assignment_scope(self):
         source = self._api()
         for token in (
@@ -61,6 +96,63 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
             "student_group=student_group",
         ):
             self.assertIn(token, source)
+
+    def test_assessment_result_plan_selector_uses_current_mark_entry_capability(self):
+        source = self._api()
+        query = source.split("def assessment_result_plan_query", 1)[1]
+        for token in (
+            "_resolve_branch(filters.get(BRANCH_FIELD))",
+            'base_filters = {BRANCH_FIELD: branch, "docstatus": 1}',
+            "capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()",
+            '"can_enter_marks"',
+            "school_branch=branch",
+            "on_date=nowdate()",
+            "assignment_scope",
+            "program_offering",
+            "plan.student_group",
+            "plan.course",
+            "plan.docstatus = 1",
+            "return frappe.db.sql(",
+        ):
+            self.assertIn(token, query)
+        self.assertNotIn('"can_view_subject_content"', query)
+
+        client = (APP / "public" / "js" / "education" / "assessment_result.js").read_text(encoding="utf-8")
+        self.assertIn(
+            'query: "eduedge.api.assessment_assignment_options.assessment_result_plan_query"',
+            client,
+        )
+        self.assertIn("eduedge_school_branch: frm.doc.eduedge_school_branch", client)
+        self.assertNotIn("docstatus: 1", client)
+
+
+    def test_assessment_result_student_selector_is_plan_anchored(self):
+        source = self._api()
+        query = source.split("def assessment_result_student_query", 1)[1]
+        for token in (
+            'assessment_plan = str(filters.get("assessment_plan")',
+            '"Assessment Plan"',
+            '["name", "student_group", "course", BRANCH_FIELD, "docstatus"]',
+            "int(plan.docstatus or 0) != 1",
+            "plan.get(BRANCH_FIELD) != branch",
+            "group_student.parent = %(student_group)s",
+            "group_student.active = 1",
+            "student.enabled = 1",
+            '"can_enter_marks"',
+            "user_has_instructor_assignment_capability(",
+            "on_date=nowdate()",
+            'plan_doc.check_permission("read")',
+        ):
+            self.assertIn(token, query)
+
+        client = (APP / "public" / "js" / "education" / "assessment_result.js").read_text(encoding="utf-8")
+        self.assertIn(
+            'query: "eduedge.api.assessment_assignment_options.assessment_result_student_query"',
+            client,
+        )
+        self.assertIn("assessment_plan: frm.doc.assessment_plan", client)
+        self.assertNotIn("eduedge.api.academic_operations.student_query", client)
+
 
     def test_client_cascade_filters_and_clears_invalid_children(self):
         source = self._client()
@@ -77,6 +169,25 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
             'frm.set_value("course", null)',
         ):
             self.assertIn(token, source)
+
+    def test_assessment_plan_cascade_preserves_stable_context(self):
+        source = self._client()
+
+        group_handler = source.split("student_group(frm)", 1)[1].split(
+            "course(frm)", 1
+        )[0]
+        self.assertIn('frm.set_value("course", null)', group_handler)
+        self.assertIn('frm.set_value("examiner", null)', group_handler)
+        self.assertNotIn('frm.set_value("room", null)', group_handler)
+        self.assertNotIn('frm.set_value("supervisor", null)', group_handler)
+
+        date_handler = source.split("schedule_date(frm)", 1)[1]
+        self.assertIn('frm.set_value("examiner", null)', date_handler)
+        self.assertIn('frm.set_value("supervisor", null)', date_handler)
+        self.assertNotIn('frm.set_value("student_group", null)', date_handler)
+        self.assertNotIn('frm.set_value("course", null)', date_handler)
+        self.assertNotIn('frm.set_value("room", null)', date_handler)
+
 
     def test_backend_before_validate_remains_authoritative_over_smart_queries(self):
         operations = (APP / "education" / "assessment_operations.py").read_text(encoding="utf-8")

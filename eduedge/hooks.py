@@ -25,6 +25,9 @@ scheduler_events = {
 	"hourly": [
 		"eduedge.platform.runtime_context.refresh_cached_runtime_context",
 	],
+	"daily": [
+		"eduedge.education.people_fields.reconcile_instructor_primary_branches",
+	],
 	"cron": {
 		"*/5 * * * *": [
 			"eduedge.security.feature_gate.run_cbt_expiry_job",
@@ -44,6 +47,12 @@ override_whitelisted_methods = {
 	"eduedge.api.academic_operations.get_attendance_register": "eduedge.api.academic_operations_safe.get_attendance_register",
 	"eduedge.api.academic_operations.save_attendance_register": "eduedge.api.academic_operations_safe.save_attendance_register",
 	"eduedge.api.academic_operations.student_group_query": "eduedge.api.academic_operations_review.student_group_query",
+	"education.education.doctype.student_attendance_tool.student_attendance_tool.get_student_attendance_records": "eduedge.api.attendance_tool_safe.get_student_attendance_records",
+	"education.education.api.mark_attendance": "eduedge.api.attendance_tool_safe.mark_attendance",
+	"education.education.api.get_assessment_students": "eduedge.api.assessment_result_tool_safe.get_assessment_students",
+	"education.education.api.get_assessment_details": "eduedge.api.assessment_result_tool_safe.get_assessment_details",
+	"education.education.api.mark_assessment_result": "eduedge.api.assessment_result_tool_safe.mark_assessment_result",
+	"education.education.api.submit_assessment_results": "eduedge.api.assessment_result_tool_safe.submit_assessment_results",
 	"eduedge.api.programme_offerings.get_programme_offerings_page": "eduedge.api.programme_offerings_safe.get_programme_offerings_page",
 	"eduedge.api.programme_offerings.get_programme_offering_options": "eduedge.api.programme_offerings_safe.get_programme_offering_options",
 	"eduedge.api.programme_offerings.save_programme_offering": "eduedge.api.programme_offerings_safe.save_programme_offering",
@@ -58,6 +67,7 @@ override_whitelisted_methods = {
 	"eduedge.cbt.attempt_review.get_attempt_review_queue": "eduedge.cbt.integration_hardening.get_attempt_review_queue",
 	"eduedge.cbt.attempt_review.resolve_attempt_review": "eduedge.cbt.integration_hardening.resolve_attempt_review",
 	"eduedge.cbt.attempts.get_attempt_state": "eduedge.cbt.attempt_runtime_guard.get_attempt_state",
+	"eduedge.cbt.attempts.record_heartbeat": "eduedge.cbt.attempt_runtime_guard.record_heartbeat",
 	"eduedge.cbt.attempts.sync_answers": "eduedge.cbt.attempt_runtime_guard.sync_answers",
 	"eduedge.cbt.attempts.submit_attempt": "eduedge.cbt.attempt_runtime_guard.submit_attempt",
 }
@@ -72,6 +82,7 @@ add_to_apps_screen = [
 ]
 
 doctype_js = {
+	"Instructor": "public/js/education/instructor.js",
 	"Program": "public/js/education/program.js",
 	"Course": "public/js/education/course.js",
 	"Student Admission": "public/js/education/student_admission.js",
@@ -84,6 +95,7 @@ doctype_js = {
 	"Student Attendance": "public/js/education/student_attendance.js",
 	"Assessment Plan": "public/js/education/assessment_plan.js",
 	"Assessment Result": "public/js/education/assessment_result.js",
+	"Assessment Result Tool": "public/js/education/assessment_result_tool.js",
 	"EduEdge Institution Academic Calendar": "eduedge/doctype/eduedge_institution_academic_calendar/eduedge_institution_academic_calendar.js",
 }
 
@@ -148,9 +160,11 @@ permission_query_conditions = {
 	"Instructor": "eduedge.education.academic_permissions.instructor_query",
 	"Assessment Group": "eduedge.education.academic_permissions.assessment_group_query",
 	"Grading Scale": "eduedge.education.academic_permissions.grading_scale_query",
+	"EduEdge Result Profile": "eduedge.education.result_profile_permissions.result_profile_query",
 	"Fee Structure": "eduedge.education.academic_permissions.fee_structure_query",
 	"EduEdge Enrollment Status Log": "eduedge.education.academic_branch_permissions.enrollment_status_log_query",
 	"EduEdge School Branch": "eduedge.education.permissions.school_branch_query",
+	"EduEdge User Branch Access": "eduedge.education.user_branch_access_permissions.user_branch_access_query",
 	"EduEdge School Event": "eduedge.education.school_event_permissions.school_event_query",
 	"Student Admission": "eduedge.education.permissions.student_admission_query",
 	"Student Applicant": "eduedge.education.permissions.student_applicant_query",
@@ -169,7 +183,9 @@ permission_query_conditions = {
 	"EduEdge Student Photo Review Log": "eduedge.education.people_permissions.student_photo_review_log_query",
 	"EduEdge Result Publication": "eduedge.education.permissions.result_publication_query",
 	"EduEdge Result Publication Log": "eduedge.education.permissions.result_publication_log_query",
+	"EduEdge Published Result Snapshot": "eduedge.education.permissions.published_result_snapshot_query",
 	"EduEdge Report Card Review": "eduedge.education.permissions.report_card_review_query",
+	"EduEdge Report Card Issue": "eduedge.education.permissions.report_card_issue_query",
 	"EduEdge Training Progress": "eduedge.training.permissions.training_progress_query",
 	"EduEdge Examination Centre": "eduedge.cbt.permissions.examination_centre_query",
 	"EduEdge CBT Question": "eduedge.cbt.permissions.cbt_question_query",
@@ -205,9 +221,11 @@ has_permission = {
 	"Instructor": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"Assessment Group": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"Grading Scale": "eduedge.education.academic_permissions.has_academic_institution_permission",
+	"EduEdge Result Profile": "eduedge.education.result_profile_permissions.has_result_profile_permission",
 	"Fee Structure": "eduedge.education.academic_permissions.has_academic_institution_permission",
 	"EduEdge Enrollment Status Log": "eduedge.education.academic_branch_permissions.has_enrollment_status_log_permission",
 	"EduEdge School Branch": "eduedge.education.permissions.has_school_branch_record_permission",
+	"EduEdge User Branch Access": "eduedge.education.user_branch_access_permissions.has_user_branch_access_permission",
 	"EduEdge School Event": "eduedge.education.school_event_permissions.has_school_event_permission",
 	"Student Admission": "eduedge.education.permissions.has_student_admission_permission",
 	"Student Applicant": "eduedge.education.permissions.has_student_applicant_permission",
@@ -224,9 +242,11 @@ has_permission = {
 	"EduEdge Instructor Branch Assignment": "eduedge.education.permissions.has_school_branch_permission",
 	"EduEdge Instructor Assignment": "eduedge.education.people_permissions.has_people_branch_permission",
 	"EduEdge Student Photo Review Log": "eduedge.education.people_permissions.has_people_branch_permission",
-	"EduEdge Result Publication": "eduedge.education.permissions.has_school_branch_permission",
+	"EduEdge Result Publication": "eduedge.education.permissions.has_result_publication_permission",
 	"EduEdge Result Publication Log": "eduedge.education.permissions.has_result_publication_log_permission",
-	"EduEdge Report Card Review": "eduedge.education.permissions.has_school_branch_permission",
+	"EduEdge Published Result Snapshot": "eduedge.education.permissions.has_published_result_snapshot_permission",
+	"EduEdge Report Card Review": "eduedge.education.permissions.has_report_card_review_permission",
+	"EduEdge Report Card Issue": "eduedge.education.permissions.has_report_card_issue_permission",
 	"EduEdge Training Progress": "eduedge.training.permissions.has_training_progress_permission",
 	"EduEdge Examination Centre": "eduedge.cbt.permissions.has_school_branch_permission",
 	"EduEdge CBT Question": "eduedge.cbt.permissions.has_school_branch_permission",
@@ -257,3 +277,4 @@ fixtures = [
 		]]],
 	},
 ]
+

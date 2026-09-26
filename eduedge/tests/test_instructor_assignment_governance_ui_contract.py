@@ -59,7 +59,7 @@ class TestInstructorAssignmentGovernanceUIContract(unittest.TestCase):
             "Reason",
             "reasonError",
             "at least 3 characters",
-            "Branch Eligibility is independent",
+            "Branch Eligibility remains owned by Branch Governance",
         ):
             self.assertIn(token, component)
         self.assertNotIn("frappe.ui.Dialog", component)

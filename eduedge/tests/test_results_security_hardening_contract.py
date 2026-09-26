@@ -1,0 +1,244 @@
+from pathlib import Path
+import json
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+APP = ROOT / "eduedge"
+
+
+class TestResultsSecurityHardeningContract(unittest.TestCase):
+	def test_result_records_use_instructor_aware_permission_hooks(self):
+		hooks = (APP / "hooks.py").read_text()
+		permissions = (APP / "education" / "permissions.py").read_text()
+		for doctype, handler in (
+			("EduEdge Result Publication", "has_result_publication_permission"),
+			("EduEdge Published Result Snapshot", "has_published_result_snapshot_permission"),
+			("EduEdge Report Card Review", "has_report_card_review_permission"),
+			("EduEdge Report Card Issue", "has_report_card_issue_permission"),
+		):
+			self.assertIn(f'"{doctype}"', hooks)
+			self.assertIn(handler, hooks)
+		self.assertIn(
+			'return _class_responsibility_result_query("EduEdge Result Publication", user)',
+			permissions,
+		)
+		self.assertIn(
+			"return _has_class_responsibility_result_permission(doc, user, permission_type)",
+			permissions,
+		)
+		self.assertIn("def _class_responsibility_assignment_condition", permissions)
+		self.assertIn("assignment.instructor in", permissions)
+
+	def test_class_responsibility_list_scope_requires_branch_eligibility(self):
+		permissions = (APP / "education" / "permissions.py").read_text()
+		helper = permissions.split("def _class_responsibility_assignment_condition", 1)[1].split(
+			"def _class_responsibility_result_query", 1
+		)[0]
+		for token in (
+			"from `tabEduEdge Instructor Branch Assignment` eligibility",
+			"eligibility.instructor = assignment.instructor",
+			"eligibility.school_branch = assignment.school_branch",
+			"eligibility.enabled = 1",
+			"eligibility.valid_from is null",
+			"eligibility.valid_to is null",
+		):
+			self.assertIn(token, helper)
+
+	def test_subject_teacher_cannot_receive_whole_class_publication_readiness(self):
+		api = (APP / "api" / "assessment_operations.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_assessment_operations" / "EduEdgeAssessmentOperations.vue").read_text()
+		for token in (
+			"def _can_view_publication_scope",
+			"is_limited_instructor_user(frappe.session.user)",
+			"has_class_responsibility_assignment(",
+			"def _assert_publication_scope_access",
+			"can_view_publication_scope",
+			"can_manage_publication",
+			"_assert_publication_scope_access(student_group, academic_year, academic_term)",
+		):
+			self.assertIn(token, api)
+		self.assertIn('v-if="context.can_view_publication_scope"', vue)
+		self.assertIn("context.can_manage_publication", vue)
+		self.assertIn("Class-level result control", vue)
+
+	def test_instructor_can_read_branch_scoped_result_profiles_without_manage_rights(self):
+		payload = json.loads(
+			(APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.json").read_text()
+		)
+		rows = [row for row in payload.get("permissions") or [] if row.get("role") == "Instructor"]
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0].get("read"), 1)
+		for right in ("create", "write", "delete", "share", "import"):
+			self.assertFalse(rows[0].get(right))
+
+		permissions = (APP / "education" / "result_profile_permissions.py").read_text()
+		self.assertIn("def result_profile_query", permissions)
+		self.assertIn("get_allowed_school_branches", permissions)
+		self.assertIn("def has_result_profile_permission", permissions)
+
+
+	def test_assessment_context_unions_class_responsibility_without_broadening_plan_scope(self):
+		teaching = (APP / "education" / "teaching_assignments.py").read_text()
+		api = (APP / "api" / "assessment_operations.py").read_text()
+		plan_options = (APP / "api" / "assessment_assignment_options.py").read_text()
+
+		for token in (
+			"def class_responsibility_group_names",
+			"get_active_instructor_names_for_user",
+			"if len(instructors) != 1:",
+			"active_assignment_rows(",
+			"branch=branch",
+			"row.get(\"assignment_type\") in CLASS_RESPONSIBILITY_TYPES",
+			"not row.get(\"course\")",
+			"scope == CLASS_SCOPE",
+			"scope == CLASS_ARM_SCOPE",
+		):
+			self.assertIn(token, teaching)
+
+		for token in (
+			"def _assessment_context_groups",
+			'groups = frappe.get_list(',
+			'candidates = frappe.get_all(',
+			"class_responsibility_group_names(",
+			"if row.name not in responsibility_names or row.name in merged:",
+			"groups = _assessment_context_groups(",
+		):
+			self.assertIn(token, api)
+
+		# Planning remains subject/capability-specific; class responsibility is only
+		# an additional publication/review discovery path on the mixed operations page.
+		self.assertIn("def assessment_plan_student_group_query", plan_options)
+		self.assertIn("can_create_assessment_plans", plan_options)
+		self.assertNotIn("class_responsibility_group_names", plan_options)
+
+
+	def test_report_card_service_rejects_unassigned_teacher_class(self):
+		service = (APP / "education" / "report_cards.py").read_text()
+		self.assertIn("is_limited_instructor_user", service)
+		self.assertIn("has_class_responsibility_assignment", service)
+		self.assertIn("def _assert_publication_operator_scope", service)
+		self.assertIn("Full report-card access is limited to the effective Class Teacher", service)
+		self.assertNotIn("if write and not roles.intersection(OPERATIONAL_ROLES)", service)
+
+	def test_raw_snapshot_and_issue_hooks_require_class_responsibility_even_with_extra_roles(self):
+		permissions = (APP / "education" / "permissions.py").read_text()
+		self.assertIn(
+			'return _class_responsibility_result_query("EduEdge Published Result Snapshot", user)',
+			permissions,
+		)
+		self.assertIn(
+			'return _class_responsibility_result_query("EduEdge Report Card Issue", user)',
+			permissions,
+		)
+		self.assertIn("def _has_class_responsibility_result_permission", permissions)
+		self.assertIn(
+			"def has_published_result_snapshot_permission(doc, user=None, permission_type=None)",
+			permissions,
+		)
+		self.assertIn(
+			"def has_report_card_issue_permission(doc, user=None, permission_type=None)",
+			permissions,
+		)
+		self.assertGreaterEqual(
+			permissions.count("return _has_class_responsibility_result_permission(doc, user, permission_type)"),
+			3,
+		)
+
+	def test_historical_class_scope_is_read_only_without_current_responsibility(self):
+		permissions = (APP / "education" / "permissions.py").read_text()
+		report_cards = (APP / "education" / "report_cards.py").read_text()
+		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
+
+		for token in (
+			'"create"',
+			'"write"',
+			'"delete"',
+			'"submit"',
+			'"cancel"',
+			'"amend"',
+			"on_date=nowdate() if mutation_permission else None",
+		):
+			self.assertIn(token, permissions)
+		self.assertIn("def can_view_report_card_scope", report_cards)
+		self.assertIn("def can_manage_report_card_reviews", report_cards)
+		self.assertIn("on_date=nowdate()", report_cards)
+		self.assertIn("def _can_manage_publication_scope", assessment_api)
+		self.assertIn("def _assert_publication_mutation_scope", assessment_api)
+		self.assertIn("Current Class/Form responsibility is required", assessment_api)
+
+	def test_generic_student_read_does_not_grant_report_card_access(self):
+		service = (APP / "education" / "report_cards.py").read_text()
+		self.assertIn("You are not permitted to access governed report cards.", service)
+		self.assertNotIn('student_doc.check_permission("read")', service)
+
+	def test_subject_teacher_cannot_acquire_class_teacher_review_authority(self):
+		teaching = (APP / "education" / "teaching_assignments.py").read_text()
+		permissions = (APP / "education" / "permissions.py").read_text()
+		service = (APP / "education" / "report_cards.py").read_text()
+		api = (APP / "api" / "report_cards.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
+		self.assertIn("def has_class_responsibility_assignment", teaching)
+		self.assertIn("CLASS_RESPONSIBILITY_TYPES", teaching)
+		self.assertIn("term_end_date", teaching)
+		self.assertIn("year_end_date", teaching)
+		self.assertIn("def _class_responsibility_result_query", permissions)
+		self.assertIn('not frappe.db.exists("DocType", "EduEdge Instructor Assignment")', permissions)
+		self.assertIn('frappe.get_meta("Student Group").has_field(OFFERING_FIELD)', permissions)
+		self.assertIn('return _class_responsibility_result_query("EduEdge Report Card Review", user)', permissions)
+		self.assertIn("has_class_responsibility_assignment", permissions)
+		self.assertIn("def can_view_report_card_scope", service)
+		self.assertIn("def can_manage_report_card_reviews", service)
+		self.assertIn('frappe.has_permission(REVIEW_DOCTYPE, "create", user=resolved_user)', service)
+		self.assertIn('frappe.has_permission(REVIEW_DOCTYPE, "write", user=resolved_user)', service)
+		self.assertIn("def assert_report_card_review_management", service)
+		self.assertIn("assert_report_card_review_management", api)
+		self.assertIn('"can_review"', api)
+		self.assertIn("can_view_report_card_scope(row)", api)
+		self.assertIn("can_manage_report_card_reviews(selected_publication)", api)
+		self.assertIn("context.can_review", vue)
+		self.assertIn("Published results are read-only here.", vue)
+
+	def test_teacher_has_no_raw_snapshot_or_issue_payload_permission(self):
+		for relative in (
+			"eduedge/doctype/eduedge_published_result_snapshot/eduedge_published_result_snapshot.json",
+			"eduedge/doctype/eduedge_report_card_issue/eduedge_report_card_issue.json",
+		):
+			payload = json.loads((APP / relative).read_text())
+			roles = {row.get("role") for row in payload.get("permissions") or []}
+			self.assertNotIn("Teacher", roles)
+			self.assertNotIn("Instructor", roles)
+
+	def test_publication_and_review_transitions_lock_source_rows(self):
+		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
+		report_api = (APP / "api" / "report_cards.py").read_text()
+		self.assertIn("for_update=True", assessment_api)
+		self.assertIn("where name=%s for update", assessment_api)
+		self.assertIn("def _get_review_for_update", report_api)
+		self.assertIn("where name=%s for update", report_api)
+		self.assertIn("select name from `tabStudent Group` where name=%s for update", assessment_api)
+		self.assertIn("select name from `tabEduEdge Result Publication` where name=%s for update", report_api)
+
+	def test_corrections_cannot_branch_from_stale_published_version(self):
+		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
+		self.assertIn("A newer published result version exists.", assessment_api)
+		self.assertIn("next_version = int(source.publication_version or 1) + 1", assessment_api)
+
+	def test_database_uniqueness_guards_snapshot_and_issue_versions(self):
+		patches = (APP / "patches.txt").read_text()
+		patch = (APP / "patches" / "v1_0" / "add_result_record_unique_constraints.py").read_text()
+		self.assertIn("add_result_record_unique_constraints", patches)
+		self.assertIn('"EduEdge Published Result Snapshot"', patch)
+		self.assertIn('["result_publication", "student"]', patch)
+		self.assertIn('"EduEdge Report Card Issue"', patch)
+		self.assertIn('["result_publication", "student", "issue_version"]', patch)
+		self.assertIn('"EduEdge Report Card Review"', patch)
+		self.assertIn('"uniq_eduedge_review_publication_student"', patch)
+		self.assertIn("frappe.db.add_unique", patch)
+		self.assertIn("def _constraint_exists", patch)
+		self.assertIn("if not _constraint_exists(doctype, constraint_name)", patch)
+		self.assertIn("Resolve the duplicate records before migration.", patch)
+
+
+if __name__ == "__main__":
+	unittest.main()

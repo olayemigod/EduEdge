@@ -23,6 +23,24 @@ ADMIN_ROLES = {
 	"School Administrator",
 	"Academic Administrator",
 }
+ANSWER_SYNC_CONFLICT_REASON = "Answer revision conflict detected during browser synchronisation."
+SYNC_RECONCILIATION_HOURS = 24
+
+
+def _answer_sync_conflict_active(attempt) -> bool:
+	return bool(
+		cint(attempt.requires_review)
+		and ANSWER_SYNC_CONFLICT_REASON in {
+			row.strip()
+			for row in str(attempt.review_reasons or "").splitlines()
+			if row.strip()
+		}
+	)
+
+
+RUNTIME_SECURITY_EVENTS = {
+	"Concurrent Tab Detected": "Concurrent browser tab detected for this attempt.",
+}
 
 
 @contextmanager
@@ -58,6 +76,47 @@ def _review_reason(existing: str | None, reason: str) -> str:
 	if reason not in rows:
 		rows.append(reason)
 	return "\n".join(rows)
+
+
+def _record_runtime_security_event(attempt, event_name: str | None) -> None:
+	event = str(event_name or "").strip()
+	if not event:
+		return
+	reason = RUNTIME_SECURITY_EVENTS.get(event)
+	if not reason:
+		frappe.throw(_("Unsupported CBT runtime security event."), frappe.ValidationError)
+	review_reasons = _review_reason(attempt.review_reasons, reason)
+	frappe.db.set_value(
+		"EduEdge CBT Attempt",
+		attempt.name,
+		{"requires_review": 1, "review_reasons": review_reasons},
+		update_modified=False,
+	)
+	attempt.requires_review = 1
+	attempt.review_reasons = review_reasons
+	if frappe.db.exists(
+		"EduEdge CBT Lifecycle Log",
+		{
+			"reference_doctype": "EduEdge CBT Attempt",
+			"reference_name": attempt.name,
+			"event_type": event,
+		},
+	):
+		return
+	from eduedge.cbt.schedule_governance import write_lifecycle_log
+
+	write_lifecycle_log(
+		reference_doctype="EduEdge CBT Attempt",
+		reference_name=attempt.name,
+		exam_schedule=attempt.exam_schedule,
+		candidate_assignment=attempt.candidate_assignment,
+		exam_scope=attempt.exam_scope,
+		school_branch=attempt.school_branch,
+		event_type=event,
+		from_status=attempt.attempt_status,
+		to_status=attempt.attempt_status,
+		reason=reason,
+	)
 
 
 def _assert_manager(assignment) -> None:
@@ -283,6 +342,14 @@ def _remaining(attempt) -> int:
 	if not attempt.expires_at:
 		return 0
 	return max(0, int((get_datetime(attempt.expires_at) - now_datetime()).total_seconds()))
+
+
+def reconciliation_deadline(attempt):
+	"""Return the final server-authoritative window for pre-cutoff browser reconciliation."""
+	anchor = attempt.expires_at or attempt.launch_token_expires_at
+	if not anchor:
+		return None
+	return get_datetime(anchor) + timedelta(hours=SYNC_RECONCILIATION_HOURS)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -599,6 +666,7 @@ def record_heartbeat(
 	launch_token: str,
 	client_session_id: str,
 	reported_pending_count: int = 0,
+	runtime_event: str | None = None,
 ) -> dict:
 	_lock("EduEdge CBT Attempt", attempt_name)
 	attempt = _load(attempt_name, launch_token)
@@ -606,6 +674,7 @@ def record_heartbeat(
 	if attempt.attempt_status == "In Progress" and _remaining(attempt) <= 0:
 		_finalize_timeout(attempt.name)
 		attempt.reload()
+	_record_runtime_security_event(attempt, runtime_event)
 	current = now_datetime()
 	frappe.db.set_value(
 		"EduEdge CBT Attempt",
@@ -613,7 +682,13 @@ def record_heartbeat(
 		{"last_heartbeat_at": current, "reported_pending_sync_count": max(0, cint(reported_pending_count))},
 		update_modified=False,
 	)
-	return {"attempt": attempt.name, "status": attempt.attempt_status, "server_time": current, "seconds_remaining": _remaining(attempt)}
+	return {
+		"attempt": attempt.name,
+		"status": attempt.attempt_status,
+		"server_time": current,
+		"seconds_remaining": _remaining(attempt),
+		"answer_sync_conflict": _answer_sync_conflict_active(attempt),
+	}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -657,13 +732,21 @@ def _finalize_timeout(attempt_name: str) -> None:
 		return
 	pending = cint(attempt.reported_pending_sync_count)
 	if cint(attempt.auto_submit_on_timeout):
-		status = "Pending Sync" if pending else "Auto Submitted"
+		# A server timeout cannot prove that an offline browser has no newer local
+		# answers. Hold every auto-timeout in Pending Sync until the active browser
+		# confirms a zero-pending queue or the reconciliation window expires.
+		status = "Pending Sync"
 		source = "Server Timeout Auto-submit"
 	else:
 		status, source = "Timed Out", "Server Timeout"
 	reasons = attempt.review_reasons
 	if status == "Pending Sync":
-		reasons = _review_reason(reasons, "Timeout reached with pending browser answers.")
+		timeout_reason = (
+			"Timeout reached with reported pending browser answers."
+			if pending
+			else "Server timeout entered the browser reconciliation window."
+		)
+		reasons = _review_reason(reasons, timeout_reason)
 	if status == "Timed Out":
 		reasons = _review_reason(reasons, "Attempt timed out without automatic submission.")
 	frappe.db.set_value(
@@ -673,7 +756,7 @@ def _finalize_timeout(attempt_name: str) -> None:
 			"attempt_status": status,
 			"submitted_at": now_datetime() if status != "Timed Out" else None,
 			"submission_source": source,
-			"requires_review": 1 if status in {"Pending Sync", "Timed Out"} else cint(attempt.requires_review),
+			"requires_review": 1 if status == "Timed Out" else cint(attempt.requires_review),
 			"review_reasons": reasons,
 		},
 		update_modified=False,

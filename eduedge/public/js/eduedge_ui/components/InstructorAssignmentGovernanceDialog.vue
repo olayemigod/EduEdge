@@ -17,7 +17,7 @@
 			<section class="eduedge-assignment-governance__notice" :class="{ 'is-danger': mode === 'delete' }">
 				<strong>{{ noticeTitle }}</strong>
 				<span>{{ noticeText }}</span>
-				<small>Branch Eligibility is independent and will not be shortened, deleted or widened by this action.</small>
+				<small>Branch Eligibility remains owned by Branch Governance and is not shortened, deleted or widened by this academic assignment action.</small>
 			</section>
 
 			<label class="eduedge-assignment-governance__field">

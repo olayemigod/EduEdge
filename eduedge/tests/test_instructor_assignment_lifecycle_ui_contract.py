@@ -23,7 +23,10 @@ class TestInstructorAssignmentLifecycleUIContract(unittest.TestCase):
             "assignmentStatus(item)",
             "Current",
             "Scheduled",
+            "Ending",
             "Ended",
+            "Replaced",
+            "Transferred",
             "Disabled",
             "Status unavailable",
         ):
@@ -41,6 +44,24 @@ class TestInstructorAssignmentLifecycleUIContract(unittest.TestCase):
             self.assertIn(token, api)
 
         self.assertNotIn(":label=\"item.enabled ? 'Active' : 'Disabled'\"", component)
+
+    def test_register_renders_all_authoritative_lifecycle_states(self):
+        component = (
+            APP
+            / "public"
+            / "js"
+            / "eduedge_instructor_assignments"
+            / "EduEdgeInstructorAssignments.vue"
+        ).read_text(encoding="utf-8")
+        for token in (
+            'label === "Ending"',
+            'label === "Replaced"',
+            'label === "Transferred"',
+            "Final responsibility date {{ item.ended_on }}",
+        ):
+            self.assertIn(token, component)
+        self.assertNotIn(">Ended {{ item.ended_on }}", component)
+
 
     def test_relation_enrichment_cannot_take_down_core_lifecycle_state(self):
         api = (APP / "api" / "instructor_assignment_lifecycle.py").read_text(encoding="utf-8")

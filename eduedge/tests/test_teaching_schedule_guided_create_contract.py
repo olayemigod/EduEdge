@@ -43,6 +43,65 @@ class TestTeachingScheduleGuidedCreateContract(unittest.TestCase):
         self.assertNotIn("/app/instructor/", dialog.lower())
         self.assertNotIn("frappe.new_doc", dialog)
 
+    def test_limited_guided_selectors_reuse_exact_assignment_governance(self):
+        api = (APP / "api" / "teaching_schedule.py").read_text(encoding="utf-8")
+        dialog = (APP / "public/js/eduedge_teaching_schedule/TeachingScheduleCreateDialog.vue").read_text(encoding="utf-8")
+
+        for token in (
+            "def _limited_teaching_schedule_offering_names",
+            "resolve_exact_instructor_for_user(required=True)",
+            "eligibility_covers_period(",
+            '"assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)]',
+            "schedule_student_group_query(",
+            "schedule_course_query(",
+            "_group_offering(row[0]) != program_offering",
+        ):
+            self.assertIn(token, api)
+        self.assertIn("student_group: this.draft.student_group", dialog)
+        self.assertIn(
+            "!this.draft.program_offering || !this.draft.student_group || !this.draft.reference_date",
+            dialog,
+        )
+
+
+    def test_date_change_revalidates_context_without_destructive_reset(self):
+        dialog = (APP / "public/js/eduedge_teaching_schedule/TeachingScheduleCreateDialog.vue").read_text(encoding="utf-8")
+        block = dialog.split("async revalidateDateContext()", 1)[1].split(
+            "updateOffering(value)", 1
+        )[0]
+
+        for token in (
+            "this.clearInstructor()",
+            "const selectedDate = this.draft.reference_date",
+            "await this.searchOfferings(offering)",
+            "row?.value === offering",
+            "await this.searchClassArms(studentGroup)",
+            "row?.value === studentGroup",
+            "await this.searchCourses(course)",
+            "row?.value === course",
+            "this.clearOffering()",
+            "this.clearStudentGroup()",
+            "this.clearCourse()",
+            "this.draft.reference_date !== selectedDate",
+            "this.draft.program_offering !== offering",
+            "this.draft.student_group !== studentGroup",
+            "this.draft.course !== course",
+        ):
+            self.assertIn(token, block)
+        self.assertNotIn("this.clearRoom()", block)
+        self.assertNotIn("this.reset()", block)
+
+        watcher = dialog.split("async referenceDate(value)", 1)[1].split("methods:", 1)[0]
+        self.assertIn("await this.revalidateDateContext()", watcher)
+        self.assertNotIn("this.clearOffering()", watcher)
+
+        date_handler = dialog.split("async dateChanged()", 1)[1].split(
+            "async revalidateDateContext()", 1
+        )[0]
+        self.assertIn("await this.revalidateDateContext()", date_handler)
+        self.assertNotIn("this.clearOffering()", date_handler)
+
+
     def test_room_can_be_created_and_selected_without_leaving_schedule_dialog(self):
         dialog = (APP / "public/js/eduedge_teaching_schedule/TeachingScheduleCreateDialog.vue").read_text(encoding="utf-8")
         room_api = (APP / "api/teaching_schedule_rooms.py").read_text(encoding="utf-8")

@@ -45,6 +45,13 @@
 							<input v-model="filters.academic_year" class="form-control" placeholder="Academic Year" @change="resetScope" />
 						</label>
 						<label>
+							<span>Result Mode</span>
+							<select v-model="filters.result_mode" class="form-control" @change="changeResultMode">
+								<option value="Terminal">Terminal</option>
+								<option value="Annual">Annual / Cumulative</option>
+							</select>
+						</label>
+						<label v-if="filters.result_mode !== 'Annual'">
 							<span>Academic Term</span>
 							<input v-model="filters.academic_term" class="form-control" placeholder="Optional term" @change="resetScope" />
 						</label>
@@ -58,9 +65,18 @@
 							</select>
 						</label>
 						<label>
+							<span>Result Profile</span>
+							<select v-model="filters.result_profile" class="form-control" @change="changeResultProfile">
+								<option value="">Legacy Assessment Group</option>
+								<option v-for="profile in context.result_profiles" :key="profile.name" :value="profile.name">
+									{{ profile.profile_name || profile.name }}{{ profile.is_default ? ' · Default' : '' }}
+								</option>
+							</select>
+						</label>
+						<label v-if="!filters.result_profile && filters.result_mode !== 'Annual'">
 							<span>Assessment Group</span>
 							<select v-model="filters.assessment_group" class="form-control" @change="loadContext">
-								<option value="">All assessment groups</option>
+								<option value="">Select assessment group</option>
 								<option v-for="group in context.assessment_groups" :key="group.name" :value="group.name">
 									{{ group.assessment_group_name || group.name }}
 								</option>
@@ -75,9 +91,9 @@
 				<EdgeDashboardLayout min-column-width="12rem">
 					<EdgeStatCard label="Assessment Plans" :value="context.counts.plans" helper="Plans in the selected scope" />
 					<EdgeStatCard label="Submitted Plans" :value="context.counts.submitted_plans" helper="Ready for result entry" />
-					<EdgeStatCard label="Expected Results" :value="context.counts.expected_results" helper="Students × submitted plans" />
-					<EdgeStatCard label="Submitted Results" :value="context.counts.submitted_results" helper="Final result records" />
-					<EdgeStatCard label="Missing Results" :value="context.counts.missing_results" helper="Blocking approval" />
+					<EdgeStatCard v-if="context.can_view_publication_scope" label="Expected Results" :value="context.counts.expected_results" helper="Students × submitted plans" />
+					<EdgeStatCard v-if="context.can_view_publication_scope" label="Submitted Results" :value="context.counts.submitted_results" helper="Final result records" />
+					<EdgeStatCard v-if="context.can_view_publication_scope" label="Missing Results" :value="context.counts.missing_results" helper="Blocking approval" />
 				</EdgeDashboardLayout>
 
 				<section class="eduedge-assessment-grid">
@@ -117,7 +133,7 @@
 						</div>
 					</article>
 
-					<article class="eduedge-panel">
+					<article v-if="context.can_view_publication_scope" class="eduedge-panel">
 						<div class="eduedge-panel-heading">
 							<div>
 								<p class="edge-eyebrow">Approval and publication</p>
@@ -125,14 +141,14 @@
 							</div>
 							<EdgeStatusBadge
 								v-if="context.publication"
-								:label="context.publication.status"
+								:label="`${context.publication.status} · v${context.publication.publication_version || 1}`"
 								:status="context.publication.status"
 								:tone="publicationTone"
 							/>
 						</div>
 
 						<div v-if="!scopeComplete" class="eduedge-scope-note">
-							Select a class and assessment group to calculate result completeness and manage publication.
+							Select a class and Result Profile. Existing legacy Assessment Group publications remain available for read and history only.
 						</div>
 						<template v-else>
 							<div class="eduedge-readiness-list">
@@ -144,15 +160,39 @@
 								<div><span>Missing</span><strong>{{ context.readiness?.missing_results || 0 }}</strong></div>
 							</div>
 
+							<div class="eduedge-result-scope-summary">
+								<div><span>Mode</span><strong>{{ context.publication?.result_mode || filters.result_mode }}</strong></div>
+								<div><span>Profile</span><strong>{{ selectedProfileLabel }}</strong></div>
+								<div v-if="context.publication"><span>Version</span><strong>v{{ context.publication.publication_version || 1 }}</strong></div>
+							</div>
+
+							<div v-if="context.readiness?.profile_blockers?.length" class="eduedge-danger-note">
+								<strong>Result publication is blocked</strong>
+								<ul>
+									<li v-for="(blocker, index) in context.readiness.profile_blockers" :key="index">
+										{{ blocker.reason || blocker.code || 'Resolve result configuration before approval.' }}
+										<span v-if="blocker.student"> · {{ blocker.student }}</span>
+										<span v-if="blocker.course"> · {{ blocker.course }}</span>
+									</li>
+								</ul>
+							</div>
+							<div v-if="context.readiness?.unmapped_assessment_groups?.length" class="eduedge-danger-note">
+								<strong>Unmapped assessment groups</strong>
+								<p>{{ context.readiness.unmapped_assessment_groups.join(', ') }}</p>
+							</div>
+
 							<div class="eduedge-publication-actions">
-								<button v-if="!context.publication" type="button" class="edge-button edge-button--primary" :disabled="working" @click="ensurePublication">
+								<button v-if="context.can_manage_publication" type="button" class="edge-button" @click="openRoute('/app/eduedge-result-profile')">
+									Manage result profiles
+								</button>
+								<button v-if="context.can_manage_publication && !context.publication && filters.result_profile" type="button" class="edge-button edge-button--primary" :disabled="working" @click="ensurePublication">
 									Create publication control
 								</button>
-								<button v-if="context.publication" type="button" class="edge-button" :disabled="working" @click="refreshPublication">
+								<button v-if="context.can_manage_publication && context.publication" type="button" class="edge-button" :disabled="working" @click="refreshPublication">
 									Refresh completeness
 								</button>
 								<button
-									v-if="['Draft', 'Rejected'].includes(context.publication?.status)"
+									v-if="context.can_manage_publication && context.publication?.result_profile && ['Draft', 'Rejected'].includes(context.publication?.status)"
 									type="button"
 									class="edge-button edge-button--primary"
 									:disabled="working || !context.readiness?.ready"
@@ -161,7 +201,7 @@
 									Request approval
 								</button>
 								<button
-									v-if="context.can_approve && context.publication?.status === 'Pending Approval'"
+									v-if="context.can_approve && context.publication?.result_profile && context.publication?.status === 'Pending Approval'"
 									type="button"
 									class="edge-button edge-button--primary"
 									:disabled="working"
@@ -179,7 +219,7 @@
 									Reject
 								</button>
 								<button
-									v-if="context.can_approve && context.publication?.status === 'Approved'"
+									v-if="context.can_approve && context.publication?.result_profile && context.publication?.status === 'Approved'"
 									type="button"
 									class="edge-button edge-button--primary"
 									:disabled="working"
@@ -187,15 +227,38 @@
 								>
 									Publish results
 								</button>
+								<button
+									v-if="context.can_approve && context.publication?.result_profile && context.publication?.status === 'Published'"
+									type="button"
+									class="edge-button"
+									:disabled="working"
+									@click="createRevision"
+								>
+									Create correction version
+								</button>
 							</div>
 
-							<p v-if="context.publication?.status === 'Published'" class="eduedge-success-note">
-								Results are published and report-card generation is enabled for this scope.
+							<p v-if="isLegacyPublication" class="eduedge-danger-note">
+								Legacy Assessment Group publication — read/history only. New approval, publication, and correction versions require a Result Profile.
+							</p>
+							<p v-else-if="context.publication?.status === 'Published'" class="eduedge-success-note">
+								Results are published as immutable version {{ context.publication.publication_version || 1 }}. Corrections require a new publication version.
 							</p>
 							<p v-else-if="context.publication?.rejection_reason" class="eduedge-danger-note">
 								{{ context.publication.rejection_reason }}
 							</p>
 						</template>
+					</article>
+					<article v-else class="eduedge-panel">
+						<div class="eduedge-panel-heading">
+							<div>
+								<p class="edge-eyebrow">Approval and publication</p>
+								<h2>Class-level result control</h2>
+							</div>
+						</div>
+						<div class="eduedge-scope-note">
+							Whole-class readiness and publication are available only to the effective Class/Form responsibility or authorized academic managers.
+						</div>
 					</article>
 				</section>
 			</template>
@@ -220,6 +283,8 @@ export default {
 				academic_term: "",
 				student_group: "",
 				assessment_group: "",
+				result_profile: "",
+				result_mode: "Terminal",
 			},
 			context: {
 				user: {},
@@ -227,22 +292,40 @@ export default {
 				allowed_branches: [],
 				student_groups: [],
 				assessment_groups: [],
+				result_profiles: [],
 				plans: [],
 				counts: {},
 				publication: null,
 				readiness: null,
 				can_approve: false,
+				can_view_publication_scope: false,
+				can_manage_publication: false,
 			},
 		};
 	},
 	computed: {
 		scopeComplete() {
+			const resultScope = this.filters.result_profile || (
+				this.context.publication &&
+				this.filters.result_mode !== "Annual" &&
+				this.filters.assessment_group
+			);
 			return Boolean(
 				this.filters.branch &&
 					this.filters.academic_year &&
 					this.filters.student_group &&
-					this.filters.assessment_group
+					resultScope
 			);
+		},
+		isLegacyPublication() {
+			return Boolean(this.context.publication && !this.context.publication.result_profile);
+		},
+		selectedProfileLabel() {
+			if (!this.filters.result_profile) {
+				return this.isLegacyPublication ? "Legacy Assessment Group · read only" : "Select Result Profile";
+			}
+			const profile = this.context.result_profiles.find((row) => row.name === this.filters.result_profile);
+			return profile?.profile_name || this.filters.result_profile;
 		},
 		publicationTone() {
 			const status = this.context.publication?.status;
@@ -267,9 +350,12 @@ export default {
 					academic_term: this.filters.academic_term || undefined,
 					student_group: this.filters.student_group || undefined,
 					assessment_group: this.filters.assessment_group || undefined,
+					result_profile: this.filters.result_profile || undefined,
+					result_mode: this.filters.result_mode || "Terminal",
 				});
 				this.context = response.message || this.context;
 				this.filters = { ...this.filters, ...(this.context.filters || {}) };
+				if (this.filters.result_mode === "Annual") this.filters.academic_term = "";
 			} catch (error) {
 				this.error = error?.message || "Assessment operations could not be loaded.";
 			} finally {
@@ -280,6 +366,7 @@ export default {
 			if (!this.filters.branch) return;
 			this.filters.student_group = "";
 			this.filters.assessment_group = "";
+			this.filters.result_profile = "";
 			await frappe.call("eduedge.api.branch_context.switch_school_branch", {
 				branch: this.filters.branch,
 			});
@@ -288,6 +375,26 @@ export default {
 		async resetScope() {
 			this.filters.student_group = "";
 			this.filters.assessment_group = "";
+			await this.loadContext();
+		},
+		async changeResultMode() {
+			this.filters.student_group = "";
+			this.filters.assessment_group = "";
+			if (this.filters.result_mode === "Annual") {
+				this.filters.academic_term = "";
+				if (!this.filters.result_profile) {
+					const preferred = this.context.result_profiles.find((row) => row.is_default) || this.context.result_profiles[0];
+					this.filters.result_profile = preferred?.name || "";
+				}
+			}
+			await this.loadContext();
+		},
+		async changeResultProfile() {
+			this.filters.student_group = "";
+			if (this.filters.result_profile) this.filters.assessment_group = "";
+			if (!this.filters.result_profile && this.filters.result_mode === "Annual") {
+				this.filters.result_mode = "Terminal";
+			}
 			await this.loadContext();
 		},
 		async callAction(method, args = {}) {
@@ -311,7 +418,9 @@ export default {
 				student_group: this.filters.student_group,
 				academic_year: this.filters.academic_year,
 				academic_term: this.filters.academic_term || undefined,
-				assessment_group: this.filters.assessment_group,
+				assessment_group: this.filters.assessment_group || undefined,
+				result_profile: this.filters.result_profile || undefined,
+				result_mode: this.filters.result_mode || "Terminal",
 			});
 		},
 		refreshPublication() {
@@ -344,6 +453,14 @@ export default {
 			return this.callAction("eduedge.api.assessment_operations.publish_results", {
 				publication: this.context.publication.name,
 			});
+		},
+		createRevision() {
+			frappe.confirm(
+				__("Create a new correction version? The published version will remain unchanged."),
+				() => this.callAction("eduedge.api.assessment_operations.create_result_publication_revision", {
+					publication: this.context.publication.name,
+				})
+			);
 		},
 	},
 };
@@ -404,6 +521,24 @@ export default {
 	padding-bottom: 0.45rem;
 	border-bottom: 1px solid var(--border-color);
 }
+.eduedge-result-scope-summary {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+	gap: 0.55rem;
+	margin-top: 0.9rem;
+}
+.eduedge-result-scope-summary div {
+	padding: 0.65rem;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+}
+.eduedge-result-scope-summary span {
+	display: block;
+	color: var(--text-muted);
+	margin-bottom: 0.2rem;
+}
+.eduedge-danger-note ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+.eduedge-danger-note p { margin: 0.45rem 0 0; }
 .eduedge-publication-actions {
 	display: flex;
 	flex-wrap: wrap;

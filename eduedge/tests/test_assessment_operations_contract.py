@@ -59,6 +59,16 @@ class TestAssessmentOperationsContract(unittest.TestCase):
 		self.assertIn("publish_results", text)
 		self.assertIn("get_report_card_readiness", text)
 
+	def test_legacy_sessional_context_delegates_to_hardened_assessment_service(self):
+		text = (APP / "api" / "assessment_operations_sessional.py").read_text()
+		function = text.split("def get_assessment_context", 1)[1]
+		self.assertIn("return base.get_assessment_context(", function)
+		self.assertIn('result_mode="Terminal"', function)
+		self.assertIn("Class/Form publication responsibility", function)
+		self.assertNotIn("base.get_publication_readiness(", function)
+		self.assertNotIn("frappe.db.get_value(", function)
+		self.assertNotIn('frappe.get_list(\n\t\t"Assessment Plan"', function)
+
 	def test_publication_log_is_append_only(self):
 		text = (
 			APP

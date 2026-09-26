@@ -1,0 +1,50 @@
+{
+ "actions": [],
+ "creation": "2026-09-15 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "component_key",
+  "assessment_group",
+  "sequence"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "description": "Choose one of the Result Component keys configured on the parent Result Profile.",
+   "fieldname": "component_key",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Component Key",
+   "reqd": 1
+  },
+  {
+   "columns": 7,
+   "description": "Native Frappe Education Assessment Group. Parent groups are allowed and are resolved recursively to their leaf groups.",
+   "fieldname": "assessment_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Assessment Group",
+   "options": "Assessment Group",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "10",
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-15 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "EduEdge",
+ "name": "EduEdge Result Component Source",
+ "owner": "Administrator",
+ "permissions": []
+}

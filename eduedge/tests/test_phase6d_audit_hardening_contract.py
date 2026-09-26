@@ -32,14 +32,21 @@ class TestPhase6DAuditHardeningContract(unittest.TestCase):
         self.assertIn("self.transferred_to_assignment and not before.transferred_to_assignment", source)
         self.assertIn("if instructor.status != \"Active\" and not (governed_disable or governed_closure)", source)
 
-    def test_primary_branch_profile_save_does_not_rewrite_historical_eligibility_dates(self):
+    def test_primary_branch_profile_save_cannot_rewrite_governance_eligibility(self):
         source = (APP / "api" / "instructor_profiles.py").read_text(encoding="utf-8")
-        block = source[source.index("def _ensure_branch_eligibility"):source.index("@frappe.whitelist(methods=[\"POST\"])", source.index("def _ensure_branch_eligibility"))]
-        self.assertIn("current_target", block)
-        self.assertIn("_covers_date", block)
-        self.assertIn("Historical and future", block)
-        self.assertNotIn("doc.valid_from = doc.valid_from or", block)
-        self.assertNotIn("doc.valid_to =", block.split("if current_target:", 1)[1].split("if not frappe.has_permission", 1)[0])
+        eligibility = (
+            APP
+            / "eduedge"
+            / "doctype"
+            / "eduedge_instructor_branch_assignment"
+            / "eduedge_instructor_branch_assignment.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("def _ensure_branch_eligibility", source)
+        self.assertIn("governed_primary = primary_branch(name)", source)
+        self.assertIn("Primary Branch is managed by Instructor Branch Eligibility in Branch Governance", source)
+        self.assertIn("def _sync_instructor_primary_branch", eligibility)
+        self.assertIn("primary_branch(name)", eligibility)
+        self.assertNotIn("doc.valid_from = doc.valid_from or", source)
 
     def test_employee_options_are_home_institution_company_scoped_and_refresh_on_change(self):
         api = (APP / "api" / "instructor_profiles.py").read_text(encoding="utf-8")

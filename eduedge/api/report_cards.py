@@ -10,15 +10,37 @@ from eduedge.education.report_cards import (
 	OPERATIONAL_ROLES,
 	REVIEW_DOCTYPE,
 	assert_report_card_access,
+	assert_report_card_review_management,
+	can_manage_report_card_reviews,
+	can_view_report_card_scope,
 	get_publication_student_summaries,
 	get_published_publication,
 	get_student_report_card_payload,
 	refresh_review_metrics,
 )
 from eduedge.education.offerings import assert_branch_access, get_context_branch
+from eduedge.education.report_card_issues import create_report_card_issue, get_report_card_issue_history
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+from eduedge.services.institution_branding import get_report_identity
 
+
+
+def _attach_report_identity(payload: dict) -> dict:
+	if (
+		(payload.get("issue") or payload.get("issue_record"))
+		and payload.get("branding")
+		and payload.get("terminology")
+	):
+		return payload
+	branch_name = (payload.get("branch") or {}).get("name")
+	identity = get_report_identity(branch=branch_name)
+	payload["institution"] = identity["institution"]
+	payload["branding"] = identity["branding"]
+	payload["terminology"] = identity["terminology"]
+	if identity.get("address"):
+		payload["address"] = identity["address"]
+	return payload
 
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
@@ -70,11 +92,20 @@ def get_report_card_context(
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
+			"publication_version",
+			"supersedes_publication",
 			"published_on",
 		],
 		order_by="published_on desc, modified desc",
 		page_length=200,
 	)
+	publications = [
+		row for row in publications
+		if can_view_report_card_scope(row)
+	]
+
 
 	selected_publication = None
 	students = []
@@ -101,6 +132,9 @@ def get_report_card_context(
 		"current_branch": current_branch,
 		"allowed_branches": get_allowed_school_branches(),
 		"can_approve": bool(APPROVER_ROLES.intersection(roles)),
+		"can_review": bool(
+			selected_publication and can_manage_report_card_reviews(selected_publication)
+		),
 		"filters": {
 			"branch": resolved_branch,
 			"publication": publication,
@@ -123,6 +157,7 @@ def get_report_card_context(
 				for row in students
 				if (row.get("review") or {}).get("progression_status") == "Approved"
 			),
+			"issued": sum(1 for row in students if row.get("issue")),
 		},
 	}
 
@@ -131,8 +166,15 @@ def get_report_card_context(
 @guard_eduedge_action("assessment", action="prepare_report_cards")
 def prepare_report_cards(publication: str) -> dict:
 	_require_operator()
+	locked_publication = frappe.db.sql(
+		"select name from `tabEduEdge Result Publication` where name=%s for update",
+		(publication,),
+	)
+	if not locked_publication:
+		frappe.throw(_("Result Publication does not exist."), frappe.DoesNotExistError)
 	publication_row = get_published_publication(publication)
 	assert_branch_access(publication_row.school_branch)
+	assert_report_card_review_management(publication_row)
 	summaries = get_publication_student_summaries(publication)
 	created = 0
 	updated = 0
@@ -176,6 +218,7 @@ def save_report_card_review(
 	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
 	doc.check_permission("write")
 	assert_branch_access(doc.school_branch)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(
 			_("Only Draft report-card reviews can be edited. Reopen the review first."),
@@ -207,8 +250,8 @@ def save_report_card_review(
 @guard_eduedge_action("assessment", action="recommend_progression")
 def recommend_progression(review: str) -> dict:
 	_require_operator()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(_("Only Draft reviews can be recommended."), frappe.ValidationError)
 	if doc.progression_recommendation == "Pending Review":
@@ -235,8 +278,7 @@ def recommend_progression(review: str) -> dict:
 @guard_eduedge_action("assessment", action="approve_progression")
 def approve_progression(review: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status != "Recommended":
 		frappe.throw(_("Only Recommended reviews can be approved."), frappe.ValidationError)
 	settings = frappe.get_single("EduEdge Settings")
@@ -251,15 +293,17 @@ def approve_progression(review: str) -> dict:
 			"approved_on": now_datetime(),
 		},
 	)
-	return _review_payload(doc.name)
+	issue_name = create_report_card_issue(doc.name)
+	payload = _review_payload(doc.name)
+	payload["report_card_issue"] = issue_name
+	return payload
 
 
 @frappe.whitelist()
 @guard_eduedge_action("assessment", action="reopen_progression_review")
 def reopen_progression_review(review: str, reason: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status not in {"Recommended", "Approved"}:
 		frappe.throw(_("Only Recommended or Approved reviews can be reopened."))
 	reason = (reason or "").strip()
@@ -280,15 +324,61 @@ def reopen_progression_review(review: str, reason: str) -> dict:
 
 
 @frappe.whitelist()
+def get_report_card_history(publication: str, student: str) -> dict:
+	_require_operator()
+	publication_row = get_published_publication(publication)
+	assert_report_card_access(publication_row, student)
+	issue_history = get_report_card_issue_history(publication, student)
+
+	filters = {
+		"school_branch": publication_row.school_branch,
+		"student_group": publication_row.student_group,
+		"academic_year": publication_row.academic_year,
+		"result_mode": publication_row.result_mode or "Terminal",
+		"status": "Published",
+	}
+	if publication_row.academic_term:
+		filters["academic_term"] = publication_row.academic_term
+	else:
+		filters["academic_term"] = ["is", "not set"]
+	if publication_row.result_profile:
+		filters["result_profile"] = publication_row.result_profile
+	elif publication_row.assessment_group:
+		filters["assessment_group"] = publication_row.assessment_group
+
+	publications = frappe.get_all(
+		"EduEdge Result Publication",
+		filters=filters,
+		fields=[
+			"name",
+			"title",
+			"publication_version",
+			"supersedes_publication",
+			"published_on",
+		],
+		order_by="publication_version desc, published_on desc",
+		page_length=0,
+	)
+	return {
+		"issues": issue_history,
+		"publications": [dict(row) for row in publications],
+	}
+
+
+@frappe.whitelist()
 def get_report_card(publication: str, student: str) -> dict:
 	_require_login()
-	return get_student_report_card_payload(publication, student)
+	return _attach_report_identity(
+		get_student_report_card_payload(publication, student)
+	)
 
 
 @frappe.whitelist()
 def preview_report_card(publication: str, student: str) -> None:
 	_require_login()
-	payload = get_student_report_card_payload(publication, student)
+	payload = _attach_report_identity(
+		get_student_report_card_payload(publication, student)
+	)
 	assert_report_card_access(frappe._dict(payload["publication"]), student)
 	settings = frappe.get_single("EduEdge Settings")
 	letterhead = None
@@ -312,6 +402,19 @@ def preview_report_card(publication: str, student: str) -> None:
 	frappe.response.filename = f"Report Card {student}.pdf"
 	frappe.response.filecontent = get_pdf(final_html)
 	frappe.response.type = "pdf"
+
+
+def _get_review_for_update(name: str):
+	rows = frappe.db.sql(
+		"select name from `tabEduEdge Report Card Review` where name=%s for update",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Report Card Review does not exist."), frappe.DoesNotExistError)
+	doc = frappe.get_doc(REVIEW_DOCTYPE, name)
+	doc.check_permission("write")
+	assert_branch_access(doc.school_branch)
+	return doc
 
 
 def _transition(doc, to_status: str, *, updates: dict | None = None) -> None:

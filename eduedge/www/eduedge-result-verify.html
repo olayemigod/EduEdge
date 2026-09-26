@@ -1,0 +1,58 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Verify Result{% endblock %}
+
+{% block head_include %}
+{{ super() }}
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+	.result-verify-shell{max-width:720px;margin:0 auto;padding:2rem 1rem 3rem}
+	.result-verify-card{border:1px solid var(--border-color,#e5e7eb);border-radius:16px;background:var(--card-bg,#fff);padding:1.25rem}
+	.result-verify-status{display:inline-flex;align-items:center;padding:.35rem .65rem;border-radius:999px;font-weight:700;font-size:.82rem}
+	.result-verify-status.is-valid{background:#ecfdf3;color:#067647}
+	.result-verify-status.is-warning{background:#fffaeb;color:#b54708}
+	.result-verify-status.is-invalid{background:#fef3f2;color:#b42318}
+	.result-verify-card h1{margin:.7rem 0 .35rem}
+	.result-verify-card>p{color:var(--text-muted,#667085)}
+	.result-verify-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;margin-top:1rem}
+	.result-verify-grid div{padding:.7rem;border:1px solid var(--border-color,#e5e7eb);border-radius:10px}
+	.result-verify-grid span{display:block;color:var(--text-muted,#667085);font-size:.78rem}
+	.result-verify-grid strong{display:block;margin-top:.18rem;overflow-wrap:anywhere}
+	.result-verify-note{margin-top:1rem;padding:.75rem;border-radius:10px;background:var(--control-bg,#f2f4f7)}
+	@media(max-width:620px){.result-verify-grid{grid-template-columns:1fr}.result-verify-shell{padding:1rem .75rem 2rem}}
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="result-verify-shell">
+	<div class="result-verify-card">
+		{% if verification.valid %}
+			{% set tone = "is-valid" if verification.status == "Current" else "is-warning" %}
+			<span class="result-verify-status {{ tone }}">{{ verification.status }}</span>
+			<h1>Issued Result Verified</h1>
+			<p>{{ verification.status_message }}</p>
+			<div class="result-verify-grid">
+				<div><span>Institution</span><strong>{{ verification.institution_name or "-" }}</strong></div>
+				<div><span>Branch / Campus</span><strong>{{ verification.branch_name or "-" }}</strong></div>
+				<div><span>Student</span><strong>{{ verification.student_name or "-" }}</strong></div>
+				<div><span>Class / Group</span><strong>{{ verification.student_group or "-" }}</strong></div>
+				<div><span>Academic Year</span><strong>{{ verification.academic_year or "-" }}</strong></div>
+				<div><span>Academic Period</span><strong>{{ verification.academic_term or verification.result_mode or "-" }}</strong></div>
+				<div><span>Result Type</span><strong>{{ verification.result_mode or "-" }}</strong></div>
+				<div><span>Publication Version</span><strong>{{ verification.publication_version }}</strong></div>
+				<div><span>Issue Version</span><strong>{{ verification.issue_version }}</strong></div>
+				<div><span>Issued On</span><strong>{{ verification.issued_on or "-" }}</strong></div>
+				<div><span>Fingerprint</span><strong>{{ verification.fingerprint }}</strong></div>
+			</div>
+			<div class="result-verify-note">This verification confirms document authenticity only. Marks, comments and attendance are not exposed on the public verification page.</div>
+		{% else %}
+			<span class="result-verify-status is-invalid">Invalid</span>
+			<h1>Result Could Not Be Verified</h1>
+			<p>{{ verification.status_message }}</p>
+			<div class="result-verify-note">Check that the QR code or verification link came directly from the issued report card.</div>
+		{% endif %}
+	</div>
+</div>
+{% endblock %}

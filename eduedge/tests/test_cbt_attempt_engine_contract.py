@@ -96,12 +96,121 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			self.assertIn(token, service)
 		self.assertNotIn('"is_correct":', service)
 
+	def test_reconciliation_mutations_share_absolute_deadline_guard(self):
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+
+		for token in (
+			"def _assert_reconciliation_window_open(attempt)",
+			'attempt.attempt_status not in {"Pending Sync", "Auto Submitted", "Timed Out"}',
+			"deadline = base.reconciliation_deadline(attempt)",
+			"now_datetime() > deadline",
+			"The browser reconciliation window has expired.",
+			"def record_heartbeat(",
+			"_assert_reconciliation_window_open(attempt)",
+		):
+			self.assertIn(token, guard)
+
+		sync_block = guard.split("def sync_answers(", 1)[1].split(
+			"@frappe.whitelist(allow_guest=True)\ndef record_heartbeat", 1
+		)[0]
+		self.assertIn("_assert_reconciliation_window_open(attempt)", sync_block)
+
+		submit_block = guard.split("def submit_attempt(", 1)[1]
+		self.assertIn("_assert_reconciliation_window_open(attempt)", submit_block)
+
+		hooks = (APP / "hooks.py").read_text()
+		candidate = (APP / "public" / "js" / "eduedge_cbt_candidate.js").read_text()
+		self.assertIn(
+			'"eduedge.cbt.attempts.record_heartbeat": "eduedge.cbt.attempt_runtime_guard.record_heartbeat"',
+			hooks,
+		)
+		self.assertIn(
+			'heartbeat: "eduedge.cbt.attempt_runtime_guard.record_heartbeat"',
+			candidate,
+		)
+
+
+	def test_heartbeat_flags_and_audits_concurrent_tab_detection(self):
+		service = (APP / "cbt" / "attempts.py").read_text()
+		for token in (
+			'RUNTIME_SECURITY_EVENTS = {',
+			'"Concurrent Tab Detected": "Concurrent browser tab detected for this attempt."',
+			"def _record_runtime_security_event",
+			'"requires_review": 1',
+			'"EduEdge CBT Lifecycle Log"',
+			'event_type=event',
+			'def record_heartbeat(',
+			'runtime_event: str | None = None',
+			'_record_runtime_security_event(attempt, runtime_event)',
+		):
+			self.assertIn(token, service)
+
+
+	def test_sync_conflict_flags_review_and_preserves_pending_evidence(self):
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		for token in (
+			'"requires_review": 1',
+			'"reported_pending_sync_count": pending',
+			'"last_heartbeat_at": server_time',
+			'cint(answer_count) + max(0, cint(reported_pending_count))',
+			'"sync_status": "Conflict"',
+			"base.ANSWER_SYNC_CONFLICT_REASON",
+			'"answer_sync_conflict": base._answer_sync_conflict_active(attempt)',
+		):
+			self.assertIn(token, guard)
+
+
+	def test_sync_conflict_state_survives_reload_and_heartbeat_until_review_resolution(self):
+		attempts = (APP / "cbt" / "attempts.py").read_text()
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		for token in (
+			'ANSWER_SYNC_CONFLICT_REASON = "Answer revision conflict detected during browser synchronisation."',
+			"def _answer_sync_conflict_active(attempt)",
+			"cint(attempt.requires_review)",
+			'"answer_sync_conflict": _answer_sync_conflict_active(attempt)',
+		):
+			self.assertIn(token, attempts)
+		self.assertIn('"answer_sync_conflict": False', guard)
+		self.assertIn('"answer_sync_conflict": base._answer_sync_conflict_active(attempt)', guard)
+
+
+	def test_server_timeout_waits_for_browser_reconciliation_before_scoring(self):
+		attempts = (APP / "cbt" / "attempts.py").read_text()
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		scoring = (APP / "cbt" / "scoring.py").read_text()
+
+		self.assertIn("SYNC_RECONCILIATION_HOURS = 24", attempts)
+		self.assertIn("def reconciliation_deadline(attempt)", attempts)
+		finalize = attempts.split("def _finalize_timeout", 1)[1].split(
+			"def finalize_expired_attempts", 1
+		)[0]
+		for token in (
+			'status = "Pending Sync"',
+			'"Server Timeout Auto-submit"',
+			'"Server timeout entered the browser reconciliation window."',
+		):
+			self.assertIn(token, finalize)
+		self.assertNotIn('status = "Auto Submitted"', finalize)
+
+		for token in (
+			"deadline = base.reconciliation_deadline(attempt)",
+			'attempt.attempt_status == "Pending Sync"',
+			'str(attempt.submission_source or "").startswith("Server Timeout")',
+			"not client_pending",
+			"not cint(attempt.reported_pending_sync_count)",
+			'"attempt_status": "Auto Submitted"',
+		):
+			self.assertIn(token, guard)
+		self.assertIn('SCOREABLE_ATTEMPT_STATUSES = {"Submitted", "Auto Submitted"}', scoring)
+		self.assertIn("Pending browser answers must be resolved before scoring.", scoring)
+
+
 	def test_runtime_guard_hides_prestart_and_terminal_questions_and_audits_late_answers(self):
 		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
 		for token in (
 			'"questions": []',
 			'"answers": {}',
-			'SYNC_RECONCILIATION_HOURS = 24',
+			'base.reconciliation_deadline(attempt)',
 			'Post-submission sync accepts only answers saved before the server cutoff',
 			'Answers were reconciled after submission or timeout',
 			'attempt.attempt_status == "In Progress" and base._remaining(attempt) <= 0',

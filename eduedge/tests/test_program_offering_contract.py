@@ -41,7 +41,23 @@ class TestProgramOfferingContract(unittest.TestCase):
 
 	def test_upstream_enrollment_api_is_not_overridden(self):
 		text = (ROOT / "eduedge" / "hooks.py").read_text()
-		self.assertNotIn('"education.', text)
+		education_overrides = [
+			line.strip().split('":', 1)[0].strip('"')
+			for line in text.splitlines()
+			if line.strip().startswith('"education.')
+		]
+		self.assertEqual(
+			set(education_overrides),
+			{
+				"education.education.doctype.student_attendance_tool.student_attendance_tool.get_student_attendance_records",
+				"education.education.api.mark_attendance",
+				"education.education.api.get_assessment_students",
+				"education.education.api.get_assessment_details",
+				"education.education.api.mark_assessment_result",
+				"education.education.api.submit_assessment_results",
+			},
+		)
+		self.assertNotIn("education.education.api.enroll_student", education_overrides)
 		self.assertNotIn('"erpnext.', text)
 		self.assertIn('"eduedge.api.resource_center.get_resource_page"', text)
 		self.assertIn('"Student Admission"', text)

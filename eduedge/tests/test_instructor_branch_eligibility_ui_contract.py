@@ -14,8 +14,8 @@ COMPONENT = (
 
 
 def _branch_eligibility_section(source: str) -> str:
-    return source.split('<h2>Branch Eligibility Periods</h2>', 1)[1].split(
-        '<h2>Current Instructor Assignments</h2>', 1
+    return source.split('<h2>Instructor Branch Eligibility</h2>', 1)[1].split(
+        '<h2>Instructor Assignment Register</h2>', 1
     )[0]
 
 
@@ -27,6 +27,7 @@ class TestInstructorBranchEligibilityUIContract(unittest.TestCase):
             "branchEligibilityGroups",
             "group.periods",
             "eligibility period",
+            "Manage in Branch Governance",
             "Branch{{ branchEligibilityGroups.length === 1 ? '' : 'es' }}",
             "Period{{ data.branch_assignments.length === 1 ? '' : 's' }}",
         ):
