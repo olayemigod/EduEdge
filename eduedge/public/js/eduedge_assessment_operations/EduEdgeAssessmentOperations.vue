@@ -148,7 +148,7 @@
 						</div>
 
 						<div v-if="!scopeComplete" class="eduedge-scope-note">
-							Select a class and Result Profile. Legacy publications can still use an Assessment Group.
+							Select a class and Result Profile. Existing legacy Assessment Group publications remain available for read and history only.
 						</div>
 						<template v-else>
 							<div class="eduedge-readiness-list">
@@ -185,14 +185,14 @@
 								<button v-if="context.can_manage_publication" type="button" class="edge-button" @click="openRoute('/app/eduedge-result-profile')">
 									Manage result profiles
 								</button>
-								<button v-if="context.can_manage_publication && !context.publication" type="button" class="edge-button edge-button--primary" :disabled="working" @click="ensurePublication">
+								<button v-if="context.can_manage_publication && !context.publication && filters.result_profile" type="button" class="edge-button edge-button--primary" :disabled="working" @click="ensurePublication">
 									Create publication control
 								</button>
 								<button v-if="context.can_manage_publication && context.publication" type="button" class="edge-button" :disabled="working" @click="refreshPublication">
 									Refresh completeness
 								</button>
 								<button
-									v-if="context.can_manage_publication && ['Draft', 'Rejected'].includes(context.publication?.status)"
+									v-if="context.can_manage_publication && context.publication?.result_profile && ['Draft', 'Rejected'].includes(context.publication?.status)"
 									type="button"
 									class="edge-button edge-button--primary"
 									:disabled="working || !context.readiness?.ready"
@@ -201,7 +201,7 @@
 									Request approval
 								</button>
 								<button
-									v-if="context.can_approve && context.publication?.status === 'Pending Approval'"
+									v-if="context.can_approve && context.publication?.result_profile && context.publication?.status === 'Pending Approval'"
 									type="button"
 									class="edge-button edge-button--primary"
 									:disabled="working"
@@ -219,7 +219,7 @@
 									Reject
 								</button>
 								<button
-									v-if="context.can_approve && context.publication?.status === 'Approved'"
+									v-if="context.can_approve && context.publication?.result_profile && context.publication?.status === 'Approved'"
 									type="button"
 									class="edge-button edge-button--primary"
 									:disabled="working"
@@ -228,7 +228,7 @@
 									Publish results
 								</button>
 								<button
-									v-if="context.can_approve && context.publication?.status === 'Published'"
+									v-if="context.can_approve && context.publication?.result_profile && context.publication?.status === 'Published'"
 									type="button"
 									class="edge-button"
 									:disabled="working"
@@ -238,7 +238,10 @@
 								</button>
 							</div>
 
-							<p v-if="context.publication?.status === 'Published'" class="eduedge-success-note">
+							<p v-if="isLegacyPublication" class="eduedge-danger-note">
+								Legacy Assessment Group publication — read/history only. New approval, publication, and correction versions require a Result Profile.
+							</p>
+							<p v-else-if="context.publication?.status === 'Published'" class="eduedge-success-note">
 								Results are published as immutable version {{ context.publication.publication_version || 1 }}. Corrections require a new publication version.
 							</p>
 							<p v-else-if="context.publication?.rejection_reason" class="eduedge-danger-note">
@@ -303,7 +306,9 @@ export default {
 	computed: {
 		scopeComplete() {
 			const resultScope = this.filters.result_profile || (
-				this.filters.result_mode !== "Annual" && this.filters.assessment_group
+				this.context.publication &&
+				this.filters.result_mode !== "Annual" &&
+				this.filters.assessment_group
 			);
 			return Boolean(
 				this.filters.branch &&
@@ -312,8 +317,13 @@ export default {
 					resultScope
 			);
 		},
+		isLegacyPublication() {
+			return Boolean(this.context.publication && !this.context.publication.result_profile);
+		},
 		selectedProfileLabel() {
-			if (!this.filters.result_profile) return "Legacy Assessment Group";
+			if (!this.filters.result_profile) {
+				return this.isLegacyPublication ? "Legacy Assessment Group · read only" : "Select Result Profile";
+			}
 			const profile = this.context.result_profiles.find((row) => row.name === this.filters.result_profile);
 			return profile?.profile_name || this.filters.result_profile;
 		},
