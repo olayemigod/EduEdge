@@ -15,6 +15,9 @@ from eduedge.api.assessment_assignment_options import (
     assessment_plan_student_group_query,
 )
 from eduedge.api.assessment_operations import get_assessment_context
+from eduedge.api.assessment_operations_sessional import (
+    get_assessment_context as get_legacy_sessional_assessment_context,
+)
 from eduedge.api.attendance_tool_safe import get_student_attendance_records
 from eduedge.api.branch_governance import get_governance_context
 from eduedge.api.class_arms import save_class_arm
@@ -737,6 +740,21 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
         self.assertFalse(
             assessment_context["can_view_publication_scope"],
+        )
+        legacy_sessional_context = get_legacy_sessional_assessment_context(
+            branch=branch_a.name,
+            academic_year=year.name,
+            academic_term=term.name,
+            student_group=class_a["name"],
+        )
+        self.assertFalse(
+            legacy_sessional_context["can_view_publication_scope"],
+        )
+        self.assertIsNone(legacy_sessional_context["publication"])
+        self.assertIsNone(legacy_sessional_context["readiness"])
+        self.assertEqual(
+            {row["name"] for row in legacy_sessional_context["student_groups"]},
+            {class_a["name"], class_peer["name"]},
         )
         self.assertEqual(
             [row[0] for row in assessment_plan_student_group_query(
