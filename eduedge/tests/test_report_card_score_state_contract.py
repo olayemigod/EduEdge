@@ -16,7 +16,11 @@ class TestReportCardScoreStateContract(unittest.TestCase):
 	def test_genuine_zero_is_rendered_as_zero_not_missing(self):
 		service = (APP / "education" / "profiled_report_cards.py").read_text()
 		self.assertIn('if flt(component.get("maximum_score")) <= 0:', service)
-		self.assertIn('return str(int(value))', service)
+		self.assertIn(
+			'display_score = str(int(value)) if value.is_integer()',
+			service,
+		)
+		self.assertIn('return display_score', service)
 		template = (APP / "templates" / "report_card.html").read_text()
 		self.assertIn('component.display_value or "-"', template)
 
