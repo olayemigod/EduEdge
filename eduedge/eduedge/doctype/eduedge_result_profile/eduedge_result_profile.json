@@ -244,6 +244,7 @@
   },
   {
    "default": "0",
+   "depends_on": "eval:doc.show_progression",
    "description": "Enable when this Result Profile needs a different promotion threshold from the current EduEdge default. The resolved threshold is frozen when publication approval is requested.",
    "fieldname": "use_custom_promotion_pass_average",
    "fieldtype": "Check",
@@ -251,8 +252,8 @@
   },
   {
    "default": "50",
-   "depends_on": "eval:doc.use_custom_promotion_pass_average",
-   "mandatory_depends_on": "eval:doc.use_custom_promotion_pass_average",
+   "depends_on": "eval:doc.show_progression && doc.use_custom_promotion_pass_average",
+   "mandatory_depends_on": "eval:doc.show_progression && doc.use_custom_promotion_pass_average",
    "description": "Annual result average required for the suggested Promote outcome. This does not auto-approve progression; final progression remains a reviewed decision.",
    "fieldname": "promotion_pass_average",
    "fieldtype": "Percent",
