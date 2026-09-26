@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from eduedge.education.result_engine import (
@@ -8,6 +9,7 @@ from eduedge.education.result_engine import (
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 )
+from eduedge.education.result_profile import _validate_metrics
 
 
 def _profile() -> dict:
@@ -163,6 +165,73 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(subject["cumulative_score"], 163)
 		self.assertEqual(subject["cumulative_maximum_score"], 200)
 		self.assertEqual(subject["annual_percentage"], 81.5)
+
+	def test_zero_score_precision_is_preserved(self):
+		profile = _profile()
+		profile["score_precision"] = 0
+		payload = compose_terminal_subject_results(
+			profile,
+			[
+				_row("Alpha", "CA", 30.4, 40),
+				_row("Alpha", "EXAM", 47.6, 60),
+			],
+		)
+		subject = payload["subjects"][0]
+		self.assertEqual(subject["total_score"], 78)
+		self.assertEqual(subject["percentage"], 78)
+		self.assertEqual(
+			[(row["component_key"], row["score"]) for row in subject["components"]],
+			[("ca", 30), ("exam", 48)],
+		)
+		self.assertEqual(payload["summary"]["overall_percentage"], 78)
+
+	def test_metric_basis_must_match_selected_report_surface(self):
+		invalid_terminal = frappe._dict(
+			metrics=[
+				frappe._dict(
+					metric_key="Class Average",
+					display_label="Annual Average",
+					calculation_basis="Annual Average Percentage",
+					display_as="Percentage",
+					decimal_places=2,
+					show_on_terminal=1,
+					show_on_annual=0,
+				)
+			]
+		)
+		with self.assertRaises(frappe.ValidationError):
+			_validate_metrics(invalid_terminal)
+
+		invalid_annual = frappe._dict(
+			metrics=[
+				frappe._dict(
+					metric_key="Class Highest",
+					display_label="Current Term Highest",
+					calculation_basis="Current Term Percentage",
+					display_as="Percentage",
+					decimal_places=2,
+					show_on_terminal=0,
+					show_on_annual=1,
+				)
+			]
+		)
+		with self.assertRaises(frappe.ValidationError):
+			_validate_metrics(invalid_annual)
+
+		valid_both = frappe._dict(
+			metrics=[
+				frappe._dict(
+					metric_key="Class Average",
+					display_label="Cumulative Average",
+					calculation_basis="Year-to-Date Cumulative Percentage",
+					display_as="Percentage",
+					decimal_places=2,
+					show_on_terminal=1,
+					show_on_annual=1,
+				)
+			]
+		)
+		_validate_metrics(valid_both)
 
 	def test_class_statistics_label_and_representation_are_profile_driven(self):
 		profile = _profile()
