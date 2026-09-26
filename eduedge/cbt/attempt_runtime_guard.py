@@ -56,6 +56,17 @@ def _load_candidate_attempt(
 	return attempt
 
 
+def _assert_reconciliation_window_open(attempt) -> None:
+	if attempt.attempt_status not in {"Pending Sync", "Auto Submitted", "Timed Out"}:
+		return
+	deadline = base.reconciliation_deadline(attempt)
+	if not deadline or now_datetime() > deadline:
+		frappe.throw(
+			_("The browser reconciliation window has expired. Use the governed Attempt Review workflow."),
+			frappe.PermissionError,
+		)
+
+
 def _reconciliation_cutoff(attempt):
 	if str(attempt.submission_source or "").startswith("Server Timeout"):
 		return get_datetime(attempt.expires_at) if attempt.expires_at else None
@@ -272,6 +283,7 @@ def sync_answers(
 	if attempt.attempt_status not in {"In Progress", "Pending Sync", "Auto Submitted", "Timed Out"}:
 		frappe.throw(_("Answers cannot be synced for this status."), frappe.ValidationError)
 	if is_reconciliation:
+		_assert_reconciliation_window_open(attempt)
 		_validate_reconciliation_payload(attempt, rows, client_saved_at)
 
 	idempotency_key = str(idempotency_key or "").strip()
@@ -423,6 +435,48 @@ def sync_answers(
 
 
 @frappe.whitelist(allow_guest=True)
+def record_heartbeat(
+	attempt_name: str,
+	launch_token: str,
+	client_session_id: str,
+	reported_pending_count: int = 0,
+	runtime_event: str | None = None,
+) -> dict:
+	base._lock("EduEdge CBT Attempt", attempt_name)
+	attempt = _load_candidate_attempt(
+		attempt_name,
+		launch_token,
+		allow_reconciliation=True,
+	)
+	base._session(attempt, client_session_id)
+	if attempt.attempt_status == "In Progress" and base._remaining(attempt) <= 0:
+		base._finalize_timeout(attempt.name)
+		attempt.reload()
+	_assert_reconciliation_window_open(attempt)
+	base._record_runtime_security_event(attempt, runtime_event)
+	current = now_datetime()
+	pending = max(0, cint(reported_pending_count))
+	frappe.db.set_value(
+		"EduEdge CBT Attempt",
+		attempt.name,
+		{
+			"last_heartbeat_at": current,
+			"reported_pending_sync_count": pending,
+		},
+		update_modified=False,
+	)
+	return {
+		"attempt": attempt.name,
+		"status": attempt.attempt_status,
+		"server_time": current,
+		"seconds_remaining": base._remaining(attempt),
+		"reported_pending_count": pending,
+		"answer_sync_conflict": base._answer_sync_conflict_active(attempt),
+		"reconciliation_deadline": base.reconciliation_deadline(attempt),
+	}
+
+
+@frappe.whitelist(allow_guest=True)
 def submit_attempt(
 	attempt_name: str,
 	launch_token: str,
@@ -440,6 +494,8 @@ def submit_attempt(
 		base._finalize_timeout(attempt.name)
 		attempt.reload()
 	client_pending = max(0, cint(reported_pending_count))
+	if attempt.attempt_status in {"Pending Sync", "Auto Submitted", "Timed Out"}:
+		_assert_reconciliation_window_open(attempt)
 	deadline = base.reconciliation_deadline(attempt)
 	if (
 		attempt.attempt_status == "Pending Sync"
