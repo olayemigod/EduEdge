@@ -27,6 +27,30 @@ from eduedge.education.result_profile import get_publication_result_profile_conf
 SNAPSHOT_DOCTYPE = "EduEdge Published Result Snapshot"
 
 
+def build_publication_approval_fingerprint(publication_doc) -> dict:
+	"""Fingerprint the academic payload reviewed for approval.
+
+	Cosmetic Student identity fields are intentionally excluded. The fingerprint
+	covers calculated results/class metrics, governed attendance, and exact source
+	Assessment Result identities so corrected/replaced academic data requires
+	re-approval before publication.
+	"""
+	payloads = build_publication_student_payloads(publication_doc)
+	academic_payload = {
+		student: {
+			"result": item["payload"].get("result") or {},
+			"attendance": item["payload"].get("attendance") or {},
+			"source_assessment_results": item["payload"].get("source_assessment_results") or [],
+		}
+		for student, item in sorted(payloads.items())
+	}
+	payload_json = _canonical_json(academic_payload)
+	return {
+		"hash": hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+		"student_count": len(academic_payload),
+	}
+
+
 def create_publication_snapshots(publication: str) -> list[str]:
 	doc = frappe.get_doc("EduEdge Result Publication", publication)
 	if not doc.result_profile:
