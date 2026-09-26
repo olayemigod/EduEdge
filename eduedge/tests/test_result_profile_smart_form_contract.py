@@ -40,6 +40,32 @@ class TestResultProfileSmartFormContract(unittest.TestCase):
 		self.assertIn('permission_type in {"create", "write", "delete", "share"}', permissions)
 		self.assertIn("institution_branches.issubset(branches)", permissions)
 
+	def test_metric_form_prevents_incompatible_terminal_and_annual_bases(self):
+		js = (APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.js").read_text()
+		service = (APP / "education" / "result_profile.py").read_text()
+		for token in (
+			"TERMINAL_METRIC_BASES",
+			"ANNUAL_METRIC_BASES",
+			"reconcileMetricSurfaces",
+			'show_on_terminal", 0',
+			'show_on_annual", 0',
+			'frappe.ui.form.on("EduEdge Result Metric"',
+		):
+			self.assertIn(token, js)
+		for token in (
+			"TERMINAL_METRIC_BASES",
+			"ANNUAL_METRIC_BASES",
+			"cannot use {1} on Terminal reports",
+			"cannot use {1} on Annual reports",
+		):
+			self.assertIn(token, service)
+
+	def test_zero_score_precision_is_not_treated_as_missing(self):
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn("def result_score_precision", engine)
+		self.assertIn('if value in (None, "")', engine)
+		self.assertNotIn('config.get("score_precision") or 2', engine)
+
 	def test_profile_is_locked_during_approval_window(self):
 		service = (APP / "education" / "result_profile.py").read_text()
 		self.assertIn("assert_result_profile_mutable", service)
