@@ -149,9 +149,19 @@ def validate_publication_profile(doc) -> None:
 		frappe.throw(_("Annual Result Publications require a Result Profile."), frappe.ValidationError)
 
 
+def resolve_profile_promotion_pass_average(doc) -> float:
+	if cint(doc.get("use_custom_promotion_pass_average")):
+		return flt(doc.get("promotion_pass_average"))
+	return flt(
+		frappe.db.get_single_value("EduEdge Settings", "promotion_pass_average")
+		or 0
+	)
+
+
 def get_result_profile_config(name: str) -> dict:
 	doc = frappe.get_doc("EduEdge Result Profile", name)
 	doc.check_permission("read")
+	promotion_pass_average = resolve_profile_promotion_pass_average(doc)
 	return {
 		"name": doc.name,
 		"profile_name": doc.profile_name,
@@ -164,6 +174,14 @@ def get_result_profile_config(name: str) -> dict:
 		"minimum_eligible_periods": cint(doc.minimum_eligible_periods),
 		"missing_result_policy": doc.missing_result_policy,
 		"absence_policy": doc.absence_policy,
+		"progression": {
+			"promotion_pass_average": promotion_pass_average,
+			"source": (
+				"Result Profile"
+				if cint(doc.get("use_custom_promotion_pass_average"))
+				else "EduEdge Settings"
+			),
+		},
 		"presentation": {
 			"terminal_report_title": doc.terminal_report_title or "Terminal Report",
 			"annual_report_title": doc.annual_report_title or "Annual Result",
@@ -402,6 +420,13 @@ def _validate_calculation_settings(doc) -> None:
 		frappe.throw(_("Minimum Eligible Periods must be at least 1."), frappe.ValidationError)
 	if not 0 <= cint(doc.score_precision) <= 6:
 		frappe.throw(_("Score Precision must be between 0 and 6."), frappe.ValidationError)
+	if cint(doc.get("use_custom_promotion_pass_average")) and not (
+		0 <= flt(doc.get("promotion_pass_average")) <= 100
+	):
+		frappe.throw(
+			_("Promotion Pass Average must be between 0 and 100."),
+			frappe.ValidationError,
+		)
 
 
 def _validate_components(doc) -> None:
