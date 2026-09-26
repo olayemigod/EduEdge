@@ -413,6 +413,45 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             students=[],
         )
 
+        # New governed publications must be profile-backed even through the
+        # native DocType path. Legacy Assessment Group records remain a
+        # read/history compatibility concern, not a new publication mode.
+        assessment_parent = frappe.db.get_value(
+            "Assessment Group",
+            {"is_group": 1},
+            "name",
+        )
+        if not assessment_parent:
+            root_group = frappe.get_doc(
+                {
+                    "doctype": "Assessment Group",
+                    "assessment_group_name": f"QA Core Root {self.suffix}",
+                    "is_group": 1,
+                }
+            )
+            root_group.insert(ignore_permissions=True, ignore_mandatory=True)
+            assessment_parent = root_group.name
+        legacy_group = self._insert(
+            "Assessment Group",
+            assessment_group_name=f"QA Core Legacy {self.suffix}",
+            parent_assessment_group=assessment_parent,
+            is_group=0,
+        )
+        legacy_publication = frappe.get_doc(
+            {
+                "doctype": "EduEdge Result Publication",
+                "school_branch": branch_a.name,
+                "student_group": class_a["name"],
+                "assessment_group": legacy_group.name,
+                "academic_year": year.name,
+                "academic_term": term.name,
+                "result_mode": "Terminal",
+                "status": "Draft",
+            }
+        )
+        with self.assertRaises(frappe.ValidationError):
+            legacy_publication.insert(ignore_permissions=True)
+
         assignment_a = self._make_subject_assignment(
             instructor_a,
             institution,
