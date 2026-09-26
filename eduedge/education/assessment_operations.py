@@ -36,6 +36,17 @@ PUBLICATION_STATUSES = {
 	"Published",
 }
 
+PROFILE_BACKED_PUBLICATION_REQUIRED = _(
+	"New governed Result Publications require a Result Profile. "
+	"Existing legacy Assessment Group publications remain available for read and history only."
+)
+
+
+def assert_profile_backed_publication(doc) -> None:
+	if doc.get("result_profile"):
+		return
+	frappe.throw(PROFILE_BACKED_PUBLICATION_REQUIRED, frappe.ValidationError)
+
 
 def before_validate_assessment_plan(doc, method=None) -> None:
 	group = _get_student_group(doc.student_group)
@@ -193,6 +204,7 @@ def validate_publication_scope(doc) -> None:
 				frappe.ValidationError,
 			)
 	if doc.is_new():
+		assert_profile_backed_publication(doc)
 		return
 	if doc.has_value_changed("status") and not getattr(
 		frappe.flags, "in_eduedge_result_publication_transition", False
