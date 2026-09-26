@@ -211,6 +211,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"source_result_names": ["RES-1"],
 				"payload": {
 					"student": {"student_name": "Student One", "image": "/private/a.png"},
+					"profile": {"presentation": {"show_attendance": 1}},
 					"result": {"summary": {"overall_percentage": 72.5}},
 					"attendance": {"present": 42, "absent": 3},
 					"source_assessment_results": ["RES-1"],
@@ -229,6 +230,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"source_result_names": ["RES-1"],
 				"payload": {
 					"student": {"student_name": "Renamed Student", "image": "/private/b.png"},
+					"profile": {"presentation": {"show_attendance": 1}},
 					"result": {"summary": {"overall_percentage": 72.5}},
 					"attendance": {"present": 42, "absent": 3},
 					"source_assessment_results": ["RES-1"],
@@ -248,6 +250,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"source_result_names": ["RES-1"],
 				"payload": {
 					"student": {"student_name": "Student One", "image": "/private/a.png"},
+					"profile": {"presentation": {"show_attendance": 1}},
 					"result": {"summary": {"overall_percentage": 73.5}},
 					"attendance": {"present": 42, "absent": 3},
 					"source_assessment_results": ["RES-1"],
@@ -261,6 +264,42 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 			third = build_publication_approval_fingerprint(publication)
 		self.assertNotEqual(first["hash"], third["hash"])
 		self.assertEqual(first["student_count"], 1)
+
+		hidden_attendance_a = {
+			"STU-1": {
+				"student": {"student_name": "Student One"},
+				"source_result_names": ["RES-1"],
+				"payload": {
+					"profile": {"presentation": {"show_attendance": 0}},
+					"result": {"summary": {"overall_percentage": 72.5}},
+					"attendance": {"present": 42, "absent": 3},
+					"source_assessment_results": ["RES-1"],
+				},
+			}
+		}
+		hidden_attendance_b = {
+			"STU-1": {
+				"student": {"student_name": "Student One"},
+				"source_result_names": ["RES-1"],
+				"payload": {
+					"profile": {"presentation": {"show_attendance": 0}},
+					"result": {"summary": {"overall_percentage": 72.5}},
+					"attendance": {"present": 10, "absent": 35},
+					"source_assessment_results": ["RES-1"],
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=hidden_attendance_a,
+		):
+			hidden_first = build_publication_approval_fingerprint(publication)
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=hidden_attendance_b,
+		):
+			hidden_second = build_publication_approval_fingerprint(publication)
+		self.assertEqual(hidden_first, hidden_second)
 
 	def test_zero_score_precision_is_preserved(self):
 		profile = _profile()
