@@ -13,7 +13,12 @@ from eduedge.education.result_engine import (
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 )
-from eduedge.education.result_profile import _validate_metrics
+from eduedge.education.profiled_report_cards import _suggested_progression
+from eduedge.education.result_profile import (
+	_validate_calculation_settings,
+	_validate_metrics,
+	resolve_profile_promotion_pass_average,
+)
 from eduedge.education.result_snapshots import build_publication_approval_fingerprint
 
 
@@ -301,6 +306,78 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		):
 			hidden_second = build_publication_approval_fingerprint(publication)
 		self.assertEqual(hidden_first, hidden_second)
+
+	def test_progression_uses_frozen_profile_threshold_not_live_global_setting(self):
+		profile = {"progression": {"promotion_pass_average": 60}}
+		with patch(
+			"eduedge.education.profiled_report_cards.frappe.db.get_single_value",
+			return_value=20,
+		) as global_setting:
+			self.assertEqual(
+				_suggested_progression("Annual", 59.9, True, profile),
+				"Repeat",
+			)
+			self.assertEqual(
+				_suggested_progression("Annual", 60, True, profile),
+				"Promote",
+			)
+			global_setting.assert_not_called()
+
+	def test_legacy_snapshot_progression_falls_back_to_site_setting(self):
+		with patch(
+			"eduedge.education.profiled_report_cards.frappe.db.get_single_value",
+			return_value=55,
+		) as global_setting:
+			self.assertEqual(
+				_suggested_progression("Annual", 54.9, True, {}),
+				"Repeat",
+			)
+			self.assertEqual(
+				_suggested_progression("Annual", 55, True, {}),
+				"Promote",
+			)
+			self.assertEqual(global_setting.call_count, 2)
+
+	def test_profile_promotion_threshold_override_and_validation(self):
+		custom = frappe._dict(
+			{
+				"use_custom_promotion_pass_average": 1,
+				"promotion_pass_average": 65,
+			}
+		)
+		with patch(
+			"eduedge.education.result_profile.frappe.db.get_single_value",
+			return_value=50,
+		) as global_setting:
+			self.assertEqual(resolve_profile_promotion_pass_average(custom), 65)
+			global_setting.assert_not_called()
+
+		inherited = frappe._dict(
+			{
+				"use_custom_promotion_pass_average": 0,
+				"promotion_pass_average": 65,
+			}
+		)
+		with patch(
+			"eduedge.education.result_profile.frappe.db.get_single_value",
+			return_value=52.5,
+		):
+			self.assertEqual(resolve_profile_promotion_pass_average(inherited), 52.5)
+
+		base = frappe._dict(
+			{
+				"overall_calculation_method": "Average of Subject Percentages",
+				"annual_aggregation_method": "Equal Average of Eligible Terms",
+				"missing_result_policy": "Block Publication",
+				"absence_policy": "Block Publication",
+				"minimum_eligible_periods": 1,
+				"score_precision": 2,
+				"use_custom_promotion_pass_average": 1,
+				"promotion_pass_average": 101,
+			}
+		)
+		with self.assertRaises(frappe.ValidationError):
+			_validate_calculation_settings(base)
 
 	def test_overall_grade_uses_same_rounded_percentage_shown_to_user(self):
 		config = _profile()
