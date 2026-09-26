@@ -56,9 +56,26 @@ class TestInstructorAssignmentLifecycleContract(unittest.TestCase):
         status_block = lifecycle.split("def _lifecycle_status", 1)[1].split(
             "def _readable_instructor_from_assignment", 1
         )[0]
-        self.assertIn('return "Ending" if getdate(row.ended_on) >= today else "Ended"', status_block)
-        self.assertLess(status_block.index('row.replaced_by_assignment'), status_block.index('row.ended_on'))
-        self.assertLess(status_block.index('row.transferred_to_assignment'), status_block.index('row.ended_on'))
+        for token in (
+            'if row.ended_on and getdate(row.ended_on) >= today:',
+            'return "Ending"',
+            'if row.replaced_by_assignment:',
+            'return "Replaced"',
+            'if row.transferred_to_assignment:',
+            'return "Transferred"',
+            'if row.ended_on:',
+            'return "Ended"',
+        ):
+            self.assertIn(token, status_block)
+        self.assertLess(
+            status_block.index('if row.ended_on and getdate(row.ended_on) >= today:'),
+            status_block.index('if row.replaced_by_assignment:'),
+        )
+        self.assertLess(
+            status_block.index('if row.ended_on and getdate(row.ended_on) >= today:'),
+            status_block.index('if row.transferred_to_assignment:'),
+        )
+        self.assertIn("must not make the source disappear from active scope too early", status_block)
 
 
     def test_existing_responsibility_identity_and_lifecycle_audit_are_protected(self):
