@@ -13,6 +13,7 @@ from eduedge.api.academic_operations_safe import (
 from eduedge.api.assessment_assignment_options import (
     assessment_plan_course_query,
     assessment_plan_student_group_query,
+    get_assessment_plan_criteria,
 )
 from eduedge.api.assessment_operations import get_assessment_context
 from eduedge.api.assessment_workbenches import get_marks_entry_context
@@ -539,6 +540,32 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [row[0] for row in first_assessment_courses],
             [course.name],
         )
+
+        # The upstream Education criteria endpoint supplies only Course, which is
+        # insufficient for exact capability authorization. Limited Instructors
+        # therefore receive no data from the context-free call; the EduEdge form
+        # reloads criteria with the exact Branch + Class + assessment date.
+        self.assertEqual(
+            get_assessment_plan_criteria(course.name),
+            [],
+        )
+        self.assertEqual(
+            get_assessment_plan_criteria(
+                course.name,
+                school_branch=branch_a.name,
+                student_group=class_a["name"],
+                schedule_date="2094-10-05",
+            ),
+            [],
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_assessment_plan_criteria(
+                extra_course.name,
+                school_branch=branch_a.name,
+                student_group=class_a["name"],
+                schedule_date="2094-10-05",
+            )
+
         frappe.set_user("Administrator")
         frappe.db.set_value(
             "EduEdge Instructor Assignment",
