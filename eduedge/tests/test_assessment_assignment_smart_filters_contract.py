@@ -126,6 +126,18 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, client)
 
+        course_handler = client.split("course(frm)", 1)[1].split(
+            "schedule_date(frm)", 1
+        )[0]
+        self.assertIn('frm.clear_table("assessment_criteria")', course_handler)
+        self.assertIn("load_eduedge_assessment_criteria(frm);", course_handler)
+
+        date_handler = client.split("schedule_date(frm)", 1)[1]
+        self.assertIn('frm.clear_table("assessment_criteria")', date_handler)
+        self.assertIn("load_eduedge_assessment_criteria(frm);", date_handler)
+        self.assertNotIn('frm.set_value("student_group", null)', date_handler)
+        self.assertNotIn('frm.set_value("course", null)', date_handler)
+
 
     def test_default_off_teacher_course_query_still_uses_existing_assignment_scope(self):
         source = self._api()
