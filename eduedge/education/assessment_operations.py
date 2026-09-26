@@ -44,11 +44,13 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 	_validate_linked_context(doc, group)
 	if is_teacher_user():
 		program_offering = group.get(OFFERING_FIELD) or _resolve_group_offering(group)
+		assessment_date = doc.schedule_date or nowdate()
 		require_course_assignment(
 			doc.course,
 			branch=doc.get(BRANCH_FIELD),
 			program_offering=program_offering,
 			student_group=doc.student_group,
+			on_date=assessment_date,
 		)
 		require_instructor_assignment_capability(
 			"can_create_assessment_plans",
@@ -57,7 +59,7 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 			program_offering=program_offering or "",
 			student_group=doc.student_group,
 			course=doc.course,
-			on_date=doc.schedule_date or nowdate(),
+			on_date=assessment_date,
 		)
 	if doc.room:
 		room_branch = frappe.db.get_value("Room", doc.room, BRANCH_FIELD)
