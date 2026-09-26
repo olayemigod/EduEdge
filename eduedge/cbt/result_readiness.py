@@ -80,7 +80,7 @@ def get_result_readiness(exam_schedule: str, *, check_permission: bool = True) -
 	missing_attempts = [
 		assignment
 		for assignment in assignments
-		if assignment.assignment_status != "Completed" and assignment.name not in latest_by_assignment
+		if assignment.name not in latest_by_assignment
 	]
 	latest_attempts = list(latest_by_assignment.values())
 	status_counts = Counter(row.attempt_status for row in latest_attempts)
