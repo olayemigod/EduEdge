@@ -115,12 +115,17 @@ frappe.ui.form.on("Assessment Plan", {
 	},
 	course(frm) {
 		frm.set_value("examiner", null);
+		frm.clear_table("assessment_criteria");
+		frm.refresh_field("assessment_criteria");
 		load_eduedge_assessment_criteria(frm);
 	},
 	schedule_date(frm) {
-		// Date changes revalidate personnel eligibility without destroying stable
-		// Class, Subject or Room context. Backend validation remains authoritative.
+		// Date changes preserve stable Class, Subject and Room values, but all
+		// date-governed dependents must be re-authorized for the new assessment date.
 		frm.set_value("examiner", null);
 		frm.set_value("supervisor", null);
+		frm.clear_table("assessment_criteria");
+		frm.refresh_field("assessment_criteria");
+		load_eduedge_assessment_criteria(frm);
 	},
 });
