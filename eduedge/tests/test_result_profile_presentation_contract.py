@@ -19,10 +19,39 @@ class TestResultProfilePresentationContract(unittest.TestCase):
 			"show_attendance",
 			"show_comments",
 			"show_progression",
+			"use_custom_promotion_pass_average",
+			"promotion_pass_average",
 			"show_grading_legend",
 			"show_next_period_date",
 		):
 			self.assertIn(fieldname, fields)
+
+	def test_progression_threshold_controls_are_context_aware(self):
+		path = APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.json"
+		payload = json.loads(path.read_text())
+		fields = {field["fieldname"]: field for field in payload["fields"]}
+		self.assertEqual(
+			fields["use_custom_promotion_pass_average"].get("depends_on"),
+			"eval:doc.show_progression",
+		)
+		self.assertEqual(
+			fields["promotion_pass_average"].get("depends_on"),
+			"eval:doc.show_progression && doc.use_custom_promotion_pass_average",
+		)
+		self.assertEqual(
+			fields["promotion_pass_average"].get("mandatory_depends_on"),
+			"eval:doc.show_progression && doc.use_custom_promotion_pass_average",
+		)
+
+	def test_progression_threshold_is_resolved_into_frozen_profile_config(self):
+		service = (APP / "education" / "result_profile.py").read_text()
+		report_cards = (APP / "education" / "profiled_report_cards.py").read_text()
+		self.assertIn("def resolve_promotion_pass_average", service)
+		self.assertIn('"promotion_pass_average": promotion_pass_average', service)
+		self.assertIn('"promotion_pass_average_source": promotion_pass_average_source', service)
+		self.assertIn("profile: dict | None = None", report_cards)
+		self.assertIn('(profile or {}).get("promotion_pass_average")', report_cards)
+		self.assertIn("Backward compatibility for historical snapshots", report_cards)
 
 	def test_hidden_attendance_is_not_rendered_in_pdf_summary(self):
 		template = (APP / "templates" / "report_card.html").read_text()

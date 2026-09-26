@@ -13,7 +13,12 @@ from eduedge.education.result_engine import (
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 )
-from eduedge.education.result_profile import _validate_metrics
+from eduedge.education.result_profile import (
+	_validate_calculation_settings,
+	_validate_metrics,
+	resolve_promotion_pass_average,
+)
+from eduedge.education.profiled_report_cards import _suggested_progression
 from eduedge.education.result_snapshots import build_publication_approval_fingerprint
 
 
@@ -301,6 +306,72 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		):
 			hidden_second = build_publication_approval_fingerprint(publication)
 		self.assertEqual(hidden_first, hidden_second)
+
+	def test_promotion_threshold_is_profile_scoped_and_freezable(self):
+		inherited = frappe._dict(
+			{
+				"use_custom_promotion_pass_average": 0,
+				"promotion_pass_average": 50,
+			}
+		)
+		with patch(
+			"eduedge.education.result_profile.frappe.get_single",
+			return_value=frappe._dict({"promotion_pass_average": 55}),
+		):
+			self.assertEqual(
+				resolve_promotion_pass_average(inherited),
+				(55.0, "EduEdge Settings"),
+			)
+
+		custom = frappe._dict(
+			{
+				"use_custom_promotion_pass_average": 1,
+				"promotion_pass_average": 60,
+			}
+		)
+		with patch("eduedge.education.result_profile.frappe.get_single") as settings_mock:
+			self.assertEqual(
+				resolve_promotion_pass_average(custom),
+				(60.0, "Result Profile"),
+			)
+			settings_mock.assert_not_called()
+
+		with patch("eduedge.education.profiled_report_cards.frappe.get_single") as settings_mock:
+			self.assertEqual(
+				_suggested_progression(
+					"Annual",
+					55,
+					True,
+					{"promotion_pass_average": 60},
+				),
+				"Repeat",
+			)
+			settings_mock.assert_not_called()
+
+		with patch(
+			"eduedge.education.profiled_report_cards.frappe.get_single",
+			return_value=frappe._dict({"promotion_pass_average": 50}),
+		):
+			self.assertEqual(
+				_suggested_progression("Annual", 55, True, {}),
+				"Promote",
+			)
+
+	def test_custom_promotion_threshold_must_be_a_percentage(self):
+		doc = frappe._dict(
+			{
+				"overall_calculation_method": "Average of Subject Percentages",
+				"annual_aggregation_method": "Equal Average of Eligible Terms",
+				"missing_result_policy": "Block Publication",
+				"absence_policy": "Block Publication",
+				"minimum_eligible_periods": 1,
+				"score_precision": 2,
+				"use_custom_promotion_pass_average": 1,
+				"promotion_pass_average": 101,
+			}
+		)
+		with self.assertRaises(frappe.ValidationError):
+			_validate_calculation_settings(doc)
 
 	def test_overall_grade_uses_same_rounded_percentage_shown_to_user(self):
 		config = _profile()
