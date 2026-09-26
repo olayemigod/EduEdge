@@ -157,6 +157,14 @@
 							<small>{{ branchEligibilitySummary(previewPlan.destination_branch_eligibility) }}</small>
 							<small>The source Branch Eligibility is not shortened or deleted by Transfer.</small>
 						</div>
+						<div
+							v-if="previewPlan.capability_review?.pending"
+							class="eduedge-transfer-plan-card eduedge-transfer-plan-grid__wide"
+						>
+							<strong class="eduedge-transfer-plan-label">Capability review required</strong>
+							<span>Operational capabilities are not inherited from the source assignment.</span>
+							<small>{{ previewPlan.capability_review?.message }}</small>
+						</div>
 					</div>
 				</template>
 			</section>
@@ -463,8 +471,12 @@ export default {
 					args: currentArgs,
 				});
 				const result = response.message || {};
+				const successMessage = result.action === "already-transferred" ? "Instructor Assignment was already transferred" : "Instructor Assignment transferred";
+				const finalMessage = result.capability_review?.pending
+					? `${successMessage}. Review the successor assignment's capabilities before operational use.`
+					: successMessage;
 				frappe.show_alert({
-					message: result.action === "already-transferred" ? "Instructor Assignment was already transferred" : "Instructor Assignment transferred",
+					message: finalMessage,
 					indicator: "green",
 				});
 				await this.onComplete?.(result);
