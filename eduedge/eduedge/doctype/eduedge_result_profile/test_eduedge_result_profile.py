@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from eduedge.education.assessment_operations import _get_publication_cohort_students
 from eduedge.education.result_engine import (
 	build_component_plan_maximum_blockers,
 	build_configured_class_metrics,
@@ -165,6 +168,47 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(subject["cumulative_score"], 163)
 		self.assertEqual(subject["cumulative_maximum_score"], 200)
 		self.assertEqual(subject["annual_percentage"], 81.5)
+
+	def test_publication_cohort_keeps_assessed_inactive_students_only(self):
+		roster = [
+			frappe._dict(
+				student="ACTIVE",
+				student_name="Active Student",
+				group_roll_number=1,
+				active=1,
+			),
+			frappe._dict(
+				student="HISTORICAL",
+				student_name="Historical Student",
+				group_roll_number=2,
+				active=0,
+			),
+			frappe._dict(
+				student="INACTIVE-NO-RESULT",
+				student_name="Unassessed Inactive Student",
+				group_roll_number=3,
+				active=0,
+			),
+		]
+		with patch(
+			"eduedge.education.assessment_operations.frappe.get_all",
+			side_effect=[roster, ["HISTORICAL"]],
+		) as get_all:
+			students = _get_publication_cohort_students(
+				school_branch="BRANCH-A",
+				student_group="GROUP-A",
+				plan_names=["PLAN-1", "PLAN-2"],
+			)
+
+		self.assertEqual([row.student for row in students], ["ACTIVE", "HISTORICAL"])
+		result_call = get_all.call_args_list[1]
+		self.assertEqual(result_call.args[0], "Assessment Result")
+		self.assertEqual(result_call.kwargs["filters"]["school_branch"], "BRANCH-A")
+		self.assertEqual(
+			result_call.kwargs["filters"]["assessment_plan"],
+			["in", ["PLAN-1", "PLAN-2"]],
+		)
+		self.assertEqual(result_call.kwargs["filters"]["docstatus"], ["!=", 2])
 
 	def test_zero_score_precision_is_preserved(self):
 		profile = _profile()
