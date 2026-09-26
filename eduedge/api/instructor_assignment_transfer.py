@@ -14,6 +14,7 @@ from eduedge.api.instructor_assignment_replacement import (
 from eduedge.api.instructor_assignments import _period_dates, _require_assignment_manager
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_assignment_capabilities import successor_capability_review_state
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.teaching_assignments import (
     CLASS_ARM_SCOPE,
@@ -413,6 +414,10 @@ def _transfer_plan(
         "reason": resolved_reason,
         "destination_branch_eligibility": branch_access,
         "source_branch_eligibility_changed": False,
+        "capability_review": successor_capability_review_state(
+            assignment_type=destination.get("assignment_type"),
+            course=destination.get("course"),
+        ),
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
     }
@@ -457,6 +462,7 @@ def _already_transferred(
             "transfer_date": str(source.ended_on),
             "successor_valid_from": str(successor.valid_from),
             "successor_valid_to": str(successor.valid_to or ""),
+            "capability_review": successor_capability_review_state(successor),
             "source_branch_eligibility_changed": False,
         }
     frappe.throw(
@@ -636,6 +642,7 @@ def transfer_instructor_assignment(
             "instructor": successor.instructor,
             "reason": resolved_reason,
             "destination_branch_eligibility": branch_result,
+            "capability_review": successor_capability_review_state(successor),
             "source_branch_eligibility_changed": False,
         }
     except Exception:
