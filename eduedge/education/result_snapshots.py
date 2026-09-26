@@ -36,14 +36,19 @@ def build_publication_approval_fingerprint(publication_doc) -> dict:
 	re-approval before publication.
 	"""
 	payloads = build_publication_student_payloads(publication_doc)
-	academic_payload = {
-		student: {
-			"result": item["payload"].get("result") or {},
-			"attendance": item["payload"].get("attendance") or {},
-			"source_assessment_results": item["payload"].get("source_assessment_results") or [],
+	academic_payload = {}
+	for student, item in sorted(payloads.items()):
+		payload = item["payload"]
+		presentation = (payload.get("profile") or {}).get("presentation") or {}
+		academic_payload[student] = {
+			"result": payload.get("result") or {},
+			"attendance": (
+				payload.get("attendance") or {}
+				if presentation.get("show_attendance")
+				else {}
+			),
+			"source_assessment_results": payload.get("source_assessment_results") or [],
 		}
-		for student, item in sorted(payloads.items())
-	}
 	payload_json = _canonical_json(academic_payload)
 	return {
 		"hash": hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
