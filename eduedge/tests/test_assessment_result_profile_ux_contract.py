@@ -33,6 +33,11 @@ class TestAssessmentResultProfileUXContract(unittest.TestCase):
 		self.assertIn("isLegacyPublication()", vue)
 		self.assertIn("Legacy Assessment Group · read only", vue)
 
+	def test_missing_result_count_is_described_as_profile_governed(self):
+		vue = (APP / "public" / "js" / "eduedge_assessment_operations" / "EduEdgeAssessmentOperations.vue").read_text()
+		self.assertIn("Governed by the selected Result Profile policy", vue)
+		self.assertNotIn('label="Missing Results" :value="context.counts.missing_results" helper="Blocking approval"', vue)
+
 	def test_snapshot_contains_grading_legend_not_only_scale_name(self):
 		service = (APP / "education" / "result_snapshots.py").read_text()
 		self.assertIn('"grading_legend": _grading_legend(config)', service)
