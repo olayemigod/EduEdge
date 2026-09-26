@@ -344,6 +344,109 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 			hidden_second = build_publication_approval_fingerprint(publication)
 		self.assertEqual(hidden_first, hidden_second)
 
+	def test_approval_fingerprint_tracks_only_visible_snapshot_derived_values(self):
+		publication = frappe._dict({"name": "PUB-1"})
+		base_payload = {
+			"STU-1": {
+				"student": {"student_name": "Student One"},
+				"source_result_names": ["RES-1"],
+				"payload": {
+					"profile": {
+						"presentation": {
+							"show_attendance": 0,
+							"show_grading_legend": 1,
+							"show_next_period_date": 1,
+						}
+					},
+					"result": {"summary": {"overall_percentage": 72.5}},
+					"attendance": {"present": 42, "absent": 3},
+					"grading_legend": [
+						{"grade_code": "A", "threshold": 70, "remark": "Excellent"}
+					],
+					"next_term_start_date": "2026-01-05",
+					"source_assessment_results": ["RES-1"],
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=base_payload,
+		):
+			approved = build_publication_approval_fingerprint(publication)
+
+		changed_legend = {
+			"STU-1": {
+				**base_payload["STU-1"],
+				"payload": {
+					**base_payload["STU-1"]["payload"],
+					"grading_legend": [
+						{"grade_code": "A", "threshold": 75, "remark": "Excellent"}
+					],
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=changed_legend,
+		):
+			legend_changed = build_publication_approval_fingerprint(publication)
+		self.assertNotEqual(approved["hash"], legend_changed["hash"])
+
+		changed_date = {
+			"STU-1": {
+				**base_payload["STU-1"],
+				"payload": {
+					**base_payload["STU-1"]["payload"],
+					"next_term_start_date": "2026-01-12",
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=changed_date,
+		):
+			date_changed = build_publication_approval_fingerprint(publication)
+		self.assertNotEqual(approved["hash"], date_changed["hash"])
+
+		hidden_a = {
+			"STU-1": {
+				**base_payload["STU-1"],
+				"payload": {
+					**base_payload["STU-1"]["payload"],
+					"profile": {
+						"presentation": {
+							"show_attendance": 0,
+							"show_grading_legend": 0,
+							"show_next_period_date": 0,
+						}
+					},
+				},
+			}
+		}
+		hidden_b = {
+			"STU-1": {
+				**hidden_a["STU-1"],
+				"payload": {
+					**hidden_a["STU-1"]["payload"],
+					"grading_legend": [
+						{"grade_code": "A", "threshold": 90, "remark": "Changed"}
+					],
+					"next_term_start_date": "2026-02-02",
+				},
+			}
+		}
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=hidden_a,
+		):
+			hidden_first = build_publication_approval_fingerprint(publication)
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=hidden_b,
+		):
+			hidden_second = build_publication_approval_fingerprint(publication)
+		self.assertEqual(hidden_first, hidden_second)
+
 	def test_progression_uses_frozen_profile_threshold_not_live_global_setting(self):
 		profile = {"progression": {"promotion_pass_average": 60}}
 		with patch(
