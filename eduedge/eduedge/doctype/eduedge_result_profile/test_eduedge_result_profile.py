@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from eduedge.education.result_engine import (
@@ -7,6 +10,10 @@ from eduedge.education.result_engine import (
 	build_configured_class_metrics,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
+)
+from eduedge.education.result_snapshots import (
+	assert_approved_publication_payload_unchanged,
+	build_publication_payload_digest,
 )
 
 
@@ -71,6 +78,47 @@ def _row(term: str, group: str, score: float, maximum: float, *, course: str = "
 
 
 class TestEduEdgeResultEngine(FrappeTestCase):
+	def test_approved_publication_payload_digest_fails_closed_on_change(self):
+		payload_v1 = {
+			"STU-001": {
+				"payload": {
+					"student": {"name": "STU-001"},
+					"result": {"subjects": [{"course": "MATH", "total_score": 75}]},
+				}
+			}
+		}
+		payload_v2 = {
+			"STU-001": {
+				"payload": {
+					"student": {"name": "STU-001"},
+					"result": {"subjects": [{"course": "MATH", "total_score": 76}]},
+				}
+			}
+		}
+		publication = frappe._dict({"approved_payload_hash": ""})
+
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=payload_v1,
+		):
+			approved_hash = build_publication_payload_digest(publication)
+			publication.approved_payload_hash = approved_hash
+			self.assertEqual(
+				assert_approved_publication_payload_unchanged(publication),
+				approved_hash,
+			)
+
+		with patch(
+			"eduedge.education.result_snapshots.build_publication_student_payloads",
+			return_value=payload_v2,
+		):
+			with self.assertRaises(frappe.ValidationError):
+				assert_approved_publication_payload_unchanged(publication)
+
+		publication.approved_payload_hash = ""
+		with self.assertRaises(frappe.ValidationError):
+			assert_approved_publication_payload_unchanged(publication)
+
 	def test_component_target_maximum_blocks_mismatched_native_plans(self):
 		valid = build_component_plan_maximum_blockers(
 			_profile(),
