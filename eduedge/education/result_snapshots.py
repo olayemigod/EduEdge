@@ -321,6 +321,7 @@ def _get_submitted_result_rows(branch: str, plan_names: list[str], students: lis
 			"docstatus": 1,
 		},
 		fields=fields,
+		order_by="student asc, course asc, assessment_group asc, assessment_plan asc, name asc",
 		page_length=0,
 	)
 
