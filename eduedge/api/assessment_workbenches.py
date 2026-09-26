@@ -214,7 +214,7 @@ def save_marks_entry(
 @guard_eduedge_action("assessment", action="submit_marks_entry")
 def submit_marks_entry(assessment_plan: str) -> dict:
 	_require_login()
-	plan = _get_plan(assessment_plan)
+	plan = _get_mark_entry_plan(assessment_plan)
 	if plan.docstatus != 1:
 		frappe.throw(_("Assessment Plan must be submitted before results can be submitted."), frappe.ValidationError)
 
