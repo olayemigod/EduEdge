@@ -108,6 +108,14 @@
 							<small>{{ branchEligibilitySummary(previewPlan.incoming_branch_eligibility) }}</small>
 							<small>The outgoing Instructor's Branch Eligibility is not changed by Replace / Handover.</small>
 						</div>
+						<div
+							v-if="previewPlan.capability_review?.pending"
+							class="eduedge-replacement-plan-card eduedge-replacement-plan-grid__wide"
+						>
+							<strong class="eduedge-replacement-plan-label">Capability review required</strong>
+							<span>Operational capabilities are not inherited from the source assignment.</span>
+							<small>{{ previewPlan.capability_review?.message }}</small>
+						</div>
 					</div>
 				</template>
 			</section>
@@ -339,8 +347,12 @@ export default {
 					args: currentArgs,
 				});
 				const result = response.message || {};
+				const successMessage = result.action === "already-replaced" ? "Instructor Assignment was already replaced" : "Instructor Assignment replaced and handed over";
+				const finalMessage = result.capability_review?.pending
+					? `${successMessage}. Review the successor assignment's capabilities before operational use.`
+					: successMessage;
 				frappe.show_alert({
-					message: result.action === "already-replaced" ? "Instructor Assignment was already replaced" : "Instructor Assignment replaced and handed over",
+					message: finalMessage,
 					indicator: "green",
 				});
 				await this.onComplete?.(result);
