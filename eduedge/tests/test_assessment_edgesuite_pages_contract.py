@@ -9,6 +9,7 @@ NAVIGATION = APP / "public" / "js" / "eduedge_ui" / "navigation.js"
 PRODUCT_MENU = APP / "public" / "js" / "eduedge_product_menu.bundle.js"
 RESOURCE_CENTER = APP / "api" / "resource_center.py"
 MARKS_ENTRY = APP / "public" / "js" / "eduedge_marks_entry" / "EduEdgeMarksEntry.vue"
+MARKS_WORKBENCH = APP / "api" / "assessment_workbenches.py"
 RESULT_ANALYTICS = APP / "public" / "js" / "eduedge_result_analytics" / "EduEdgeResultAnalytics.vue"
 
 
@@ -75,6 +76,33 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		self.assertIn("@input=\"markDirty(row)\"", text)
 		self.assertIn("save_marks_entry", text)
 		self.assertNotIn('@input="saveRow(row)"', text)
+
+	def test_marks_entry_reuses_current_mark_capability_governance(self):
+		text = MARKS_WORKBENCH.read_text()
+		for token in (
+			"from eduedge.api.assessment_assignment_options import assessment_result_plan_query",
+			"from eduedge.api.assessment_result_tool_safe import (",
+			"_authorized_plan,",
+			"get_assessment_details as get_safe_assessment_details",
+			"get_assessment_students as get_safe_assessment_students",
+			"def _get_mark_entry_plan",
+			"plan, _group = _authorized_plan(name)",
+			"rows = assessment_result_plan_query(",
+			"criteria = get_safe_assessment_details(plan.name)",
+			"students = get_safe_assessment_students(plan.name, plan.student_group)",
+		):
+			self.assertIn(token, text)
+		self.assertGreaterEqual(text.count("_get_mark_entry_plan(assessment_plan)"), 3)
+		self.assertNotIn("from education.education.api import", text)
+
+	def test_safe_mark_entry_payload_preserves_edgesuite_metadata(self):
+		text = (APP / "api" / "assessment_result_tool_safe.py").read_text()
+		for token in (
+			'"assessment_group"',
+			'"maximum_assessment_score"',
+			'student_result["comment"] = result.comment',
+		):
+			self.assertIn(token, text)
 
 
 if __name__ == "__main__":
