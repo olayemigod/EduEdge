@@ -40,6 +40,8 @@ class TestResultProfileFreezeContract(unittest.TestCase):
 		self.assertIn("def assert_approved_publication_payload_unchanged", snapshots)
 		self.assertIn("approved_payload_hash = build_publication_payload_digest(doc)", api)
 		self.assertIn("assert_approved_publication_payload_unchanged(doc)", api)
+		self.assertIn("Approved payload fingerprint:", api)
+		self.assertIn('order_by="student asc, course asc, assessment_group asc, assessment_plan asc, name asc"', snapshots)
 		self.assertGreaterEqual(api.count('"approved_payload_hash": None'), 2)
 		self.assertIn("def _validate_approval_payload_hash", controller)
 		self.assertIn("Approved result payload fingerprint is managed by the EduEdge publication workflow.", controller)
