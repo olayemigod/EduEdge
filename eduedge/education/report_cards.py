@@ -24,6 +24,14 @@ from eduedge.education.profiled_report_cards import (
 PUBLICATION_DOCTYPE = "EduEdge Result Publication"
 REVIEW_DOCTYPE = "EduEdge Report Card Review"
 REVIEW_STATUSES = {"Draft", "Recommended", "Approved"}
+REVIEW_WORKFLOW_FIELDS = (
+	"progression_status",
+	"recommended_by",
+	"recommended_on",
+	"approved_by",
+	"approved_on",
+	"last_review_note",
+)
 PROGRESSION_RECOMMENDATIONS = {
 	"Pending Review",
 	"Promote",
@@ -136,7 +144,23 @@ def validate_report_card_review(doc) -> None:
 			frappe.PermissionError,
 		)
 
+	transitioning = bool(
+		getattr(frappe.flags, "in_eduedge_report_card_transition", False)
+	)
 	if doc.is_new():
+		if doc.progression_status != "Draft":
+			frappe.throw(
+				_("A new Report Card Review must start in Draft status."),
+				frappe.ValidationError,
+			)
+		for fieldname in REVIEW_WORKFLOW_FIELDS:
+			if fieldname == "progression_status":
+				continue
+			if doc.get(fieldname):
+				frappe.throw(
+					_("Report Card Review workflow fields are managed by EduEdge actions."),
+					frappe.ValidationError,
+				)
 		return
 
 	for fieldname in (
@@ -154,13 +178,13 @@ def validate_report_card_review(doc) -> None:
 				frappe.ValidationError,
 			)
 
-	if doc.has_value_changed("progression_status") and not getattr(
-		frappe.flags, "in_eduedge_report_card_transition", False
-	):
-		frappe.throw(
-			_("Use the EduEdge Report Card actions to change progression status."),
-			frappe.ValidationError,
-		)
+	if not transitioning:
+		for fieldname in REVIEW_WORKFLOW_FIELDS:
+			if doc.has_value_changed(fieldname):
+				frappe.throw(
+					_("Use the EduEdge Report Card actions to change review workflow fields."),
+					frappe.ValidationError,
+				)
 
 
 def assert_report_card_access(publication, student: str, *, write: bool = False) -> None:
