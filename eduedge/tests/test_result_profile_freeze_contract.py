@@ -88,6 +88,7 @@ class TestResultProfileFreezeContract(unittest.TestCase):
 			self.assertIn(token, schema)
 			self.assertIn(token, api)
 		self.assertIn("def build_publication_approval_fingerprint", snapshots)
+		self.assertIn('"academic_term_label": (payload.get("publication") or {}).get("academic_term_label")', snapshots)
 		self.assertIn('"result": payload.get("result") or {}', snapshots)
 		self.assertIn('presentation.get("show_attendance")', snapshots)
 		self.assertIn('payload.get("attendance") or {}', snapshots)
