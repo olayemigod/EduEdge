@@ -47,6 +47,7 @@ from eduedge.education.report_cards import (
     can_manage_report_card_reviews,
     can_view_report_card_scope,
 )
+from eduedge.education.permissions import has_report_card_review_permission
 from eduedge.permissions_baseline import (
     ensure_legacy_assessment_report_role_guard,
     ensure_legacy_attendance_report_role_guard,
@@ -491,11 +492,10 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
                 }
             )
             self.assertTrue(
-                frappe.has_permission(
-                    "EduEdge Report Card Review",
+                has_report_card_review_permission(
+                    active_review,
+                    instructor_user.name,
                     "write",
-                    doc=active_review,
-                    user=instructor_user.name,
                 )
             )
 
@@ -517,19 +517,17 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             self.assertTrue(can_view_report_card_scope(instructor_publication))
             self.assertFalse(can_manage_report_card_reviews(instructor_publication))
             self.assertTrue(
-                frappe.has_permission(
-                    "EduEdge Report Card Review",
+                has_report_card_review_permission(
+                    historical_review,
+                    instructor_user.name,
                     "read",
-                    doc=historical_review,
-                    user=instructor_user.name,
                 )
             )
             self.assertFalse(
-                frappe.has_permission(
-                    "EduEdge Report Card Review",
+                has_report_card_review_permission(
+                    historical_review,
+                    instructor_user.name,
                     "write",
-                    doc=historical_review,
-                    user=instructor_user.name,
                 )
             )
 
