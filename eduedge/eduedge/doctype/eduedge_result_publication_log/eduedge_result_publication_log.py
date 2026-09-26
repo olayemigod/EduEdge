@@ -15,3 +15,9 @@ class EduEdgeResultPublicationLog(Document):
 	def validate(self) -> None:
 		if not self.is_new():
 			frappe.throw(_("Result Publication logs are append-only."), frappe.ValidationError)
+
+	def on_trash(self) -> None:
+		frappe.throw(
+			_("Result Publication logs are append-only and cannot be deleted."),
+			frappe.ValidationError,
+		)
