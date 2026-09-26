@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, nowdate
+from frappe.utils import cint, getdate, nowdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.academic_operations import assert_instructor_assignment
@@ -115,6 +115,11 @@ def _validate_examiner_and_supervisor(doc) -> None:
 
 def before_validate_assessment_result(doc, method=None) -> None:
 	plan = _get_assessment_plan(doc.assessment_plan)
+	if cint(plan.docstatus) != 1:
+		frappe.throw(
+			_("Assessment Results can only be created against a submitted Assessment Plan."),
+			frappe.ValidationError,
+		)
 	student_branch = frappe.db.get_value("Student", doc.student, BRANCH_FIELD)
 	plan_branch = plan.get(BRANCH_FIELD)
 	resolved_branch = plan_branch or student_branch
@@ -556,6 +561,7 @@ def _get_assessment_plan(name: str):
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"docstatus",
 			BRANCH_FIELD,
 		],
 		as_dict=True,
