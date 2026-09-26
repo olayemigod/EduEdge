@@ -119,7 +119,9 @@ def assessment_plan_student_group_query(doctype, txt, searchfield, start, page_l
     group_filters: dict = {"name": ["in", sorted(allowed_groups)], BRANCH_FIELD: branch, "disabled": 0}
     if filters.get("academic_year"):
         group_filters["academic_year"] = filters["academic_year"]
-    rows = frappe.get_list(
+    # allowed_groups is already the exact capability/eligibility authorization
+    # boundary. Avoid re-applying schedule-derived Student Group list permission here.
+    rows = frappe.get_all(
         "Student Group",
         filters=group_filters,
         or_filters={
