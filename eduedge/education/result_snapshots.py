@@ -26,6 +26,16 @@ from eduedge.education.result_profile import get_publication_result_profile_conf
 SNAPSHOT_DOCTYPE = "EduEdge Published Result Snapshot"
 
 
+def build_publication_payload_digest(publication_doc) -> str:
+	"""Hash the exact composed payload set that approval is attesting."""
+	payloads = build_publication_student_payloads(publication_doc)
+	canonical = {
+		student: item["payload"]
+		for student, item in sorted(payloads.items(), key=lambda row: row[0])
+	}
+	return hashlib.sha256(_canonical_json(canonical).encode("utf-8")).hexdigest()
+
+
 def create_publication_snapshots(publication: str) -> list[str]:
 	doc = frappe.get_doc("EduEdge Result Publication", publication)
 	if not doc.result_profile:
