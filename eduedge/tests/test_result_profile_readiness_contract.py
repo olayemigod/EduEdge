@@ -41,7 +41,9 @@ class TestResultProfileReadinessContract(unittest.TestCase):
 		self.assertIn("(missing == 0 or exclude_missing)", readiness)
 		self.assertIn("def build_missing_result_blockers", engine)
 		self.assertIn("MISSING_SUBJECT_RESULTS", engine)
-		self.assertIn("Not Offered / Exempt", engine)
+		self.assertIn('explicit_exclusion_states = {"Exempt", "Not Offered"}', engine)
+		self.assertIn("missing_assessment_plans", engine)
+		self.assertIn("Every expected plan must either contribute a submitted result", engine)
 		self.assertIn("build_missing_result_blockers", snapshots)
 		self.assertIn("if not exclude_missing or missing_subject_blockers", snapshots)
 

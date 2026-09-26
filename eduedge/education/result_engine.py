@@ -130,26 +130,47 @@ def build_missing_result_blockers(
 	if not plan_course or not student_names:
 		return []
 
-	submitted_subjects = {
-		(str(_value(row, "student") or ""), plan_course.get(str(_value(row, "assessment_plan") or "")))
-		for row in (result_rows or [])
-		if cint(_value(row, "docstatus")) == 1
-		and plan_course.get(str(_value(row, "assessment_plan") or ""))
-	}
+	plans_by_course: dict[str, set[str]] = defaultdict(set)
+	for plan_name, course in plan_course.items():
+		plans_by_course[course].add(plan_name)
+
+	submitted_by_subject: dict[tuple[str, str], dict[str, str]] = defaultdict(dict)
+	for row in result_rows or []:
+		if cint(_value(row, "docstatus")) != 1:
+			continue
+		plan_name = str(_value(row, "assessment_plan") or "")
+		course = plan_course.get(plan_name)
+		student = str(_value(row, "student") or "")
+		if not plan_name or not course or not student:
+			continue
+		state = str(_value(row, "eduedge_score_state") or "Scored")
+		submitted_by_subject[(student, course)][plan_name] = state
+
+	explicit_exclusion_states = {"Exempt", "Not Offered"}
 	blockers = []
 	for student in sorted(set(student_names)):
-		for course in sorted(set(plan_course.values())):
-			if (student, course) in submitted_subjects:
+		for course in sorted(plans_by_course):
+			expected_plans = plans_by_course[course]
+			submitted = submitted_by_subject.get((student, course), {})
+			if submitted and any(
+				state not in explicit_exclusion_states for state in submitted.values()
+			):
 				continue
+			if set(submitted) == expected_plans and submitted:
+				continue
+
+			missing_plans = sorted(expected_plans - set(submitted))
 			blockers.append(
 				{
 					"code": "MISSING_SUBJECT_RESULTS",
 					"reason": _(
 						"Missing-result exclusion cannot remove an entire planned subject. "
-						"Enter at least one submitted result, or use Not Offered / Exempt explicitly."
+						"Every expected plan must either contribute a submitted result, "
+						"or the whole subject must be explicitly Not Offered / Exempt."
 					),
 					"student": student,
 					"course": course,
+					"missing_assessment_plans": missing_plans,
 				}
 			)
 	return blockers

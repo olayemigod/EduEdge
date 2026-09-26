@@ -172,10 +172,51 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 			{"name": "PLAN-EXAM", "course": "CRS"},
 		]
 		partial_rows = [
-			{"assessment_plan": "PLAN-CA", "student": "STU-1", "docstatus": 1},
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Scored",
+			},
 		]
 		self.assertEqual(
 			build_missing_result_blockers(profile, plans, partial_rows, ["STU-1"]),
+			[],
+		)
+
+		partial_exclusion = [
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Exempt",
+			},
+		]
+		blockers = build_missing_result_blockers(
+			profile,
+			plans,
+			partial_exclusion,
+			["STU-1"],
+		)
+		self.assertEqual(len(blockers), 1)
+		self.assertEqual(blockers[0]["missing_assessment_plans"], ["PLAN-EXAM"])
+
+		full_exclusion = [
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Exempt",
+			},
+			{
+				"assessment_plan": "PLAN-EXAM",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Not Offered",
+			},
+		]
+		self.assertEqual(
+			build_missing_result_blockers(profile, plans, full_exclusion, ["STU-1"]),
 			[],
 		)
 
