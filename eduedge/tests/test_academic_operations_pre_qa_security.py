@@ -104,10 +104,11 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		for token in (
 			'get_user_capability_assignment_rows(',
 			'"can_create_assessment_plans"',
-			"eligibility",
 			'groups = frappe.get_all(',
 		):
 			self.assertIn(token, helper)
+		capabilities = (APP / "education" / "instructor_assignment_capabilities.py").read_text(encoding="utf-8")
+		self.assertIn("eligibility_covers_period(", capabilities)
 		self.assertIn("allowed_groups = _capability_group_names", query)
 		self.assertIn("rows = frappe.get_all(", query)
 		self.assertNotIn("Course Schedule", helper)
