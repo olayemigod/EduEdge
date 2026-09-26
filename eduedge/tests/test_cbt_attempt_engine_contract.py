@@ -96,6 +96,21 @@ class TestCBTAttemptEngineContract(unittest.TestCase):
 			self.assertIn(token, service)
 		self.assertNotIn('"is_correct":', service)
 
+	def test_expired_launch_token_reports_reconciliation_expiry_after_deadline(self):
+		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
+		loader = guard.split("def _load_candidate_attempt(", 1)[1].split(
+			"def _assert_reconciliation_window_open", 1
+		)[0]
+		for token in (
+			"reconciliation_candidate = (",
+			"attempt.attempt_status in RECONCILIATION_STATUSES",
+			"reconciliation_candidate and now_datetime() > deadline",
+			"The browser reconciliation window has expired.",
+			"CBT launch token has expired.",
+		):
+			self.assertIn(token, loader)
+
+
 	def test_reconciliation_mutations_share_absolute_deadline_guard(self):
 		guard = (APP / "cbt" / "attempt_runtime_guard.py").read_text()
 
