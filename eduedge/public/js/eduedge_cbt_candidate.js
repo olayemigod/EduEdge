@@ -208,6 +208,7 @@
 			this.timerBaseSeconds = 0;
 			this.timerBasePerformance = window.performance.now();
 			this.serverClockOffsetMs = 0;
+			this.reconciliationDeadlineEpoch = 0;
 			this.connectionState = navigator.onLine ? "checking" : "offline";
 			this.submissionRequested = false;
 			this.locallyLocked = false;
@@ -282,6 +283,14 @@
 				await this.storage.seedServerAnswers(state.answers || {});
 				const deadlineEpoch = Date.now() + Math.max(0, Number(state.seconds_remaining || 0)) * 1000;
 				await this.storage.setMeta("timer_deadline_epoch", deadlineEpoch);
+				const serverEpoch = Date.parse(String(state.server_time || "").replace(" ", "T"));
+				const reconciliationServerEpoch = Date.parse(String(state.reconciliation_deadline || "").replace(" ", "T"));
+				this.reconciliationDeadlineEpoch = (
+					Number.isFinite(serverEpoch) && Number.isFinite(reconciliationServerEpoch)
+				)
+					? Date.now() + Math.max(0, reconciliationServerEpoch - serverEpoch)
+					: 0;
+				await this.storage.setMeta("reconciliation_deadline_epoch", this.reconciliationDeadlineEpoch);
 				await this.storage.setMeta("cached_attempt_state", {
 					attempt: state.attempt,
 					candidate_name: state.candidate_name,
@@ -296,14 +305,19 @@
 					reported_pending_sync_count: state.reported_pending_sync_count || 0,
 					last_sync_at: state.last_sync_at || null,
 					answer_sync_conflict: Boolean(state.answer_sync_conflict),
+					reconciliation_deadline: state.reconciliation_deadline || null,
 				});
 			} else {
 				const deadlineEpoch = Number(await this.storage.getMeta("timer_deadline_epoch", Date.now()));
 				this.serverState.seconds_remaining = Math.max(0, Math.floor((deadlineEpoch - Date.now()) / 1000));
+				this.reconciliationDeadlineEpoch = Number(
+					await this.storage.getMeta("reconciliation_deadline_epoch", 0)
+				) || 0;
 			}
 			await this.reloadLocalAnswers();
 			this.currentIndex = Math.max(0, Math.min(this.currentIndex, Math.max(0, this.questions.length - 1)));
 			this.setTimer(Number(this.serverState.seconds_remaining || 0));
+			if (this.reconciliationWindowExpired()) this.stopReconciliationRetries();
 			this.renderForStatus();
 			if (hadSyncConflict && !this.syncConflict && this.serverState.status === "In Progress") {
 				this.restartPeriodicSync();
@@ -455,6 +469,31 @@
 				</main>`;
 			this.root.querySelector("p").textContent = message || "An unexpected error occurred.";
 			this.root.querySelector("button").addEventListener("click", () => window.location.reload());
+		}
+
+		reconciliationWindowExpired() {
+			if (!["Pending Sync", "Auto Submitted", "Timed Out"].includes(this.serverState?.status)) return false;
+			return Boolean(
+				this.reconciliationDeadlineEpoch
+				&& Date.now() > this.reconciliationDeadlineEpoch
+			);
+		}
+
+		stopReconciliationRetries() {
+			window.clearTimeout(this.syncTimer);
+			window.clearInterval(this.periodicSyncInterval);
+			window.clearInterval(this.heartbeatInterval);
+			this.syncTimer = null;
+			this.periodicSyncInterval = null;
+			this.heartbeatInterval = null;
+		}
+
+		enterReconciliationExpired() {
+			if (!this.reconciliationWindowExpired()) return false;
+			this.locallyLocked = true;
+			this.stopReconciliationRetries();
+			this.renderForStatus();
+			return true;
 		}
 
 		renderForStatus() {
@@ -756,6 +795,10 @@
 		}
 
 		async flushSync() {
+			if (this.reconciliationWindowExpired()) {
+				this.enterReconciliationExpired();
+				return false;
+			}
 			if (this.syncConflict) return false;
 			if (this.syncing) return this.syncPromise;
 			if (!navigator.onLine) {
@@ -850,6 +893,10 @@
 		}
 
 		async completeQueuedSubmission() {
+			if (this.reconciliationWindowExpired()) {
+				this.enterReconciliationExpired();
+				return;
+			}
 			if (!this.submissionRequested || this.syncConflict) return;
 			try {
 				const result = await apiCall(API.submit, {
@@ -891,6 +938,10 @@
 		}
 
 		async heartbeat(runtimeEvent = "") {
+			if (this.reconciliationWindowExpired()) {
+				this.enterReconciliationExpired();
+				return;
+			}
 			if (this.tabConflict) return;
 			if (!navigator.onLine || !this.serverState || this.serverState.status === "Prepared") return;
 			try {
@@ -934,6 +985,7 @@
 
 		renderTerminal(syncPending) {
 			const status = this.serverState?.status || "Closed";
+			const reconciliationExpired = syncPending && this.reconciliationWindowExpired();
 			this.root.innerHTML = `
 				<main class="cbt-entry">
 					<section class="cbt-entry-card cbt-terminal-card">
@@ -946,13 +998,17 @@
 							<div><strong>Browser pending</strong><span class="cbt-terminal-pending"></span></div>
 							<div><strong>Connection</strong><span class="cbt-entry-connection"></span></div>
 						</div>
-						<button type="button" class="cbt-button cbt-button-secondary cbt-retry-sync" ${syncPending ? "" : "hidden"}>Retry Synchronisation</button>
+						<button type="button" class="cbt-button cbt-button-secondary cbt-retry-sync" ${syncPending && !reconciliationExpired ? "" : "hidden"}>Retry Synchronisation</button>
 					</section>
 				</main>`;
-			this.root.querySelector("h1").textContent = syncPending ? "Submission awaiting synchronisation" : "Examination received";
-			this.root.querySelector(".cbt-terminal-message").textContent = syncPending
-				? "Your submission is recorded, but some browser-saved answers still need to reach the server. Keep this page open or reconnect this browser."
-				: "Your answers are locked. You may close this page when instructed by the invigilator.";
+			this.root.querySelector("h1").textContent = reconciliationExpired
+				? "Browser reconciliation window closed"
+				: (syncPending ? "Submission awaiting synchronisation" : "Examination received");
+			this.root.querySelector(".cbt-terminal-message").textContent = reconciliationExpired
+				? "Automatic browser reconciliation has ended. Keep this browser data intact and contact the invigilator; the governed Attempt Review workflow is now required."
+				: (syncPending
+					? "Your submission is recorded, but some browser-saved answers still need to reach the server. Keep this page open or reconnect this browser."
+					: "Your answers are locked. You may close this page when instructed by the invigilator.");
 			this.root.querySelector(".cbt-terminal-status").textContent = status;
 			this.root.querySelector(".cbt-terminal-pending").textContent = String(this.pendingCount);
 			this.updatePreparedConnection();
@@ -1050,6 +1106,10 @@
 			window.clearInterval(this.timerInterval);
 			window.clearInterval(this.heartbeatInterval);
 			window.clearInterval(this.tabLeaseInterval);
+			if (this.reconciliationWindowExpired()) {
+				this.stopReconciliationRetries();
+				return;
+			}
 			this.timerInterval = window.setInterval(() => this.updateTimerUI(), 1000);
 			this.restartPeriodicSync();
 			this.heartbeatInterval = window.setInterval(() => this.heartbeat(), HEARTBEAT_MS);
@@ -1058,6 +1118,10 @@
 
 		installLifecycleHandlers() {
 			window.addEventListener("online", async () => {
+				if (this.reconciliationWindowExpired()) {
+					this.enterReconciliationExpired();
+					return;
+				}
 				this.setConnection("checking");
 				if (this.syncConflict) {
 					await this.refreshState();
