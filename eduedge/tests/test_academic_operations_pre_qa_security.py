@@ -91,6 +91,29 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 		self.assertIn("_validate_department", controller)
 		self.assertNotIn("Select an enabled Academic Level", controller)
 
+	def test_assessment_plan_class_selector_bootstraps_from_exact_capability(self):
+		options = (APP / "api" / "assessment_assignment_options.py").read_text(encoding="utf-8")
+		helper = options.split("def _capability_group_names", 1)[1].split(
+			"@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_plan_student_group_query",
+			1,
+		)[0]
+		query = options.split("def assessment_plan_student_group_query", 1)[1].split(
+			"@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_plan_course_query",
+			1,
+		)[0]
+		for token in (
+			'get_user_capability_assignment_rows(',
+			'"can_create_assessment_plans"',
+			"eligibility",
+			'groups = frappe.get_all(',
+		):
+			self.assertIn(token, helper)
+		self.assertIn("allowed_groups = _capability_group_names", query)
+		self.assertIn("rows = frappe.get_all(", query)
+		self.assertNotIn("Course Schedule", helper)
+		self.assertNotIn("Course Schedule", query)
+
+
 	def test_student_group_and_schedule_validate_native_hierarchy_server_side(self):
 		operations = (APP / "education" / "academic_operations.py").read_text(encoding="utf-8")
 		self.assertIn("Programme / Class must belong to the Student Group's Institution", operations)
