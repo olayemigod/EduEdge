@@ -6,6 +6,7 @@ from frappe.tests.utils import FrappeTestCase
 from eduedge.education.result_engine import (
 	build_component_plan_maximum_blockers,
 	build_configured_class_metrics,
+	build_missing_result_blockers,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 )
@@ -140,6 +141,39 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(subject["cumulative_maximum_score"], 300)
 		self.assertEqual(subject["annual_percentage"], 75.33)
 		self.assertEqual(payload["summary"]["overall_percentage"], 75.33)
+
+	def test_missing_component_can_be_excluded_without_hiding_whole_subject(self):
+		profile = _profile()
+		profile["missing_result_policy"] = "Exclude from Denominator"
+		payload = compose_terminal_subject_results(
+			profile,
+			[
+				_row("Alpha", "CA", 30, 40),
+			],
+		)
+		self.assertFalse(payload["blockers"])
+		subject = payload["subjects"][0]
+		self.assertEqual(subject["total_score"], 30)
+		self.assertEqual(subject["maximum_score"], 40)
+		self.assertEqual(subject["percentage"], 75)
+
+		plans = [
+			{"name": "PLAN-CA", "course": "CRS"},
+			{"name": "PLAN-EXAM", "course": "CRS"},
+		]
+		partial_rows = [
+			{"assessment_plan": "PLAN-CA", "student": "STU-1", "docstatus": 1},
+		]
+		self.assertEqual(
+			build_missing_result_blockers(profile, plans, partial_rows, ["STU-1"]),
+			[],
+		)
+
+		blockers = build_missing_result_blockers(profile, plans, [], ["STU-1"])
+		self.assertEqual(len(blockers), 1)
+		self.assertEqual(blockers[0]["code"], "MISSING_SUBJECT_RESULTS")
+		self.assertEqual(blockers[0]["student"], "STU-1")
+		self.assertEqual(blockers[0]["course"], "CRS")
 
 	def test_not_offered_period_is_excluded_not_converted_to_zero(self):
 		periods = [
