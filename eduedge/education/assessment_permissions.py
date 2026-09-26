@@ -76,6 +76,15 @@ def _assignment_exists_sql(*, table: str, capability: str, user: str, result_mod
                         and assignment.student_group = {group_expr}
                     )
                 )
+                and exists (
+                    select 1
+                    from `tabEduEdge Instructor Branch Assignment` eligibility
+                    where eligibility.instructor = assignment.instructor
+                        and eligibility.school_branch = assignment.school_branch
+                        and eligibility.enabled = 1
+                        and (eligibility.valid_from is null or eligibility.valid_from <= {date_expr})
+                        and (eligibility.valid_to is null or eligibility.valid_to >= {date_expr})
+                )
         )
     """
 
