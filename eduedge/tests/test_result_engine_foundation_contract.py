@@ -95,5 +95,16 @@ class TestResultEngineFoundationContract(unittest.TestCase):
 		self.assertGreaterEqual(install.count("ensure_result_engine_custom_fields()"), 2)
 
 
+	def test_overall_grade_and_remark_use_rounded_display_percentage(self):
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn(
+			"rounded_overall_percentage = round_result_value(overall_percentage, precision)",
+			engine,
+		)
+		self.assertIn("get_grade(grading_scale, rounded_overall_percentage)", engine)
+		self.assertIn("get_grade_remark(grading_scale, rounded_overall_percentage)", engine)
+		self.assertIn('"overall_percentage": rounded_overall_percentage', engine)
+
+
 if __name__ == "__main__":
 	unittest.main()
