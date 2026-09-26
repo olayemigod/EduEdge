@@ -158,6 +158,34 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
         ):
             self.assertIn(token, hooks)
 
+    def test_plan_subject_assignment_and_capability_share_assessment_date(self):
+        operations = (APP / "education" / "assessment_operations.py").read_text(
+            encoding="utf-8"
+        )
+        validator = operations.split("def before_validate_assessment_plan", 1)[1].split(
+            "def _validate_examiner_and_supervisor", 1
+        )[0]
+        self.assertIn("assessment_date = doc.schedule_date or nowdate()", validator)
+        self.assertIn("require_course_assignment(", validator)
+        self.assertIn('"can_create_assessment_plans"', validator)
+        self.assertGreaterEqual(validator.count("on_date=assessment_date"), 2)
+
+        assignments = (APP / "education" / "teaching_assignments.py").read_text(
+            encoding="utf-8"
+        )
+        helper_block = assignments.split("def assigned_course_rows", 1)[1].split(
+            "def assignment_scope_label", 1
+        )[0]
+        for helper in (
+            "def assigned_course_rows",
+            "def assigned_courses",
+            "def has_course_assignment",
+            "def require_course_assignment",
+        ):
+            self.assertIn(helper, assignments)
+        self.assertGreaterEqual(helper_block.count("on_date=None"), 4)
+        self.assertIn("on_date=on_date", helper_block)
+
 
 if __name__ == "__main__":
     unittest.main()
