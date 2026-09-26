@@ -111,17 +111,41 @@ class EduEdgeResultPublication(Document):
 
 
 	def _validate_server_managed_change(self) -> None:
-		if self.is_new() or getattr(
+		if getattr(
 			frappe.flags,
 			"in_eduedge_result_publication_transition",
 			False,
 		):
+			return
+		if self.is_new():
+			self._validate_initial_server_managed_state()
 			return
 		if any(self.has_value_changed(fieldname) for fieldname in SERVER_MANAGED_FIELDS):
 			frappe.throw(
 				_("Result Publication workflow and readiness fields can change only through EduEdge result actions."),
 				frappe.ValidationError,
 			)
+
+	def _validate_initial_server_managed_state(self) -> None:
+		if (self.status or "Draft") != "Draft":
+			frappe.throw(
+				_("New Result Publications must start in Draft status."),
+				frappe.ValidationError,
+			)
+		allow_revision_profile_config = bool(self.supersedes_publication and self.result_profile)
+		for fieldname in SERVER_MANAGED_FIELDS:
+			if fieldname == "status":
+				continue
+			if (
+				allow_revision_profile_config
+				and fieldname in {"result_profile_config_hash", "result_profile_config_json"}
+			):
+				continue
+			if self.get(fieldname) not in (None, "", 0, False):
+				frappe.throw(
+					_("New Result Publications cannot pre-populate workflow or readiness state."),
+					frappe.ValidationError,
+				)
 
 
 	def _validate_scope_change(self) -> None:
