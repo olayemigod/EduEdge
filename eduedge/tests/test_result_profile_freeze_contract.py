@@ -70,5 +70,24 @@ class TestResultProfileFreezeContract(unittest.TestCase):
 		self.assertIn("Create a new Result Profile for the new scope.", service)
 
 
+	def test_approval_freezes_academic_payload_until_publish(self):
+		api = (APP / "api" / "assessment_operations.py").read_text()
+		snapshots = (APP / "education" / "result_snapshots.py").read_text()
+		schema = (APP / "eduedge" / "doctype" / "eduedge_result_publication" / "eduedge_result_publication.json").read_text()
+		for token in (
+			"approved_academic_payload_hash",
+			"approved_academic_student_count",
+		):
+			self.assertIn(token, schema)
+			self.assertIn(token, api)
+		self.assertIn("def build_publication_approval_fingerprint", snapshots)
+		self.assertIn('"result": item["payload"].get("result") or {}', snapshots)
+		self.assertIn('"attendance": item["payload"].get("attendance") or {}', snapshots)
+		self.assertIn('"source_assessment_results"', snapshots)
+		self.assertGreaterEqual(api.count("build_publication_approval_fingerprint("), 2)
+		self.assertIn("Approved academic result data changed after approval.", api)
+		self.assertIn("predates academic payload fingerprinting", api)
+
+
 if __name__ == "__main__":
 	unittest.main()
