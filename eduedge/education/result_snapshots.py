@@ -31,9 +31,9 @@ def build_publication_approval_fingerprint(publication_doc) -> dict:
 	"""Fingerprint the academic payload reviewed for approval.
 
 	Cosmetic Student identity fields are intentionally excluded. The fingerprint
-	covers calculated results/class metrics, governed attendance, and exact source
-	Assessment Result identities so corrected/replaced academic data requires
-	re-approval before publication.
+	covers calculated results/class metrics, governed attendance, visible
+	publication-derived report values, and exact source Assessment Result identities
+	so reviewed output cannot drift before publication without re-approval.
 	"""
 	payloads = build_publication_student_payloads(publication_doc)
 	academic_payload = {}
@@ -46,6 +46,16 @@ def build_publication_approval_fingerprint(publication_doc) -> dict:
 				payload.get("attendance") or {}
 				if presentation.get("show_attendance")
 				else {}
+			),
+			"grading_legend": (
+				payload.get("grading_legend") or []
+				if presentation.get("show_grading_legend")
+				else []
+			),
+			"next_term_start_date": (
+				payload.get("next_term_start_date")
+				if presentation.get("show_next_period_date")
+				else None
 			),
 			"source_assessment_results": payload.get("source_assessment_results") or [],
 		}
