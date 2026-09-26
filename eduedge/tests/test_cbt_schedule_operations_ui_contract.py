@@ -143,6 +143,30 @@ class TestCBTScheduleOperationsUIContract(unittest.TestCase):
 		):
 			self.assertIn(expected, governance)
 
+	def test_lifecycle_page_actions_use_trusted_operation_context(self):
+		api = (APP / "api/cbt_schedule_operations_hardened.py").read_text(encoding="utf-8")
+		candidate = (
+			APP / "eduedge/doctype/eduedge_cbt_candidate_assignment/eduedge_cbt_candidate_assignment.py"
+		).read_text(encoding="utf-8")
+		readiness = (APP / "cbt/result_readiness.py").read_text(encoding="utf-8")
+		self.assertIn("controlled_cbt_operation", api)
+		self.assertGreaterEqual(
+			api.count('controlled_cbt_operation("eduedge_controlled_status_action")'),
+			5,
+		)
+		for token in (
+			"COMPLETABLE_ATTEMPT_STATUSES",
+			'"Submitted"',
+			'"Auto Submitted"',
+			'"Under Review"',
+			'"Scored"',
+			"Candidate completion requires a prepared CBT Attempt.",
+			"Submit or resolve the attempt first.",
+		):
+			self.assertIn(token, candidate)
+		self.assertIn("if assignment.name not in latest_by_assignment", readiness)
+		self.assertNotIn('assignment.assignment_status != "Completed"', readiness)
+
 	def test_candidate_timing_and_intervention_truth_are_enforced(self):
 		candidate = (
 			APP / "eduedge/doctype/eduedge_cbt_candidate_assignment/eduedge_cbt_candidate_assignment.py"
