@@ -120,6 +120,8 @@
 	}
 	.comment-box { border: 1px solid #bbb; min-height: 62px; padding: 7px; }
 	.comment-box h4 { margin: 0 0 5px; font-size: 9pt; }
+	.result-status-legend { margin-top: 6px; font-size: 7.5pt; color: #444; }
+	.result-status-legend span { white-space: nowrap; }
 	.grade-legend { margin-top: 10px; }
 	.grade-legend table { width: auto; min-width: 55%; }
 	.institution-footer { margin-top: 12px; padding-top: 7px; border-top: 1px solid #bbb; text-align: center; }
@@ -355,6 +357,15 @@
 				{% endfor %}
 			</tbody>
 		</table>
+	{% endif %}
+
+	{% if profiled and summary.result_status_legend %}
+		<div class="result-status-legend">
+			<strong>{{ _("Result Status") }}:</strong>
+			{% for item in summary.result_status_legend %}
+				<span><b>{{ item.code }}</b> = {{ _(item.label) }}{% if not loop.last %};{% endif %}</span>
+			{% endfor %}
+		</div>
 	{% endif %}
 
 	{% if profiled %}
