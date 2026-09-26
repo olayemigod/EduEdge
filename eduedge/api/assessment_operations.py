@@ -488,7 +488,7 @@ def ensure_result_publication(
 		if doc.has_value_changed("result_profile") or doc.has_value_changed("result_mode"):
 			if not doc.supersedes_publication:
 				set_publication_result_profile_config(doc, None)
-			doc.save()
+			_save_governed_publication_update(doc)
 			_refresh_readiness(doc)
 		return _publication_payload(name)
 
@@ -835,6 +835,19 @@ def _refresh_readiness(doc) -> dict:
 	return readiness
 
 
+def _save_governed_publication_update(doc) -> None:
+	flag = "in_eduedge_result_publication_transition"
+	previous = frappe.flags.get(flag)
+	frappe.flags[flag] = True
+	try:
+		doc.save()
+	finally:
+		if previous is None:
+			frappe.flags.pop(flag, None)
+		else:
+			frappe.flags[flag] = previous
+
+
 def _transition(
 	doc,
 	to_status: str,
@@ -844,14 +857,10 @@ def _transition(
 	remarks: str | None = None,
 ) -> None:
 	from_status = doc.status
-	frappe.flags.in_eduedge_result_publication_transition = True
-	try:
-		doc.status = to_status
-		for fieldname, value in (updates or {}).items():
-			doc.set(fieldname, value)
-		doc.save()
-	finally:
-		frappe.flags.in_eduedge_result_publication_transition = False
+	doc.status = to_status
+	for fieldname, value in (updates or {}).items():
+		doc.set(fieldname, value)
+	_save_governed_publication_update(doc)
 	append_publication_log(
 		doc.name,
 		action=action,
