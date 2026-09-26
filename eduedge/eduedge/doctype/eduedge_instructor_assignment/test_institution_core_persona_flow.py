@@ -438,7 +438,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             class_peer["name"],
             course,
         )
-        self._make_class_responsibility_assignment(
+        class_responsibility = self._make_class_responsibility_assignment(
             instructor_a,
             institution,
             branch_a,
@@ -475,6 +475,57 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         self.assertTrue(frappe.has_permission("EduEdge Report Card Review", "create"))
         self.assertTrue(frappe.has_permission("EduEdge Report Card Review", "write"))
         self.assertTrue(can_manage_report_card_reviews(instructor_publication))
+
+        # Historical academic-period responsibility may remain readable even when
+        # the assignment is not effective today. Mutation must then fail closed.
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            class_responsibility.name,
+            "valid_from",
+            "2094-09-01",
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
+        frappe.set_user(instructor_user.name)
+        self.assertTrue(can_view_report_card_scope(instructor_publication))
+        self.assertFalse(can_manage_report_card_reviews(instructor_publication))
+
+        historical_review = frappe._dict(
+            {
+                "doctype": "EduEdge Report Card Review",
+                "school_branch": branch_a.name,
+                "student_group": class_peer["name"],
+                "academic_year": year.name,
+                "academic_term": term.name,
+            }
+        )
+        self.assertTrue(
+            frappe.has_permission(
+                "EduEdge Report Card Review",
+                "read",
+                doc=historical_review,
+                user=instructor_user.name,
+            )
+        )
+        self.assertFalse(
+            frappe.has_permission(
+                "EduEdge Report Card Review",
+                "write",
+                doc=historical_review,
+                user=instructor_user.name,
+            )
+        )
+
+        frappe.set_user("Administrator")
+        frappe.db.set_value(
+            "EduEdge Instructor Assignment",
+            class_responsibility.name,
+            "valid_from",
+            None,
+            update_modified=False,
+        )
+        frappe.clear_cache(user=instructor_user.name)
         frappe.set_user("Administrator")
 
         self._make_subject_assignment(
