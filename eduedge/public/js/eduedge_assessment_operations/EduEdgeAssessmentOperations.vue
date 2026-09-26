@@ -93,7 +93,7 @@
 					<EdgeStatCard label="Submitted Plans" :value="context.counts.submitted_plans" helper="Ready for result entry" />
 					<EdgeStatCard v-if="context.can_view_publication_scope" label="Expected Results" :value="context.counts.expected_results" helper="Students × submitted plans" />
 					<EdgeStatCard v-if="context.can_view_publication_scope" label="Submitted Results" :value="context.counts.submitted_results" helper="Final result records" />
-					<EdgeStatCard v-if="context.can_view_publication_scope" label="Missing Results" :value="context.counts.missing_results" helper="Blocking approval" />
+					<EdgeStatCard v-if="context.can_view_publication_scope" label="Missing Results" :value="context.counts.missing_results" helper="Governed by the selected Result Profile policy" />
 				</EdgeDashboardLayout>
 
 				<section class="eduedge-assessment-grid">
