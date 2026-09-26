@@ -18,6 +18,7 @@ CANDIDATE_COMMANDS = {
 	"eduedge.cbt.attempts.sync_answers": "sync",
 	"eduedge.cbt.attempts.submit_attempt": "submit",
 	"eduedge.cbt.attempt_runtime_guard.get_attempt_state": "state",
+	"eduedge.cbt.attempt_runtime_guard.record_heartbeat": "heartbeat",
 	"eduedge.cbt.attempt_runtime_guard.sync_answers": "sync",
 	"eduedge.cbt.attempt_runtime_guard.submit_attempt": "submit",
 }
