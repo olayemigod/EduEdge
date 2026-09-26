@@ -26,6 +26,19 @@ PERCENTAGE_BASES = {
 	"Annual Cumulative Percentage",
 	"Annual Average Percentage",
 }
+TERMINAL_METRIC_BASES = {
+	"Current Term Raw Score",
+	"Current Term Percentage",
+	"Year-to-Date Cumulative Raw Score",
+	"Year-to-Date Cumulative Percentage",
+}
+ANNUAL_METRIC_BASES = {
+	"Year-to-Date Cumulative Raw Score",
+	"Year-to-Date Cumulative Percentage",
+	"Annual Cumulative Raw Score",
+	"Annual Cumulative Percentage",
+	"Annual Average Percentage",
+}
 METRIC_DISPLAY_TYPES = {"Raw Score", "Percentage", "Number"}
 ANNUAL_AGGREGATION_METHODS = {
 	"Equal Average of Eligible Terms",
@@ -474,6 +487,22 @@ def _validate_metrics(doc) -> None:
 		if row.display_as == "Percentage" and row.calculation_basis not in PERCENTAGE_BASES:
 			frappe.throw(
 				_("Percentage display requires a percentage calculation basis."),
+				frappe.ValidationError,
+			)
+		if row.show_on_terminal and row.calculation_basis not in TERMINAL_METRIC_BASES:
+			frappe.throw(
+				_(
+					"Statistic {0} cannot use {1} on Terminal reports. "
+					"Use a Current Term or Year-to-Date basis."
+				).format(row.display_label, row.calculation_basis),
+				frappe.ValidationError,
+			)
+		if row.show_on_annual and row.calculation_basis not in ANNUAL_METRIC_BASES:
+			frappe.throw(
+				_(
+					"Statistic {0} cannot use {1} on Annual reports. "
+					"Use a cumulative or annual basis."
+				).format(row.display_label, row.calculation_basis),
 				frappe.ValidationError,
 			)
 		key = (row.metric_key, row.calculation_basis)
