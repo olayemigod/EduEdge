@@ -27,10 +27,29 @@ class TestResultProfilePublicationUIContract(unittest.TestCase):
 		self.assertIn('result_mode == "Annual"', api)
 		self.assertIn('group_filters["academic_term"] = ["is", "not set"]', api)
 
-	def test_profile_or_assessment_group_is_required_for_creation(self):
+	def test_new_governed_publications_require_result_profile(self):
+		service = (APP / "education" / "assessment_operations.py").read_text()
 		api = (APP / "api" / "assessment_operations.py").read_text()
-		self.assertIn("if not assessment_group and not result_profile", api)
-		self.assertIn("Select a Result Profile or Assessment Group", api)
+		vue = (APP / "public" / "js" / "eduedge_assessment_operations" / "EduEdgeAssessmentOperations.vue").read_text()
+		self.assertIn("PROFILE_BACKED_PUBLICATION_REQUIRED", service)
+		self.assertIn("def assert_profile_backed_publication", service)
+		self.assertIn("if doc.is_new():", service)
+		self.assertIn("assert_profile_backed_publication(doc)", service)
+		self.assertGreaterEqual(api.count("assert_profile_backed_publication("), 4)
+		self.assertIn("!context.publication && filters.result_profile", vue)
+		self.assertIn("Existing legacy Assessment Group publications remain available for read and history only.", vue)
+		self.assertIn("Legacy Assessment Group publication — read/history only.", vue)
+
+	def test_legacy_publication_cannot_advance_or_spawn_revision(self):
+		api = (APP / "api" / "assessment_operations.py").read_text()
+		for function_name in (
+			"request_result_approval",
+			"approve_results",
+			"publish_results",
+			"create_result_publication_revision",
+		):
+			block = api.split(f"def {function_name}", 1)[1].split("\n\n", 1)[0]
+			self.assertIn("assert_profile_backed_publication(", block)
 
 
 if __name__ == "__main__":
