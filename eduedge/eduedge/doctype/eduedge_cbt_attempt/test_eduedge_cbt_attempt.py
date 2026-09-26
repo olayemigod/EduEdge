@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -8,6 +9,7 @@ from frappe.utils import now_datetime
 
 from eduedge.cbt import attempt_runtime_guard
 from eduedge.cbt import attempts as attempt_service
+from eduedge.cbt import result_readiness
 
 
 class TestEduEdgeCBTAttemptTimeoutReconciliation(FrappeTestCase):
@@ -61,6 +63,42 @@ class TestEduEdgeCBTAttemptTimeoutReconciliation(FrappeTestCase):
 		self.assertEqual(result["status"], "Auto Submitted")
 		self.assertEqual(attempt.attempt_status, "Auto Submitted")
 		self.assertEqual(attempt.reported_pending_sync_count, 0)
+
+	def test_completed_candidate_without_attempt_blocks_result_readiness(self):
+		schedule = frappe._dict(
+			{
+				"name": "TEST-CBT-SCHEDULE-READINESS",
+				"schedule_title": "CBT Readiness Test",
+				"status": "Completed",
+				"school_branch": "TEST-BRANCH",
+			}
+		)
+		assignment = frappe._dict(
+			{
+				"name": "TEST-CBT-ASSIGN-COMPLETED",
+				"assignment_status": "Completed",
+				"candidate_name": "Completed Candidate",
+			}
+		)
+		with (
+			patch(
+				"eduedge.cbt.result_readiness._require_schedule_access",
+				return_value=schedule,
+			),
+			patch(
+				"eduedge.cbt.result_readiness.frappe.get_all",
+				side_effect=[[assignment], []],
+			),
+		):
+			readiness = result_readiness.get_result_readiness(schedule.name)
+
+		self.assertEqual(readiness["missing_attempt_count"], 1)
+		self.assertFalse(readiness["ready_for_result_processing"])
+		self.assertFalse(readiness["ready_for_result_approval"])
+		self.assertIn(
+			"MISSING_ATTEMPTS",
+			{row["code"] for row in readiness["approval_blockers"]},
+		)
 
 	def test_submit_confirmation_cannot_erase_server_known_pending_answers(self):
 		attempt, token = self._make_timed_out_attempt(pending=2)
