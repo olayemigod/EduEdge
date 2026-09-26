@@ -11,7 +11,10 @@ from eduedge.cbt.public_access import (
 	require_public_exam_assignment,
 	require_public_exam_authoring,
 )
-from eduedge.cbt.schedule_governance import assert_user_branch_access
+from eduedge.cbt.schedule_governance import (
+	assert_user_branch_access,
+	controlled_cbt_operation,
+)
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
 from eduedge.eduedge.doctype.eduedge_cbt_exam_template.eduedge_cbt_exam_template import MODE_FIXED
@@ -548,7 +551,8 @@ def save_schedule(values: str | dict, name: str | None = None) -> dict:
 		reference_name=name,
 	)
 	if doc.is_new():
-		doc.insert()
+		with controlled_cbt_operation("eduedge_controlled_status_action"):
+			doc.insert()
 	else:
 		doc.save()
 	return {"name": doc.name, "values": _schedule_values(doc)}
@@ -566,7 +570,8 @@ def set_schedule_status(name: str, status: str, reason: str | None = None) -> di
 	)
 	doc.status = status
 	doc.status_change_reason = str(reason or "").strip()
-	doc.save()
+	with controlled_cbt_operation("eduedge_controlled_status_action"):
+		doc.save()
 	return {"name": doc.name, "status": doc.status, "activated_by": doc.activated_by, "activated_on": doc.activated_on}
 
 
@@ -611,7 +616,8 @@ def set_candidate_status(name: str, status: str, reason: str | None = None) -> d
 	)
 	doc.assignment_status = status
 	doc.status_change_reason = str(reason or "").strip()
-	doc.save()
+	with controlled_cbt_operation("eduedge_controlled_status_action"):
+		doc.save()
 	return {"name": doc.name, "status": doc.assignment_status}
 
 
@@ -659,7 +665,8 @@ def assign_template_student_group(schedule: str) -> dict:
 		doc.student = row.student
 		doc.assignment_status = "Eligible"
 		try:
-			doc.insert()
+			with controlled_cbt_operation("eduedge_controlled_status_action"):
+				doc.insert()
 		except frappe.DuplicateEntryError:
 			skipped.append(row.student)
 			continue
