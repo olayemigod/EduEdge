@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+from unittest.mock import patch
+
+import frappe
+from frappe.tests.utils import FrappeTestCase
+
+
+class TestEduEdgeResultPublication(FrappeTestCase):
+	def _publication(self):
+		return frappe.get_doc(
+			{
+				"doctype": "EduEdge Result Publication",
+				"status": "Approved",
+			}
+		)
+
+	def test_direct_server_managed_change_is_blocked(self):
+		doc = self._publication()
+		with (
+			patch.object(doc, "is_new", return_value=False),
+			patch.object(
+				doc,
+				"has_value_changed",
+				side_effect=lambda fieldname: fieldname == "status",
+			),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				doc._validate_server_managed_change()
+
+	def test_governed_transition_allows_server_managed_change(self):
+		doc = self._publication()
+		flag = "in_eduedge_result_publication_transition"
+		previous = frappe.flags.get(flag)
+		frappe.flags[flag] = True
+		try:
+			with (
+				patch.object(doc, "is_new", return_value=False),
+				patch.object(doc, "has_value_changed", return_value=True),
+			):
+				doc._validate_server_managed_change()
+		finally:
+			if previous is None:
+				frappe.flags.pop(flag, None)
+			else:
+				frappe.flags[flag] = previous
