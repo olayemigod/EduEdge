@@ -36,6 +36,19 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_capability_authorized_group_selector_can_bootstrap_before_first_schedule(self):
+        source = self._api()
+        helper = source.split("def _capability_group_names", 1)[1].split(
+            "@frappe.whitelist()\n@frappe.validate_and_sanitize_search_inputs\ndef assessment_plan_student_group_query",
+            1,
+        )[0]
+        self.assertIn("get_user_capability_assignment_rows(", helper)
+        self.assertIn("groups = frappe.get_all(", helper)
+        self.assertNotIn("groups = frappe.get_list(", helper)
+        self.assertIn("Capability rows already fail closed on exact Instructor identity", helper)
+        self.assertIn("first Assessment Plan creation", helper)
+
+
     def test_course_query_cascades_from_group_offering_curriculum_and_exact_capability(self):
         source = self._api()
         for token in (
