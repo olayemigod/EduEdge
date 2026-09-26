@@ -18,7 +18,10 @@ from eduedge.education.teaching_assignments import (
 	has_class_responsibility_assignment,
 )
 from eduedge.education.offerings import assert_branch_access, get_context_branch
-from eduedge.education.result_snapshots import create_publication_snapshots
+from eduedge.education.result_snapshots import (
+	build_publication_approval_fingerprint,
+	create_publication_snapshots,
+)
 from eduedge.education.result_profile import (
 	freeze_publication_result_profile_config,
 	get_publication_result_profile_config,
@@ -553,6 +556,8 @@ def request_result_approval(publication: str) -> dict:
 			"requested_on": now_datetime(),
 			"approved_by": None,
 			"approved_on": None,
+			"approved_academic_payload_hash": None,
+			"approved_academic_student_count": 0,
 			"published_by": None,
 			"published_on": None,
 			"rejected_by": None,
@@ -574,11 +579,17 @@ def approve_results(publication: str) -> dict:
 	readiness = _refresh_readiness(doc)
 	if not readiness["ready"]:
 		frappe.throw(_("Result completeness changed. Approval is blocked."), frappe.ValidationError)
+	fingerprint = build_publication_approval_fingerprint(doc)
 	_transition(
 		doc,
 		"Approved",
 		action="Approved",
-		updates={"approved_by": frappe.session.user, "approved_on": now_datetime()},
+		updates={
+			"approved_by": frappe.session.user,
+			"approved_on": now_datetime(),
+			"approved_academic_payload_hash": fingerprint["hash"],
+			"approved_academic_student_count": fingerprint["student_count"],
+		},
 	)
 	return _publication_payload(doc.name)
 
@@ -604,6 +615,8 @@ def reject_results(publication: str, reason: str) -> dict:
 			"rejection_reason": reason,
 			"approved_by": None,
 			"approved_on": None,
+			"approved_academic_payload_hash": None,
+			"approved_academic_student_count": 0,
 		},
 	)
 	return _publication_payload(doc.name)
@@ -620,6 +633,26 @@ def publish_results(publication: str) -> dict:
 	readiness = _refresh_readiness(doc)
 	if not readiness["ready"]:
 		frappe.throw(_("Result completeness changed. Publication is blocked."), frappe.ValidationError)
+	if not doc.approved_academic_payload_hash:
+		frappe.throw(
+			_(
+				"This approval predates academic payload fingerprinting. "
+				"Reject the publication and request approval again before publishing."
+			),
+			frappe.ValidationError,
+		)
+	fingerprint = build_publication_approval_fingerprint(doc)
+	if (
+		fingerprint["hash"] != doc.approved_academic_payload_hash
+		or fingerprint["student_count"] != int(doc.approved_academic_student_count or 0)
+	):
+		frappe.throw(
+			_(
+				"Approved academic result data changed after approval. "
+				"Reject the publication and request approval again."
+			),
+			frappe.ValidationError,
+		)
 	_transition(
 		doc,
 		"Published",
