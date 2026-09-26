@@ -182,6 +182,14 @@
 							<small>{{ branchEligibilitySummary(previewPlan.destination_branch_eligibility) }}</small>
 							<small>The source Branch Eligibility is not shortened or deleted by preparation.</small>
 						</div>
+						<div
+							v-if="previewPlan.capability_review?.pending"
+							class="eduedge-preparation-plan-card eduedge-preparation-plan-grid__wide"
+						>
+							<strong class="eduedge-preparation-plan-label">Capability review required</strong>
+							<span>Operational capabilities are not inherited from the source assignment.</span>
+							<small>{{ previewPlan.capability_review?.message }}</small>
+						</div>
 					</div>
 				</template>
 			</section>
@@ -532,8 +540,12 @@ export default {
 					args: currentArgs,
 				});
 				const result = response.message || {};
+				const successMessage = result.action === "already-prepared" ? "Future Instructor Assignment was already prepared" : "Future Instructor Assignment prepared";
+				const finalMessage = result.capability_review?.pending
+					? `${successMessage}. Review the future assignment's capabilities before its responsibility period begins.`
+					: successMessage;
 				frappe.show_alert({
-					message: result.action === "already-prepared" ? "Future Instructor Assignment was already prepared" : "Future Instructor Assignment prepared",
+					message: finalMessage,
 					indicator: "green",
 				});
 				await this.onComplete?.(result);
