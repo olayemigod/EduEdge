@@ -30,6 +30,14 @@ def average_result_values(values) -> float:
 	return float(sum(decimals, Decimal("0")) / Decimal(len(decimals)))
 
 
+def result_score_precision(config: dict) -> int:
+	"""Resolve configured precision without treating a valid zero as missing."""
+	value = config.get("score_precision")
+	if value in (None, ""):
+		value = 2
+	return max(0, min(cint(value), 6))
+
+
 BASIS_VALUE_FIELDS = {
 	"Current Term Raw Score": "total_score",
 	"Current Term Percentage": "percentage",
@@ -150,7 +158,7 @@ def compose_terminal_subject_results(profile: str | dict, result_rows: list) -> 
 	config = get_result_profile_config(profile) if isinstance(profile, str) else profile
 	source_index = get_component_source_index(config)
 	component_config = {row["component_key"]: row for row in config["components"]}
-	precision = cint(config.get("score_precision") or 2)
+	precision = result_score_precision(config)
 
 	subjects: dict[str, dict] = {}
 	blockers: list[dict] = []
@@ -287,7 +295,7 @@ def compose_cumulative_subject_results(
 ) -> dict:
 	"""Compose Year-to-Date or full Annual subject results from native term results."""
 	config = get_result_profile_config(profile) if isinstance(profile, str) else profile
-	precision = cint(config.get("score_precision") or 2)
+	precision = result_score_precision(config)
 	active_periods = []
 	for period in periods:
 		active_periods.append(period)
@@ -440,7 +448,7 @@ def calculate_overall_summary(
 	score_field: str = "total_score",
 	maximum_field: str = "maximum_score",
 ) -> dict:
-	precision = cint(config.get("score_precision") or 2)
+	precision = result_score_precision(config)
 	eligible = [row for row in subjects if row.get("eligible")]
 	total_score = sum(flt(row.get(score_field)) for row in eligible)
 	maximum_score = sum(flt(row.get(maximum_field)) for row in eligible)
