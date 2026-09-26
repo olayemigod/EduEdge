@@ -27,7 +27,7 @@ from eduedge.services.instructor_branch_governance import (
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
 MAX_FILTER_SCAN = 5000
-LIFECYCLE_STATUSES = ("Current", "Scheduled", "Ended", "Replaced", "Transferred", "Disabled")
+LIFECYCLE_STATUSES = ("Current", "Scheduled", "Ending", "Ended", "Replaced", "Transferred", "Disabled")
 ORIGINS = ("Normal", "Prepared", "Replacement", "Transfer")
 PRESETS = (
     "current_upcoming",
@@ -153,7 +153,7 @@ def _preset_matches(status: str, origin: str, preset: str) -> bool:
     if preset == "all":
         return True
     if preset == "current_upcoming":
-        return status in {"Current", "Scheduled"}
+        return status in {"Current", "Scheduled", "Ending"}
     if preset == "prepared":
         return origin == "Prepared"
     mapping = {
