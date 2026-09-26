@@ -51,6 +51,16 @@ class TestInstructorAssignmentLifecycleContract(unittest.TestCase):
         self.assertNotIn("rename_doc", lifecycle)
         self.assertNotIn("EduEdge Instructor Branch Assignment", lifecycle)
 
+    def test_lifecycle_status_respects_final_valid_day(self):
+        lifecycle = (APP / "api" / "instructor_assignment_lifecycle.py").read_text(encoding="utf-8")
+        status_block = lifecycle.split("def _lifecycle_status", 1)[1].split(
+            "def _readable_instructor_from_assignment", 1
+        )[0]
+        self.assertIn('return "Ending" if getdate(row.ended_on) >= today else "Ended"', status_block)
+        self.assertLess(status_block.index('row.replaced_by_assignment'), status_block.index('row.ended_on'))
+        self.assertLess(status_block.index('row.transferred_to_assignment'), status_block.index('row.ended_on'))
+
+
     def test_existing_responsibility_identity_and_lifecycle_audit_are_protected(self):
         controller = (
             APP
