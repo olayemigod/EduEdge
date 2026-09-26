@@ -31,6 +31,20 @@ class TestResultProfileReadinessContract(unittest.TestCase):
 		self.assertNotIn("ANNUAL_COHORT_PENDING", text)
 		self.assertIn("not all_blockers", text)
 
+	def test_missing_result_policy_is_honored_without_hiding_entire_subject(self):
+		readiness = (APP / "education" / "assessment_operations.py").read_text()
+		engine = (APP / "education" / "result_engine.py").read_text()
+		snapshots = (APP / "education" / "result_snapshots.py").read_text()
+		self.assertIn("build_missing_result_blockers", readiness)
+		self.assertIn('missing_result_policy") == "Exclude from Denominator"', readiness)
+		self.assertIn("(submitted == expected or exclude_missing)", readiness)
+		self.assertIn("(missing == 0 or exclude_missing)", readiness)
+		self.assertIn("def build_missing_result_blockers", engine)
+		self.assertIn("MISSING_SUBJECT_RESULTS", engine)
+		self.assertIn("Not Offered / Exempt", engine)
+		self.assertIn("build_missing_result_blockers", snapshots)
+		self.assertIn("if not exclude_missing or missing_subject_blockers", snapshots)
+
 	def test_publication_api_accepts_profile_and_mode_but_keeps_defaults(self):
 		text = (APP / "api" / "assessment_operations.py").read_text()
 		self.assertIn("result_profile: str | None = None", text)
