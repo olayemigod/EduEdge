@@ -48,12 +48,17 @@ def _assignment_names(names: str | list | tuple | None) -> list[str]:
 def _lifecycle_status(row, today) -> str:
     if not cint(row.enabled):
         return "Disabled"
+    # End/Replace/Transfer all keep the source responsibility operational through
+    # its final responsibility date. Successor links describe the eventual historical
+    # outcome, but must not make the source disappear from active scope too early.
+    if row.ended_on and getdate(row.ended_on) >= today:
+        return "Ending"
     if row.replaced_by_assignment:
         return "Replaced"
     if row.transferred_to_assignment:
         return "Transferred"
     if row.ended_on:
-        return "Ending" if getdate(row.ended_on) >= today else "Ended"
+        return "Ended"
     if row.valid_from and getdate(row.valid_from) > today:
         return "Scheduled"
     if row.valid_to and getdate(row.valid_to) < today:
