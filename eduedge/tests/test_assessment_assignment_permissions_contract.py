@@ -177,6 +177,23 @@ class TestAssessmentAssignmentPermissionsContract(unittest.TestCase):
             validator.index('frappe.db.get_value("Student", doc.student, BRANCH_FIELD)'),
         )
 
+    def test_plan_criteria_must_belong_to_selected_course(self):
+        operations = (APP / "education" / "assessment_operations.py").read_text(
+            encoding="utf-8"
+        )
+        helper = operations.split("def _validate_assessment_plan_criteria_course", 1)[1].split(
+            "def _validate_examiner_and_supervisor", 1
+        )[0]
+        self.assertIn("_validate_assessment_plan_criteria_course(doc)", operations)
+        for token in (
+            '"Course Assessment Criteria"',
+            '"parent": doc.course',
+            '"parenttype": "Course"',
+            "Assessment Criteria cannot be repeated",
+            "are not configured for Subject / Course",
+        ):
+            self.assertIn(token, helper)
+
     def test_plan_subject_assignment_and_capability_share_assessment_date(self):
         operations = (APP / "education" / "assessment_operations.py").read_text(
             encoding="utf-8"
