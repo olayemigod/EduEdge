@@ -598,7 +598,7 @@ def format_metric_value(value, display_as: str, decimal_places: int = 2):
 	if display_as == "Percentage":
 		return f"{rounded:.{precision}f}%"
 	if display_as == "Number":
-		return str(int(Decimal(str(flt(value))).quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+		return f"{rounded:.{precision}f}"
 	return f"{rounded:.{precision}f}"
 
 
