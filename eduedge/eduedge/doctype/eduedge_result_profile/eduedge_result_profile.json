@@ -35,6 +35,8 @@
   "show_attendance",
   "show_comments",
   "show_progression",
+  "use_custom_promotion_pass_average",
+  "promotion_pass_average",
   "show_grading_legend",
   "show_next_period_date",
   "show_report_signatory",
@@ -239,6 +241,22 @@
    "fieldname": "show_progression",
    "fieldtype": "Check",
    "label": "Show Progression Decision"
+  },
+  {
+   "default": "0",
+   "description": "Enable when this Result Profile needs a different promotion threshold from the current EduEdge default. The resolved threshold is frozen when publication approval is requested.",
+   "fieldname": "use_custom_promotion_pass_average",
+   "fieldtype": "Check",
+   "label": "Override Promotion Pass Average"
+  },
+  {
+   "default": "50",
+   "depends_on": "eval:doc.use_custom_promotion_pass_average",
+   "mandatory_depends_on": "eval:doc.use_custom_promotion_pass_average",
+   "description": "Annual result average required for the suggested Promote outcome. This does not auto-approve progression; final progression remains a reviewed decision.",
+   "fieldname": "promotion_pass_average",
+   "fieldtype": "Percent",
+   "label": "Promotion Pass Average"
   },
   {
    "default": "1",
