@@ -26,6 +26,7 @@ class EduEdgeResultPublication(Document):
 		validate_publication_profile(self)
 		self._validate_revision_identity()
 		self._validate_scope_change()
+		self._validate_approval_payload_hash()
 		self._validate_duplicate_scope()
 
 	def on_trash(self) -> None:
@@ -120,6 +121,16 @@ class EduEdgeResultPublication(Document):
 					_("Result Publication scope cannot change after approval begins."),
 					frappe.ValidationError,
 				)
+
+	def _validate_approval_payload_hash(self) -> None:
+		if self.is_new() or not self.has_value_changed("approved_payload_hash"):
+			return
+		if getattr(frappe.flags, "in_eduedge_result_publication_transition", False):
+			return
+		frappe.throw(
+			_("Approved result payload fingerprint is managed by the EduEdge publication workflow."),
+			frappe.ValidationError,
+		)
 
 	def _validate_duplicate_scope(self) -> None:
 		filters = {
