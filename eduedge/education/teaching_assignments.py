@@ -288,6 +288,7 @@ def assigned_course_rows(
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> list[dict]:
     return [
         row
@@ -296,6 +297,7 @@ def assigned_course_rows(
             branch=branch,
             program_offering=program_offering,
             student_group=student_group,
+            on_date=on_date,
         )
         if row.get("course")
     ]
@@ -306,10 +308,17 @@ def assigned_courses(
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> set[str]:
     return {
         row.course
-        for row in assigned_course_rows(user, branch, program_offering, student_group)
+        for row in assigned_course_rows(
+            user,
+            branch,
+            program_offering,
+            student_group,
+            on_date=on_date,
+        )
         if row.get("course")
     }
 
@@ -321,8 +330,15 @@ def has_course_assignment(
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> bool:
-    return course in assigned_courses(user, branch, program_offering, student_group)
+    return course in assigned_courses(
+        user,
+        branch,
+        program_offering,
+        student_group,
+        on_date=on_date,
+    )
 
 
 def require_course_assignment(
@@ -332,6 +348,7 @@ def require_course_assignment(
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> None:
     if has_course_assignment(
         course,
@@ -339,6 +356,7 @@ def require_course_assignment(
         branch=branch,
         program_offering=program_offering,
         student_group=student_group,
+        on_date=on_date,
     ):
         return
     frappe.throw(
