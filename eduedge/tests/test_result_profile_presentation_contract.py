@@ -26,6 +26,23 @@ class TestResultProfilePresentationContract(unittest.TestCase):
 		):
 			self.assertIn(fieldname, fields)
 
+	def test_progression_threshold_controls_are_context_aware(self):
+		path = APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.json"
+		payload = json.loads(path.read_text())
+		fields = {field["fieldname"]: field for field in payload["fields"]}
+		self.assertEqual(
+			fields["use_custom_promotion_pass_average"].get("depends_on"),
+			"eval:doc.show_progression",
+		)
+		self.assertEqual(
+			fields["promotion_pass_average"].get("depends_on"),
+			"eval:doc.show_progression && doc.use_custom_promotion_pass_average",
+		)
+		self.assertEqual(
+			fields["promotion_pass_average"].get("mandatory_depends_on"),
+			"eval:doc.show_progression && doc.use_custom_promotion_pass_average",
+		)
+
 	def test_progression_threshold_is_resolved_into_frozen_profile_config(self):
 		service = (APP / "education" / "result_profile.py").read_text()
 		report_cards = (APP / "education" / "profiled_report_cards.py").read_text()
