@@ -41,6 +41,7 @@ def build_publication_approval_fingerprint(publication_doc) -> dict:
 		payload = item["payload"]
 		presentation = (payload.get("profile") or {}).get("presentation") or {}
 		academic_payload[student] = {
+			"academic_term_label": (payload.get("publication") or {}).get("academic_term_label"),
 			"result": payload.get("result") or {},
 			"attendance": (
 				payload.get("attendance") or {}
