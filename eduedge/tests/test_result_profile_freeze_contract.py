@@ -33,6 +33,13 @@ class TestResultProfileFreezeContract(unittest.TestCase):
 		self.assertIn('{"result_publication": publication.get("name")}', service)
 		self.assertIn('profile = (json.loads(snapshot_json) or {}).get("profile")', service)
 
+	def test_frozen_profile_contains_resolved_progression_policy(self):
+		service = (APP / "education" / "result_profile.py").read_text()
+		self.assertIn("promotion_pass_average = resolve_profile_promotion_pass_average(doc)", service)
+		self.assertIn('"progression": {', service)
+		self.assertIn('"promotion_pass_average": promotion_pass_average', service)
+		self.assertIn('"source": (', service)
+
 	def test_readiness_and_snapshot_generation_use_frozen_profile(self):
 		assessment = (APP / "education" / "assessment_operations.py").read_text()
 		snapshots = (APP / "education" / "result_snapshots.py").read_text()
