@@ -12,6 +12,7 @@ from eduedge.education.report_cards import (
 	assert_report_card_access,
 	assert_report_card_review_management,
 	can_manage_report_card_reviews,
+	can_view_report_card_scope,
 	get_publication_student_summaries,
 	get_published_publication,
 	get_student_report_card_payload,
@@ -102,7 +103,7 @@ def get_report_card_context(
 	)
 	publications = [
 		row for row in publications
-		if can_manage_report_card_reviews(row)
+		if can_view_report_card_scope(row)
 	]
 
 
