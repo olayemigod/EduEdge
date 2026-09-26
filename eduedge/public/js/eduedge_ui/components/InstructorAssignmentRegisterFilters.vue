@@ -228,7 +228,7 @@
 </template>
 
 <script>
-const STATUSES = ["Current", "Scheduled", "Ended", "Replaced", "Transferred", "Disabled"];
+const STATUSES = ["Current", "Scheduled", "Ending", "Ended", "Replaced", "Transferred", "Disabled"];
 const PRESETS = [
 	{ value: "current_upcoming", label: "Current + Upcoming" },
 	{ value: "current", label: "Current" },
