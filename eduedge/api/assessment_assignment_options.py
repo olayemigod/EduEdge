@@ -80,7 +80,11 @@ def _capability_group_names(branch: str, reference_date) -> set[str]:
     fields = ["name", "program", "academic_year", "academic_term", BRANCH_FIELD]
     if meta.has_field(OFFERING_FIELD):
         fields.append(OFFERING_FIELD)
-    groups = frappe.get_list(
+    # Capability rows already fail closed on exact Instructor identity, Branch
+    # access and covering Branch Eligibility. Use a selector-only metadata read here
+    # so first Assessment Plan creation does not depend on an already-owned Course
+    # Schedule through the normal Student Group permission query.
+    groups = frappe.get_all(
         "Student Group",
         filters={BRANCH_FIELD: branch, "disabled": 0},
         fields=fields,
