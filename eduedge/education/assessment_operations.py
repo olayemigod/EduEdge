@@ -15,6 +15,7 @@ from eduedge.education.instructor_assignments import assert_schedule_instructor_
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.result_engine import (
 	build_component_plan_maximum_blockers,
+	build_missing_result_blockers,
 	compose_cumulative_subject_results,
 	compose_terminal_subject_results,
 	get_result_periods,
@@ -396,13 +397,26 @@ def get_publication_readiness(
 				composition_blockers.append({"student": student, **blocker})
 			unmapped_assessment_groups.update(composed.get("unmapped_assessment_groups") or [])
 
+	if profile_config:
+		profile_blockers.extend(
+			build_missing_result_blockers(
+				profile_config,
+				plans,
+				results,
+				student_names,
+			)
+		)
 	all_blockers = profile_blockers + composition_blockers
+	exclude_missing = bool(
+		profile_config
+		and profile_config.get("missing_result_policy") == "Exclude from Denominator"
+	)
 	ready = bool(
 		plans
 		and students
-		and submitted == expected
 		and drafts == 0
-		and missing == 0
+		and (submitted == expected or exclude_missing)
+		and (missing == 0 or exclude_missing)
 		and not all_blockers
 		and not unmapped_assessment_groups
 	)
