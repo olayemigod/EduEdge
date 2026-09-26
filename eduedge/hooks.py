@@ -49,6 +49,7 @@ override_whitelisted_methods = {
 	"eduedge.api.academic_operations.student_group_query": "eduedge.api.academic_operations_review.student_group_query",
 	"education.education.doctype.student_attendance_tool.student_attendance_tool.get_student_attendance_records": "eduedge.api.attendance_tool_safe.get_student_attendance_records",
 	"education.education.api.mark_attendance": "eduedge.api.attendance_tool_safe.mark_attendance",
+	"education.education.api.get_assessment_criteria": "eduedge.api.assessment_assignment_options.get_assessment_plan_criteria",
 	"education.education.api.get_assessment_students": "eduedge.api.assessment_result_tool_safe.get_assessment_students",
 	"education.education.api.get_assessment_details": "eduedge.api.assessment_result_tool_safe.get_assessment_details",
 	"education.education.api.mark_assessment_result": "eduedge.api.assessment_result_tool_safe.mark_assessment_result",
