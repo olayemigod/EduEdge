@@ -31,6 +31,16 @@ class TestResultProfileReadinessContract(unittest.TestCase):
 		self.assertNotIn("ANNUAL_COHORT_PENDING", text)
 		self.assertIn("not all_blockers", text)
 
+	def test_publication_cohort_preserves_assessed_inactive_roster_history(self):
+		text = (APP / "education" / "assessment_operations.py").read_text()
+		self.assertIn("def _get_publication_cohort_students", text)
+		self.assertIn('"parenttype": "Student Group"', text)
+		self.assertIn('"docstatus": ["!=", 2]', text)
+		self.assertIn('"assessment_plan": ["in", plan_names]', text)
+		self.assertIn("row.student in historical_result_students", text)
+		self.assertIn("students = _get_publication_cohort_students(", text)
+		self.assertNotIn('filters={"parent": student_group, "active": 1}', text)
+
 	def test_publication_api_accepts_profile_and_mode_but_keeps_defaults(self):
 		text = (APP / "api" / "assessment_operations.py").read_text()
 		self.assertIn("result_profile: str | None = None", text)
