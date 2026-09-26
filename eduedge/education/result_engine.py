@@ -507,15 +507,24 @@ def calculate_overall_summary(
 		overall_percentage = total_score / maximum_score * 100 if maximum_score else 0
 	else:
 		overall_percentage = average_result_values(percentage_values)
+	rounded_overall_percentage = round_result_value(overall_percentage, precision)
 	grading_scale = config.get("grading_scale")
-	overall_grade = get_grade(grading_scale, overall_percentage) if grading_scale and eligible else ""
-	overall_remark = get_grade_remark(grading_scale, overall_percentage) if grading_scale and eligible else ""
+	overall_grade = (
+		get_grade(grading_scale, rounded_overall_percentage)
+		if grading_scale and eligible
+		else ""
+	)
+	overall_remark = (
+		get_grade_remark(grading_scale, rounded_overall_percentage)
+		if grading_scale and eligible
+		else ""
+	)
 	return {
 		"subject_count": len(eligible),
 		"total_score": round_result_value(total_score, precision),
 		"maximum_score": round_result_value(maximum_score, precision),
 		"sum_subject_percentages": round_result_value(sum_subject_percentages, precision),
-		"overall_percentage": round_result_value(overall_percentage, precision),
+		"overall_percentage": rounded_overall_percentage,
 		"overall_grade": overall_grade,
 		"overall_remark": overall_remark,
 	}
