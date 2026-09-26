@@ -1,3 +1,58 @@
+function load_eduedge_assessment_criteria(frm) {
+	if (!frm.doc.course || !frm.doc.student_group || !frm.doc.eduedge_school_branch || !frm.doc.maximum_assessment_score) {
+		return;
+	}
+	const context = {
+		course: frm.doc.course,
+		student_group: frm.doc.student_group,
+		school_branch: frm.doc.eduedge_school_branch,
+		schedule_date: frm.doc.schedule_date,
+		maximum_assessment_score: frm.doc.maximum_assessment_score,
+	};
+	// Frappe's native course handler first calls the context-free upstream API.
+	// Wait for that request to settle, then repopulate through EduEdge's exact
+	// Branch + Class + assessment-date authorization path.
+	frappe.after_ajax(() => {
+		if (
+			frm.doc.course !== context.course ||
+			frm.doc.student_group !== context.student_group ||
+			frm.doc.eduedge_school_branch !== context.school_branch ||
+			frm.doc.schedule_date !== context.schedule_date ||
+			frm.doc.maximum_assessment_score !== context.maximum_assessment_score
+		) {
+			return;
+		}
+		frappe.call({
+			method: "eduedge.api.assessment_assignment_options.get_assessment_plan_criteria",
+			args: {
+				course: context.course,
+				school_branch: context.school_branch,
+				student_group: context.student_group,
+				schedule_date: context.schedule_date,
+			},
+			callback(r) {
+				if (
+					frm.doc.course !== context.course ||
+					frm.doc.student_group !== context.student_group ||
+					frm.doc.eduedge_school_branch !== context.school_branch ||
+					frm.doc.schedule_date !== context.schedule_date
+				) {
+					return;
+				}
+				frm.clear_table("assessment_criteria");
+				(r.message || []).forEach((criterion) => {
+					const row = frm.add_child("assessment_criteria");
+					row.assessment_criteria = criterion.assessment_criteria;
+					row.maximum_score =
+						(Number(criterion.weightage || 0) / 100) *
+						Number(frm.doc.maximum_assessment_score || 0);
+				});
+				frm.refresh_field("assessment_criteria");
+			},
+		});
+	});
+}
+
 frappe.ui.form.on("Assessment Plan", {
 	setup(frm) {
 		frm.set_query("student_group", () => ({
@@ -60,11 +115,17 @@ frappe.ui.form.on("Assessment Plan", {
 	},
 	course(frm) {
 		frm.set_value("examiner", null);
+		frm.clear_table("assessment_criteria");
+		frm.refresh_field("assessment_criteria");
+		load_eduedge_assessment_criteria(frm);
 	},
 	schedule_date(frm) {
-		// Date changes revalidate personnel eligibility without destroying stable
-		// Class, Subject or Room context. Backend validation remains authoritative.
+		// Date changes preserve stable Class, Subject and Room values, but all
+		// date-governed dependents must be re-authorized for the new assessment date.
 		frm.set_value("examiner", null);
 		frm.set_value("supervisor", null);
+		frm.clear_table("assessment_criteria");
+		frm.refresh_field("assessment_criteria");
+		load_eduedge_assessment_criteria(frm);
 	},
 });

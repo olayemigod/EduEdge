@@ -32,6 +32,7 @@ class TestEducationBranchContract(unittest.TestCase):
 			{
 				"education.education.doctype.student_attendance_tool.student_attendance_tool.get_student_attendance_records",
 				"education.education.api.mark_attendance",
+				"education.education.api.get_assessment_criteria",
 				"education.education.api.get_assessment_students",
 				"education.education.api.get_assessment_details",
 				"education.education.api.mark_assessment_result",
