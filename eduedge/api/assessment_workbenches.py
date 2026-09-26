@@ -7,6 +7,12 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from eduedge.api.assessment_assignment_options import assessment_result_plan_query
+from eduedge.api.assessment_result_tool_safe import (
+	_authorized_plan,
+	get_assessment_details as get_safe_assessment_details,
+	get_assessment_students as get_safe_assessment_students,
+)
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
 from eduedge.platform.access import guard_eduedge_action
@@ -39,44 +45,31 @@ def _resolve_branch(branch: str | None = None) -> str:
 	return resolved
 
 
-def _plan_fields() -> list[str]:
-	fields = [
-		"name",
-		"assessment_name",
-		"student_group",
-		"assessment_group",
-		"course",
-		"schedule_date",
-		"maximum_assessment_score",
-		"docstatus",
-	]
-	meta = frappe.get_meta("Assessment Plan")
-	if meta.has_field(BRANCH_FIELD):
-		fields.append(BRANCH_FIELD)
-	return fields
-
-
-def _get_plan(name: str):
-	doc = frappe.get_doc("Assessment Plan", name)
-	doc.check_permission("read")
-	branch = doc.get(BRANCH_FIELD)
-	if branch:
-		assert_branch_access(branch)
-	return doc
+def _get_mark_entry_plan(name: str):
+	plan, _group = _authorized_plan(name)
+	return plan
 
 
 def _plan_options(branch: str) -> list[dict]:
-	filters: dict[str, Any] = {"docstatus": 1}
-	if frappe.get_meta("Assessment Plan").has_field(BRANCH_FIELD):
-		filters[BRANCH_FIELD] = branch
-	rows = frappe.get_list(
+	"""Return only submitted plans the current user may operate for mark entry."""
+	rows = assessment_result_plan_query(
 		"Assessment Plan",
-		filters=filters,
-		fields=_plan_fields(),
-		order_by="schedule_date desc, modified desc",
-		limit_page_length=250,
+		"",
+		"name",
+		0,
+		250,
+		{BRANCH_FIELD: branch},
 	)
-	return rows
+	return [
+		{
+			"name": row[0],
+			"assessment_name": row[1],
+			"student_group": row[2],
+			"course": row[3],
+			"schedule_date": row[4],
+		}
+		for row in rows
+	]
 
 
 def _result_can_submit() -> bool:
@@ -98,7 +91,7 @@ def get_marks_entry_context(
 	criteria: list[dict] = []
 	students: list[dict] = []
 	if assessment_plan:
-		plan = _get_plan(assessment_plan)
+		plan = _get_mark_entry_plan(assessment_plan)
 		if plan.docstatus != 1:
 			frappe.throw(_("Marks can only be entered against a submitted Assessment Plan."), frappe.ValidationError)
 		if plan.get(BRANCH_FIELD) and plan.get(BRANCH_FIELD) != resolved_branch:
@@ -112,9 +105,8 @@ def get_marks_entry_context(
 			"schedule_date": plan.schedule_date,
 			"maximum_assessment_score": plan.maximum_assessment_score,
 		}
-		from education.education.api import get_assessment_details, get_assessment_students
-		criteria = get_assessment_details(plan.name) or []
-		students = get_assessment_students(plan.name, plan.student_group) or []
+		criteria = get_safe_assessment_details(plan.name) or []
+		students = get_safe_assessment_students(plan.name, plan.student_group) or []
 
 	return {
 		"allowed_branches": get_allowed_school_branches(),
@@ -147,7 +139,7 @@ def save_marks_entry(
 	comment: str | None = None,
 ) -> dict:
 	_require_login()
-	plan = _get_plan(assessment_plan)
+	plan = _get_mark_entry_plan(assessment_plan)
 	if plan.docstatus != 1:
 		frappe.throw(_("Marks can only be entered against a submitted Assessment Plan."), frappe.ValidationError)
 
