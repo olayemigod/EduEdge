@@ -64,6 +64,7 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             "frappe.DuplicateEntryError",
             "_apply_assessment_result_plan_contract(doc, plan)",
             '("student_group", plan.student_group)',
+            '("program", plan.program)',
             '("course", plan.course)',
             '("academic_year", plan.academic_year)',
             '("academic_term", plan.academic_term)',
