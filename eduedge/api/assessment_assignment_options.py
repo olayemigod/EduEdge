@@ -12,6 +12,7 @@ from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import (
     assignment_capability_enforcement_enabled,
     get_user_capability_assignment_rows,
+    require_instructor_assignment_capability,
     user_has_instructor_assignment_capability,
 )
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, assigned_courses
@@ -219,6 +220,73 @@ def assessment_plan_course_query(doctype, txt, searchfield, start, page_len, fil
         page_length=int(page_len),
         order_by="course_name asc",
         as_list=True,
+    )
+
+
+@frappe.whitelist()
+def get_assessment_plan_criteria(
+    course: str,
+    school_branch: str | None = None,
+    student_group: str | None = None,
+    schedule_date: str | None = None,
+):
+    """Return Course assessment criteria only after exact plan-creation authorization.
+
+    Upstream Frappe calls this API with Course alone. Capability-enforced limited
+    Instructors fail closed for that context-free call; the EduEdge Assessment Plan
+    client follows with Branch + Class + assessment-date context.
+    """
+    _require_academic_operator()
+    subject = str(course or "").strip()
+    if not subject:
+        return []
+
+    capability_scoped = is_teacher_user() and assignment_capability_enforcement_enabled()
+    if capability_scoped:
+        group_name = str(student_group or "").strip()
+        branch = str(school_branch or "").strip()
+        if not group_name or not branch:
+            return []
+        group = _group_record(group_name)
+        if not group or group.disabled or group.get(BRANCH_FIELD) != branch:
+            return []
+        branch = _resolve_branch(branch)
+        offering = _resolve_group_offering(group)
+        if not offering:
+            return []
+        if group.program and not frappe.db.exists(
+            "Program Course",
+            {
+                "parent": group.program,
+                "parenttype": "Program",
+                "course": subject,
+            },
+        ):
+            frappe.throw(
+                _("The selected Subject / Course is not part of this Class curriculum."),
+                frappe.PermissionError,
+            )
+        require_instructor_assignment_capability(
+            "can_create_assessment_plans",
+            user=frappe.session.user,
+            school_branch=branch,
+            program_offering=offering,
+            student_group=group_name,
+            course=subject,
+            on_date=getdate(schedule_date or nowdate()),
+        )
+    else:
+        frappe.get_doc("Course", subject).check_permission("read")
+
+    return frappe.get_all(
+        "Course Assessment Criteria",
+        filters={
+            "parent": subject,
+            "parenttype": "Course",
+        },
+        fields=["assessment_criteria", "weightage"],
+        order_by="idx asc",
+        limit_page_length=0,
     )
 
 
