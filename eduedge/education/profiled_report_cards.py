@@ -8,6 +8,15 @@ from eduedge.education.result_snapshots import get_snapshot_payload
 
 SNAPSHOT_DOCTYPE = "EduEdge Published Result Snapshot"
 
+RESULT_STATUS_LABELS = {
+	"ABS": "Absent",
+	"P-ABS": "Partially Absent",
+	"EX": "Exempt",
+	"N/O": "Not Offered",
+	"EXC": "Excluded",
+}
+RESULT_STATUS_ORDER = ("ABS", "P-ABS", "EX", "N/O", "EXC")
+
 
 def get_profiled_publication_student_summaries(publication, review_doctype: str) -> list[dict]:
 	snapshots = frappe.get_all(
@@ -160,6 +169,7 @@ def summary_from_snapshot_payload(payload: dict) -> dict:
 		"component_totals": _component_totals(courses, visible_components) if mode == "Terminal" else [],
 		"periods": result.get("periods") or [],
 		"grading_legend": payload.get("grading_legend") or [],
+		"result_status_legend": _result_status_legend(courses, mode),
 	}
 
 
@@ -206,14 +216,37 @@ def _prepare_component_for_display(component: dict) -> dict:
 
 def _component_display_value(component: dict) -> str:
 	status_code = (component.get("status_code") or "").strip()
-	if status_code:
+	if status_code and status_code != "P-ABS":
 		return status_code
 	if flt(component.get("maximum_score")) <= 0:
 		return "-"
 	value = flt(component.get("score"))
-	if value.is_integer():
-		return str(int(value))
-	return f"{value:.2f}".rstrip("0").rstrip(".")
+	display_score = str(int(value)) if value.is_integer() else f"{value:.2f}".rstrip("0").rstrip(".")
+	if status_code == "P-ABS":
+		return f"{display_score} P-ABS"
+	return display_score
+
+
+def _result_status_legend(courses: list[dict], mode: str) -> list[dict]:
+	codes = set()
+	for course in courses:
+		if mode == "Annual":
+			component_rows = [
+				component
+				for period in (course.get("periods") or [])
+				for component in (period.get("display_components") or [])
+			]
+		else:
+			component_rows = course.get("display_components") or []
+		for component in component_rows:
+			code = (component.get("status_code") or "").strip()
+			if code in RESULT_STATUS_LABELS:
+				codes.add(code)
+	return [
+		{"code": code, "label": RESULT_STATUS_LABELS[code]}
+		for code in RESULT_STATUS_ORDER
+		if code in codes
+	]
 
 
 def _component_totals(courses: list[dict], components: list[dict]) -> list[dict]:
