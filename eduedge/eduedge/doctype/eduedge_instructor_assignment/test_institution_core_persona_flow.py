@@ -728,7 +728,25 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             )
 
         # Client filtering is guidance only; direct child-row injection must fail
-        # unless every criterion belongs to the selected Course.
+        # unless every criterion is unique and belongs to the selected Course.
+        pending_plan.append(
+            "assessment_criteria",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "maximum_score": 50,
+            },
+        )
+        pending_plan.append(
+            "assessment_criteria",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "maximum_score": 50,
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_plan(pending_plan)
+
+        pending_plan.set("assessment_criteria", [])
         pending_plan.append(
             "assessment_criteria",
             {
@@ -738,6 +756,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
         with self.assertRaises(frappe.ValidationError):
             before_validate_assessment_plan(pending_plan)
+
         pending_plan.set("assessment_criteria", [])
         pending_plan.append(
             "assessment_criteria",
