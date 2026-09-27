@@ -880,6 +880,19 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             before_validate_assessment_result(duplicate_detail_result)
 
+        negative_score_result = frappe.new_doc("Assessment Result")
+        negative_score_result.assessment_plan = mark_plan.name
+        negative_score_result.student = student.name
+        negative_score_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": -1,
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(negative_score_result)
+
         frappe.set_user(instructor_user.name)
         active_marks_context = get_marks_entry_context(branch=branch_a.name)
         self.assertIn(
