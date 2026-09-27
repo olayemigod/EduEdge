@@ -221,6 +221,55 @@ def validate_publication_scope(doc) -> None:
 		)
 
 
+def _get_publication_cohort_students(
+	*,
+	school_branch: str,
+	student_group: str,
+	plan_names: list[str],
+) -> list:
+	"""Preserve historically assessed students in the publication cohort.
+
+	Student Group maintenance retains removed learners as inactive child rows.
+	An inactive row remains in the result cohort only when a non-cancelled
+	Assessment Result exists in the exact Branch and Assessment Plan scope.
+	"""
+	roster_rows = frappe.get_all(
+		"Student Group Student",
+		filters={"parent": student_group, "parenttype": "Student Group"},
+		fields=["student", "student_name", "group_roll_number", "active"],
+		order_by="group_roll_number asc, student_name asc, idx asc",
+		page_length=0,
+	)
+	historical_result_students: set[str] = set()
+	if plan_names:
+		historical_result_students = {
+			student
+			for student in frappe.get_all(
+				"Assessment Result",
+				filters={
+					BRANCH_FIELD: school_branch,
+					"assessment_plan": ["in", plan_names],
+					"docstatus": ["!=", 2],
+				},
+				pluck="student",
+				page_length=0,
+			)
+			if student
+		}
+
+	return [
+		frappe._dict(
+			{
+				"student": row.student,
+				"student_name": row.student_name,
+				"group_roll_number": row.group_roll_number,
+			}
+		)
+		for row in roster_rows
+		if row.student and (cint(row.active) or row.student in historical_result_students)
+	]
+
+
 def get_publication_readiness(
 	*,
 	school_branch: str,
@@ -317,13 +366,12 @@ def get_publication_readiness(
 			_build_required_course_plan_blockers(group, plans)
 		)
 
-	students = frappe.get_all(
-		"Student Group Student",
-		filters={"parent": student_group, "active": 1},
-		fields=["student", "student_name", "group_roll_number"],
-		order_by="group_roll_number asc, student_name asc",
-	)
 	plan_names = [row.name for row in plans]
+	students = _get_publication_cohort_students(
+		school_branch=school_branch,
+		student_group=student_group,
+		plan_names=plan_names,
+	)
 	student_names = [row.student for row in students]
 	if (
 		profile_config
