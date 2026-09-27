@@ -790,6 +790,75 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(format_metric_value(78.42, "Number", 1), "78.4")
 		self.assertEqual(format_metric_value(78.42, "Number", 2), "78.42")
 
+	def test_annual_average_metric_is_independent_of_configured_annual_result(self):
+		profile = _profile()
+		profile["metrics"] = [
+			{
+				"metric_key": "Class Average",
+				"display_label": "Annual Average %",
+				"calculation_basis": "Annual Average Percentage",
+				"display_as": "Percentage",
+				"decimal_places": 2,
+				"sequence": 10,
+				"show_on_terminal": False,
+				"show_on_annual": True,
+			}
+		]
+
+		profile["annual_aggregation_method"] = "Weighted Average"
+		weighted_periods = [
+			{"academic_term": "Alpha", "display_label": "Alpha", "sequence": 10, "weight": 80},
+			{"academic_term": "Rapha", "display_label": "Rapha", "sequence": 20, "weight": 20},
+		]
+		weighted = compose_cumulative_subject_results(
+			profile,
+			[
+				_row("Alpha", "CA", 40, 40),
+				_row("Alpha", "EXAM", 60, 60),
+				_row("Rapha", "CA", 20, 40),
+				_row("Rapha", "EXAM", 30, 60),
+			],
+			weighted_periods,
+		)
+		self.assertFalse(weighted["blockers"])
+		weighted_subject = weighted["subjects"][0]
+		self.assertEqual(weighted_subject["annual_percentage"], 90)
+		self.assertEqual(weighted_subject["annual_average_percentage"], 75)
+		weighted_metrics = build_configured_class_metrics(
+			profile,
+			[weighted_subject],
+			result_mode="Annual",
+		)
+		self.assertEqual(weighted_metrics[0]["value"], 75)
+		self.assertEqual(weighted_metrics[0]["display_value"], "75.00%")
+
+		profile["annual_aggregation_method"] = "Raw Cumulative"
+		raw_periods = [
+			{"academic_term": "Alpha", "display_label": "Alpha", "sequence": 10, "weight": 0},
+			{"academic_term": "Rapha", "display_label": "Rapha", "sequence": 20, "weight": 0},
+		]
+		raw = compose_cumulative_subject_results(
+			profile,
+			[
+				_row("Alpha", "CA", 40, 40),
+				_row("Alpha", "EXAM", 60, 60),
+				_row("Rapha", "CA", 20, 80),
+				_row("Rapha", "EXAM", 30, 120),
+			],
+			raw_periods,
+		)
+		self.assertFalse(raw["blockers"])
+		raw_subject = raw["subjects"][0]
+		self.assertEqual(raw_subject["annual_percentage"], 50)
+		self.assertEqual(raw_subject["annual_average_percentage"], 62.5)
+		raw_metrics = build_configured_class_metrics(
+			profile,
+			[raw_subject],
+			result_mode="Annual",
+		)
+		self.assertEqual(raw_metrics[0]["value"], 62.5)
+		self.assertEqual(raw_metrics[0]["display_value"], "62.50%")
+
 	def test_class_statistics_label_and_representation_are_profile_driven(self):
 		profile = _profile()
 		profile["metrics"] = [
@@ -807,8 +876,8 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		metrics = build_configured_class_metrics(
 			profile,
 			[
-				{"annual_percentage": 75.33, "eligible": True},
-				{"annual_percentage": 81.50, "eligible": True},
+				{"annual_average_percentage": 75.33, "eligible": True},
+				{"annual_average_percentage": 81.50, "eligible": True},
 			],
 			result_mode="Annual",
 		)
