@@ -134,32 +134,52 @@ def build_missing_result_blockers(
 	if not plan_scope or not student_names:
 		return []
 
-	submitted_subject_periods = {
-		(
-			str(_value(row, "student") or ""),
-			*(plan_scope.get(str(_value(row, "assessment_plan") or "")) or ("", "")),
-		)
-		for row in (result_rows or [])
-		if cint(_value(row, "docstatus")) == 1
-		and plan_scope.get(str(_value(row, "assessment_plan") or ""))
-	}
-	planned_subject_periods = sorted(set(plan_scope.values()))
+	plans_by_subject_period: dict[tuple[str, str], set[str]] = defaultdict(set)
+	for plan_name, subject_period in plan_scope.items():
+		plans_by_subject_period[subject_period].add(plan_name)
+
+	submitted_by_subject_period: dict[tuple[str, str, str], dict[str, str]] = defaultdict(dict)
+	for row in result_rows or []:
+		if cint(_value(row, "docstatus")) != 1:
+			continue
+		plan_name = str(_value(row, "assessment_plan") or "")
+		subject_period = plan_scope.get(plan_name)
+		student = str(_value(row, "student") or "")
+		if not plan_name or not subject_period or not student:
+			continue
+		state = str(_value(row, "eduedge_score_state") or "Scored")
+		if state not in SCORE_STATES:
+			state = "Scored"
+		course, academic_term = subject_period
+		submitted_by_subject_period[(student, course, academic_term)][plan_name] = state
+
+	contributing_states = {"Scored"}
+	if config.get("absence_policy") == "Treat as Zero":
+		contributing_states.add("Absent")
+
 	blockers = []
 	for student in sorted(set(student_names)):
-		for course, academic_term in planned_subject_periods:
-			if (student, course, academic_term) in submitted_subject_periods:
+		for (course, academic_term), expected_plans in sorted(plans_by_subject_period.items()):
+			submitted = submitted_by_subject_period.get((student, course, academic_term), {})
+			if set(submitted) == expected_plans:
 				continue
+			if any(state in contributing_states for state in submitted.values()):
+				continue
+
+			missing_plans = sorted(expected_plans - set(submitted))
 			blockers.append(
 				{
 					"code": "MISSING_SUBJECT_RESULTS",
 					"reason": _(
 						"Missing-result exclusion cannot remove an entire planned subject "
-						"for an academic period. Enter at least one submitted result, or "
-						"use Not Offered / Exempt explicitly."
+						"for an academic period. At least one submitted plan must contribute "
+						"to the denominator, or every expected plan must be explicitly "
+						"completed under the configured absence/exclusion policy."
 					),
 					"student": student,
 					"course": course,
 					"academic_term": academic_term or None,
+					"missing_assessment_plans": missing_plans,
 				}
 			)
 	return blockers
