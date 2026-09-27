@@ -65,7 +65,9 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             '"Assessment Plan Criteria"',
             '"parenttype": "Assessment Plan"',
             "Assessment Result criteria must exactly match the submitted Assessment Plan.",
-            "row.maximum_score = expected_maximum",
+            "if score < 0 or score > maximum_score:",
+            "must be between 0 and {1}",
+            "row.maximum_score = maximum_score",
         ):
             self.assertIn(token, validator)
 
