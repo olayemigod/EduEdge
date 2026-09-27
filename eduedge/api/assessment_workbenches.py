@@ -13,6 +13,7 @@ from eduedge.api.assessment_result_tool_safe import (
 	get_assessment_details as get_safe_assessment_details,
 	get_assessment_students as get_safe_assessment_students,
 )
+from eduedge.education.assessment_operations import normalize_assessment_result_score
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.offerings import assert_branch_access
 from eduedge.platform.access import guard_eduedge_action
@@ -127,7 +128,10 @@ def _parse_scores(scores: str | dict | None) -> dict[str, float]:
 	parsed = frappe.parse_json(scores) if isinstance(scores, str) else (scores or {})
 	if not isinstance(parsed, dict):
 		frappe.throw(_("Scores must be a JSON object."), frappe.ValidationError)
-	return {str(key): flt(value) for key, value in parsed.items()}
+	return {
+		str(key): normalize_assessment_result_score(value, str(key))
+		for key, value in parsed.items()
+	}
 
 
 @frappe.whitelist()
