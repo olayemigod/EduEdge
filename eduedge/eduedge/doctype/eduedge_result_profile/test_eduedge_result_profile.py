@@ -16,7 +16,11 @@ from eduedge.education.result_engine import (
 	compose_terminal_subject_results,
 	format_metric_value,
 )
-from eduedge.education.profiled_report_cards import _suggested_progression
+from eduedge.education.profiled_report_cards import (
+	_prepare_component_for_display,
+	_result_status_legend,
+	_suggested_progression,
+)
 from eduedge.education.result_profile import (
 	_validate_calculation_settings,
 	_validate_metrics,
@@ -627,6 +631,55 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		):
 			hidden_second = build_publication_approval_fingerprint(publication)
 		self.assertEqual(hidden_first, hidden_second)
+
+	def test_partial_absence_keeps_numeric_mark_and_visible_status(self):
+		profile = _profile()
+		profile["absence_policy"] = "Exclude from Denominator"
+		profile["missing_result_policy"] = "Exclude from Denominator"
+		payload = compose_terminal_subject_results(
+			profile,
+			[
+				_row("Alpha", "CA", 20, 20),
+				_row("Alpha", "CA", 0, 20, state="Absent"),
+			],
+		)
+		component = next(
+			row
+			for row in payload["subjects"][0]["components"]
+			if row["component_key"] == "ca"
+		)
+		self.assertEqual(component["status"], "Partially Absent")
+		self.assertEqual(component["status_code"], "P-ABS")
+		prepared = _prepare_component_for_display(component)
+		self.assertEqual(prepared["display_value"], "20 P-ABS")
+		self.assertEqual(
+			_result_status_legend([{"display_components": [prepared]}], "Terminal"),
+			[{"code": "P-ABS", "label": "Partially Absent"}],
+		)
+
+	def test_mixed_excluded_states_are_distinct_from_missing(self):
+		profile = _profile()
+		profile["missing_result_policy"] = "Exclude from Denominator"
+		payload = compose_terminal_subject_results(
+			profile,
+			[
+				_row("Alpha", "CA", 0, 20, state="Exempt"),
+				_row("Alpha", "CA", 0, 20, state="Not Offered"),
+			],
+		)
+		component = next(
+			row
+			for row in payload["subjects"][0]["components"]
+			if row["component_key"] == "ca"
+		)
+		self.assertEqual(component["status"], "Excluded")
+		self.assertEqual(component["status_code"], "EXC")
+		prepared = _prepare_component_for_display(component)
+		self.assertEqual(prepared["display_value"], "EXC")
+		self.assertEqual(
+			_result_status_legend([{"display_components": [prepared]}], "Terminal"),
+			[{"code": "EXC", "label": "Excluded"}],
+		)
 
 	def test_progression_uses_frozen_profile_threshold_not_live_global_setting(self):
 		profile = {"progression": {"promotion_pass_average": 60}}
