@@ -417,14 +417,19 @@ def _get_review_for_update(name: str):
 
 
 def _transition(doc, to_status: str, *, updates: dict | None = None) -> None:
-	frappe.flags.in_eduedge_report_card_transition = True
+	flag = "in_eduedge_report_card_transition"
+	previous = frappe.flags.get(flag)
+	frappe.flags[flag] = True
 	try:
 		doc.progression_status = to_status
 		for fieldname, value in (updates or {}).items():
 			doc.set(fieldname, value)
 		doc.save()
 	finally:
-		frappe.flags.in_eduedge_report_card_transition = False
+		if previous is None:
+			frappe.flags.pop(flag, None)
+		else:
+			frappe.flags[flag] = previous
 
 
 def _review_payload(name: str) -> dict:
