@@ -68,6 +68,15 @@ class TestAssessmentOperationsContract(unittest.TestCase):
 		):
 			self.assertIn(token, helper)
 
+	def test_publication_blocks_legacy_duplicate_active_results(self):
+		operations = (APP / "education" / "assessment_operations.py").read_text(
+			encoding="utf-8"
+		)
+		self.assertIn("def build_duplicate_assessment_result_blockers", operations)
+		self.assertIn('"DUPLICATE_ASSESSMENT_RESULTS"', operations)
+		self.assertIn("profile_blockers.extend(build_duplicate_assessment_result_blockers(results))", operations)
+		self.assertIn('"assessment_results": sorted(name for name in names if name)', operations)
+
 	def test_publication_api_does_not_mutate_submitted_results(self):
 		text = (APP / "api" / "assessment_operations.py").read_text()
 		self.assertNotIn('db_set("Assessment Result"', text)
