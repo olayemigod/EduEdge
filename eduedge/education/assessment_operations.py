@@ -54,6 +54,7 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 	_assign_branch(doc, group.get(BRANCH_FIELD))
 	_validate_branch(doc)
 	_validate_linked_context(doc, group)
+	_validate_assessment_plan_criteria_course(doc)
 	if is_teacher_user():
 		program_offering = group.get(OFFERING_FIELD) or _resolve_group_offering(group)
 		assessment_date = doc.schedule_date or nowdate()
@@ -81,6 +82,38 @@ def before_validate_assessment_plan(doc, method=None) -> None:
 				frappe.ValidationError,
 			)
 	_validate_examiner_and_supervisor(doc)
+
+
+def _validate_assessment_plan_criteria_course(doc) -> None:
+	selected = [
+		str(row.get("assessment_criteria") or "").strip()
+		for row in (doc.get("assessment_criteria") or [])
+		if str(row.get("assessment_criteria") or "").strip()
+	]
+	if not selected:
+		return
+	if len(selected) != len(set(selected)):
+		frappe.throw(
+			_("Assessment Criteria cannot be repeated within the same Assessment Plan."),
+			frappe.ValidationError,
+		)
+
+	allowed = set(
+		frappe.get_all(
+			"Course Assessment Criteria",
+			filters={"parent": doc.course, "parenttype": "Course"},
+			pluck="assessment_criteria",
+			limit_page_length=0,
+		)
+	)
+	invalid = sorted(set(selected) - allowed)
+	if invalid:
+		frappe.throw(
+			_(
+				"Assessment Criteria {0} are not configured for Subject / Course {1}."
+			).format(", ".join(invalid), doc.course),
+			frappe.ValidationError,
+		)
 
 
 def _validate_examiner_and_supervisor(doc) -> None:
