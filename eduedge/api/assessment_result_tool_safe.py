@@ -6,6 +6,7 @@ from frappe.utils import cint, cstr, flt, nowdate
 
 from eduedge.api.academic_operations import _require_academic_operator
 from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.education.assessment_operations import normalize_assessment_result_score
 from eduedge.education.curriculum_permissions import is_teacher_user
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import (
@@ -274,7 +275,10 @@ def mark_assessment_result(assessment_plan, scores):
 	result.set(
 		"details",
 		[
-			{"assessment_criteria": criteria, "score": flt(score)}
+			{
+				"assessment_criteria": criteria,
+				"score": normalize_assessment_result_score(score, str(criteria)),
+			}
 			for criteria, score in detail_values.items()
 		],
 	)
