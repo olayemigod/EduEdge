@@ -1,6 +1,6 @@
 {% set profiled = publication.result_profile %}
 {% set mode = summary.result_mode or publication.result_mode or "Terminal" %}
-{% set issued = issue or issue_record %}
+{% set issued = issue_record or issue %}
 {% set presentation = summary.profile.presentation if summary.profile and summary.profile.presentation else {} %}
 {% set terms = terminology or {} %}
 {% set academic_year_term = terms.get("academic_year") or {} %}
