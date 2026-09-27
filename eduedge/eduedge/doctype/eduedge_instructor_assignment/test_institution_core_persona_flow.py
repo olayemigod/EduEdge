@@ -792,7 +792,14 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
                 "academic_year": year.name,
                 "academic_term": term.name,
                 "schedule_date": "2094-10-05",
-                "maximum_assessment_score": 0,
+                "assessment_group": legacy_group.name,
+                "maximum_assessment_score": 100,
+                "assessment_criteria": [
+                    {
+                        "assessment_criteria": valid_criterion.name,
+                        "maximum_score": 100,
+                    }
+                ],
                 BRANCH_FIELD: branch_a.name,
             }
         )
@@ -813,8 +820,45 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             1,
             update_modified=False,
         )
+
+        native_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": 75,
+            },
+        )
+        # Client/read-only fetch fields are not trusted: the submitted Plan is
+        # authoritative for report-driving scope and denominator metadata.
+        native_result.course = extra_course.name
+        native_result.assessment_group = assessment_parent
+        native_result.maximum_score = 999
         before_validate_assessment_result(native_result)
         self.assertEqual(native_result.get(BRANCH_FIELD), branch_a.name)
+        self.assertEqual(native_result.course, course.name)
+        self.assertEqual(native_result.student_group, class_a["name"])
+        self.assertEqual(native_result.assessment_group, legacy_group.name)
+        self.assertEqual(native_result.maximum_score, 100)
+        self.assertEqual(native_result.details[0].maximum_score, 100)
+
+        missing_detail_result = frappe.new_doc("Assessment Result")
+        missing_detail_result.assessment_plan = mark_plan.name
+        missing_detail_result.student = student.name
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(missing_detail_result)
+
+        rogue_detail_result = frappe.new_doc("Assessment Result")
+        rogue_detail_result.assessment_plan = mark_plan.name
+        rogue_detail_result.student = student.name
+        rogue_detail_result.append(
+            "details",
+            {
+                "assessment_criteria": rogue_criterion.name,
+                "score": 75,
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(rogue_detail_result)
 
         frappe.set_user(instructor_user.name)
         active_marks_context = get_marks_entry_context(branch=branch_a.name)
