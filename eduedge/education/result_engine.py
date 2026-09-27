@@ -138,7 +138,7 @@ def build_missing_result_blockers(
 	for plan_name, subject_period in plan_scope.items():
 		plans_by_subject_period[subject_period].add(plan_name)
 
-	submitted_by_subject_period: dict[tuple[str, str, str], dict[str, str]] = defaultdict(dict)
+	submitted_by_subject_period: dict[tuple[str, str, str], dict[str, dict]] = defaultdict(dict)
 	for row in result_rows or []:
 		if cint(_value(row, "docstatus")) != 1:
 			continue
@@ -151,7 +151,10 @@ def build_missing_result_blockers(
 		if state not in SCORE_STATES:
 			state = "Scored"
 		course, academic_term = subject_period
-		submitted_by_subject_period[(student, course, academic_term)][plan_name] = state
+		submitted_by_subject_period[(student, course, academic_term)][plan_name] = {
+			"state": state,
+			"maximum_score": flt(_value(row, "maximum_score")),
+		}
 
 	contributing_states = {"Scored"}
 	if config.get("absence_policy") == "Treat as Zero":
@@ -163,7 +166,10 @@ def build_missing_result_blockers(
 			submitted = submitted_by_subject_period.get((student, course, academic_term), {})
 			if set(submitted) == expected_plans:
 				continue
-			if any(state in contributing_states for state in submitted.values()):
+			if any(
+				item["state"] in contributing_states and flt(item.get("maximum_score")) > 0
+				for item in submitted.values()
+			):
 				continue
 
 			missing_plans = sorted(expected_plans - set(submitted))
