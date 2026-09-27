@@ -35,6 +35,18 @@ class TestResultProfilePresentationContract(unittest.TestCase):
 		self.assertIn('progression.get("promotion_pass_average")', report_cards)
 		self.assertIn("Backward compatibility for immutable snapshots", report_cards)
 
+	def test_result_status_legend_is_conditional_and_explains_codes(self):
+		template = (APP / "templates" / "report_card.html").read_text()
+		report_cards = (APP / "education" / "profiled_report_cards.py").read_text()
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn("summary.result_status_legend", template)
+		self.assertIn('_("Result Status")', template)
+		self.assertIn('"P-ABS": "Partially Absent"', report_cards)
+		self.assertIn('"EXC": "Excluded"', report_cards)
+		self.assertIn('"Partially Absent": "P-ABS"', engine)
+		self.assertIn('"Excluded": "EXC"', engine)
+		self.assertIn('status_code != "P-ABS"', report_cards)
+
 	def test_hidden_attendance_is_not_rendered_in_pdf_summary(self):
 		template = (APP / "templates" / "report_card.html").read_text()
 		self.assertGreaterEqual(
