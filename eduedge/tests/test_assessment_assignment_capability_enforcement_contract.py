@@ -58,7 +58,10 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
         for token in (
             "if doc.is_new():",
             "_lock_assessment_plan_for_result(doc.assessment_plan)",
+            "_assert_no_active_assessment_result_duplicate(doc)",
             "for update",
+            '"docstatus": ["!=", 2]',
+            "frappe.DuplicateEntryError",
             "_apply_assessment_result_plan_contract(doc, plan)",
             '("student_group", plan.student_group)',
             '("course", plan.course)',
