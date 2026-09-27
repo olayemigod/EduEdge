@@ -49,6 +49,30 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_assessment_result_scope_and_criteria_are_plan_authoritative(self):
+        source = self._source()
+        validator = source.split("def before_validate_assessment_result", 1)[1].split(
+            "def validate_publication_scope",
+            1,
+        )[0]
+        for token in (
+            "_apply_assessment_result_plan_contract(doc, plan)",
+            '("student_group", plan.student_group)',
+            '("course", plan.course)',
+            '("assessment_group", plan.assessment_group)',
+            '("grading_scale", plan.grading_scale)',
+            "doc.maximum_score = flt(plan.maximum_assessment_score)",
+            '"Assessment Plan Criteria"',
+            '"parenttype": "Assessment Plan"',
+            "Assessment Result criteria must exactly match the submitted Assessment Plan.",
+            "row.maximum_score = expected_maximum",
+        ):
+            self.assertIn(token, validator)
+
+        marker = source.split("def _get_assessment_plan", 1)[1]
+        self.assertIn('"grading_scale"', marker)
+        self.assertIn('"maximum_assessment_score"', marker)
+
     def test_assessment_plan_lookup_includes_course_and_schedule_context(self):
         source = self._source()
         marker = source.split("def _get_assessment_plan", 1)[1]
