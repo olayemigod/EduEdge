@@ -148,7 +148,7 @@
   },
   {
    "default": "Block Publication",
-   "description": "Exclude from Denominator may omit individual missing assessment components, but a whole planned subject for an academic period cannot disappear silently. Use Not Offered or Exempt when a subject does not apply to a Student for that period.",
+   "description": "Exclude from Denominator may omit individual missing assessment components only when the subject-period still has a submitted result that contributes to the denominator. A whole subject-period can be excluded only after every expected Assessment Plan is submitted and resolved under the configured absence/exemption policy.",
    "fieldname": "missing_result_policy",
    "fieldtype": "Select",
    "label": "Missing Result Policy",
