@@ -284,7 +284,13 @@ def _apply_assessment_result_plan_contract(doc, plan) -> None:
 	for row in actual_rows:
 		criterion = str(row.assessment_criteria)
 		maximum_score = expected_maximum[criterion]
-		score = flt(row.get("score"))
+		raw_score = row.get("score")
+		if raw_score in (None, ""):
+			frappe.throw(
+				_("Assessment Criterion {0} requires an explicit score.").format(criterion),
+				frappe.ValidationError,
+			)
+		score = flt(raw_score)
 		if score < 0 or score > maximum_score:
 			frappe.throw(
 				_(
