@@ -77,6 +77,16 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		self.assertIn("save_marks_entry", text)
 		self.assertNotIn('@input="saveRow(row)"', text)
 
+	def test_marks_entry_rejects_malformed_scores_before_document_save(self):
+		text = MARKS_WORKBENCH.read_text()
+		self.assertIn(
+			"from eduedge.education.assessment_operations import normalize_assessment_result_score",
+			text,
+		)
+		parser = text.split("def _parse_scores", 1)[1].split("@frappe.whitelist()", 1)[0]
+		self.assertIn("normalize_assessment_result_score(value, str(key))", parser)
+		self.assertNotIn("flt(value)", parser)
+
 	def test_marks_entry_reuses_current_mark_capability_governance(self):
 		text = MARKS_WORKBENCH.read_text()
 		for token in (
