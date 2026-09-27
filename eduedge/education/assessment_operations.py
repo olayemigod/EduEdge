@@ -282,7 +282,17 @@ def _apply_assessment_result_plan_contract(doc, plan) -> None:
 		)
 
 	for row in actual_rows:
-		row.maximum_score = expected_maximum[str(row.assessment_criteria)]
+		criterion = str(row.assessment_criteria)
+		maximum_score = expected_maximum[criterion]
+		score = flt(row.get("score"))
+		if score < 0 or score > maximum_score:
+			frappe.throw(
+				_(
+					"Score for Assessment Criterion {0} must be between 0 and {1}."
+				).format(criterion, maximum_score),
+				frappe.ValidationError,
+			)
+		row.maximum_score = maximum_score
 
 
 def validate_publication_scope(doc) -> None:
