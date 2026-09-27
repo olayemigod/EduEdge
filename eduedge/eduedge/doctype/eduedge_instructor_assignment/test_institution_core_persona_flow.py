@@ -41,6 +41,7 @@ from eduedge.education.academic_operations import before_validate_student_attend
 from eduedge.education.assessment_operations import (
     before_validate_assessment_plan,
     before_validate_assessment_result,
+    build_duplicate_assessment_result_blockers,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.assessment_permissions import has_assessment_plan_permission
@@ -918,6 +919,34 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         )
         with self.assertRaises(frappe.ValidationError):
             before_validate_assessment_result(invalid_state_result)
+
+        duplicate_blockers = build_duplicate_assessment_result_blockers(
+            [
+                frappe._dict(
+                    {
+                        "name": "LEGACY-RESULT-1",
+                        "assessment_plan": mark_plan.name,
+                        "student": student.name,
+                    }
+                ),
+                frappe._dict(
+                    {
+                        "name": "LEGACY-RESULT-2",
+                        "assessment_plan": mark_plan.name,
+                        "student": student.name,
+                    }
+                ),
+            ]
+        )
+        self.assertEqual(len(duplicate_blockers), 1)
+        self.assertEqual(
+            duplicate_blockers[0]["code"],
+            "DUPLICATE_ASSESSMENT_RESULTS",
+        )
+        self.assertEqual(
+            duplicate_blockers[0]["assessment_results"],
+            ["LEGACY-RESULT-1", "LEGACY-RESULT-2"],
+        )
 
         frappe.set_user(instructor_user.name)
         active_marks_context = get_marks_entry_context(branch=branch_a.name)
