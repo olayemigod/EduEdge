@@ -65,6 +65,8 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             "_apply_assessment_result_plan_contract(doc, plan)",
             '("student_group", plan.student_group)',
             '("course", plan.course)',
+            '("academic_year", plan.academic_year)',
+            '("academic_term", plan.academic_term)',
             '("assessment_group", plan.assessment_group)',
             '("grading_scale", plan.grading_scale)',
             "doc.maximum_score = flt(plan.maximum_assessment_score)",
