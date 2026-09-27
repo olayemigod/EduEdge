@@ -70,6 +70,17 @@ class TestAnnualResultEngineContract(unittest.TestCase):
 		engine = (APP / "education" / "result_engine.py").read_text()
 		self.assertIn("build_configured_class_metrics", engine)
 
+	def test_publication_cohort_preserves_assessed_inactive_roster_history(self):
+		text = (APP / "education" / "assessment_operations.py").read_text()
+		self.assertIn("def _get_publication_cohort_students", text)
+		self.assertIn('"parenttype": "Student Group"', text)
+		self.assertIn('"docstatus": ["!=", 2]', text)
+		self.assertIn('"assessment_plan": ["in", plan_names]', text)
+		self.assertIn("BRANCH_FIELD: school_branch", text)
+		self.assertIn("row.student in historical_result_students", text)
+		self.assertIn("students = _get_publication_cohort_students(", text)
+		self.assertNotIn('filters={"parent": student_group, "active": 1}', text)
+
 	def test_annual_publication_uses_sessional_student_group_and_calendar_periods(self):
 		service = (APP / "education" / "assessment_operations.py").read_text()
 		self.assertIn('result_mode == "Annual"', service)
