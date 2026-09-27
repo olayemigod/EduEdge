@@ -4,6 +4,8 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
+from math import isfinite
+
 from frappe.utils import cint, flt, getdate, nowdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
@@ -343,7 +345,18 @@ def _apply_assessment_result_plan_contract(doc, plan) -> None:
 				_("Assessment Criterion {0} requires an explicit score.").format(criterion),
 				frappe.ValidationError,
 			)
-		score = flt(raw_score)
+		try:
+			score = float(raw_score)
+		except (TypeError, ValueError):
+			frappe.throw(
+				_("Assessment Criterion {0} requires a numeric score.").format(criterion),
+				frappe.ValidationError,
+			)
+		if not isfinite(score):
+			frappe.throw(
+				_("Assessment Criterion {0} requires a finite numeric score.").format(criterion),
+				frappe.ValidationError,
+			)
 		if score < 0 or score > maximum_score:
 			frappe.throw(
 				_(
