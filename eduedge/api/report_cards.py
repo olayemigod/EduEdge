@@ -19,7 +19,11 @@ from eduedge.education.report_cards import (
 	refresh_review_metrics,
 )
 from eduedge.education.offerings import assert_branch_access, get_context_branch
-from eduedge.education.report_card_issues import create_report_card_issue, get_report_card_issue_history
+from eduedge.education.report_card_issues import (
+	create_report_card_issue,
+	get_report_card_issue_history,
+	resolve_report_card_render_settings,
+)
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 from eduedge.services.institution_branding import get_report_identity
@@ -380,19 +384,14 @@ def preview_report_card(publication: str, student: str) -> None:
 		get_student_report_card_payload(publication, student)
 	)
 	assert_report_card_access(frappe._dict(payload["publication"]), student)
-	settings = frappe.get_single("EduEdge Settings")
-	letterhead = None
-	if settings.report_card_letter_head:
-		letterhead = frappe.db.get_value(
-			"Letter Head", settings.report_card_letter_head, "content"
-		)
+	render_settings = resolve_report_card_render_settings(payload)
 
 	html = frappe.render_template(
 		"eduedge/templates/report_card.html",
 		{
 			**payload,
-			"letterhead": letterhead,
-			"show_marks": bool(settings.report_card_show_marks),
+			"letterhead": render_settings["letterhead"],
+			"show_marks": render_settings["show_marks"],
 		},
 	)
 	final_html = frappe.render_template(
