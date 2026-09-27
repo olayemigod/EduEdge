@@ -905,6 +905,20 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             before_validate_assessment_result(blank_score_result)
 
+        invalid_state_result = frappe.new_doc("Assessment Result")
+        invalid_state_result.assessment_plan = mark_plan.name
+        invalid_state_result.student = student.name
+        invalid_state_result.eduedge_score_state = "Unknown"
+        invalid_state_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": 75,
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(invalid_state_result)
+
         frappe.set_user(instructor_user.name)
         active_marks_context = get_marks_entry_context(branch=branch_a.name)
         self.assertIn(
