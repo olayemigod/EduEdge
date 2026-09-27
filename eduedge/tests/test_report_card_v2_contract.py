@@ -58,7 +58,10 @@ class TestReportCardV2Contract(unittest.TestCase):
 		self.assertIn("publication.publication_version", vue)
 		self.assertIn("Published academic snapshot", vue)
 		self.assertIn("terminalComponentScore", vue)
-		self.assertIn("annualPeriodScore", vue)
+		self.assertIn("annualPeriodComponentScore", vue)
+		self.assertNotIn("annualPeriodScore(course, term)", vue)
+		self.assertIn("period.display_components", vue)
+		self.assertIn(":colspan=\"(selectedStudent.display_components || []).length || 1\"", vue)
 		self.assertIn("display_metrics", vue)
 
 
