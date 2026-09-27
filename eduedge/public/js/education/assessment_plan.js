@@ -16,49 +16,52 @@ function load_eduedge_assessment_criteria(frm) {
 		maximum_assessment_score: frm.doc.maximum_assessment_score,
 	};
 
-	// Frappe's native Course handler first calls the context-free upstream API.
-	// Wait for that request to settle, then repopulate through exact
-	// Branch + Class + Subject + assessment-date authorization.
-	frappe.after_ajax(() => {
-		if (
-			frm.doc.course !== context.course ||
-			frm.doc.student_group !== context.student_group ||
-			frm.doc.eduedge_school_branch !== context.school_branch ||
-			frm.doc.schedule_date !== context.schedule_date ||
-			frm.doc.maximum_assessment_score !== context.maximum_assessment_score
-		) {
-			return;
-		}
-		frappe.call({
-			method: "eduedge.api.assessment_assignment_options.get_assessment_plan_criteria",
-			args: {
-				course: context.course,
-				school_branch: context.school_branch,
-				student_group: context.student_group,
-				schedule_date: context.schedule_date,
-			},
-			callback(r) {
-				if (
-					frm.doc.course !== context.course ||
-					frm.doc.student_group !== context.student_group ||
-					frm.doc.eduedge_school_branch !== context.school_branch ||
-					frm.doc.schedule_date !== context.schedule_date ||
-					frm.doc.maximum_assessment_score !== context.maximum_assessment_score
-				) {
-					return;
-				}
-				frm.clear_table("assessment_criteria");
-				(r.message || []).forEach((criterion) => {
-					const row = frm.add_child("assessment_criteria");
-					row.assessment_criteria = criterion.assessment_criteria;
-					row.maximum_score =
-						(Number(criterion.weightage || 0) / 100) *
-						Number(context.maximum_assessment_score || 0);
-				});
-				frm.refresh_field("assessment_criteria");
-			},
+	// Defer one event-loop turn so all Assessment Plan course handlers have had a
+	// chance to start. Then wait for Frappe's native context-free criteria request
+	// to settle before repopulating through exact Branch + Class + Subject + date
+	// authorization. This remains safe regardless of handler registration order.
+	setTimeout(() => {
+		frappe.after_ajax(() => {
+			if (
+				frm.doc.course !== context.course ||
+				frm.doc.student_group !== context.student_group ||
+				frm.doc.eduedge_school_branch !== context.school_branch ||
+				frm.doc.schedule_date !== context.schedule_date ||
+				frm.doc.maximum_assessment_score !== context.maximum_assessment_score
+			) {
+				return;
+			}
+			frappe.call({
+				method: "eduedge.api.assessment_assignment_options.get_assessment_plan_criteria",
+				args: {
+					course: context.course,
+					school_branch: context.school_branch,
+					student_group: context.student_group,
+					schedule_date: context.schedule_date,
+				},
+				callback(r) {
+					if (
+						frm.doc.course !== context.course ||
+						frm.doc.student_group !== context.student_group ||
+						frm.doc.eduedge_school_branch !== context.school_branch ||
+						frm.doc.schedule_date !== context.schedule_date ||
+						frm.doc.maximum_assessment_score !== context.maximum_assessment_score
+					) {
+						return;
+					}
+					frm.clear_table("assessment_criteria");
+					(r.message || []).forEach((criterion) => {
+						const row = frm.add_child("assessment_criteria");
+						row.assessment_criteria = criterion.assessment_criteria;
+						row.maximum_score =
+							(Number(criterion.weightage || 0) / 100) *
+							Number(context.maximum_assessment_score || 0);
+					});
+					frm.refresh_field("assessment_criteria");
+				},
+			});
 		});
-	});
+	}, 0);
 }
 
 frappe.ui.form.on("Assessment Plan", {
