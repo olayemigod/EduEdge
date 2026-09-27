@@ -656,6 +656,22 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 			_result_status_legend([{"display_components": [prepared]}], "Terminal"),
 			[{"code": "P-ABS", "label": "Partially Absent"}],
 		)
+		self.assertEqual(
+			_result_status_legend(
+				[{"periods": [{"display_components": [prepared]}]}],
+				"Annual",
+			),
+			[{"code": "P-ABS", "label": "Partially Absent"}],
+		)
+		legacy = _prepare_component_for_display(
+			{
+				"status": "Partially Absent",
+				"status_code": "",
+				"score": 20,
+				"maximum_score": 20,
+			}
+		)
+		self.assertEqual(legacy["display_value"], "20")
 
 	def test_mixed_excluded_states_are_distinct_from_missing(self):
 		profile = _profile()
