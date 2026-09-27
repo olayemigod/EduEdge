@@ -912,6 +912,32 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             before_validate_assessment_result(blank_score_result)
 
+        malformed_score_result = frappe.new_doc("Assessment Result")
+        malformed_score_result.assessment_plan = mark_plan.name
+        malformed_score_result.student = student.name
+        malformed_score_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": "not-a-number",
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(malformed_score_result)
+
+        nan_score_result = frappe.new_doc("Assessment Result")
+        nan_score_result.assessment_plan = mark_plan.name
+        nan_score_result.student = student.name
+        nan_score_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": float("nan"),
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(nan_score_result)
+
         invalid_state_result = frappe.new_doc("Assessment Result")
         invalid_state_result.assessment_plan = mark_plan.name
         invalid_state_result.student = student.name
