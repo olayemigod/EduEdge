@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import cint, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.academic_operations import assert_instructor_assignment
@@ -165,6 +165,7 @@ def before_validate_assessment_result(doc, method=None) -> None:
 			_("Assessment Results can only be created against a submitted Assessment Plan."),
 			frappe.ValidationError,
 		)
+	_apply_assessment_result_plan_contract(doc, plan)
 	student_branch = frappe.db.get_value("Student", doc.student, BRANCH_FIELD)
 	plan_branch = plan.get(BRANCH_FIELD)
 	resolved_branch = plan_branch or student_branch
@@ -205,6 +206,83 @@ def before_validate_assessment_result(doc, method=None) -> None:
 			course=plan.course,
 			on_date=nowdate(),
 		)
+
+
+def _apply_assessment_result_plan_contract(doc, plan) -> None:
+	"""Make the submitted Assessment Plan authoritative for result scope and criteria."""
+	for fieldname, value in (
+		("student_group", plan.student_group),
+		("course", plan.course),
+		("assessment_group", plan.assessment_group),
+		("grading_scale", plan.grading_scale),
+	):
+		doc.set(fieldname, value)
+	doc.maximum_score = flt(plan.maximum_assessment_score)
+
+	criteria_rows = frappe.get_all(
+		"Assessment Plan Criteria",
+		filters={"parent": plan.name, "parenttype": "Assessment Plan"},
+		fields=["assessment_criteria", "maximum_score", "idx"],
+		order_by="idx asc",
+		page_length=0,
+	)
+	expected_names = [
+		str(row.assessment_criteria or "").strip()
+		for row in criteria_rows
+		if str(row.assessment_criteria or "").strip()
+	]
+	if not expected_names:
+		frappe.throw(
+			_("Submitted Assessment Plan has no Assessment Criteria."),
+			frappe.ValidationError,
+		)
+	if len(expected_names) != len(set(expected_names)):
+		frappe.throw(
+			_("Submitted Assessment Plan has duplicate Assessment Criteria."),
+			frappe.ValidationError,
+		)
+
+	expected_maximum = {
+		str(row.assessment_criteria): flt(row.maximum_score)
+		for row in criteria_rows
+		if row.assessment_criteria
+	}
+	configured_total = sum(expected_maximum.values())
+	if abs(configured_total - flt(plan.maximum_assessment_score)) > 1e-9:
+		frappe.throw(
+			_("Submitted Assessment Plan criteria no longer match its Maximum Assessment Score."),
+			frappe.ValidationError,
+		)
+
+	actual_rows = list(doc.get("details") or [])
+	actual_names = [
+		str(row.get("assessment_criteria") or "").strip()
+		for row in actual_rows
+	]
+	if any(not name for name in actual_names):
+		frappe.throw(
+			_("Every Assessment Result detail row requires an Assessment Criterion."),
+			frappe.ValidationError,
+		)
+	if len(actual_names) != len(set(actual_names)):
+		frappe.throw(
+			_("Assessment Result criteria cannot be repeated."),
+			frappe.ValidationError,
+		)
+
+	missing = sorted(set(expected_names) - set(actual_names))
+	extra = sorted(set(actual_names) - set(expected_names))
+	if missing or extra:
+		frappe.throw(
+			_(
+				"Assessment Result criteria must exactly match the submitted Assessment Plan. "
+				"Missing: {0}. Unexpected: {1}."
+			).format(", ".join(missing) or "-", ", ".join(extra) or "-"),
+			frappe.ValidationError,
+		)
+
+	for row in actual_rows:
+		row.maximum_score = expected_maximum[str(row.assessment_criteria)]
 
 
 def validate_publication_scope(doc) -> None:
@@ -668,6 +746,8 @@ def _get_assessment_plan(name: str):
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"grading_scale",
+			"maximum_assessment_score",
 			"docstatus",
 			BRANCH_FIELD,
 		],
