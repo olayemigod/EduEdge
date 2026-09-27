@@ -62,6 +62,8 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             '("assessment_group", plan.assessment_group)',
             '("grading_scale", plan.grading_scale)',
             "doc.maximum_score = flt(plan.maximum_assessment_score)",
+            "if score_state not in SCORE_STATES:",
+            "Invalid Assessment Result score state",
             '"Assessment Plan Criteria"',
             '"parenttype": "Assessment Plan"',
             "Assessment Result criteria must exactly match the submitted Assessment Plan.",
