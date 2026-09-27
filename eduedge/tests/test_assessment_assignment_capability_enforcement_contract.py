@@ -65,6 +65,8 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             '"Assessment Plan Criteria"',
             '"parenttype": "Assessment Plan"',
             "Assessment Result criteria must exactly match the submitted Assessment Plan.",
+            'if raw_score in (None, ""):',
+            "requires an explicit score",
             "if score < 0 or score > maximum_score:",
             "must be between 0 and {1}",
             "row.maximum_score = maximum_score",
