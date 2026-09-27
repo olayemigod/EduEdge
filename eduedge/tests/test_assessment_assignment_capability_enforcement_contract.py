@@ -56,6 +56,9 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             1,
         )[0]
         for token in (
+            "if doc.is_new():",
+            "_lock_assessment_plan_for_result(doc.assessment_plan)",
+            "for update",
             "_apply_assessment_result_plan_contract(doc, plan)",
             '("student_group", plan.student_group)',
             '("course", plan.course)',
