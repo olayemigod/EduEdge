@@ -45,6 +45,16 @@ class TestAssessmentResultToolSafeContract(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
 
+    def test_numeric_result_tool_cannot_coerce_malformed_scores_to_zero(self):
+        source = (APP / "api" / "assessment_result_tool_safe.py").read_text(encoding="utf-8")
+        mark = source.split("def mark_assessment_result", 1)[1].split("def submit_assessment_results", 1)[0]
+        self.assertIn(
+            "from eduedge.education.assessment_operations import normalize_assessment_result_score",
+            source,
+        )
+        self.assertIn("normalize_assessment_result_score(score, str(criteria))", mark)
+        self.assertNotIn('"score": flt(score)', mark)
+
     def test_tool_plan_selector_uses_current_mark_entry_scope(self):
         client = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text(encoding="utf-8")
         options = (APP / "api" / "assessment_assignment_options.py").read_text(encoding="utf-8")
