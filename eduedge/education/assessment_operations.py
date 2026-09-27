@@ -259,6 +259,7 @@ def _apply_assessment_result_plan_contract(doc, plan) -> None:
 	"""Make the submitted Assessment Plan authoritative for result scope and criteria."""
 	for fieldname, value in (
 		("student_group", plan.student_group),
+		("program", plan.program),
 		("course", plan.course),
 		("academic_year", plan.academic_year),
 		("academic_term", plan.academic_term),
@@ -832,6 +833,7 @@ def _get_assessment_plan(name: str):
 		[
 			"name",
 			"student_group",
+			"program",
 			"course",
 			"schedule_date",
 			"academic_year",
