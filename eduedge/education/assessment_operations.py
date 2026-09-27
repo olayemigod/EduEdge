@@ -176,6 +176,15 @@ def before_validate_assessment_result(doc, method=None) -> None:
 			_("Invalid Assessment Result score state: {0}.").format(score_state),
 			frappe.ValidationError,
 		)
+	if score_state != "Scored" and any(
+		abs(flt(row.get("score"))) > 1e-9 for row in (doc.get("details") or [])
+	):
+		frappe.throw(
+			_(
+				"Absent, Exempt and Not Offered Assessment Results must use zero criterion scores."
+			),
+			frappe.ValidationError,
+		)
 	student_branch = frappe.db.get_value("Student", doc.student, BRANCH_FIELD)
 	plan_branch = plan.get(BRANCH_FIELD)
 	resolved_branch = plan_branch or student_branch
