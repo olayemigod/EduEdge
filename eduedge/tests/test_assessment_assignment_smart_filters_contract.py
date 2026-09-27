@@ -115,6 +115,7 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
         client = self._client()
         for token in (
             "function load_eduedge_assessment_criteria(frm)",
+            "setTimeout(() =>",
             "frappe.after_ajax(() =>",
             '"eduedge.api.assessment_assignment_options.get_assessment_plan_criteria"',
             "school_branch: context.school_branch",
