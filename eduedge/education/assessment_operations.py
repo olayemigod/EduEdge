@@ -162,6 +162,7 @@ def _validate_examiner_and_supervisor(doc) -> None:
 def before_validate_assessment_result(doc, method=None) -> None:
 	if doc.is_new():
 		_lock_assessment_plan_for_result(doc.assessment_plan)
+		_assert_no_active_assessment_result_duplicate(doc)
 	plan = _get_assessment_plan(doc.assessment_plan)
 	if cint(plan.docstatus) != 1:
 		frappe.throw(
@@ -225,6 +226,24 @@ def _lock_assessment_plan_for_result(assessment_plan: str) -> None:
 	)
 	if not rows:
 		frappe.throw(_("Assessment Plan does not exist."), frappe.DoesNotExistError)
+
+
+def _assert_no_active_assessment_result_duplicate(doc) -> None:
+	duplicate = frappe.db.exists(
+		"Assessment Result",
+		{
+			"assessment_plan": doc.assessment_plan,
+			"student": doc.student,
+			"docstatus": ["!=", 2],
+		},
+	)
+	if duplicate:
+		frappe.throw(
+			_(
+				"Assessment Result {0} already exists for this Student and Assessment Plan."
+			).format(duplicate),
+			frappe.DuplicateEntryError,
+		)
 
 
 def _apply_assessment_result_plan_contract(doc, plan) -> None:
