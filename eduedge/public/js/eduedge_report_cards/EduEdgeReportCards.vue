@@ -139,27 +139,55 @@
 									<table class="eduedge-result-table">
 										<thead>
 											<tr>
-												<th>Subject</th>
+												<th :rowspan="selectedStudent.result_mode === 'Annual' ? 2 : 1">Subject</th>
 												<template v-if="selectedStudent.result_mode === 'Annual'">
-													<th v-for="period in selectedStudent.periods || []" :key="period.academic_term">{{ period.display_label }}</th>
+													<th
+														v-for="period in selectedStudent.periods || []"
+														:key="period.academic_term"
+														:colspan="(selectedStudent.display_components || []).length || 1"
+													>
+														{{ period.display_label }}
+													</th>
 												</template>
 												<template v-else>
 													<th v-for="component in selectedStudent.display_components || []" :key="component.component_key">{{ component.component_label }}</th>
 												</template>
-												<th>Total</th>
-												<th>%</th>
-												<th>Grade</th>
-												<th>Remark</th>
-												<th v-for="metric in selectedStudent.display_metrics || []" :key="`${metric.metric_key}-${metric.calculation_basis}-${metric.display_label}`">{{ metric.display_label }}</th>
+												<th :rowspan="selectedStudent.result_mode === 'Annual' ? 2 : 1">Total</th>
+												<th :rowspan="selectedStudent.result_mode === 'Annual' ? 2 : 1">%</th>
+												<th :rowspan="selectedStudent.result_mode === 'Annual' ? 2 : 1">Grade</th>
+												<th :rowspan="selectedStudent.result_mode === 'Annual' ? 2 : 1">Remark</th>
+												<th
+													v-for="metric in selectedStudent.display_metrics || []"
+													:key="`${metric.metric_key}-${metric.calculation_basis}-${metric.display_label}`"
+													:rowspan="selectedStudent.result_mode === 'Annual' ? 2 : 1"
+												>
+													{{ metric.display_label }}
+												</th>
+											</tr>
+											<tr v-if="selectedStudent.result_mode === 'Annual'">
+												<template v-for="period in selectedStudent.periods || []" :key="period.academic_term">
+													<th
+														v-for="component in selectedStudent.display_components || []"
+														:key="`${period.academic_term}-${component.component_key}`"
+													>
+														{{ component.component_label }}
+													</th>
+												</template>
 											</tr>
 										</thead>
 										<tbody>
 											<tr v-for="course in selectedStudent.courses" :key="course.course">
 												<td class="is-subject">{{ course.course_name || course.course }}</td>
 												<template v-if="selectedStudent.result_mode === 'Annual'">
-													<td v-for="period in selectedStudent.periods || []" :key="period.academic_term" class="is-number">
-														{{ annualPeriodScore(course, period.academic_term) }}
-													</td>
+													<template v-for="period in selectedStudent.periods || []" :key="period.academic_term">
+														<td
+															v-for="component in selectedStudent.display_components || []"
+															:key="`${period.academic_term}-${component.component_key}`"
+															class="is-number"
+														>
+															{{ annualPeriodComponentScore(course, period.academic_term, component.component_key) }}
+														</td>
+													</template>
 												</template>
 												<template v-else>
 													<td v-for="component in selectedStudent.display_components || []" :key="component.component_key" class="is-number">
@@ -176,6 +204,12 @@
 											</tr>
 										</tbody>
 									</table>
+								</div>
+								<div v-if="selectedStudent.result_status_legend?.length" class="eduedge-result-status-legend">
+									<strong>Result Status:</strong>
+									<span v-for="item in selectedStudent.result_status_legend" :key="item.code">
+										<b>{{ item.code }}</b> = {{ item.label }}
+									</span>
 								</div>
 							</div>
 
@@ -290,10 +324,18 @@ export default {
 			if (!Number(component.maximum_score || 0)) return "-";
 			return Number(component.score || 0).toFixed(2).replace(/\.00$/, "");
 		},
-		annualPeriodScore(course, term) {
+		annualPeriodComponentScore(course, term, componentKey) {
 			const period = course?.period_map?.[term];
-			if (!period || !period.eligible) return "-";
-			return Number(period.total_score || 0).toFixed(2).replace(/\.00$/, "");
+			if (!period) return "-";
+			const component = (period.display_components || []).find(
+				(row) => row.component_key === componentKey,
+			);
+			if (!component) return "-";
+			if (component.display_value !== undefined && component.display_value !== null) {
+				return component.display_value;
+			}
+			if (!Number(component.maximum_score || 0)) return "-";
+			return Number(component.score || 0).toFixed(2).replace(/\.00$/, "");
 		},
 		resultTotal(course) {
 			const value = this.selectedStudent?.result_mode === "Annual" ? course?.cumulative_score : course?.total_score;
@@ -479,6 +521,8 @@ export default {
 .eduedge-result-table tr:last-child td { border-bottom: 0; }
 .eduedge-result-table .is-subject { font-weight: 600; white-space: normal; min-width: 10rem; }
 .eduedge-result-table .is-number { text-align: right; font-variant-numeric: tabular-nums; }
+.eduedge-result-status-legend { display: flex; flex-wrap: wrap; gap: 0.45rem 0.9rem; margin-top: 0.65rem; padding: 0.65rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.78rem; }
+.eduedge-result-status-legend strong { margin-right: 0.2rem; }
 .eduedge-history-panel { margin: 1rem 0; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
 .eduedge-history-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .eduedge-history-grid > div { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--control-bg); }
