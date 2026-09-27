@@ -178,6 +178,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"assessment_plan": "PLAN-CA",
 				"student": "STU-1",
 				"docstatus": 1,
+				"maximum_score": 40,
 				"eduedge_score_state": "Scored",
 			},
 		]
@@ -191,6 +192,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"assessment_plan": "PLAN-CA",
 				"student": "STU-1",
 				"docstatus": 1,
+				"maximum_score": 40,
 				"eduedge_score_state": "Exempt",
 			},
 		]
@@ -208,6 +210,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"assessment_plan": "PLAN-CA",
 				"student": "STU-1",
 				"docstatus": 1,
+				"maximum_score": 40,
 				"eduedge_score_state": "Absent",
 			},
 		]
@@ -228,6 +231,24 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		)
 
 		profile["absence_policy"] = "Exclude from Denominator"
+		zero_maximum_scored = [
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"maximum_score": 0,
+				"eduedge_score_state": "Scored",
+			},
+		]
+		blockers = build_missing_result_blockers(
+			profile,
+			plans,
+			zero_maximum_scored,
+			["STU-1"],
+		)
+		self.assertEqual(len(blockers), 1)
+		self.assertEqual(blockers[0]["missing_assessment_plans"], ["PLAN-EXAM"])
+
 		full_exclusion = [
 			{
 				"assessment_plan": "PLAN-CA",
@@ -239,6 +260,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"assessment_plan": "PLAN-EXAM",
 				"student": "STU-1",
 				"docstatus": 1,
+				"maximum_score": 60,
 				"eduedge_score_state": "Not Offered",
 			},
 		]
@@ -272,6 +294,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"student": "STU-1",
 				"academic_term": "Alpha",
 				"docstatus": 1,
+				"maximum_score": 40,
 			}
 		]
 		blockers = build_missing_result_blockers(profile, plans, alpha_only, ["STU-1"])
@@ -290,6 +313,7 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 				"student": "STU-1",
 				"academic_term": "Rapha",
 				"docstatus": 1,
+				"maximum_score": 40,
 			}
 		]
 		self.assertEqual(
