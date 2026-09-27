@@ -51,6 +51,13 @@ class TestIssuedReportCardPresentationContract(unittest.TestCase):
 		self.assertIn("OFFICIAL ISSUED REPORT CARD", template)
 		self.assertIn("issued.issue_version", template)
 
+	def test_issued_template_prefers_runtime_issue_record_for_fingerprint(self):
+		template = (APP / "templates" / "report_card.html").read_text()
+		self.assertIn("{% set issued = issue_record or issue %}", template)
+		self.assertNotIn("{% set issued = issue or issue_record %}", template)
+		self.assertIn("issued.payload_hash", template)
+		self.assertIn("issued.issue_version", template)
+
 	def test_official_footer_mentions_immutable_issue_version(self):
 		template = (APP / "templates" / "report_card.html").read_text()
 		self.assertIn("Issued report-card version", template)
