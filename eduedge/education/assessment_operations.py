@@ -260,6 +260,8 @@ def _apply_assessment_result_plan_contract(doc, plan) -> None:
 	for fieldname, value in (
 		("student_group", plan.student_group),
 		("course", plan.course),
+		("academic_year", plan.academic_year),
+		("academic_term", plan.academic_term),
 		("assessment_group", plan.assessment_group),
 		("grading_scale", plan.grading_scale),
 	):
