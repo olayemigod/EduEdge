@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils.pdf import get_pdf
 
+from eduedge.education.report_card_issues import resolve_report_card_render_settings
 from eduedge.education.report_cards import get_student_report_card_payload
 from eduedge.services.institution_branding import get_report_identity
 
@@ -43,21 +44,14 @@ def preview_report_card(publication: str, student: str) -> None:
 	payload = _attach_institution_identity(
 		get_student_report_card_payload(publication, student)
 	)
-	settings = frappe.get_single("EduEdge Settings")
-	letter_head_name = (
-		(payload.get("branding") or {}).get("report_card_letter_head")
-		or settings.report_card_letter_head
-	)
-	letterhead = None
-	if letter_head_name:
-		letterhead = frappe.db.get_value("Letter Head", letter_head_name, "content")
+	render_settings = resolve_report_card_render_settings(payload)
 
 	html = frappe.render_template(
 		"eduedge/templates/report_card.html",
 		{
 			**payload,
-			"letterhead": letterhead,
-			"show_marks": bool(settings.report_card_show_marks),
+			"letterhead": render_settings["letterhead"],
+			"show_marks": render_settings["show_marks"],
 		},
 	)
 	final_html = frappe.render_template(
