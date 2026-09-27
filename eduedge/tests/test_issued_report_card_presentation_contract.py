@@ -15,6 +15,29 @@ class TestIssuedReportCardPresentationContract(unittest.TestCase):
 		self.assertIn('payload["branding"] = identity["branding"]', service)
 		self.assertIn('payload["terminology"] = identity["terminology"]', service)
 
+	def test_issued_payload_freezes_pdf_render_settings(self):
+		service = (APP / "education" / "report_card_issues.py").read_text()
+		main_api = (APP / "api" / "report_cards.py").read_text()
+		profiled_api = (APP / "api" / "report_cards_profiled.py").read_text()
+		self.assertIn("def _freeze_issue_render_settings", service)
+		self.assertIn('payload["render_settings"] = _current_report_card_render_settings(payload)', service)
+		self.assertIn("def resolve_report_card_render_settings", service)
+		self.assertIn('(payload.get("branding") or {}).get("report_card_letter_head")', service)
+		self.assertIn('"letterhead": letterhead', service)
+		self.assertIn('"show_marks": bool(settings.report_card_show_marks)', service)
+		self.assertIn("resolve_report_card_render_settings(payload)", main_api)
+		self.assertIn('render_settings["letterhead"]', main_api)
+		self.assertIn('render_settings["show_marks"]', main_api)
+		self.assertIn("resolve_report_card_render_settings(payload)", profiled_api)
+		self.assertIn('render_settings["letterhead"]', profiled_api)
+		self.assertIn('render_settings["show_marks"]', profiled_api)
+
+	def test_legacy_issued_payloads_fall_back_to_current_render_settings(self):
+		service = (APP / "education" / "report_card_issues.py").read_text()
+		self.assertIn('if payload.get("issue") or payload.get("issue_record")', service)
+		self.assertIn("if isinstance(frozen, dict)", service)
+		self.assertIn("return _current_report_card_render_settings(payload)", service)
+
 	def test_profiled_api_does_not_replace_frozen_branding(self):
 		api = (APP / "api" / "report_cards_profiled.py").read_text()
 		self.assertIn('(payload.get("issue") or payload.get("issue_record"))', api)
