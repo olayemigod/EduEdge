@@ -15,6 +15,7 @@ from eduedge.api.academic_operations_safe import (
 from eduedge.api.assessment_assignment_options import (
     assessment_plan_course_query,
     assessment_plan_student_group_query,
+    get_assessment_plan_criteria,
 )
 from eduedge.api.assessment_operations import get_assessment_context
 from eduedge.api.assessment_workbenches import get_marks_entry_context
@@ -318,6 +319,22 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             course_name=f"QA Core Science {self.suffix}",
             **{INSTITUTION_FIELD: institution.name},
         )
+        valid_criterion = self._insert(
+            "Assessment Criteria",
+            assessment_criteria=f"QA Core Knowledge {self.suffix}",
+        )
+        rogue_criterion = self._insert(
+            "Assessment Criteria",
+            assessment_criteria=f"QA Core Rogue {self.suffix}",
+        )
+        course.append(
+            "assessment_criteria",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "weightage": 100,
+            },
+        )
+        course.save(ignore_permissions=True)
         program = self._insert(
             "Program",
             program_name=f"QA Core Class {self.suffix}",
@@ -687,6 +704,51 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             [row[0] for row in first_assessment_courses],
             [course.name],
         )
+
+        # Frappe's native criteria request carries only Course and therefore fails
+        # closed for a capability-scoped Instructor. EduEdge reloads with the exact
+        # Branch + Class + assessment date before returning criteria.
+        self.assertEqual(get_assessment_plan_criteria(course.name), [])
+        exact_criteria = get_assessment_plan_criteria(
+            course.name,
+            school_branch=branch_a.name,
+            student_group=class_a["name"],
+            schedule_date="2094-10-05",
+        )
+        self.assertEqual(
+            [(row.assessment_criteria, int(row.weightage)) for row in exact_criteria],
+            [(valid_criterion.name, 100)],
+        )
+        with self.assertRaises(frappe.PermissionError):
+            get_assessment_plan_criteria(
+                extra_course.name,
+                school_branch=branch_a.name,
+                student_group=class_a["name"],
+                schedule_date="2094-10-05",
+            )
+
+        # Client filtering is guidance only; direct child-row injection must fail
+        # unless every criterion belongs to the selected Course.
+        pending_plan.append(
+            "assessment_criteria",
+            {
+                "assessment_criteria": rogue_criterion.name,
+                "maximum_score": 100,
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_plan(pending_plan)
+        pending_plan.set("assessment_criteria", [])
+        pending_plan.append(
+            "assessment_criteria",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "maximum_score": 100,
+            },
+        )
+        before_validate_assessment_plan(pending_plan)
+        self.assertEqual(pending_plan.get(BRANCH_FIELD), branch_a.name)
+
         frappe.set_user("Administrator")
         frappe.db.set_value(
             "EduEdge Instructor Assignment",
