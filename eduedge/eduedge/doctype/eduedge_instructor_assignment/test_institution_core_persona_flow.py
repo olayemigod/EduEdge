@@ -860,6 +860,26 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             before_validate_assessment_result(rogue_detail_result)
 
+        duplicate_detail_result = frappe.new_doc("Assessment Result")
+        duplicate_detail_result.assessment_plan = mark_plan.name
+        duplicate_detail_result.student = student.name
+        duplicate_detail_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": 35,
+            },
+        )
+        duplicate_detail_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": 40,
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(duplicate_detail_result)
+
         frappe.set_user(instructor_user.name)
         active_marks_context = get_marks_entry_context(branch=branch_a.name)
         self.assertIn(
