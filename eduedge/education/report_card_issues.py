@@ -47,6 +47,7 @@ def create_report_card_issue(review: str) -> str:
 		_prefer_issued=False,
 	)
 	payload = _freeze_institution_identity(payload)
+	payload = _freeze_issue_render_settings(payload)
 	publication = payload.get("publication") or {}
 	payload["issue"] = {
 		"issue_version": _next_issue_version(review_doc.result_publication, review_doc.student),
@@ -122,6 +123,38 @@ def _freeze_institution_identity(payload: dict) -> dict:
 	if identity.get("address"):
 		payload["address"] = identity["address"]
 	return payload
+
+
+def _freeze_issue_render_settings(payload: dict) -> dict:
+	payload["render_settings"] = _current_report_card_render_settings(payload)
+	return payload
+
+
+def resolve_report_card_render_settings(payload: dict) -> dict:
+	"""Use immutable render settings for issued reports, with legacy fallback."""
+	if payload.get("issue") or payload.get("issue_record"):
+		frozen = payload.get("render_settings")
+		if isinstance(frozen, dict):
+			return {
+				"letterhead": frozen.get("letterhead") or "",
+				"show_marks": bool(frozen.get("show_marks")),
+			}
+	return _current_report_card_render_settings(payload)
+
+
+def _current_report_card_render_settings(payload: dict) -> dict:
+	settings = frappe.get_single("EduEdge Settings")
+	letter_head_name = (
+		(payload.get("branding") or {}).get("report_card_letter_head")
+		or settings.report_card_letter_head
+	)
+	letterhead = ""
+	if letter_head_name:
+		letterhead = frappe.db.get_value("Letter Head", letter_head_name, "content") or ""
+	return {
+		"letterhead": letterhead,
+		"show_marks": bool(settings.report_card_show_marks),
+	}
 
 def _latest_issue_row(publication: str, student: str):
 	rows = frappe.get_all(
