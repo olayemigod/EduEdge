@@ -29,6 +29,15 @@ class TestReportCardScoreStateContract(unittest.TestCase):
 		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
 		self.assertIn("component.display_value !== undefined", vue)
 		self.assertIn("return component.display_value", vue)
+		self.assertIn("annualPeriodComponentScore", vue)
+		self.assertIn("period.display_components || []", vue)
+
+	def test_browser_preview_explains_visible_result_status_codes(self):
+		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
+		self.assertIn("selectedStudent.result_status_legend?.length", vue)
+		self.assertIn("Result Status:", vue)
+		self.assertIn("item.code", vue)
+		self.assertIn("item.label", vue)
 
 
 if __name__ == "__main__":
