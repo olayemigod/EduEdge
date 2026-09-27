@@ -174,10 +174,76 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 			{"name": "PLAN-EXAM", "course": "CRS"},
 		]
 		partial_rows = [
-			{"assessment_plan": "PLAN-CA", "student": "STU-1", "docstatus": 1},
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Scored",
+			},
 		]
 		self.assertEqual(
 			build_missing_result_blockers(profile, plans, partial_rows, ["STU-1"]),
+			[],
+		)
+
+		partial_exclusion = [
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Exempt",
+			},
+		]
+		blockers = build_missing_result_blockers(
+			profile,
+			plans,
+			partial_exclusion,
+			["STU-1"],
+		)
+		self.assertEqual(len(blockers), 1)
+		self.assertEqual(blockers[0]["missing_assessment_plans"], ["PLAN-EXAM"])
+
+		partial_absence = [
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Absent",
+			},
+		]
+		profile["absence_policy"] = "Exclude from Denominator"
+		blockers = build_missing_result_blockers(
+			profile,
+			plans,
+			partial_absence,
+			["STU-1"],
+		)
+		self.assertEqual(len(blockers), 1)
+		self.assertEqual(blockers[0]["missing_assessment_plans"], ["PLAN-EXAM"])
+
+		profile["absence_policy"] = "Treat as Zero"
+		self.assertEqual(
+			build_missing_result_blockers(profile, plans, partial_absence, ["STU-1"]),
+			[],
+		)
+
+		profile["absence_policy"] = "Exclude from Denominator"
+		full_exclusion = [
+			{
+				"assessment_plan": "PLAN-CA",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Exempt",
+			},
+			{
+				"assessment_plan": "PLAN-EXAM",
+				"student": "STU-1",
+				"docstatus": 1,
+				"eduedge_score_state": "Not Offered",
+			},
+		]
+		self.assertEqual(
+			build_missing_result_blockers(profile, plans, full_exclusion, ["STU-1"]),
 			[],
 		)
 
@@ -186,6 +252,10 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(blockers[0]["code"], "MISSING_SUBJECT_RESULTS")
 		self.assertEqual(blockers[0]["student"], "STU-1")
 		self.assertEqual(blockers[0]["course"], "CRS")
+		self.assertEqual(
+			blockers[0]["missing_assessment_plans"],
+			["PLAN-CA", "PLAN-EXAM"],
+		)
 
 	def test_missing_result_exclusion_cannot_hide_whole_subject_period(self):
 		profile = _profile()
@@ -209,6 +279,10 @@ class TestEduEdgeResultEngine(FrappeTestCase):
 		self.assertEqual(blockers[0]["code"], "MISSING_SUBJECT_RESULTS")
 		self.assertEqual(blockers[0]["course"], "CRS")
 		self.assertEqual(blockers[0]["academic_term"], "Rapha")
+		self.assertEqual(
+			blockers[0]["missing_assessment_plans"],
+			["RAPHA-CA", "RAPHA-EXAM"],
+		)
 
 		rapha_partial = alpha_only + [
 			{
