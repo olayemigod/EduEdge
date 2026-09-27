@@ -260,6 +260,28 @@ def _assert_no_active_assessment_result_duplicate(doc) -> None:
 		)
 
 
+def normalize_assessment_result_score(raw_score, criterion: str = "") -> float:
+	label = str(criterion or _("Assessment Criterion"))
+	if raw_score in (None, ""):
+		frappe.throw(
+			_("{0} requires an explicit score.").format(label),
+			frappe.ValidationError,
+		)
+	try:
+		score = float(raw_score)
+	except (TypeError, ValueError):
+		frappe.throw(
+			_("{0} requires a numeric score.").format(label),
+			frappe.ValidationError,
+		)
+	if not isfinite(score):
+		frappe.throw(
+			_("{0} requires a finite numeric score.").format(label),
+			frappe.ValidationError,
+		)
+	return score
+
+
 def _apply_assessment_result_plan_contract(doc, plan) -> None:
 	"""Make the submitted Assessment Plan authoritative for result scope and criteria."""
 	for fieldname, value in (
@@ -339,24 +361,7 @@ def _apply_assessment_result_plan_contract(doc, plan) -> None:
 	for row in actual_rows:
 		criterion = str(row.assessment_criteria)
 		maximum_score = expected_maximum[criterion]
-		raw_score = row.get("score")
-		if raw_score in (None, ""):
-			frappe.throw(
-				_("Assessment Criterion {0} requires an explicit score.").format(criterion),
-				frappe.ValidationError,
-			)
-		try:
-			score = float(raw_score)
-		except (TypeError, ValueError):
-			frappe.throw(
-				_("Assessment Criterion {0} requires a numeric score.").format(criterion),
-				frappe.ValidationError,
-			)
-		if not isfinite(score):
-			frappe.throw(
-				_("Assessment Criterion {0} requires a finite numeric score.").format(criterion),
-				frappe.ValidationError,
-			)
+		score = normalize_assessment_result_score(row.get("score"), criterion)
 		if score < 0 or score > maximum_score:
 			frappe.throw(
 				_(
