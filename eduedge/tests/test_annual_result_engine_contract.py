@@ -45,6 +45,19 @@ class TestAnnualResultEngineContract(unittest.TestCase):
 		self.assertIn("cumulative_percentage", engine)
 		self.assertIn("annual_percentage", engine)
 
+	def test_annual_average_metric_is_independent_of_configured_annual_percentage(self):
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn('"Annual Average Percentage": "annual_average_percentage"', engine)
+		self.assertIn("annual_average_percentage = average_result_values(", engine)
+		self.assertIn("annual_percentage = annual_average_percentage", engine)
+		self.assertIn('method == "Weighted Average"', engine)
+		self.assertIn('method == "Raw Cumulative"', engine)
+		self.assertNotIn('"Annual Average Percentage": "annual_percentage"', engine)
+		self.assertNotIn(
+			'subject["annual_average_percentage"] = subject["annual_percentage"]',
+			engine,
+		)
+
 	def test_overall_percentage_policy_is_explicit(self):
 		path = APP / "eduedge" / "doctype" / "eduedge_result_profile" / "eduedge_result_profile.json"
 		payload = json.loads(path.read_text())
