@@ -98,6 +98,8 @@ class TestAssessmentAssignmentSmartFiltersContract(unittest.TestCase):
             "if not group_name or not branch:",
             "return []",
             '"can_create_assessment_plans"',
+            "if not group.program or not frappe.db.exists(",
+            '"Program Course"',
             "require_instructor_assignment_capability(",
             "student_group=group_name",
             "on_date=getdate(schedule_date or nowdate())",
