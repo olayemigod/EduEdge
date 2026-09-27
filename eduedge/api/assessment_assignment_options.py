@@ -257,7 +257,7 @@ def get_assessment_plan_criteria(
         offering = _resolve_group_offering(group)
         if not offering:
             return []
-        if group.program and not frappe.db.exists(
+        if not group.program or not frappe.db.exists(
             "Program Course",
             {
                 "parent": group.program,
