@@ -832,12 +832,16 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         # Client/read-only fetch fields are not trusted: the submitted Plan is
         # authoritative for report-driving scope and denominator metadata.
         native_result.course = extra_course.name
+        native_result.academic_year = None
+        native_result.academic_term = None
         native_result.assessment_group = assessment_parent
         native_result.maximum_score = 999
         before_validate_assessment_result(native_result)
         self.assertEqual(native_result.get(BRANCH_FIELD), branch_a.name)
         self.assertEqual(native_result.course, course.name)
         self.assertEqual(native_result.student_group, class_a["name"])
+        self.assertEqual(native_result.academic_year, year.name)
+        self.assertEqual(native_result.academic_term, term.name)
         self.assertEqual(native_result.assessment_group, legacy_group.name)
         self.assertEqual(native_result.maximum_score, 100)
         self.assertEqual(native_result.details[0].maximum_score, 100)
