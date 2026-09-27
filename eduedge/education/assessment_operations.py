@@ -435,6 +435,31 @@ def _get_publication_cohort_students(
 	]
 
 
+def build_duplicate_assessment_result_blockers(result_rows: list) -> list[dict]:
+	"""Fail publication closed when legacy/import drift contains duplicate active results."""
+	pairs: dict[tuple[str, str], list[str]] = defaultdict(list)
+	for row in result_rows or []:
+		plan_name = str(row.get("assessment_plan") or "")
+		student = str(row.get("student") or "")
+		name = str(row.get("name") or "")
+		if plan_name and student:
+			pairs[(plan_name, student)].append(name)
+
+	return [
+		{
+			"code": "DUPLICATE_ASSESSMENT_RESULTS",
+			"reason": _(
+				"Multiple active Assessment Results exist for one Student and Assessment Plan."
+			),
+			"assessment_plan": plan_name,
+			"student": student,
+			"assessment_results": sorted(name for name in names if name),
+		}
+		for (plan_name, student), names in sorted(pairs.items())
+		if len(names) > 1
+	]
+
+
 def get_publication_readiness(
 	*,
 	school_branch: str,
@@ -581,24 +606,8 @@ def get_publication_readiness(
 			fields=result_fields,
 			page_length=0,
 		)
-	result_pair_rows: dict[tuple[str, str], list[str]] = defaultdict(list)
-	for row in results:
-		result_pair_rows[(row.assessment_plan, row.student)].append(row.name)
-	for (plan_name, student), names in sorted(result_pair_rows.items()):
-		if len(names) > 1:
-			profile_blockers.append(
-				{
-					"code": "DUPLICATE_ASSESSMENT_RESULTS",
-					"reason": _(
-						"Multiple active Assessment Results exist for one Student and Assessment Plan."
-					),
-					"assessment_plan": plan_name,
-					"student": student,
-					"assessment_results": sorted(names),
-				}
-			)
-
-	result_pairs = set(result_pair_rows)
+	profile_blockers.extend(build_duplicate_assessment_result_blockers(results))
+	result_pairs = {(row.assessment_plan, row.student) for row in results}
 	expected = len(plans) * len(students)
 	submitted = sum(1 for row in results if row.docstatus == 1)
 	drafts = sum(1 for row in results if row.docstatus == 0)
