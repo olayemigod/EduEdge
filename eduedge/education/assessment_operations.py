@@ -14,6 +14,7 @@ from eduedge.education.instructor_assignment_capabilities import require_instruc
 from eduedge.education.instructor_assignments import assert_schedule_instructor_assignment
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.result_engine import (
+	SCORE_STATES,
 	build_component_plan_maximum_blockers,
 	build_missing_result_blockers,
 	compose_cumulative_subject_results,
@@ -166,6 +167,12 @@ def before_validate_assessment_result(doc, method=None) -> None:
 			frappe.ValidationError,
 		)
 	_apply_assessment_result_plan_contract(doc, plan)
+	score_state = str(doc.get("eduedge_score_state") or "Scored")
+	if score_state not in SCORE_STATES:
+		frappe.throw(
+			_("Invalid Assessment Result score state: {0}.").format(score_state),
+			frappe.ValidationError,
+		)
 	student_branch = frappe.db.get_value("Student", doc.student, BRANCH_FIELD)
 	plan_branch = plan.get(BRANCH_FIELD)
 	resolved_branch = plan_branch or student_branch
