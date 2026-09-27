@@ -235,6 +235,46 @@ class TestResultsSecurityHardeningContract(unittest.TestCase):
 			controller,
 		)
 
+	def test_report_card_review_controller_guards_workflow_state(self):
+		controller = (
+			APP
+			/ "eduedge"
+			/ "doctype"
+			/ "eduedge_report_card_review"
+			/ "eduedge_report_card_review.py"
+		).read_text()
+		api = (APP / "api" / "report_cards.py").read_text()
+		self.assertIn("REVIEW_WORKFLOW_AUDIT_FIELDS", controller)
+		self.assertIn("REVIEW_CONTENT_FIELDS", controller)
+		self.assertIn("in_eduedge_report_card_transition", controller)
+		self.assertIn("New Report Card Reviews must start in Draft status.", controller)
+		self.assertIn(
+			"New Report Card Reviews cannot pre-populate recommendation or approval audit state.",
+			controller,
+		)
+		self.assertIn(
+			"Report Card Review workflow metadata can change only through EduEdge report-card actions.",
+			controller,
+		)
+		self.assertIn(
+			"Recommended or Approved Report Card Reviews must be reopened before editing.",
+			controller,
+		)
+		for fieldname in (
+			"recommended_by",
+			"recommended_on",
+			"approved_by",
+			"approved_on",
+			"class_teacher_comment",
+			"principal_comment",
+			"progression_recommendation",
+			"last_review_note",
+		):
+			self.assertIn(f'"{fieldname}"', controller)
+		self.assertIn('flag = "in_eduedge_report_card_transition"', api)
+		self.assertIn("previous = frappe.flags.get(flag)", api)
+		self.assertIn("frappe.flags.pop(flag, None)", api)
+
 	def test_governed_publication_updates_own_server_managed_saves(self):
 		assessment_api = (APP / "api" / "assessment_operations.py").read_text()
 		self.assertIn("def _save_governed_publication_update", assessment_api)
