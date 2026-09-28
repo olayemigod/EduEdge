@@ -232,7 +232,7 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			'group_by="eduedge_score_state"',
 			'def _analytics_performance_rows(filters: dict, fields: list[str])',
 			'limit_page_length=MAX_ANALYTICS_SUMMARY + 1',
-			'limit_page_length=MAX_ANALYTICS_ROWS',
+			'limit_page_length=page_size',
 			'"results": total_count',
 			'"submitted": submitted_count',
 			'"draft": draft_count',
@@ -249,6 +249,40 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		):
 			self.assertIn(token, vue)
 		self.assertNotIn("data.summary.summary_truncated", vue)
+
+	def test_result_analytics_records_are_permission_aware_paginated_and_race_safe(self):
+		api = MARKS_WORKBENCH.read_text()
+		vue = RESULT_ANALYTICS.read_text()
+		for token in (
+			"DEFAULT_ANALYTICS_PAGE_LENGTH = 50",
+			"page: int | str | None = 1",
+			"page_length: int | str | None = DEFAULT_ANALYTICS_PAGE_LENGTH",
+			"page_size = min(max(cint(page_length) or DEFAULT_ANALYTICS_PAGE_LENGTH, 1), MAX_ANALYTICS_ROWS)",
+			"page_start = (page_number - 1) * page_size",
+			'order_by="modified desc, name desc"',
+			"limit_start=page_start",
+			"limit_page_length=page_size",
+			'"pagination": {',
+			'"total_rows": total_count',
+			'"has_previous": page_number > 1',
+			'"has_next": page_number < total_pages',
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("frappe.get_all(", api.split("def get_result_analytics", 1)[1])
+
+		for token in (
+			"requestSerial: 0",
+			"const requestId = ++this.requestSerial",
+			"const requestedFilters = { ...this.filters }",
+			"if (requestId !== this.requestSerial) return",
+			"if (requestId === this.requestSerial) this.loading = false",
+			"this.load({ page: 1, clearResults: true })",
+			"this.load({ page: target })",
+			"data.pagination.total_rows",
+			"data.pagination.has_previous",
+			"data.pagination.has_next",
+		):
+			self.assertIn(token, vue)
 
 	def test_safe_mark_entry_payload_preserves_edgesuite_metadata(self):
 		text = (APP / "api" / "assessment_result_tool_safe.py").read_text()
