@@ -47,6 +47,41 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 		):
 			self.assertIn(token, service)
 
+	def test_public_verification_and_history_share_explicit_publication_lineage(self):
+		lineage = (APP / "education" / "result_publication_lineage.py").read_text()
+		verification = (APP / "education" / "result_verification.py").read_text()
+		api = (APP / "api" / "report_cards.py").read_text()
+		page = (APP / "www" / "eduedge-result-verify.html").read_text()
+		for token in (
+			"def get_published_publication_lineage(publication: str) -> list:",
+			'"supersedes_publication": current.name',
+			'"status": "Published"',
+			'"report_card_ready": 1',
+			"Result Publication lineage contains a cycle.",
+			"Result Publication lineage scope is inconsistent.",
+			"Result Publication lineage has multiple published successors.",
+		):
+			self.assertIn(token, lineage)
+		self.assertIn(
+			"from eduedge.education.result_publication_lineage import get_published_publication_lineage",
+			verification,
+		)
+		self.assertIn(
+			"from eduedge.education.result_publication_lineage import get_published_publication_lineage",
+			api,
+		)
+		for token in (
+			'"Superseded Publication"',
+			'"Superseded Issue"',
+			'"Review Reopened"',
+			'"Current"',
+			'"current_publication_version"',
+			"The issued report-card publication lineage is inconsistent.",
+			"The issued report-card publication version is inconsistent.",
+		):
+			self.assertIn(token, verification)
+		self.assertIn("Current Publication Version", page)
+
 	def test_existing_issued_reports_receive_verification_token_without_hash_mutation(self):
 		patch = (APP / "patches" / "v1_0" / "backfill_report_card_verification_tokens.py").read_text()
 		self.assertIn("generate_verification_token", patch)
