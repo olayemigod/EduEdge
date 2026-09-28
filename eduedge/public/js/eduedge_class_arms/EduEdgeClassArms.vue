@@ -131,10 +131,11 @@
 
 							<label><span>{{ classArmSingular }} Name</span><input v-model.trim="draft.display_name" class="form-control" :disabled="Boolean(draft.name)" :placeholder="`Example: JSS 2A or ${programmeSingular} Group A`" /><small v-if="draft.name">This reusable identity continues across Academic Sessions. A session record cannot be reassigned to another identity.</small></label>
 							<div class="two-column">
-								<label><span>Group Based On</span><select v-model="draft.group_based_on" class="form-control" :disabled="draft.legacy_term_bound" @change="groupBasisChanged"><option value="Batch">Batch / Class</option><option value="Course">Course / Subject</option><option value="Activity">Activity</option></select></label>
+								<label><span>Group Based On</span><select v-model="draft.group_based_on" class="form-control" :disabled="Boolean(draft.name) || draft.legacy_term_bound" @change="groupBasisChanged"><option value="Batch">Batch / Class</option><option value="Course">Course / Subject</option><option value="Activity">Activity</option></select></label>
 								<label><span>Maximum Strength</span><input v-model.number="draft.max_strength" type="number" min="0" class="form-control" :disabled="draft.legacy_term_bound" /><small>Zero means no configured limit.</small></label>
 							</div>
-							<label v-if="draft.group_based_on === 'Course'"><span>{{ courseSingular }}</span><select v-model="draft.course" class="form-control" :disabled="draft.legacy_term_bound"><option value="">Select {{ courseSingular }}</option><option v-for="course in options.courses" :key="course.name" :value="course.name">{{ course.label || course.name }}</option></select></label>
+							<label v-if="draft.group_based_on === 'Course'"><span>{{ courseSingular }}</span><select v-model="draft.course" class="form-control" :disabled="Boolean(draft.name) || draft.legacy_term_bound"><option value="">Select {{ courseSingular }}</option><option v-for="course in options.courses" :key="course.name" :value="course.name">{{ course.label || course.name }}</option></select></label>
+							<small v-if="draft.name" class="text-muted">Grouping basis and Course / Subject are fixed for an existing Academic Session Class Arm. Prepare a new session Class Arm when the grouping structure changes.</small>
 							<label class="class-arm-check"><input v-model="draft.disabled" type="checkbox" :disabled="draft.legacy_term_bound" /> Disabled</label>
 
 							<section class="class-arm-roster">

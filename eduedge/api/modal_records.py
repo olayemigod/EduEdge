@@ -7,6 +7,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from eduedge.education.academic_fields import INSTITUTION_FIELD
+from eduedge.education.user_branch_access_permissions import (
+	assignable_access_levels,
+	assignable_company_names,
+	assignable_institution_names,
+	manageable_user_names,
+)
 from eduedge.services.branch_context import (
 	get_allowed_institutions,
 	get_allowed_school_branches,
@@ -111,10 +118,10 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 		"title": _("Instructor Branch Assignment"),
 		"create_title": _("Assign Instructor to Branch"),
 		"edit_title": _("Update Instructor Branch Assignment"),
-		"subtitle": _("Connect an instructor to an enabled campus without changing the Instructor master."),
+		"subtitle": _("Grant or schedule Instructor Branch Eligibility. Academic responsibilities are assigned later from Instructor Assignments."),
 		"full_form_route": "/app/eduedge-instructor-branch-assignment",
 		"fields": [
-			{"fieldname": "instructor", "type": "Link", "label": _("Instructor"), "options_doctype": "Instructor", "required": True},
+			{"fieldname": "instructor", "type": "Link", "label": _("Instructor"), "options_doctype": "Instructor", "required": True, "clear_fields": ["school_branch"]},
 			{"fieldname": "school_branch", "type": "Link", "label": _("School Branch / Campus"), "options_doctype": "EduEdge School Branch", "required": True},
 			{"fieldname": "enabled", "type": "Check", "label": _("Enabled"), "default": 1},
 			{"fieldname": "is_primary", "type": "Check", "label": _("Primary Branch"), "default": 0},
@@ -207,6 +214,19 @@ def get_modal_schema(resource: str, name: str | None = None, context: str | dict
 		can_save = True
 		values.update({key: value for key, value in parsed_context.items() if key in _field_map(config)})
 
+	fields = _initial_link_options(config, values, parsed_context)
+	if doctype == "EduEdge User Branch Access":
+		access_levels = assignable_access_levels()
+		for field in fields:
+			if field.get("fieldname") == "access_scope":
+				field["options"] = access_levels
+		if values.get("access_scope") not in access_levels and access_levels:
+			values["access_scope"] = access_levels[-1]
+	if name and doctype == "EduEdge Instructor Branch Assignment":
+		for field in fields:
+			if field.get("fieldname") in {"instructor", "school_branch"}:
+				field["read_only"] = True
+
 	return {
 		"resource": resource,
 		"doctype": doctype,
@@ -214,7 +234,7 @@ def get_modal_schema(resource: str, name: str | None = None, context: str | dict
 		"title": config["edit_title"] if name else config["create_title"],
 		"subtitle": config["subtitle"],
 		"submit_label": _("Save Changes") if name else _("Create"),
-		"fields": _initial_link_options(config, values, parsed_context),
+		"fields": fields,
 		"values": values,
 		"can_save": can_save,
 		"full_form_route": _full_form_route(config, name),
@@ -242,8 +262,15 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 	query = str(txt or "").strip()
 	company = values.get("company") or context.get("company")
 	institution = values.get("institution") or context.get("institution")
+	instructor = values.get("instructor") or context.get("instructor")
+	is_instructor_eligibility = config.get("doctype") == "EduEdge Instructor Branch Assignment"
+
+	if is_instructor_eligibility and instructor and frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
+		institution = frappe.db.get_value("Instructor", instructor, INSTITUTION_FIELD) or institution
 
 	if fieldname == "school_branch":
+		if is_instructor_eligibility and not instructor:
+			return []
 		rows = get_allowed_school_branches(company=company, institution=institution)
 		if query:
 			needle = query.lower()
@@ -269,6 +296,10 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 
 	if fieldname == "institution":
 		rows = get_allowed_institutions(company=company)
+		if config.get("doctype") == "EduEdge User Branch Access":
+			assignable = assignable_institution_names(values.get("access_scope"), company=company)
+			if assignable is not None:
+				rows = [row for row in rows if row.get("name") in assignable]
 		if query:
 			needle = query.lower()
 			rows = [
@@ -288,13 +319,27 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		]
 
 	if fieldname == "company":
-		return _link_rows("Company", query, ["name", "company_name"], filters={"is_group": 0}, label_field="company_name")
+		filters: dict[str, Any] = {"is_group": 0}
+		if config.get("doctype") == "EduEdge User Branch Access":
+			assignable = assignable_company_names(values.get("access_scope"))
+			if assignable is not None:
+				if not assignable:
+					return []
+				filters["name"] = ["in", sorted(assignable)]
+		return _link_rows("Company", query, ["name", "company_name"], filters=filters, label_field="company_name")
 	if fieldname == "user":
+		filters: dict[str, Any] = {"enabled": 1, "user_type": "System User"}
+		if config.get("doctype") == "EduEdge User Branch Access":
+			manageable = manageable_user_names(company=company)
+			if manageable is not None:
+				if not manageable:
+					return []
+				filters["name"] = ["in", sorted(manageable)]
 		return _link_rows(
 			"User",
 			query,
 			["name", "full_name"],
-			filters={"enabled": 1, "user_type": "System User"},
+			filters=filters,
 			label_field="full_name",
 		)
 	if fieldname == "program":
@@ -305,7 +350,24 @@ def _search_options(config: dict, field: dict, txt: str, values: dict, context: 
 		filters = {"academic_year": values.get("academic_year")} if values.get("academic_year") else {}
 		return _link_rows("Academic Term", query, ["name", "term_name"], filters=filters, label_field="term_name")
 	if fieldname == "instructor":
-		return _link_rows("Instructor", query, ["name", "instructor_name"], label_field="instructor_name")
+		filters: dict[str, Any] = {"status": "Active"}
+		if is_instructor_eligibility and frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
+			institution_names = [
+				row.get("name")
+				for row in get_allowed_institutions(company=company)
+				if row.get("name")
+			]
+			if not institution_names:
+				return []
+			filters[INSTITUTION_FIELD] = ["in", institution_names]
+		return _link_rows(
+			"Instructor",
+			query,
+			["name", "instructor_name"],
+			filters=filters,
+			label_field="instructor_name",
+			order_by="instructor_name asc",
+		)
 
 	return _link_rows(field.get("options_doctype") or "", query, ["name"])
 

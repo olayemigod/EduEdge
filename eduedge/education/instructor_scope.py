@@ -55,7 +55,10 @@ def get_active_instructor_names_for_user(user: str | None = None) -> list[str]:
 		pluck="name",
 		limit_page_length=0,
 	)
-	if not employees:
+	# Exact teaching identity is User -> one active Employee -> one active Instructor.
+	# Fail closed on duplicate active Employee mappings even when only one of those
+	# Employees currently has an Instructor record.
+	if len(employees) != 1:
 		return []
 	instructors = frappe.get_all(
 		"Instructor",

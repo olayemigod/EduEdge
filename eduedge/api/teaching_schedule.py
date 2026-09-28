@@ -7,6 +7,10 @@ from frappe import _
 from frappe.utils import cint, getdate, nowdate
 
 from eduedge.api import academic_operations_safe as operations
+from eduedge.api.academic_operations_review import (
+	course_query as schedule_course_query,
+	student_group_query as schedule_student_group_query,
+)
 from eduedge.api.fuzzy_search import get_bounded_candidates, rank_link_rows
 from eduedge.api.instructor_assignment_link_search import (
 	_validated_offering,
@@ -16,9 +20,14 @@ from eduedge.api.teaching_assignment_options import course_schedule_instructor_q
 from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignments import _group_offering
-from eduedge.education.instructor_scope import get_user_instructor_names, is_limited_instructor_user
+from eduedge.education.instructor_scope import (
+	is_limited_instructor_user,
+	resolve_exact_instructor_for_user,
+)
+from eduedge.education.teaching_assignments import COURSE_REQUIRED_TYPES
 from eduedge.services.academic_calendar import resolve_academic_defaults
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 VALID_VIEWS = {"day", "week", "upcoming", "rooms"}
 MAX_LINK_RESULTS = 50
@@ -135,6 +144,52 @@ def _schedule_group(branch: str, program_offering: str, student_group: str) -> d
 	return dict(row)
 
 
+def _limited_teaching_schedule_offering_names(
+	branch: str,
+	reference_date: str,
+) -> set[str] | None:
+	"""Return date-effective assigned Offerings, or None for migration-safe legacy mode."""
+	if not is_limited_instructor_user():
+		return None
+	exact_instructor = resolve_exact_instructor_for_user(required=True)
+	target_date = getdate(reference_date or nowdate())
+	if not eligibility_covers_period(
+		exact_instructor,
+		branch,
+		target_date,
+		target_date,
+	):
+		return set()
+	if (
+		not frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		or not frappe.db.exists(
+			"EduEdge Instructor Assignment",
+			{"school_branch": branch},
+		)
+	):
+		return None
+	rows = frappe.get_all(
+		"EduEdge Instructor Assignment",
+		filters={
+			"instructor": exact_instructor,
+			"school_branch": branch,
+			"assignment_type": ["in", sorted(COURSE_REQUIRED_TYPES)],
+			"enabled": 1,
+		},
+		fields=["program_offering", "valid_from", "valid_to"],
+		limit_page_length=0,
+	)
+	allowed: set[str] = set()
+	for row in rows:
+		if row.valid_from and getdate(row.valid_from) > target_date:
+			continue
+		if row.valid_to and getdate(row.valid_to) < target_date:
+			continue
+		if row.program_offering:
+			allowed.add(str(row.program_offering))
+	return allowed
+
+
 @frappe.whitelist()
 def search_teaching_schedule_offerings(
 	branch: str,
@@ -149,6 +204,10 @@ def search_teaching_schedule_offerings(
 	academic_year = calendar.get("academic_year")
 	if not academic_year:
 		return []
+	limited_offerings = _limited_teaching_schedule_offering_names(
+		resolved_branch,
+		reference_date,
+	)
 	rows = get_bounded_candidates(
 		"EduEdge Program Offering",
 		filters={"school_branch": resolved_branch, "academic_year": academic_year, "is_active": 1},
@@ -160,6 +219,8 @@ def search_teaching_schedule_offerings(
 	candidates = []
 	for source in rows:
 		row = dict(source)
+		if limited_offerings is not None and row.get("name") not in limited_offerings:
+			continue
 		if row.get("academic_term") and calendar.get("academic_term") and row.get("academic_term") != calendar.get("academic_term"):
 			continue
 		row["value"] = row.get("name")
@@ -189,7 +250,38 @@ def search_teaching_schedule_class_arms(
 ) -> list[dict]:
 	_require_schedule_read()
 	resolved_branch = _resolved_branch(branch)
-	_validate_offering_date(resolved_branch, program_offering, reference_date)
+	offering = _validate_offering_date(resolved_branch, program_offering, reference_date)
+	if is_limited_instructor_user():
+		rows = schedule_student_group_query(
+			"Student Group",
+			query or "",
+			"name",
+			0,
+			MAX_LINK_RESULTS,
+			{
+				BRANCH_FIELD: resolved_branch,
+				"reference_date": reference_date,
+				"program": offering.program,
+			},
+		)
+		candidates = []
+		for row in rows:
+			if not row or _group_offering(row[0]) != program_offering:
+				continue
+			candidates.append(
+				{
+					"value": row[0],
+					"label": row[1] or row[0],
+					"description": " · ".join(str(value) for value in row[2:5] if value),
+				}
+			)
+		return rank_link_rows(
+			candidates,
+			str(query or "").strip(),
+			exact_fields=("value",),
+			search_fields=("label", "description"),
+			page_length=_limit(page_length),
+		)
 	return search_assignment_class_arms(
 		branch=resolved_branch,
 		program_offering=program_offering,
@@ -205,11 +297,34 @@ def search_teaching_schedule_courses(
 	reference_date: str,
 	query: str = "",
 	page_length: int | str = 20,
+	student_group: str | None = None,
 ) -> list[dict]:
 	"""Return only Subjects that are actually configured on the selected Class."""
 	_require_schedule_read()
 	resolved_branch = _resolved_branch(branch)
 	offering = _validate_offering_date(resolved_branch, program_offering, reference_date)
+	if is_limited_instructor_user():
+		if not student_group:
+			return []
+		_schedule_group(resolved_branch, program_offering, student_group)
+		rows = schedule_course_query(
+			"Course",
+			query or "",
+			"name",
+			0,
+			_limit(page_length),
+			{
+				BRANCH_FIELD: resolved_branch,
+				"student_group": student_group,
+				"program": offering.program,
+				"reference_date": reference_date,
+			},
+		)
+		return [
+			{"value": row[0], "label": row[1] or row[0], "description": _("Assigned Subject")}
+			for row in rows
+			if row and row[0]
+		]
 	course_names = frappe.get_all(
 		"Program Course",
 		filters={"parent": offering.program, "parenttype": "Program"},
@@ -412,14 +527,18 @@ def get_teaching_schedule_context(
 	resolved_branch = operations.base._resolve_branch(branch)
 	start_date, end_date = _date_window(reference_date, view)
 	limited_instructor = is_limited_instructor_user()
-	instructor_names = get_user_instructor_names(required=limited_instructor)
+	exact_instructor = (
+		resolve_exact_instructor_for_user(required=True)
+		if limited_instructor
+		else ""
+	)
 
 	filters: dict = {
 		BRANCH_FIELD: resolved_branch,
 		"schedule_date": ["between", [str(start_date), str(end_date)]],
 	}
 	if limited_instructor:
-		filters["instructor"] = ["in", instructor_names]
+		filters["instructor"] = exact_instructor
 
 	schedules = frappe.get_list(
 		"Course Schedule",

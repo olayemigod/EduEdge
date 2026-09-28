@@ -11,6 +11,7 @@ from eduedge.education.instructor_scope import (
     is_limited_instructor_user,
 )
 from eduedge.education.teaching_assignments import CLASS_ARM_SCOPE, CLASS_SCOPE, COURSE_REQUIRED_TYPES
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
 
 ASSIGNMENT_DOCTYPE = "EduEdge Instructor Assignment"
 CAPABILITY_FIELDS = (
@@ -43,6 +44,65 @@ def assignment_capability_enforcement_enabled() -> bool:
         return bool(cint(frappe.db.get_single_value("EduEdge Settings", "enforce_instructor_assignment_capabilities")))
     except Exception:
         return False
+
+
+def successor_capability_review_state(
+    assignment=None,
+    *,
+    assignment_type: str | None = None,
+    course: str | None = None,
+) -> dict:
+    """Describe explicit capability review required for a lifecycle successor.
+
+    Lifecycle actions never inherit operational capabilities from the source
+    assignment. Subject-bearing successors therefore remain fail-closed until a
+    manager explicitly reviews their capabilities.
+    """
+    if assignment is not None:
+        resolved_type = str(
+            (assignment.get("assignment_type") if hasattr(assignment, "get") else getattr(assignment, "assignment_type", ""))
+            or assignment_type
+            or ""
+        ).strip()
+        resolved_course = str(
+            (assignment.get("course") if hasattr(assignment, "get") else getattr(assignment, "course", ""))
+            or course
+            or ""
+        ).strip()
+        reviewed_on = (
+            assignment.get("capabilities_updated_on")
+            if hasattr(assignment, "get")
+            else getattr(assignment, "capabilities_updated_on", None)
+        )
+    else:
+        resolved_type = str(assignment_type or "").strip()
+        resolved_course = str(course or "").strip()
+        reviewed_on = None
+
+    applicable = bool(resolved_type in COURSE_REQUIRED_TYPES and resolved_course)
+    pending = bool(applicable and not reviewed_on)
+    enforcement_enabled = assignment_capability_enforcement_enabled()
+    message = ""
+    if pending:
+        message = _(
+            "Operational capabilities are not inherited from the source assignment. "
+            "Review this successor's capabilities explicitly before capability-gated Subject operations are used."
+        )
+        if not enforcement_enabled:
+            message = _(
+                "Operational capabilities are not inherited from the source assignment. "
+                "Review this successor's capabilities explicitly before capability enforcement is enabled."
+            )
+
+    return {
+        "applicable": applicable,
+        "pending": pending,
+        "reviewed": bool(applicable and reviewed_on),
+        "capabilities_inherited": False,
+        "enforcement_enabled": enforcement_enabled,
+        "reviewed_on": str(reviewed_on or ""),
+        "message": message,
+    }
 
 
 def _blank_state(*, user: str, school_branch: str, program_offering: str, course: str, student_group: str = "") -> dict:
@@ -130,12 +190,15 @@ def get_matching_instructor_capability_assignments(
             "student_group",
             "valid_from",
             "valid_to",
+            "enabled",
             *CAPABILITY_FIELDS,
         ],
         order_by="assignment_scope asc, valid_from desc, modified desc",
         limit_page_length=100,
     )
     resolved_date = getdate(on_date or nowdate())
+    if not eligibility_covers_period(instructor, branch, resolved_date, resolved_date):
+        return "resolved", instructor, []
     matched = [dict(row) for row in rows if _effective(row, resolved_date) and _scope_matches(row, group)]
     return "resolved", instructor, matched
 
@@ -235,12 +298,24 @@ def get_user_capability_assignment_rows(
             "course",
             "valid_from",
             "valid_to",
+            "enabled",
         ],
         order_by="school_branch asc, program_offering asc, course asc, valid_from desc",
         limit_page_length=0,
     )
     resolved_date = getdate(on_date or nowdate())
-    return [dict(row) for row in rows if _effective(row, resolved_date)]
+    instructor = instructors[0]
+    return [
+        dict(row)
+        for row in rows
+        if _effective(row, resolved_date)
+        and eligibility_covers_period(
+            instructor,
+            row.get("school_branch"),
+            resolved_date,
+            resolved_date,
+        )
+    ]
 
 
 def require_instructor_assignment_capability(

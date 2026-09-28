@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate
+from frappe.utils import cint, getdate
 
 
 class EduEdgeInstitutionAcademicCalendar(Document):
@@ -115,9 +115,30 @@ class EduEdgeInstitutionAcademicCalendar(Document):
 
 	def _validate_periods(self) -> None:
 		seen_terms = set()
+		seen_sequences = set()
 		periods = sorted(self.periods or [], key=lambda row: (getdate(row.start_date), getdate(row.end_date)))
 		previous = None
 		for row in periods:
+			sequence = cint(row.sequence)
+			if sequence <= 0:
+				frappe.throw(
+					_("Academic Period Sequence must be greater than zero."),
+					frappe.ValidationError,
+				)
+			if sequence in seen_sequences:
+				frappe.throw(
+					_("Academic Period Sequence {0} is used more than once.").format(sequence),
+					frappe.ValidationError,
+				)
+			seen_sequences.add(sequence)
+			if previous and sequence <= cint(previous.sequence):
+				frappe.throw(
+					_(
+						"Academic Period Sequence must increase in chronological date order. "
+						"Check {0} and {1}."
+					).format(previous.academic_term, row.academic_term),
+					frappe.ValidationError,
+				)
 			if row.academic_term in seen_terms:
 				frappe.throw(_("Academic Term {0} is listed more than once.").format(row.academic_term), frappe.ValidationError)
 			seen_terms.add(row.academic_term)

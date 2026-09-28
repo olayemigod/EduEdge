@@ -320,7 +320,6 @@ function installReplacementRegisterEnhancer() {
 
 installInstructorAssignmentVisualStyles();
 keepNewestAssignmentRowOnTop("addAcademicRow");
-keepNewestAssignmentRowOnTop("addBranchAccessRow");
 keepNewestAssignmentRowOnTop("duplicateRow");
 labelInstitutionSubjectsByClassMembership();
 enforceReadableReferenceLabels();

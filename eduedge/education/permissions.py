@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import frappe
+from frappe.utils import nowdate
 
 from eduedge.access_control import user_has_role_permission
+from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_scope import (
-	get_user_instructor_names,
 	instructor_owns_schedule,
 	is_limited_instructor_user,
+	resolve_exact_instructor_for_user,
+)
+from eduedge.education.teaching_assignments import (
+	CLASS_ARM_SCOPE,
+	CLASS_RESPONSIBILITY_TYPES,
+	CLASS_SCOPE,
+	COURSE_REQUIRED_TYPES,
+	has_class_responsibility_assignment,
 )
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
@@ -27,7 +36,9 @@ BRANCH_AWARE_DOCTYPES = (
 	"Assessment Plan",
 	"Assessment Result",
 	"EduEdge Result Publication",
+	"EduEdge Published Result Snapshot",
 	"EduEdge Report Card Review",
+	"EduEdge Report Card Issue",
 	"EduEdge Program Offering",
 	"EduEdge Instructor Branch Assignment",
 )
@@ -85,15 +96,15 @@ def student_group_query(user: str | None = None) -> str:
 	branch_condition = _branch_condition("Student Group", resolved_user)
 	if not is_limited_instructor_user(resolved_user):
 		return branch_condition
-	values = _instructor_sql_values(resolved_user)
-	if not values:
+	ownership = _schedule_assignment_condition("schedule", resolved_user)
+	if ownership == "1=0":
 		return "1=0"
 	ownership_condition = f"""
 		exists (
 			select 1
 			from `tabCourse Schedule` schedule
 			where schedule.student_group = `tabStudent Group`.name
-				and schedule.instructor in ({values})
+				and ({ownership})
 		)
 	"""
 	return _and_conditions(branch_condition, ownership_condition)
@@ -108,10 +119,10 @@ def course_schedule_query(user: str | None = None) -> str:
 	branch_condition = _branch_condition("Course Schedule", resolved_user)
 	if not is_limited_instructor_user(resolved_user):
 		return branch_condition
-	values = _instructor_sql_values(resolved_user)
-	if not values:
-		return "1=0"
-	return _and_conditions(branch_condition, f"`tabCourse Schedule`.instructor in ({values})")
+	return _and_conditions(
+		branch_condition,
+		_schedule_assignment_condition("`tabCourse Schedule`", resolved_user),
+	)
 
 
 def student_attendance_query(user: str | None = None) -> str:
@@ -119,15 +130,15 @@ def student_attendance_query(user: str | None = None) -> str:
 	branch_condition = _branch_condition("Student Attendance", resolved_user)
 	if not is_limited_instructor_user(resolved_user):
 		return branch_condition
-	values = _instructor_sql_values(resolved_user)
-	if not values:
+	ownership = _schedule_assignment_condition("schedule", resolved_user)
+	if ownership == "1=0":
 		return "1=0"
 	ownership_condition = f"""
 		exists (
 			select 1
 			from `tabCourse Schedule` schedule
 			where schedule.name = `tabStudent Attendance`.course_schedule
-				and schedule.instructor in ({values})
+				and ({ownership})
 		)
 	"""
 	return _and_conditions(branch_condition, ownership_condition)
@@ -142,7 +153,11 @@ def assessment_result_query(user: str | None = None) -> str:
 
 
 def result_publication_query(user: str | None = None) -> str:
-	return _branch_condition("EduEdge Result Publication", user, fieldname="school_branch")
+	return _class_responsibility_result_query("EduEdge Result Publication", user)
+
+
+def published_result_snapshot_query(user: str | None = None) -> str:
+	return _class_responsibility_result_query("EduEdge Published Result Snapshot", user)
 
 
 def result_publication_log_query(user: str | None = None) -> str:
@@ -153,18 +168,37 @@ def result_publication_log_query(user: str | None = None) -> str:
 	if not allowed:
 		return "1=0"
 	values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
+	instructor_condition = ""
+	if is_limited_instructor_user(resolved_user):
+		responsibility = _class_responsibility_assignment_condition(
+			student_group_expr="publication.student_group",
+			branch_expr="publication.school_branch",
+			academic_term_expr="publication.academic_term",
+			academic_year_expr="publication.academic_year",
+			user=resolved_user,
+		)
+		if responsibility == "1=0":
+			return "1=0"
+		instructor_condition = f"""
+				and ({responsibility})
+		"""
 	return f"""
 		exists (
 			select 1
 			from `tabEduEdge Result Publication` publication
 			where publication.name = `tabEduEdge Result Publication Log`.result_publication
 				and publication.school_branch in ({values})
+				{instructor_condition}
 		)
 	"""
 
 
 def report_card_review_query(user: str | None = None) -> str:
-	return _branch_condition("EduEdge Report Card Review", user, fieldname="school_branch")
+	return _class_responsibility_result_query("EduEdge Report Card Review", user)
+
+
+def report_card_issue_query(user: str | None = None) -> str:
+	return _class_responsibility_result_query("EduEdge Report Card Issue", user)
 
 
 def program_offering_query(user: str | None = None) -> str:
@@ -189,19 +223,11 @@ def guardian_query(user: str | None = None) -> str:
 	branch_values = ", ".join(frappe.db.escape(value) for value in sorted(allowed))
 	teacher_condition = ""
 	if is_limited_instructor_user(resolved_user):
-		instructor_values = _instructor_sql_values(resolved_user)
-		if not instructor_values:
+		ownership = _owned_student_condition("student.name", resolved_user)
+		if ownership == "1=0":
 			return "1=0"
 		teacher_condition = f"""
-			and exists (
-				select 1
-				from `tabStudent Group Student` group_student
-				inner join `tabCourse Schedule` schedule on schedule.student_group = group_student.parent
-				where group_student.parenttype = 'Student Group'
-					and group_student.active = 1
-					and group_student.student = student.name
-					and schedule.instructor in ({instructor_values})
-			)
+			and ({ownership})
 		"""
 	return f"""
 		exists (
@@ -301,13 +327,19 @@ def has_student_group_permission(doc, user=None, permission_type=None) -> bool:
 		return True
 	if not doc or doc.is_new():
 		return False
-	instructors = get_user_instructor_names(resolved_user)
-	if not instructors:
+	ownership = _schedule_assignment_condition("schedule", resolved_user)
+	if ownership == "1=0":
 		return False
 	return bool(
-		frappe.db.exists(
-			"Course Schedule",
-			{"student_group": doc.name, "instructor": ["in", instructors]},
+		frappe.db.sql(
+			f"""
+			select schedule.name
+			from `tabCourse Schedule` schedule
+			where schedule.student_group = %s
+				and ({ownership})
+			limit 1
+			""",
+			(doc.name,),
 		)
 	)
 
@@ -360,26 +392,237 @@ def has_school_branch_permission(doc, user=None, permission_type=None) -> bool:
 	return doc.get("school_branch") in allowed
 
 
+def has_result_publication_permission(doc, user=None, permission_type=None) -> bool:
+	return _has_class_responsibility_result_permission(doc, user, permission_type)
+
+
+def has_published_result_snapshot_permission(doc, user=None, permission_type=None) -> bool:
+	return _has_class_responsibility_result_permission(doc, user, permission_type)
+
+
+def has_report_card_review_permission(doc, user=None, permission_type=None) -> bool:
+	return _has_class_responsibility_result_permission(doc, user, permission_type)
+
+
+def has_report_card_issue_permission(doc, user=None, permission_type=None) -> bool:
+	return _has_class_responsibility_result_permission(doc, user, permission_type)
+
+
 def has_result_publication_log_permission(doc, user=None, permission_type=None) -> bool:
 	if not doc:
 		return True
 	publication = frappe.db.get_value(
-		"EduEdge Result Publication", doc.get("result_publication"), "school_branch"
+		"EduEdge Result Publication",
+		doc.get("result_publication"),
+		["school_branch", "student_group", "academic_year", "academic_term"],
+		as_dict=True,
 	)
 	if not publication:
 		return False
+	proxy = frappe._dict(
+		{
+			"doctype": "EduEdge Result Publication",
+			"school_branch": publication.school_branch,
+			"student_group": publication.student_group,
+			"academic_year": publication.academic_year,
+			"academic_term": publication.academic_term,
+		}
+	)
+	return _has_class_responsibility_result_permission(
+		proxy,
+		user,
+		permission_type,
+	)
+
+
+def _has_class_responsibility_result_permission(doc, user=None, permission_type=None) -> bool:
 	resolved_user = user or frappe.session.user
-	if not _should_apply_branch_scope(resolved_user):
+	if not has_school_branch_permission(doc, resolved_user, permission_type):
+		return False
+	if not is_limited_instructor_user(resolved_user):
 		return True
-	allowed = _allowed_branch_names(resolved_user)
-	return publication in allowed
+	if not doc:
+		return False
+
+	student_group = doc.get("student_group")
+	academic_year = doc.get("academic_year")
+	academic_term = doc.get("academic_term")
+	if doc.get("result_publication") and (not student_group or not academic_year):
+		publication = frappe.db.get_value(
+			"EduEdge Result Publication",
+			doc.get("result_publication"),
+			["student_group", "academic_year", "academic_term"],
+			as_dict=True,
+		)
+		if publication:
+			student_group = student_group or publication.student_group
+			academic_year = academic_year or publication.academic_year
+			academic_term = academic_term or publication.academic_term
+	mutation_permission = permission_type in {
+		"create",
+		"write",
+		"delete",
+		"submit",
+		"cancel",
+		"amend",
+	}
+	return has_class_responsibility_assignment(
+		student_group,
+		user=resolved_user,
+		academic_term=None if mutation_permission else academic_term,
+		academic_year=None if mutation_permission else academic_year,
+		on_date=nowdate() if mutation_permission else None,
+	)
+
+
+def _class_responsibility_assignment_condition(
+	*,
+	student_group_expr: str,
+	branch_expr: str,
+	academic_term_expr: str,
+	academic_year_expr: str,
+	user: str,
+) -> str:
+	if not is_limited_instructor_user(user):
+		return ""
+	if (
+		not frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		or not frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment")
+		or not frappe.get_meta("Student Group").has_field(OFFERING_FIELD)
+	):
+		return "1=0"
+	instructor_values = _instructor_sql_values(user)
+	if not instructor_values:
+		return "1=0"
+	types = ", ".join(frappe.db.escape(value) for value in sorted(CLASS_RESPONSIBILITY_TYPES))
+	reference_date = (
+		f"coalesce("
+		f"(select term_end_date from `tabAcademic Term` term where term.name = {academic_term_expr}), "
+		f"(select year_end_date from `tabAcademic Year` year where year.name = {academic_year_expr}), "
+		f"current_date)"
+	)
+	return f"""
+		exists (
+			select 1
+			from `tabEduEdge Instructor Assignment` assignment
+			inner join `tabStudent Group` student_group
+				on student_group.name = {student_group_expr}
+			where assignment.instructor in ({instructor_values})
+				and assignment.enabled = 1
+				and assignment.school_branch = {branch_expr}
+				and assignment.program_offering = student_group.`{OFFERING_FIELD}`
+				and assignment.assignment_type in ({types})
+				and coalesce(assignment.course, '') = ''
+				and (
+					assignment.assignment_scope = {frappe.db.escape(CLASS_SCOPE)}
+					or (
+						assignment.assignment_scope = {frappe.db.escape(CLASS_ARM_SCOPE)}
+						and assignment.student_group = {student_group_expr}
+					)
+				)
+				and (assignment.valid_from is null or assignment.valid_from <= {reference_date})
+				and (assignment.valid_to is null or assignment.valid_to >= {reference_date})
+				and exists (
+					select 1
+					from `tabEduEdge Instructor Branch Assignment` eligibility
+					where eligibility.instructor = assignment.instructor
+						and eligibility.school_branch = assignment.school_branch
+						and eligibility.enabled = 1
+						and (eligibility.valid_from is null or eligibility.valid_from <= {reference_date})
+						and (eligibility.valid_to is null or eligibility.valid_to >= {reference_date})
+				)
+		)
+	"""
+
+
+def _class_responsibility_result_query(doctype: str, user: str | None = None) -> str:
+	resolved_user = user or frappe.session.user
+	branch_condition = _branch_condition(doctype, resolved_user, fieldname="school_branch")
+	if not is_limited_instructor_user(resolved_user):
+		return branch_condition
+	table = f"`tab{doctype}`"
+	responsibility = _class_responsibility_assignment_condition(
+		student_group_expr=f"{table}.student_group",
+		branch_expr=f"{table}.school_branch",
+		academic_term_expr=f"{table}.academic_term",
+		academic_year_expr=f"{table}.academic_year",
+		user=resolved_user,
+	)
+	if responsibility == "1=0":
+		return "1=0"
+	return _and_conditions(branch_condition, responsibility)
+
+
+def _governed_result_query(doctype: str, user: str | None = None) -> str:
+	resolved_user = user or frappe.session.user
+	branch_condition = _branch_condition(doctype, resolved_user, fieldname="school_branch")
+	return _and_conditions(
+		branch_condition,
+		_owned_student_group_condition(f"`tab{doctype}`.`student_group`", resolved_user),
+	)
+
+
+def _has_governed_result_permission(doc, user=None, permission_type=None) -> bool:
+	resolved_user = user or frappe.session.user
+	if not has_school_branch_permission(doc, resolved_user, permission_type):
+		return False
+	if not is_limited_instructor_user(resolved_user):
+		return True
+	if not doc:
+		return True
+	student_group = doc.get("student_group")
+	if not student_group and doc.get("result_publication"):
+		student_group = frappe.db.get_value(
+			"EduEdge Result Publication",
+			doc.get("result_publication"),
+			"student_group",
+		)
+	return _has_instructor_student_group_scope(student_group, resolved_user)
+
+
+def _has_instructor_student_group_scope(student_group: str | None, user: str) -> bool:
+	if not is_limited_instructor_user(user):
+		return True
+	if not student_group:
+		return False
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
+		return False
+	return bool(
+		frappe.db.sql(
+			f"""
+			select schedule.name
+			from `tabCourse Schedule` schedule
+			where schedule.student_group = %s
+				and ({ownership})
+			limit 1
+			""",
+			(student_group,),
+		)
+	)
+
+
+def _owned_student_group_condition(group_expression: str, user: str) -> str:
+	if not is_limited_instructor_user(user):
+		return ""
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
+		return "1=0"
+	return f"""
+		exists (
+			select 1
+			from `tabCourse Schedule` schedule
+			where schedule.student_group = {group_expression}
+				and ({ownership})
+		)
+	"""
 
 
 def _owned_student_condition(student_expression: str, user: str) -> str:
 	if not is_limited_instructor_user(user):
 		return ""
-	values = _instructor_sql_values(user)
-	if not values:
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
 		return "1=0"
 	return f"""
 		exists (
@@ -389,7 +632,7 @@ def _owned_student_condition(student_expression: str, user: str) -> str:
 			where group_student.parenttype = 'Student Group'
 				and group_student.active = 1
 				and group_student.student = {student_expression}
-				and schedule.instructor in ({values})
+				and ({ownership})
 		)
 	"""
 
@@ -397,29 +640,117 @@ def _owned_student_condition(student_expression: str, user: str) -> str:
 def _student_is_owned(student: str | None, user: str) -> bool:
 	if not student:
 		return False
-	instructors = get_user_instructor_names(user)
-	if not instructors:
+	ownership = _schedule_assignment_condition("schedule", user)
+	if ownership == "1=0":
 		return False
 	return bool(
 		frappe.db.sql(
-			"""
-			select 1
+			f"""
+			select schedule.name
 			from `tabStudent Group Student` group_student
 			inner join `tabCourse Schedule` schedule on schedule.student_group = group_student.parent
 			where group_student.parenttype = 'Student Group'
 				and group_student.active = 1
 				and group_student.student = %s
-				and schedule.instructor in %(instructors)s
+				and ({ownership})
 			limit 1
 			""",
-			{"student": student, "instructors": tuple(instructors)},
+			(student,),
 		)
 	)
 
 
+def _schedule_assignment_condition(schedule_alias: str, user: str) -> str:
+	"""Mirror document-level schedule ownership inside list permission SQL.
+
+	Branches that have not adopted Academic Instructor Assignments keep the legacy
+	Instructor-owned schedule behavior. Once any academic assignment exists in a
+	Branch, a limited Instructor sees only schedules backed by an effective exact
+	Subject responsibility and a covering Branch Eligibility period.
+	"""
+	values = _instructor_sql_values(user)
+	if not values:
+		return "1=0"
+
+	instructor_identity = f"{schedule_alias}.instructor in ({values})"
+	if (
+		not frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		or not frappe.db.exists("DocType", "EduEdge Instructor Branch Assignment")
+		or not frappe.get_meta("Student Group").has_field(OFFERING_FIELD)
+	):
+		return instructor_identity
+
+	assignment_types = ", ".join(
+		frappe.db.escape(value) for value in sorted(COURSE_REQUIRED_TYPES)
+	)
+	class_scope = frappe.db.escape(CLASS_SCOPE)
+	arm_scope = frappe.db.escape(CLASS_ARM_SCOPE)
+	branch_field = f"{schedule_alias}.`{BRANCH_FIELD}`"
+	return _and_conditions(
+		instructor_identity,
+		f"""
+		(
+			not exists (
+				select 1
+				from `tabEduEdge Instructor Assignment` branch_assignment
+				where branch_assignment.school_branch = {branch_field}
+			)
+			or exists (
+				select 1
+				from `tabEduEdge Instructor Assignment` assignment
+				inner join `tabStudent Group` student_group
+					on student_group.name = {schedule_alias}.student_group
+				where assignment.instructor = {schedule_alias}.instructor
+					and assignment.instructor in ({values})
+					and assignment.school_branch = {branch_field}
+					and assignment.program_offering = student_group.`{OFFERING_FIELD}`
+					and assignment.course = {schedule_alias}.course
+					and assignment.assignment_type in ({assignment_types})
+					and assignment.enabled = 1
+					and (
+						assignment.assignment_scope = {class_scope}
+						or (
+							assignment.assignment_scope = {arm_scope}
+							and assignment.student_group = {schedule_alias}.student_group
+						)
+					)
+					and (
+						assignment.valid_from is null
+						or assignment.valid_from <= {schedule_alias}.schedule_date
+					)
+					and (
+						assignment.valid_to is null
+						or assignment.valid_to >= {schedule_alias}.schedule_date
+					)
+					and exists (
+						select 1
+						from `tabEduEdge Instructor Branch Assignment` eligibility
+						where eligibility.instructor = assignment.instructor
+							and eligibility.school_branch = assignment.school_branch
+							and eligibility.enabled = 1
+							and (
+								eligibility.valid_from is null
+								or eligibility.valid_from <= {schedule_alias}.schedule_date
+							)
+							and (
+								eligibility.valid_to is null
+								or eligibility.valid_to >= {schedule_alias}.schedule_date
+							)
+					)
+			)
+		)
+		""",
+	)
+
+
 def _instructor_sql_values(user: str) -> str:
-	instructors = get_user_instructor_names(user)
-	return ", ".join(frappe.db.escape(value) for value in sorted(instructors))
+	"""Return one exact Instructor identity for limited-user permission SQL.
+
+	Permission queries must fail closed rather than broadening visibility when a User
+	resolves to zero or multiple active Instructor records.
+	"""
+	instructor = resolve_exact_instructor_for_user(user)
+	return frappe.db.escape(instructor) if instructor else ""
 
 
 def _branch_condition(

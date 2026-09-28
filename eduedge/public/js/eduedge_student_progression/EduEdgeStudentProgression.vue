@@ -111,6 +111,11 @@
 
 					<article class="progression-panel planner">
 						<div class="progression-heading"><div><p class="edge-eyebrow">Governed decision</p><h2>Progression Planner</h2></div><span>{{ selected.length }} Student{{ selected.length === 1 ? '' : 's' }}</span></div>
+						<div v-if="resultHandoff" class="result-handoff-note">
+							<strong>Approved annual result loaded</strong>
+							<span>{{ resultHandoff.result_publication }} · {{ resultHandoff.outcome }} · {{ resultHandoff.student }}</span>
+							<small>The result is decision evidence only. Student Progression will still revalidate the submitted Enrollment, destination, permissions and lifecycle rules before any action.</small>
+						</div>
 						<EdgeEmptyState v-if="!selected.length" title="Select Students to continue" description="Select one learner for an individual decision or select several learners from the same Class / Programme for a bulk decision." />
 						<template v-else>
 							<div class="planner-grid">
@@ -226,6 +231,7 @@ export default {
 			preparing: false, finalizing: false, destinationLoading: false, data: blankData(), destination: blankDestination(),
 			filters: { branch: "", source_academic_year: "", program: "", student_group: "", search: "", start: 0 },
 			selected: [], planner: blankPlanner(), preview: null, prepareResult: null, finalizeResult: null,
+			resultHandoff: null,
 		};
 	},
 	computed: {
@@ -249,7 +255,33 @@ export default {
 		this.filters.source_academic_year = params.get("academic_year") || "";
 		this.filters.program = params.get("program") || "";
 		this.filters.student_group = params.get("student_group") || "";
+		const handoffStudent = params.get("student") || "";
+		const handoffOutcome = params.get("outcome") || "";
+		const handoffPublication = params.get("result_publication") || "";
+		if (handoffStudent) this.filters.search = handoffStudent;
 		await this.load(true);
+		if (handoffStudent) {
+			const row = (this.data.rows || []).find((item) => item.student === handoffStudent);
+			if (row) {
+				this.selected = [row.name];
+				if (["Promote", "Repeat", "Transfer", "Graduate"].includes(handoffOutcome)) {
+					this.planner.outcome = handoffOutcome;
+				}
+				if (handoffPublication) {
+					this.planner.reason = `Approved annual result publication ${handoffPublication}.`;
+				}
+				this.resultHandoff = {
+					student: handoffStudent,
+					source_enrollment: row.name,
+					outcome: this.planner.outcome,
+					result_publication: handoffPublication,
+				};
+				frappe.show_alert({
+					message: __("Approved annual result loaded for progression review"),
+					indicator: "blue",
+				});
+			}
+		}
 	},
 	methods: {
 		openRoute: openEduEdgeRoute,
@@ -292,7 +324,16 @@ export default {
 			} catch (error) { this.plannerError = error?.message || "Destination progression context could not be resolved."; }
 			finally { this.destinationLoading = false; }
 		},
-		batchPayload() { return { source_enrollments: this.selected, outcome: this.planner.outcome, destination_academic_year: this.needsDestination ? this.planner.destination_academic_year : undefined, target_branch: this.planner.outcome === "Transfer" ? this.planner.target_branch : undefined, target_student_group: this.needsDestination ? this.planner.target_student_group : undefined, reason: this.planner.reason, effective_date: this.planner.effective_date }; },
+		batchPayload() { return {
+			source_enrollments: this.selected,
+			outcome: this.planner.outcome,
+			destination_academic_year: this.needsDestination ? this.planner.destination_academic_year : undefined,
+			target_branch: this.planner.outcome === "Transfer" ? this.planner.target_branch : undefined,
+			target_student_group: this.needsDestination ? this.planner.target_student_group : undefined,
+			reason: this.planner.reason,
+			effective_date: this.planner.effective_date,
+			result_publication: this.resultHandoff?.result_publication || undefined,
+		}; },
 		async previewSelected() {
 			if (!this.canPreview) return;
 			this.previewing = true; this.plannerError = ""; this.preview = null; this.prepareResult = null; this.finalizeResult = null;
@@ -323,5 +364,5 @@ export default {
 </script>
 
 <style scoped>
-.progression-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;width:100%}.progression-filter-grid label,.planner-grid label{display:grid;gap:.35rem;font-weight:600}.progression-filter-grid .wide,.planner-grid .wide{grid-column:1/-1}.progression-principles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin:1rem 0}.progression-principles>div,.preview-metrics>div{display:grid;gap:.2rem;padding:.8rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.progression-principles span,.preview-metrics span,.destination-card span{color:var(--text-muted);font-size:.78rem}.progression-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(24rem,.9fr);gap:1rem}.progression-panel{display:grid;gap:1rem;align-content:start;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.progression-heading,.progression-actions,.progression-paging{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap}.progression-heading h2{margin:.2rem 0 0}.progression-list{display:grid;gap:.65rem}.progression-row{display:grid;grid-template-columns:2rem minmax(12rem,1.3fr) minmax(10rem,.8fr) minmax(13rem,1.15fr) auto;gap:.7rem;align-items:center;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.progression-row.selected{border-color:var(--primary)}.progression-select{display:flex;align-items:center;justify-content:center}.progression-student,.progression-decision{display:grid;gap:.2rem}.progression-student small,.progression-decision small,.result-card p{color:var(--text-muted)}.progression-evidence{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem}.progression-evidence span{display:grid;text-align:center;padding:.35rem;border-radius:6px;background:var(--card-bg)}.progression-evidence small{font-size:.7rem;color:var(--text-muted)}.planner-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.destination-card,.preview-card,.result-card{display:grid;gap:.5rem;padding:.8rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.preview-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}.preview-list,.prepared-list{display:grid;gap:.4rem}.preview-list span{display:block}.preview-list.danger,.progression-error{color:var(--red-600,#b42318)}.prepared-list{grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))}@media(max-width:1150px){.progression-layout{grid-template-columns:1fr}.progression-row{grid-template-columns:2rem minmax(12rem,1fr) minmax(10rem,.8fr);}.progression-decision,.progression-row>.edge-button{grid-column:2/-1}}@media(max-width:800px){.progression-filter-grid,.progression-principles,.planner-grid,.progression-row{grid-template-columns:1fr}.progression-filter-grid .wide,.planner-grid .wide,.progression-decision,.progression-row>.edge-button{grid-column:auto}.progression-select{justify-content:flex-start}.progression-evidence{grid-template-columns:repeat(3,1fr)}}
+.progression-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;width:100%}.progression-filter-grid label,.planner-grid label{display:grid;gap:.35rem;font-weight:600}.progression-filter-grid .wide,.planner-grid .wide{grid-column:1/-1}.progression-principles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin:1rem 0}.progression-principles>div,.preview-metrics>div{display:grid;gap:.2rem;padding:.8rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.progression-principles span,.preview-metrics span,.destination-card span{color:var(--text-muted);font-size:.78rem}.progression-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(24rem,.9fr);gap:1rem}.progression-panel{display:grid;gap:1rem;align-content:start;padding:1rem;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg)}.progression-heading,.progression-actions,.progression-paging{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap}.progression-heading h2{margin:.2rem 0 0}.progression-list{display:grid;gap:.65rem}.progression-row{display:grid;grid-template-columns:2rem minmax(12rem,1.3fr) minmax(10rem,.8fr) minmax(13rem,1.15fr) auto;gap:.7rem;align-items:center;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.progression-row.selected{border-color:var(--primary)}.progression-select{display:flex;align-items:center;justify-content:center}.progression-student,.progression-decision{display:grid;gap:.2rem}.progression-student small,.progression-decision small,.result-card p{color:var(--text-muted)}.progression-evidence{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem}.progression-evidence span{display:grid;text-align:center;padding:.35rem;border-radius:6px;background:var(--card-bg)}.progression-evidence small{font-size:.7rem;color:var(--text-muted)}.planner-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.destination-card,.preview-card,.result-card{display:grid;gap:.5rem;padding:.8rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.result-handoff-note{display:grid;gap:.25rem;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--control-bg)}.result-handoff-note span,.result-handoff-note small{color:var(--text-muted)}.preview-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}.preview-list,.prepared-list{display:grid;gap:.4rem}.preview-list span{display:block}.preview-list.danger,.progression-error{color:var(--red-600,#b42318)}.prepared-list{grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))}@media(max-width:1150px){.progression-layout{grid-template-columns:1fr}.progression-row{grid-template-columns:2rem minmax(12rem,1fr) minmax(10rem,.8fr);}.progression-decision,.progression-row>.edge-button{grid-column:2/-1}}@media(max-width:800px){.progression-filter-grid,.progression-principles,.planner-grid,.progression-row{grid-template-columns:1fr}.progression-filter-grid .wide,.planner-grid .wide,.progression-decision,.progression-row>.edge-button{grid-column:auto}.progression-select{justify-content:flex-start}.progression-evidence{grid-template-columns:repeat(3,1fr)}}
 </style>

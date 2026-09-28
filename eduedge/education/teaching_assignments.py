@@ -6,6 +6,10 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from eduedge.education.academic_fields import OFFERING_FIELD
+from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.services.instructor_branch_governance import eligibility_covers_period
+
 CLASS_SCOPE = "Class / Programme Offering"
 CLASS_ARM_SCOPE = "Class Arm"
 ACADEMIC_ASSIGNMENT_SCOPES = {CLASS_SCOPE, CLASS_ARM_SCOPE}
@@ -138,7 +142,18 @@ def active_assignment_rows(
         order_by="modified desc",
         limit_page_length=0,
     )
-    result = [row for row in rows if _active_on(row, on_date)]
+    reference_date = getdate(on_date or nowdate())
+    result = [
+        row
+        for row in rows
+        if _active_on(row, reference_date)
+        and eligibility_covers_period(
+            row.get("instructor"),
+            row.get("school_branch"),
+            reference_date,
+            reference_date,
+        )
+    ]
     if student_group:
         result = [
             row
@@ -151,11 +166,129 @@ def active_assignment_rows(
     return result
 
 
+def has_class_responsibility_assignment(
+    student_group: str,
+    *,
+    user: str | None = None,
+    academic_term: str | None = None,
+    academic_year: str | None = None,
+    on_date=None,
+) -> bool:
+    """Return whether a limited Instructor owns the class-level reporting responsibility.
+
+    Result review/comment/progression authority is intentionally narrower than Subject
+    teaching access. It requires an effective Class Teacher, Form Teacher, or Head of
+    Class / Level assignment for the exact Class / Class Arm.
+    """
+    resolved_user = user or frappe.session.user
+    from eduedge.education.instructor_scope import (
+        get_active_instructor_names_for_user,
+        is_limited_instructor_user,
+    )
+
+    if not is_limited_instructor_user(resolved_user):
+        return True
+    instructors = get_active_instructor_names_for_user(resolved_user)
+    if len(instructors) != 1 or not student_group:
+        return False
+
+    fields = ["name", BRANCH_FIELD]
+    if frappe.get_meta("Student Group").has_field(OFFERING_FIELD):
+        fields.append(OFFERING_FIELD)
+    group = frappe.db.get_value("Student Group", student_group, fields, as_dict=True)
+    if not group:
+        return False
+    branch = group.get(BRANCH_FIELD)
+    program_offering = group.get(OFFERING_FIELD) if OFFERING_FIELD in fields else None
+    if not branch or not program_offering:
+        return False
+
+    reference_date = on_date
+    if not reference_date and academic_term:
+        reference_date = frappe.db.get_value("Academic Term", academic_term, "term_end_date")
+    if not reference_date and academic_year:
+        reference_date = frappe.db.get_value("Academic Year", academic_year, "year_end_date")
+
+    rows = active_assignment_rows(
+        resolved_user,
+        instructors=instructors,
+        branch=branch,
+        program_offering=program_offering,
+        student_group=student_group,
+        on_date=reference_date,
+    )
+    return any(
+        row.get("assignment_type") in CLASS_RESPONSIBILITY_TYPES and not row.get("course")
+        for row in rows
+    )
+
+
+def class_responsibility_group_names(
+    groups: Iterable[dict],
+    *,
+    user: str | None = None,
+    branch: str,
+    academic_term: str | None = None,
+    academic_year: str | None = None,
+    on_date=None,
+) -> set[str]:
+    """Return candidate Student Groups covered by one exact class-responsibility identity."""
+    resolved_user = user or frappe.session.user
+    from eduedge.education.instructor_scope import (
+        get_active_instructor_names_for_user,
+        is_limited_instructor_user,
+    )
+
+    if not is_limited_instructor_user(resolved_user):
+        return set()
+    instructors = get_active_instructor_names_for_user(resolved_user)
+    if len(instructors) != 1:
+        return set()
+
+    reference_date = on_date
+    if not reference_date and academic_term:
+        reference_date = frappe.db.get_value("Academic Term", academic_term, "term_end_date")
+    if not reference_date and academic_year:
+        reference_date = frappe.db.get_value("Academic Year", academic_year, "year_end_date")
+
+    assignments = [
+        row
+        for row in active_assignment_rows(
+            resolved_user,
+            instructors=instructors,
+            branch=branch,
+            on_date=reference_date,
+        )
+        if row.get("assignment_type") in CLASS_RESPONSIBILITY_TYPES
+        and not row.get("course")
+    ]
+    if not assignments:
+        return set()
+
+    allowed: set[str] = set()
+    for group in groups:
+        group_name = str(group.get("name") or "")
+        offering = str(group.get(OFFERING_FIELD) or "")
+        if not group_name or not offering or group.get(BRANCH_FIELD) != branch:
+            continue
+        for row in assignments:
+            if row.get("program_offering") != offering:
+                continue
+            scope = row.get("assignment_scope") or CLASS_ARM_SCOPE
+            if scope == CLASS_SCOPE or (
+                scope == CLASS_ARM_SCOPE and row.get("student_group") == group_name
+            ):
+                allowed.add(group_name)
+                break
+    return allowed
+
+
 def assigned_course_rows(
     user: str | None = None,
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> list[dict]:
     return [
         row
@@ -164,6 +297,7 @@ def assigned_course_rows(
             branch=branch,
             program_offering=program_offering,
             student_group=student_group,
+            on_date=on_date,
         )
         if row.get("course")
     ]
@@ -174,10 +308,17 @@ def assigned_courses(
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> set[str]:
     return {
         row.course
-        for row in assigned_course_rows(user, branch, program_offering, student_group)
+        for row in assigned_course_rows(
+            user,
+            branch,
+            program_offering,
+            student_group,
+            on_date=on_date,
+        )
         if row.get("course")
     }
 
@@ -189,8 +330,15 @@ def has_course_assignment(
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> bool:
-    return course in assigned_courses(user, branch, program_offering, student_group)
+    return course in assigned_courses(
+        user,
+        branch,
+        program_offering,
+        student_group,
+        on_date=on_date,
+    )
 
 
 def require_course_assignment(
@@ -200,6 +348,7 @@ def require_course_assignment(
     branch: str | None = None,
     program_offering: str | None = None,
     student_group: str | None = None,
+    on_date=None,
 ) -> None:
     if has_course_assignment(
         course,
@@ -207,6 +356,7 @@ def require_course_assignment(
         branch=branch,
         program_offering=program_offering,
         student_group=student_group,
+        on_date=on_date,
     ):
         return
     frappe.throw(

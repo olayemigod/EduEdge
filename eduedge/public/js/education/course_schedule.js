@@ -11,7 +11,9 @@ function setCourseScheduleQueries(frm) {
 		query: "eduedge.api.academic_operations_review.course_query",
 		filters: {
 			eduedge_school_branch: frm.doc.eduedge_school_branch,
+			student_group: frm.doc.student_group,
 			program: frm.__eduedge_student_group_program || "",
+			reference_date: frm.doc.schedule_date,
 		},
 	}));
 	frm.set_query("instructor", () => ({
@@ -62,7 +64,9 @@ async function applyStudentGroupChange(frm) {
 		frm.__eduedge_student_group_program = "";
 		frm.__eduedge_applying_group_context = true;
 		try {
-			await frm.set_value({ eduedge_school_branch: null, course: null, instructor: null, room: null });
+			// Clearing the Class should clear Class-dependent values only.
+			// Branch and Room remain valid because Room is governed by Branch, not Class.
+			await frm.set_value({ course: null, instructor: null });
 		} finally {
 			frm.__eduedge_applying_group_context = false;
 		}
@@ -73,14 +77,17 @@ async function applyStudentGroupChange(frm) {
 	if (!message) return;
 	frm.__eduedge_student_group_program = message.program || "";
 	const fixedCourse = message.group_based_on === "Course" ? (message.course || null) : null;
+	const nextBranch = message.eduedge_school_branch || null;
+	const branchChanged = (frm.doc.eduedge_school_branch || null) !== nextBranch;
+	const values = {
+		eduedge_school_branch: nextBranch,
+		course: fixedCourse,
+		instructor: null,
+	};
+	if (branchChanged) values.room = null;
 	frm.__eduedge_applying_group_context = true;
 	try {
-		await frm.set_value({
-			eduedge_school_branch: message.eduedge_school_branch || null,
-			course: fixedCourse,
-			instructor: null,
-			room: null,
-		});
+		await frm.set_value(values);
 	} finally {
 		frm.__eduedge_applying_group_context = false;
 	}
@@ -107,8 +114,14 @@ frappe.ui.form.on("Course Schedule", {
 		setCourseScheduleQueries(frm);
 	},
 	async schedule_date(frm) {
-		frm.__eduedge_student_group_program = "";
-		await frm.set_value({ student_group: null, course: null, instructor: null, room: null, eduedge_school_branch: null });
+		// Date affects eligibility and exact teaching responsibility, but it should not
+		// destroy stable class/branch/subject/room context. Force the date-sensitive
+		// Instructor choice to be reselected and refresh all dependent queries.
+		if (frm.doc.student_group) {
+			const message = await getStudentGroupContext(frm);
+			if (message) frm.__eduedge_student_group_program = message.program || "";
+		}
+		await frm.set_value("instructor", null);
 		setCourseScheduleQueries(frm);
 	},
 	async eduedge_school_branch(frm) {

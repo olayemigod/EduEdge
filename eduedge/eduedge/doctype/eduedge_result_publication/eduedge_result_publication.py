@@ -5,16 +5,50 @@ from frappe import _
 from frappe.model.document import Document
 
 from eduedge.education.assessment_operations import validate_publication_scope
+from eduedge.education.result_profile import (
+	get_publication_result_profile_config,
+	set_publication_result_profile_config,
+	validate_publication_profile,
+)
+
+
+SERVER_MANAGED_FIELDS = (
+	"result_profile_config_hash",
+	"result_profile_config_json",
+	"approved_academic_payload_hash",
+	"approved_academic_student_count",
+	"status",
+	"expected_results",
+	"submitted_results",
+	"draft_results",
+	"missing_results",
+	"report_card_ready",
+	"requested_by",
+	"requested_on",
+	"approved_by",
+	"approved_on",
+	"rejected_by",
+	"rejected_on",
+	"rejection_reason",
+	"published_by",
+	"published_on",
+)
 
 
 class EduEdgeResultPublication(Document):
 	def before_naming(self) -> None:
+		if not self.publication_version:
+			self.publication_version = 1
 		if not self.title:
-			parts = [self.student_group, self.assessment_group, self.academic_term or self.academic_year]
-			self.title = " · ".join(part for part in parts if part)
+			parts = [self.student_group, self.assessment_group or self.result_profile, self.academic_term or self.academic_year]
+			base_title = " · ".join(part for part in parts if part)
+			self.title = f"{base_title} · v{self.publication_version}" if self.publication_version > 1 else base_title
 
 	def validate(self) -> None:
 		validate_publication_scope(self)
+		validate_publication_profile(self)
+		self._validate_revision_identity()
+		self._validate_server_managed_change()
 		self._validate_scope_change()
 		self._validate_duplicate_scope()
 
@@ -25,7 +59,113 @@ class EduEdgeResultPublication(Document):
 				frappe.ValidationError,
 			)
 
+	def _validate_revision_identity(self) -> None:
+		scope_fields = (
+			"school_branch",
+			"student_group",
+			"academic_year",
+			"academic_term",
+			"assessment_group",
+			"result_profile",
+			"result_mode",
+		)
+		if self.is_new():
+			if not self.publication_version:
+				self.publication_version = 1
+			if not self.supersedes_publication:
+				if int(self.publication_version or 1) != 1:
+					frappe.throw(
+						_("A first Result Publication must use publication version 1."),
+						frappe.ValidationError,
+					)
+				return
+			source = frappe.get_doc("EduEdge Result Publication", self.supersedes_publication)
+			if source.status != "Published":
+				frappe.throw(
+					_("A Result Publication revision must supersede a Published publication."),
+					frappe.ValidationError,
+				)
+			if int(self.publication_version or 0) != int(source.publication_version or 1) + 1:
+				frappe.throw(
+					_("A Result Publication revision must use the next sequential version."),
+					frappe.ValidationError,
+				)
+			for fieldname in scope_fields:
+				if (self.get(fieldname) or "") != (source.get(fieldname) or ""):
+					frappe.throw(
+						_("A Result Publication revision must preserve the original result scope."),
+						frappe.ValidationError,
+					)
+			if self.result_profile:
+				set_publication_result_profile_config(
+					self,
+					get_publication_result_profile_config(source),
+				)
+			return
+		for fieldname in ("publication_version", "supersedes_publication"):
+			if self.has_value_changed(fieldname):
+				frappe.throw(
+					_("Result Publication revision identity cannot change after creation."),
+					frappe.ValidationError,
+				)
+
+
+	def _validate_server_managed_change(self) -> None:
+		if getattr(
+			frappe.flags,
+			"in_eduedge_result_publication_transition",
+			False,
+		):
+			return
+		if self.is_new():
+			self._validate_initial_server_managed_state()
+			return
+		if any(self.has_value_changed(fieldname) for fieldname in SERVER_MANAGED_FIELDS):
+			frappe.throw(
+				_("Result Publication workflow and readiness fields can change only through EduEdge result actions."),
+				frappe.ValidationError,
+			)
+
+	def _validate_initial_server_managed_state(self) -> None:
+		if (self.status or "Draft") != "Draft":
+			frappe.throw(
+				_("New Result Publications must start in Draft status."),
+				frappe.ValidationError,
+			)
+		allow_revision_profile_config = bool(self.supersedes_publication and self.result_profile)
+		for fieldname in SERVER_MANAGED_FIELDS:
+			if fieldname == "status":
+				continue
+			if (
+				allow_revision_profile_config
+				and fieldname in {"result_profile_config_hash", "result_profile_config_json"}
+			):
+				continue
+			if self.get(fieldname) not in (None, "", 0, False):
+				frappe.throw(
+					_("New Result Publications cannot pre-populate workflow or readiness state."),
+					frappe.ValidationError,
+				)
+
+
 	def _validate_scope_change(self) -> None:
+		scope_fields = (
+			"school_branch",
+			"student_group",
+			"academic_year",
+			"academic_term",
+			"assessment_group",
+			"result_profile",
+			"result_mode",
+		)
+		if not self.is_new() and self.supersedes_publication:
+			for fieldname in scope_fields:
+				if self.has_value_changed(fieldname):
+					frappe.throw(
+						_("A Result Publication revision scope cannot change."),
+						frappe.ValidationError,
+					)
+			return
 		if self.is_new() or self.status in {"Draft", "Rejected"}:
 			return
 		for fieldname in (
@@ -34,6 +174,8 @@ class EduEdgeResultPublication(Document):
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
 		):
 			if self.has_value_changed(fieldname):
 				frappe.throw(
@@ -48,7 +190,10 @@ class EduEdgeResultPublication(Document):
 			"student_group": self.student_group,
 			"academic_year": self.academic_year,
 			"academic_term": self.academic_term or "",
-			"assessment_group": self.assessment_group,
+			"assessment_group": self.assessment_group if self.assessment_group else ["is", "not set"],
+			"result_profile": self.result_profile if self.result_profile else ["is", "not set"],
+			"result_mode": self.result_mode or "Terminal",
+			"publication_version": self.publication_version or 1,
 		}
 		duplicate = frappe.db.exists("EduEdge Result Publication", filters)
 		if duplicate:

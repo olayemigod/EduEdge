@@ -20,6 +20,19 @@ PERMISSION_TYPES = (
 	"print",
 )
 
+RESULT_GOVERNANCE_ROLES = {
+	"System Manager",
+	"EduEdge Administrator",
+	"School Administrator",
+	"Academic Administrator",
+}
+
+RESULT_GOVERNANCE_ROUTES = {
+	"/app/eduedge-result-profiles",
+	"/app/eduedge-result-analytics",
+	"/app/eduedge-results-audit",
+}
+
 RESOURCE_DOCTYPES = {
 	"institution": "EduEdge Institution",
 	"company_operations_settings": "EduEdge Company Operations Settings",
@@ -46,8 +59,11 @@ RESOURCE_DOCTYPES = {
 	"course_schedule": "Course Schedule",
 	"student_attendance": "Student Attendance",
 	"assessment_plan": "Assessment Plan",
+	"assessment_result_tool": "Assessment Result Tool",
 	"assessment_result": "Assessment Result",
+	"result_profile": "EduEdge Result Profile",
 	"result_publication": "EduEdge Result Publication",
+	"result_publication_log": "EduEdge Result Publication Log",
 	"report_card_review": "EduEdge Report Card Review",
 	"examination_centre": "EduEdge Examination Centre",
 	"cbt_question": "EduEdge CBT Question",
@@ -151,6 +167,15 @@ ROUTE_REQUIREMENTS = {
 		("assessment_result", "create"),
 		("assessment_result", "write"),
 	),
+	"/app/eduedge-assessment-plans": (("assessment_plan", "read"),),
+	"/app/eduedge-marks-entry": (
+		("assessment_result", "create"),
+		("assessment_result", "write"),
+	),
+	"/app/eduedge-assessment-results": (("assessment_result", "read"),),
+	"/app/eduedge-result-profiles": (("result_profile", "write"),),
+	"/app/eduedge-result-analytics": (("assessment_result", "report"),),
+	"/app/eduedge-results-audit": (("result_publication_log", "read"),),
 	"/app/eduedge-report-cards": (
 		("result_publication", "read"),
 		("report_card_review", "read"),
@@ -260,6 +285,11 @@ def build_access_manifest(user: str | None = None) -> dict:
 		route: _route_allowed(requirements, resources)
 		for route, requirements in ROUTE_REQUIREMENTS.items()
 	}
+	if resolved_user != "Administrator":
+		roles = set(frappe.get_roles(resolved_user))
+		if not roles.intersection(RESULT_GOVERNANCE_ROLES):
+			for route in RESULT_GOVERNANCE_ROUTES:
+				routes[route] = False
 	for route in _installed_eduedge_page_routes():
 		routes.setdefault(route, False)
 

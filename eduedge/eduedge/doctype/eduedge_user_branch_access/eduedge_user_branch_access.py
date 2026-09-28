@@ -5,6 +5,10 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate
 
+from eduedge.education.user_branch_access_permissions import (
+	assert_default_branch_change_scope,
+	assert_user_branch_access_scope,
+)
 from eduedge.services.branch_context import (
 	ASSIGNMENT_SCOPE_BRANCH,
 	ASSIGNMENT_SCOPE_COMPANY,
@@ -22,6 +26,8 @@ class EduEdgeUserBranchAccess(Document):
 	def validate(self) -> None:
 		self._validate_user()
 		self._validate_scope()
+		assert_user_branch_access_scope(self)
+		assert_default_branch_change_scope(self)
 		self._validate_dates()
 		self._validate_duplicate()
 

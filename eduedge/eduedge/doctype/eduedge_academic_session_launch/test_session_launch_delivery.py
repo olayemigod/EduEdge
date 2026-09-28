@@ -20,6 +20,7 @@ from eduedge.api.session_launch_timetable import (
 from eduedge.api.teaching_schedule import create_teaching_schedule
 from eduedge.education.academic_fields import INSTITUTION_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.teaching_assignments import active_assignment_rows
 from eduedge.services.academic_calendar import ensure_institution_calendar
 
 
@@ -96,6 +97,15 @@ class TestSessionLaunchDelivery(FrappeTestCase):
         if frappe.get_meta("Instructor").has_field(INSTITUTION_FIELD):
             instructor_values[INSTITUTION_FIELD] = institution.name
         instructor = self._insert("Instructor", **instructor_values)
+        eligibility = self._insert(
+            "EduEdge Instructor Branch Assignment",
+            instructor=instructor.name,
+            school_branch=branch.name,
+            enabled=1,
+            is_primary=1,
+            valid_from=year.year_start_date,
+            valid_to=year.year_end_date,
+        )
 
         offering = save_programme_offering(
             school_branch=branch.name,
@@ -309,3 +319,62 @@ class TestSessionLaunchDelivery(FrappeTestCase):
             ),
             3,
         )
+
+
+        # Branch Governance remains the effective runtime gate after academic
+        # assignments exist. Withdrawing eligibility preserves assignment history
+        # but immediately removes operational teaching authority.
+        effective_before = active_assignment_rows(
+            instructors=[instructor.name],
+            branch=branch.name,
+            program_offering=offering["name"],
+            student_group=arm["name"],
+            course=course.name,
+            on_date="2093-09-10",
+        )
+        self.assertTrue(effective_before)
+
+        eligibility.is_primary = 0
+        eligibility.enabled = 0
+        eligibility.save()
+
+        self.assertTrue(
+            frappe.db.exists(
+                "EduEdge Instructor Assignment",
+                {
+                    "instructor": instructor.name,
+                    "program_offering": offering["name"],
+                    "course": course.name,
+                    "enabled": 1,
+                },
+            )
+        )
+        effective_after = active_assignment_rows(
+            instructors=[instructor.name],
+            branch=branch.name,
+            program_offering=offering["name"],
+            student_group=arm["name"],
+            course=course.name,
+            on_date="2093-09-10",
+        )
+        self.assertEqual(effective_after, [])
+
+        revoked_readiness = get_session_delivery_context(launch_name)
+        self.assertEqual(revoked_readiness["summary"]["assigned_teaching_contexts"], 0)
+        self.assertEqual(revoked_readiness["summary"]["unassigned_teaching_contexts"], 1)
+        self.assertEqual(revoked_readiness["summary"]["class_responsibility_assigned"], 0)
+        self.assertEqual(revoked_readiness["summary"]["class_responsibility_missing"], 1)
+        self.assertFalse(revoked_readiness["summary"]["class_responsibility_ready"])
+
+        with self.assertRaises(frappe.ValidationError):
+            create_teaching_schedule(
+                branch=branch.name,
+                reference_date="2093-10-02",
+                program_offering=offering["name"],
+                student_group=arm["name"],
+                course=course.name,
+                instructor=instructor.name,
+                room=room.name,
+                from_time="13:00:00",
+                to_time="14:00:00",
+            )

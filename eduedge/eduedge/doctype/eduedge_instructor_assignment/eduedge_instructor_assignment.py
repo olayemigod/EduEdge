@@ -9,6 +9,11 @@ from eduedge.education.academic_fields import INSTITUTION_FIELD, OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
 from eduedge.education.instructor_assignment_capabilities import CAPABILITY_FIELDS
 from eduedge.education.offerings import assert_branch_access
+from eduedge.services.instructor_branch_governance import (
+    assert_instructor_branch_eligibility,
+    assignment_eligibility_covers_period,
+    assignment_eligibility_overlap_periods,
+)
 from eduedge.education.teaching_assignments import (
     ACADEMIC_ASSIGNMENT_SCOPES,
     CLASS_ARM_SCOPE,
@@ -72,6 +77,7 @@ class EduEdgeInstructorAssignment(Document):
         self._validate_capability_state()
         self._validate_existing_responsibility()
         self._validate_lifecycle_audit()
+        self._lock_assignment_scope()
         self._validate_duplicate()
         self._validate_primary_responsibility()
         self.assignment_title = self._build_title()
@@ -123,6 +129,78 @@ class EduEdgeInstructorAssignment(Document):
         self.institution = offering.institution
         self.academic_year = offering.academic_year
         self.academic_term = offering.academic_term or None
+        if self.is_new():
+            period_start, period_end = _academic_period_dates(
+                self.academic_year,
+                self.academic_term,
+            )
+            full_period_eligible = assignment_eligibility_covers_period(
+                self.instructor,
+                self.school_branch,
+                period_start,
+                period_end,
+            )
+            eligibility_windows = assignment_eligibility_overlap_periods(
+                self.instructor,
+                self.school_branch,
+                period_start,
+                period_end,
+            )
+            if full_period_eligible:
+                if not self.valid_from and period_start:
+                    self.valid_from = period_start
+                if not self.valid_to and period_end:
+                    self.valid_to = period_end
+            elif eligibility_windows:
+                matching_windows = eligibility_windows
+                if self.valid_from:
+                    start = getdate(self.valid_from)
+                    matching_windows = [
+                        row for row in matching_windows
+                        if getdate(row["valid_from"]) <= start <= getdate(row["valid_to"])
+                    ]
+                if self.valid_to:
+                    end = getdate(self.valid_to)
+                    matching_windows = [
+                        row for row in matching_windows
+                        if getdate(row["valid_from"]) <= end <= getdate(row["valid_to"])
+                    ]
+                if len(matching_windows) == 1:
+                    window = matching_windows[0]
+                    if not self.valid_from:
+                        self.valid_from = window["valid_from"]
+                    if not self.valid_to:
+                        self.valid_to = window["valid_to"]
+                elif not self.valid_from or not self.valid_to:
+                    frappe.throw(
+                        _(
+                            "This Class overlaps multiple Branch Eligibility periods. "
+                            "Select Valid From and Valid To within one governed period before saving."
+                        ),
+                        frappe.ValidationError,
+                    )
+            if self.valid_from and self.valid_to and getdate(self.valid_to) < getdate(self.valid_from):
+                frappe.throw(_("Valid To cannot be earlier than Valid From."), frappe.ValidationError)
+            if period_start and self.valid_from and getdate(self.valid_from) < getdate(period_start):
+                frappe.throw(
+                    _("Valid From cannot be earlier than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
+            if period_end and self.valid_from and getdate(self.valid_from) > getdate(period_end):
+                frappe.throw(
+                    _("Valid From cannot be later than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
+            if period_start and self.valid_to and getdate(self.valid_to) < getdate(period_start):
+                frappe.throw(
+                    _("Valid To cannot be earlier than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
+            if period_end and self.valid_to and getdate(self.valid_to) > getdate(period_end):
+                frappe.throw(
+                    _("Valid To cannot be later than the selected Class academic period."),
+                    frappe.ValidationError,
+                )
         self._offering_program = offering.program
 
     def _validate_group_context(self) -> None:
@@ -218,24 +296,13 @@ class EduEdgeInstructorAssignment(Document):
             # re-enable and widening operations remain strict.
             self.instructor_name = instructor.instructor_name
             return
-        has_explicit_access = _has_branch_eligibility(
+        assert_instructor_branch_eligibility(
             self.instructor,
             self.school_branch,
-            self.valid_from or nowdate(),
+            self.valid_from,
             self.valid_to,
+            label=self.assignment_title or self.assignment_type or _("Instructor Assignment"),
         )
-        # Historical guidance: Save through Instructor Assignments or add Branch eligibility first.
-        if not has_explicit_access and not getattr(
-            frappe.flags,
-            "in_eduedge_assignment_matrix_save",
-            False,
-        ):
-            frappe.throw(
-                _(
-                    "Instructor has no explicit Branch Access record. Save through Instructor Assignments, which validates the exact Class responsibility without widening Branch access dates."
-                ),
-                frappe.ValidationError,
-            )
         self.instructor_name = instructor.instructor_name
 
     def _validate_assignment_type_scope(self) -> None:
@@ -445,6 +512,17 @@ class EduEdgeInstructorAssignment(Document):
                 frappe.ValidationError,
             )
 
+    def _lock_assignment_scope(self) -> None:
+        # Duplicate and primary-responsibility rules span multiple Instructor rows.
+        # Serialise academic-responsibility writes at the Institution boundary so
+        # concurrent managers cannot both pass the same conflict checks.
+        if not self.institution:
+            return
+        frappe.db.sql(
+            "select name from `tabEduEdge Institution` where name = %s for update",
+            (self.institution,),
+        )
+
     def _validate_duplicate(self) -> None:
         if not self.enabled:
             return
@@ -515,6 +593,27 @@ class EduEdgeInstructorAssignment(Document):
         return " · ".join(value for value in parts if value)
 
 
+
+def _academic_period_dates(academic_year=None, academic_term=None):
+    if academic_term:
+        row = frappe.db.get_value(
+            "Academic Term",
+            academic_term,
+            ["term_start_date", "term_end_date"],
+            as_dict=True,
+        ) or {}
+        if row.get("term_start_date") or row.get("term_end_date"):
+            return row.get("term_start_date"), row.get("term_end_date")
+    if academic_year:
+        row = frappe.db.get_value(
+            "Academic Year",
+            academic_year,
+            ["year_start_date", "year_end_date"],
+            as_dict=True,
+        ) or {}
+        return row.get("year_start_date"), row.get("year_end_date")
+    return None, None
+
 def _same_value(left, right) -> bool:
     return str(left or "") == str(right or "")
 
@@ -544,19 +643,6 @@ def _course_label(course: str | None) -> str:
     if not course:
         return ""
     return frappe.db.get_value("Course", course, "course_name") or course
-
-
-def _has_branch_eligibility(instructor: str, branch: str, start_date, end_date=None) -> bool:
-    rows = frappe.get_all(
-        "EduEdge Instructor Branch Assignment",
-        filters={"instructor": instructor, "school_branch": branch, "enabled": 1},
-        fields=["valid_from", "valid_to"],
-        limit_page_length=0,
-    )
-    return any(
-        _date_ranges_overlap(start_date, end_date, row.valid_from, row.valid_to)
-        for row in rows
-    )
 
 
 def _date_ranges_overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:

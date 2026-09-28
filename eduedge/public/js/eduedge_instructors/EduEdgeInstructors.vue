@@ -13,7 +13,7 @@
 				<EdgePageHeader
 					eyebrow="People Operations"
 					title="Instructors"
-					subtitle="Maintain Institution-wide Instructor identities, optional home Branches, qualifications and cross-Institution operational assignments."
+					subtitle="Maintain Institution-wide Instructor identities, governed campus eligibility, qualifications and cross-campus responsibilities within the Home Institution."
 					:action-label="canCreate ? 'Add Instructor' : ''"
 					@action="newInstructor"
 				/>
@@ -65,10 +65,10 @@
 					<article class="people-panel editor">
 						<div class="people-heading">
 							<div><p class="edge-eyebrow">Official Instructor profile</p><h2>{{ draft.name ? draft.instructor_name || draft.name : 'New Instructor' }}</h2></div>
-							<div class="actions"><button v-if="draft.name" type="button" class="edge-button" @click="openAssignments">Instructor Assignments</button><button v-if="draft.name" type="button" class="edge-button" @click="openFullForm">Open full form</button><button type="button" class="edge-button edge-button--primary" :disabled="saving || !canSave" @click="save">{{ saving ? 'Saving...' : 'Save Instructor' }}</button></div>
+							<div class="actions"><button v-if="draft.name" type="button" class="edge-button" @click="openBranchGovernance">Branch Governance</button><button v-if="draft.name" type="button" class="edge-button" @click="openAssignments">Instructor Assignments</button><button v-if="draft.name" type="button" class="edge-button" @click="openFullForm">Open full form</button><button type="button" class="edge-button edge-button--primary" :disabled="saving || !canSave" @click="save">{{ saving ? 'Saving...' : 'Save Instructor' }}</button></div>
 						</div>
 
-						<EdgeActionBar label="Home Institution is the Instructor's administrative home. It does not restrict cross-Institution Branch, Class, Class Arm or Subject assignments." />
+						<EdgeActionBar label="Home Institution is administrative identity. Branch Governance separately controls where this Instructor is eligible to work; Instructor Assignments then control Class and Subject responsibilities." />
 						<div v-if="draft.name && draft.identity?.status" class="identity-readiness" :class="`is-${draft.identity.severity || 'warning'}`">
 							<div><strong>Teaching identity: {{ draft.identity.status }}</strong><small>{{ draft.identity.message }}</small></div>
 							<div class="identity-meta">
@@ -82,9 +82,9 @@
 							<label><span>Instructor name *</span><input v-model.trim="draft.instructor_name" class="form-control" :disabled="!canEdit" /></label>
 							<label><span>Status</span><select v-model="draft.status" class="form-control" :disabled="!canEdit"><option>Active</option><option>Left</option></select></label>
 							<label><span>Home Institution *</span><select v-model="draft.eduedge_institution" class="form-control" :disabled="!canEdit" @change="homeInstitutionChanged"><option value="">Select Home Institution</option><option v-for="row in data.allowed_institutions" :key="row.name" :value="row.name">{{ row.institution_name || row.name }}</option></select></label>
-							<label><span>Primary Branch / Campus</span><select v-model="draft.eduedge_primary_branch" class="form-control" :disabled="!canEdit || !draft.eduedge_institution"><option value="">Institution-wide / no Primary Branch</option><option v-for="row in profileBranches" :key="row.name" :value="row.name">{{ row.branch_name || row.name }}</option></select><small>Optional. Other Branches are granted through Instructor Assignments.</small></label>
+							<label><span>Primary Branch / Campus</span><input :value="draft.eduedge_primary_branch ? branchLabel(draft.eduedge_primary_branch) : 'No governed Primary Branch'" class="form-control" disabled /><small>Derived from the current Primary Instructor Branch Eligibility in Branch Governance. Change it there, not on the Instructor profile.</small></label>
 							<label><span>Department / School Section</span><select v-model="draft.department" class="form-control" :disabled="!canEdit || !draft.eduedge_institution"><option value="">Not assigned</option><option v-for="row in profileDepartments" :key="row.name" :value="row.name">{{ row.department_name || row.name }}</option></select></label>
-							<label><span>Linked Employee</span><select v-model="draft.employee" class="form-control" :disabled="!canEdit || optionsLoading || !draft.eduedge_institution"><option value="">No Employee link</option><option v-for="row in data.employees" :key="row.name" :value="row.name">{{ row.employee_name || row.name }}{{ row.user_id ? ` · ${row.user_id}` : ' · no login' }}</option></select><small>Only active Employees from the Home Institution's Company are loaded. Assignment-driven teaching access requires one active User → Employee → Instructor mapping.</small></label>
+							<label><span>Linked Employee</span><select v-model="draft.employee" class="form-control" :disabled="!canEdit || optionsLoading || !draft.eduedge_institution"><option value="">No Employee link</option><option v-for="row in data.employees" :key="row.name" :value="row.name">{{ row.employee_name || row.name }}{{ row.user_id ? ` · ${row.user_id}` : ' · no login' }}</option></select><small>Only active Employees from the Home Institution's Company are loaded; Employees explicitly classified under another Institution's HR Department are excluded. Assignment-driven teaching access requires one active User → Employee → Instructor mapping.</small></label>
 							<label><span>Gender</span><select v-model="draft.gender" class="form-control" :disabled="!canEdit"><option value="">Not specified</option><option v-for="row in data.genders" :key="row.name" :value="row.name">{{ row.name }}</option></select></label>
 							<label><span>Email</span><input v-model.trim="draft.eduedge_email" type="email" class="form-control" :disabled="!canEdit" /></label>
 							<label><span>Mobile number</span><input v-model.trim="draft.eduedge_mobile" class="form-control" :disabled="!canEdit" /></label>
@@ -94,11 +94,11 @@
 						</div>
 
 						<template v-if="draft.name">
-							<h3>Branch eligibility</h3>
-							<EdgeEmptyState v-if="!draft.branch_eligibility?.length" title="Institution-wide profile" description="No Branch eligibility has been assigned yet." />
+							<div class="people-heading"><h3>Branch Governance Eligibility</h3><button type="button" class="edge-button" @click="openBranchGovernance">Manage Eligibility</button></div>
+							<EdgeEmptyState v-if="!draft.branch_eligibility?.length" title="No governed Branch eligibility" description="Use Branch Governance before creating academic responsibilities for this Instructor." />
 							<div v-else class="assignment-list"><article v-for="row in draft.branch_eligibility" :key="row.name"><strong>{{ branchLabel(row.school_branch) }}</strong><small>{{ row.is_primary ? 'Primary Branch' : 'Additional Branch' }} · {{ row.enabled ? 'Active' : 'Disabled' }}</small></article></div>
 							<h3>Instructor Assignment History</h3>
-							<EdgeEmptyState v-if="!draft.assignments?.length" title="No Instructor Assignment" description="Assign this Instructor to one or more Institutions, Branches, Classes, Class Arms and Subjects." />
+							<EdgeEmptyState v-if="!draft.assignments?.length" title="No Instructor Assignment" description="After Branch Governance grants eligibility, assign exact Class, Class Arm and Subject responsibilities." />
 							<div v-else class="assignment-list"><article v-for="row in draft.assignments" :key="row.name"><strong>{{ row.assignment_title || row.assignment_type }}</strong><small>{{ institutionLabel(row.institution) }} · {{ branchLabel(row.school_branch) }} · {{ row.student_group || row.program_offering }} · {{ row.course || 'Whole class' }} · {{ row.enabled ? 'Enabled' : 'Disabled' }}</small></article></div>
 						</template>
 						<p v-if="saveError" class="people-error">{{ saveError }}</p>
@@ -112,9 +112,9 @@
 <script>
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
 
-const blankInstructor = (institution = "", branch = "") => ({
+const blankInstructor = (institution = "") => ({
 	name: "", instructor_name: "", employee: "", gender: "", status: "Active", department: "",
-	eduedge_institution: institution, eduedge_primary_branch: branch, eduedge_email: "", eduedge_mobile: "",
+	eduedge_institution: institution, eduedge_primary_branch: "", eduedge_email: "", eduedge_mobile: "",
 	eduedge_qualification: "", eduedge_specialisation: "", eduedge_employment_type: "", image: "",
 	assignments: [], branch_eligibility: [], identity: null,
 });
@@ -141,7 +141,6 @@ export default {
 			if (!this.filters.institution || this.filters.institution === this.data.all_institutions_key) return this.data.allowed_branches;
 			return this.data.allowed_branches.filter((row) => row.institution === this.filters.institution);
 		},
-		profileBranches() { return this.data.allowed_branches.filter((row) => row.institution === this.draft.eduedge_institution); },
 	},
 	mounted() { this.load(); },
 	methods: {
@@ -168,7 +167,7 @@ export default {
 					await this.loadProfileOptions(this.draft.eduedge_institution);
 				} else if (!this.draft.name) {
 					const home = this.filters.institution === this.data.all_institutions_key ? "" : this.filters.institution;
-					this.draft = blankInstructor(home, "");
+					this.draft = blankInstructor(home);
 					this.profileDepartments = this.data.departments || [];
 				}
 			} catch (error) { this.error = error?.message || "Instructors could not be loaded."; }
@@ -188,19 +187,18 @@ export default {
 		},
 		async filterInstitutionChanged() {
 			this.filters.branch = "";
-			this.draft = blankInstructor(this.filters.institution === this.data.all_institutions_key ? "" : this.filters.institution, "");
+			this.draft = blankInstructor(this.filters.institution === this.data.all_institutions_key ? "" : this.filters.institution);
 			await this.load(true);
 		},
-		branchChanged() { this.draft = blankInstructor(this.filters.institution === this.data.all_institutions_key ? "" : this.filters.institution, ""); this.load(true); },
+		branchChanged() { this.draft = blankInstructor(this.filters.institution === this.data.all_institutions_key ? "" : this.filters.institution); this.load(true); },
 		async homeInstitutionChanged() {
-			if (!this.profileBranches.some((row) => row.name === this.draft.eduedge_primary_branch)) this.draft.eduedge_primary_branch = "";
 			this.draft.department = "";
 			this.draft.employee = "";
 			await this.loadProfileOptions(this.draft.eduedge_institution);
 		},
 		async newInstructor() {
 			const home = this.filters.institution === this.data.all_institutions_key ? "" : this.filters.institution;
-			this.draft = blankInstructor(home, ""); this.saveError = "";
+			this.draft = blankInstructor(home); this.saveError = "";
 			await this.loadProfileOptions(home);
 		},
 		editInstructor(name) { this.load(false, name); },
@@ -228,6 +226,10 @@ export default {
 					} catch (error) { this.saveError = error?.message || "Instructor photo could not be saved."; }
 				},
 			});
+		},
+		openBranchGovernance() {
+			const params = new URLSearchParams({ instructor: this.draft.name || "" });
+			window.location.href = `/app/eduedge-branch-governance?${params.toString()}`;
 		},
 		openAssignments() {
 			const params = new URLSearchParams({ instructor: this.draft.name });

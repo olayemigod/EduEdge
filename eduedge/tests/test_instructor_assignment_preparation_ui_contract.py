@@ -144,6 +144,8 @@ class TestInstructorAssignmentPreparationUIContract(unittest.TestCase):
             "Changing Branch, Class, Class Arm, Subject, dates or reason after preview requires a fresh server preview.",
             "Branch Eligibility impact",
             "The source Branch Eligibility is not shortened or deleted by preparation.",
+            "branch-governance-required",
+            "Branch Governance must be updated before this preparation can be confirmed.",
             "previewPlan.destination?.valid_from",
             "previewPlan.destination?.valid_to",
             "previewPlan.conflicts || []",
@@ -175,6 +177,9 @@ class TestInstructorAssignmentPreparationUIContract(unittest.TestCase):
             "{{ previewPlan.destination?.student_group }}",
             "{{ previewPlan.destination?.course }}",
             "{{ previewPlan.destination_branch_eligibility?.name }}",
+            "A Branch Eligibility period will be created",
+            "Branch Eligibility will be extended",
+            "will be re-enabled",
             "prepared_to_assignment",
         ):
             self.assertNotIn(forbidden, component)

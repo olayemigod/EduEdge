@@ -1,3 +1,69 @@
+function load_eduedge_assessment_criteria(frm) {
+	if (
+		!frm.doc.course ||
+		!frm.doc.student_group ||
+		!frm.doc.eduedge_school_branch ||
+		!frm.doc.maximum_assessment_score
+	) {
+		return;
+	}
+
+	const context = {
+		course: frm.doc.course,
+		student_group: frm.doc.student_group,
+		school_branch: frm.doc.eduedge_school_branch,
+		schedule_date: frm.doc.schedule_date,
+		maximum_assessment_score: frm.doc.maximum_assessment_score,
+	};
+
+	// Defer one event-loop turn so all Assessment Plan course handlers have had a
+	// chance to start. Then wait for Frappe's native context-free criteria request
+	// to settle before repopulating through exact Branch + Class + Subject + date
+	// authorization. This remains safe regardless of handler registration order.
+	setTimeout(() => {
+		frappe.after_ajax(() => {
+			if (
+				frm.doc.course !== context.course ||
+				frm.doc.student_group !== context.student_group ||
+				frm.doc.eduedge_school_branch !== context.school_branch ||
+				frm.doc.schedule_date !== context.schedule_date ||
+				frm.doc.maximum_assessment_score !== context.maximum_assessment_score
+			) {
+				return;
+			}
+			frappe.call({
+				method: "eduedge.api.assessment_assignment_options.get_assessment_plan_criteria",
+				args: {
+					course: context.course,
+					school_branch: context.school_branch,
+					student_group: context.student_group,
+					schedule_date: context.schedule_date,
+				},
+				callback(r) {
+					if (
+						frm.doc.course !== context.course ||
+						frm.doc.student_group !== context.student_group ||
+						frm.doc.eduedge_school_branch !== context.school_branch ||
+						frm.doc.schedule_date !== context.schedule_date ||
+						frm.doc.maximum_assessment_score !== context.maximum_assessment_score
+					) {
+						return;
+					}
+					frm.clear_table("assessment_criteria");
+					(r.message || []).forEach((criterion) => {
+						const row = frm.add_child("assessment_criteria");
+						row.assessment_criteria = criterion.assessment_criteria;
+						row.maximum_score =
+							(Number(criterion.weightage || 0) / 100) *
+							Number(context.maximum_assessment_score || 0);
+					});
+					frm.refresh_field("assessment_criteria");
+				},
+			});
+		});
+	}, 0);
+}
+
 frappe.ui.form.on("Assessment Plan", {
 	setup(frm) {
 		frm.set_query("student_group", () => ({
@@ -53,18 +119,24 @@ frappe.ui.form.on("Assessment Plan", {
 		frm.set_value("course", null);
 	},
 	student_group(frm) {
+		// Class changes invalidate Subject and Subject-specific Examiner only.
+		// Room and Supervisor are Branch-scoped and remain valid when Branch is unchanged.
 		frm.set_value("course", null);
-		frm.set_value("room", null);
 		frm.set_value("examiner", null);
-		frm.set_value("supervisor", null);
 	},
 	course(frm) {
 		frm.set_value("examiner", null);
+		frm.clear_table("assessment_criteria");
+		frm.refresh_field("assessment_criteria");
+		load_eduedge_assessment_criteria(frm);
 	},
 	schedule_date(frm) {
-		frm.set_value("student_group", null);
-		frm.set_value("course", null);
+		// Date changes preserve stable Class, Subject and Room values, but all
+		// date-governed dependents must be re-authorized for the new assessment date.
 		frm.set_value("examiner", null);
 		frm.set_value("supervisor", null);
+		frm.clear_table("assessment_criteria");
+		frm.refresh_field("assessment_criteria");
+		load_eduedge_assessment_criteria(frm);
 	},
 });

@@ -66,6 +66,25 @@ NO_EDUEDGE_DEFAULT_GRANTS = (
 )
 PORTAL_ONLY_ROLES = ("Student", "Guardian", "EduEdge Parent")
 
+# Frappe Education v16 ships these Script Reports with raw SQL that bypasses
+# EduEdge Branch/record permission conditions. Keep them as system-level legacy
+# compatibility surfaces; school users use governed EduEdge Attendance instead.
+LEGACY_UNSCOPED_ATTENDANCE_REPORTS = (
+	"Student Batch-Wise Attendance",
+	"Student Monthly Attendance Sheet",
+	"Absent Student Report",
+)
+LEGACY_ATTENDANCE_REPORT_ROLES = ("System Manager",)
+
+# These upstream assessment reports use raw SQL or frappe.get_all without
+# consuming EduEdge Assessment Plan/Result permission-query conditions.
+LEGACY_UNSCOPED_ASSESSMENT_REPORTS = (
+	"Assessment Plan Status",
+	"Course wise Assessment Report",
+	"Final Assessment Grades",
+)
+LEGACY_ASSESSMENT_REPORT_ROLES = ("System Manager",)
+
 EDUEDGE_DESK_ROLES = tuple(
 	dict.fromkeys(
 		PLATFORM_MANAGERS
@@ -185,6 +204,12 @@ def get_default_permission_matrix() -> dict[str, dict[str, set[str]]]:
 	_grant(matrix, "Assessment Plan", ("CBT Invigilator",), VIEW)
 	_grant(matrix, "Assessment Result", ("Bursar",), VIEW)
 
+	# People Operations requires the same native Instructor authority as the
+	# governed assignment surfaces. Keep this in the clean-install baseline so
+	# new sites do not depend on historical migration patches for core workflow.
+	_grant(matrix, "Instructor", managers + ("School HR Officer",), MANAGE)
+	_grant(matrix, "Instructor", ACADEMIC_OPERATORS, VIEW)
+
 	_grant(matrix, "EduEdge School Branch", PLATFORM_MANAGERS + ("School Administrator",), MANAGE)
 	_grant(
 		matrix,
@@ -210,6 +235,8 @@ def get_default_permission_matrix() -> dict[str, dict[str, set[str]]]:
 	_grant(matrix, "EduEdge User Branch Access", ("Academic Administrator",), VIEW)
 	_grant(matrix, "EduEdge Instructor Branch Assignment", managers, MANAGE)
 	_grant(matrix, "EduEdge Instructor Branch Assignment", ("Teacher", "Instructor"), VIEW)
+	_grant(matrix, "EduEdge Instructor Assignment", managers, MANAGE)
+	_grant(matrix, "EduEdge Instructor Assignment", ACADEMIC_OPERATORS, VIEW)
 	_grant(matrix, "EduEdge Program Offering", managers, MANAGE)
 	_grant(matrix, "EduEdge Program Offering", ACADEMIC_OPERATORS + ADMISSION_OPERATORS, VIEW)
 	_grant(matrix, "EduEdge Result Publication", managers, MANAGE)
@@ -313,6 +340,64 @@ def ensure_eduedge_page_role_baseline() -> dict:
 	if changed_pages:
 		frappe.clear_cache()
 	return {"changed_pages": changed_pages}
+
+
+def _ensure_legacy_report_role_guard(
+	report_names: tuple[str, ...],
+	roles: tuple[str, ...],
+	*,
+	ref_doctype: str,
+) -> dict:
+	if not frappe.db.exists("DocType", "Custom Role") or not frappe.db.exists("DocType", "Report"):
+		return {"changed_reports": []}
+
+	changed_reports = []
+	for report_name in report_names:
+		if not frappe.db.exists("Report", report_name):
+			continue
+		custom_role_name = frappe.db.get_value("Custom Role", {"report": report_name}, "name")
+		if custom_role_name:
+			doc = frappe.get_doc("Custom Role", custom_role_name)
+		else:
+			doc = frappe.get_doc(
+				{
+					"doctype": "Custom Role",
+					"report": report_name,
+					"ref_doctype": ref_doctype,
+				}
+			)
+
+		desired_roles = [role for role in roles if frappe.db.exists("Role", role)]
+		if {row.role for row in doc.roles} == set(desired_roles):
+			continue
+		doc.set("roles", [{"role": role} for role in desired_roles])
+		if doc.is_new():
+			doc.insert(ignore_permissions=True)
+		else:
+			doc.save(ignore_permissions=True)
+		changed_reports.append(report_name)
+
+	if changed_reports:
+		frappe.clear_cache()
+	return {"changed_reports": changed_reports}
+
+
+def ensure_legacy_attendance_report_role_guard() -> dict:
+	"""Keep raw-SQL upstream attendance reports outside school/operator scope."""
+	return _ensure_legacy_report_role_guard(
+		LEGACY_UNSCOPED_ATTENDANCE_REPORTS,
+		LEGACY_ATTENDANCE_REPORT_ROLES,
+		ref_doctype="Student Attendance",
+	)
+
+
+def ensure_legacy_assessment_report_role_guard() -> dict:
+	"""Keep unscoped upstream assessment reports outside school/operator scope."""
+	return _ensure_legacy_report_role_guard(
+		LEGACY_UNSCOPED_ASSESSMENT_REPORTS,
+		LEGACY_ASSESSMENT_REPORT_ROLES,
+		ref_doctype="Assessment Result",
+	)
 
 
 def _role_classification(role: str, managed_roles: set[str]) -> str:

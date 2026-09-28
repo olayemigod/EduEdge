@@ -33,6 +33,8 @@ ALLOWED_STATUS_TRANSITIONS = {
 	"Disqualified": {"Disqualified"},
 }
 
+COMPLETABLE_ATTEMPT_STATUSES = {"Submitted", "Auto Submitted", "Under Review", "Scored"}
+
 IDENTITY_FIELDS = (
 	"exam_schedule",
 	"exam_template",
@@ -318,8 +320,33 @@ class EduEdgeCBTCandidateAssignment(Document):
 		if self.assignment_status == "Released":
 			if not cbt_operation_flag("eduedge_attempt_engine_release", self):
 				assert_manual_release_window(self._schedule, previous_status)
-		if self.assignment_status == "Completed" and schedule_status not in {"Active", "Suspended", "Completed"}:
-			frappe.throw(_("Candidate completion requires an activated Schedule."), frappe.ValidationError)
+		if self.assignment_status == "Completed":
+			if schedule_status not in {"Active", "Suspended", "Completed"}:
+				frappe.throw(_("Candidate completion requires an activated Schedule."), frappe.ValidationError)
+			attempts = frappe.get_all(
+				"EduEdge CBT Attempt",
+				filters={
+					"candidate_assignment": self.name,
+					"attempt_status": ["!=", "Cancelled"],
+				},
+				fields=["name", "attempt_status"],
+				order_by="attempt_number desc, creation desc",
+				limit_page_length=1,
+			)
+			if not attempts:
+				frappe.throw(
+					_("Candidate completion requires a prepared CBT Attempt."),
+					frappe.ValidationError,
+				)
+			latest_attempt = attempts[0]
+			if latest_attempt.attempt_status not in COMPLETABLE_ATTEMPT_STATUSES:
+				frappe.throw(
+					_(
+						"Candidate completion is blocked while CBT Attempt {0} is {1}. "
+						"Submit or resolve the attempt first."
+					).format(latest_attempt.name, latest_attempt.attempt_status),
+					frappe.ValidationError,
+				)
 
 		if self.assignment_status in REASONED_STATUSES:
 			reason = (self.status_change_reason or "").strip()

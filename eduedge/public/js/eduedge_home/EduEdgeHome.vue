@@ -70,7 +70,7 @@
 							:status="context.branch_access_enforced ? 'enforced' : 'legacy'"
 							:tone="context.branch_access_enforced ? 'success' : 'warning'"
 						/>
-						<button v-if="context.can_manage_branch_access" type="button" class="edge-button" @click="openRoute('/app/eduedge-branch-governance')">
+						<button v-if="context.can_manage_branch_access" type="button" class="edge-button edge-button--secondary eduedge-home-action" @click="openRoute('/app/eduedge-branch-governance')">
 							Open branch governance
 						</button>
 					</div>
@@ -91,7 +91,7 @@
 				<section class="eduedge-home-grid">
 					<article v-for="module in modules" :key="module.route" class="eduedge-module-card">
 						<div><p class="edge-eyebrow">{{ module.eyebrow }}</p><h2>{{ module.title }}</h2><p>{{ module.description }}</p></div>
-						<button type="button" class="edge-button edge-button--primary" @click="openRoute(module.route)">{{ module.action }}</button>
+						<button type="button" class="edge-button edge-button--primary eduedge-home-action" @click="openRoute(module.route)">{{ module.action }}</button>
 					</article>
 				</section>
 
@@ -210,5 +210,16 @@ export default {
 .eduedge-module-card { display: flex; flex-direction: column; justify-content: space-between; gap: var(--edge-space-4, 1rem); min-height: 13rem; padding: var(--edge-space-5, 1.25rem); border: 1px solid var(--border-color); border-radius: var(--edge-radius-lg, 12px); background: var(--card-bg); }
 .eduedge-module-card h2, .eduedge-readiness-panel h2 { margin: 0.25rem 0 0.5rem; }
 .eduedge-readiness-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+:deep(.edge-button) {
+	box-shadow: none;
+}
+:deep(.edge-button:focus-visible) {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+.eduedge-home-action {
+	min-height: 2.5rem;
+}
 @media (max-width: 640px) { .eduedge-active-pair { grid-template-columns:1fr; } .eduedge-context-status, .eduedge-readiness-panel { align-items: flex-start; flex-direction: column; } }
 </style>

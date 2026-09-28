@@ -5,6 +5,7 @@ from frappe import _
 
 from eduedge.education.academic_fields import OFFERING_FIELD
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.instructor_scope import is_limited_instructor_user
 from eduedge.education.offerings import assert_branch_access, parse_query_filters
 
 ACADEMIC_OPERATOR_ROLES = {
@@ -26,11 +27,52 @@ def _require_operator() -> None:
 		frappe.throw(_("You are not permitted to manage academic groups."), frappe.PermissionError)
 
 
+def _authoritative_roster_filters(filters: dict) -> dict | None:
+	"""Rehydrate limited-Instructor roster scope from an authorised saved Student Group."""
+	if not is_limited_instructor_user(frappe.session.user):
+		return filters
+
+	group_name = str(filters.get("student_group") or "").strip()
+	if not group_name:
+		return None
+	try:
+		group_doc = frappe.get_doc("Student Group", group_name)
+	except frappe.DoesNotExistError:
+		return None
+	group_doc.check_permission("write")
+	if group_doc.disabled:
+		return None
+
+	branch = str(group_doc.get(BRANCH_FIELD) or "").strip()
+	if not branch:
+		return None
+	requested_branch = str(filters.get(BRANCH_FIELD) or "").strip()
+	if requested_branch and requested_branch != branch:
+		return None
+	assert_branch_access(branch)
+
+	return {
+		BRANCH_FIELD: branch,
+		OFFERING_FIELD: group_doc.get(OFFERING_FIELD) if group_doc.meta.has_field(OFFERING_FIELD) else None,
+		"academic_year": group_doc.academic_year,
+		"academic_term": group_doc.academic_term,
+		"group_based_on": group_doc.group_based_on,
+		"program": group_doc.program,
+		"batch": group_doc.batch,
+		"student_category": group_doc.student_category,
+		"course": group_doc.course,
+		"student_group": group_doc.name,
+	}
+
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def student_group_student_query(doctype, txt, searchfield, start, page_len, filters):
 	_require_operator()
 	filters = parse_query_filters(filters)
+	filters = _authoritative_roster_filters(filters)
+	if not filters:
+		return []
 	branch = filters.get(BRANCH_FIELD)
 	if not branch:
 		return []

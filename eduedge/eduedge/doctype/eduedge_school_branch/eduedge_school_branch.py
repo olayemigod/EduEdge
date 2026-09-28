@@ -55,6 +55,7 @@ class EduEdgeSchoolBranch(Document):
 	def before_validate(self) -> None:
 		self.branch_code = _normalize_branch_code(self.branch_code)
 		self._derive_institution_context()
+		self._clear_stale_default_warehouse()
 		if (self.is_default or self.is_main_branch) and not self.enabled:
 			frappe.throw(_("A default or main School Branch must be enabled."), frappe.ValidationError)
 
@@ -185,6 +186,23 @@ class EduEdgeSchoolBranch(Document):
 				frappe.throw(
 					_("{0} must use Account Type {1}.").format(label, "/".join(sorted(account_types)))
 				)
+
+	def _clear_stale_default_warehouse(self) -> None:
+		"""Ignore a stale cross-company Warehouse automatically injected by Frappe defaults.
+
+		An explicitly selected incompatible Warehouse must still fail validation. This
+		only clears the value when a new Branch inherited the same value from the
+		current user's `default_warehouse` default and that Warehouse belongs to a
+		different Company.
+		"""
+		if not self.is_new() or not self.default_warehouse or not self.company:
+			return
+		warehouse_company = frappe.db.get_value("Warehouse", self.default_warehouse, "company")
+		if not warehouse_company or warehouse_company == self.company:
+			return
+		user_default = frappe.defaults.get_user_default("default_warehouse")
+		if user_default and user_default == self.default_warehouse:
+			self.default_warehouse = None
 
 	def _validate_warehouse(self) -> None:
 		if not self.default_warehouse:

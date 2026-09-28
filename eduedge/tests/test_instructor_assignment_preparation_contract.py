@@ -101,18 +101,20 @@ class TestInstructorAssignmentPreparationContract(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
-    def test_conflicts_branch_eligibility_and_atomicity_reuse_proven_foundations(self):
+    def test_conflicts_require_branch_governance_and_keep_prepare_atomic(self):
         source = self._api_source()
         for token in (
             "_destination_conflicts(source, destination, start, end)",
             "_branch_access_preview(source.instructor, destination[\"school_branch\"], start, end)",
-            "_ensure_incoming_branch_access(",
+            "_branch_governance_conflict",
+            "_require_incoming_branch_access(",
             'savepoint = "eduedge_instructor_assignment_prepare"',
             "frappe.db.savepoint(savepoint)",
             "for update",
             "frappe.db.rollback(save_point=savepoint)",
         ):
             self.assertIn(token, source)
+        self.assertNotIn("_ensure_incoming_branch_access", source)
 
     def test_exact_preparation_is_idempotent_and_history_is_not_rewritten(self):
         source = self._api_source()

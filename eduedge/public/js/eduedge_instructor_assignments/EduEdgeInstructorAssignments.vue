@@ -32,8 +32,8 @@
 							<h2>Who is being assigned?</h2>
 						</div>
 						<div class="assignment-actions">
-							<button type="button" class="edge-button" @click="addAcademicRow">Add Academic Row</button>
-							<button type="button" class="edge-button" @click="addBranchAccessRow">Add Branch Access Row</button>
+							<button type="button" class="edge-button" @click="openBranchGovernance">Branch Governance</button>
+							<button type="button" class="edge-button" :disabled="!canAuthorSelectedInstructor" @click="addAcademicRow">Add Academic Row</button>
 							<button type="button" class="edge-button" @click="resetPlanner">Reset</button>
 						</div>
 					</div>
@@ -41,18 +41,29 @@
 					<InstructorAssignmentSearchFields
 						:instructor="instructor"
 						:show-instructor="true"
-						:branch-only-scope="branchOnlyScope"
+						:include-instructor-history="true"
 						:class-arm-scope="classArmScope"
 						@update:instructor="instructor = $event"
 						@instructor-select="instructorSelected"
 						@instructor-clear="instructorCleared"
 					/>
 
+					<EdgeActionBar
+						v-if="instructor && !canAuthorSelectedInstructor"
+						label="Historical Instructor selected. Existing assignments and Branch Eligibility remain available below, but new assignment authoring is disabled until the Instructor is Active again."
+					/>
 					<EdgeActionBar :label="workingScopeLabel" />
-					<EdgeActionBar label="Each row owns one Branch and one Class. Multiple Subjects or Class Arms selected inside that row apply only to that row. Classes in another Branch must be added as another row." />
+					<EdgeActionBar
+						:label="instructor ? 'Branch options come only from this Instructor\'s active Branch Governance eligibility. Instructor Assignments cannot create or widen Branch eligibility.' : 'Select an Instructor first. Branch Governance determines which Branches can be assigned.'"
+					>
+						<template #actions>
+							<button type="button" class="edge-button" @click="openBranchGovernance">Open Branch Governance</button>
+						</template>
+					</EdgeActionBar>
+					<EdgeActionBar label="Each row owns one governed Branch and one Class. Multiple Subjects or Class Arms selected inside that row apply only to that row." />
 				</section>
 
-				<section class="rows-stack">
+				<section v-if="canAuthorSelectedInstructor" class="rows-stack">
 					<article v-for="(row, index) in rows" :key="row.row_id" class="assignment-row">
 						<div class="assignment-heading">
 							<div>
@@ -72,7 +83,7 @@
 									<option v-for="scope in data.assignment_scopes" :key="scope" :value="scope">{{ scope }}</option>
 								</select>
 							</label>
-							<label v-if="row.assignment_scope !== branchOnlyScope">
+							<label>
 								<span>Assignment Type *</span>
 								<select v-model="row.assignment_type" class="form-control" @change="typeChanged(row)">
 									<option v-for="value in data.assignment_types" :key="value" :value="value">{{ value }}</option>
@@ -90,7 +101,6 @@
 
 							<InstructorAssignmentSearchFields
 								:row="row"
-								:branch-only-scope="branchOnlyScope"
 								:class-arm-scope="classArmScope"
 								:requires-subjects="requiresSubjects(row)"
 								:subject-label="courseLabel(row, true)"
@@ -106,6 +116,11 @@
 							<div v-if="isClassResponsibility(row)" class="row-note wide">
 								<strong>Class responsibility</strong>
 								<span>{{ row.assignment_type }} does not grant Subject, Topic, CBT or Assessment access. Add a separate Subject Instructor row for academic content responsibility.</span>
+							</div>
+
+							<div v-if="row.branch_eligibility_full_period === false" class="row-note wide">
+								<strong>Partial Branch Eligibility</strong>
+								<span>This Class overlaps the Instructor's governed Branch period, but the full academic period is not covered. Use a valid window: {{ eligibilityPeriodsLabel(row) }}.</span>
 							</div>
 
 							<label>
@@ -139,7 +154,7 @@
 					</article>
 				</section>
 
-				<section class="assignment-panel">
+				<section v-if="canAuthorSelectedInstructor" class="assignment-panel">
 					<EdgeActionBar label="Preview expands every row into the exact records to be created. Invalid Subject/Class combinations and primary responsibility conflicts block the plan; nothing is silently skipped.">
 						<template #actions>
 							<button type="button" class="edge-button" :disabled="previewing || !canPreview" @click="previewPlan">{{ previewing ? 'Checking...' : 'Preview Exact Plan' }}</button>
@@ -155,7 +170,7 @@
 							<div><span>Academic records</span><strong>{{ preview.academic_record_count }}</strong></div>
 							<div><span>New records</span><strong>{{ preview.create_count }}</strong></div>
 							<div><span>Existing</span><strong>{{ preview.existing_count }}</strong></div>
-							<div><span>Branch access changes</span><strong>{{ preview.branch_change_count }}</strong></div>
+							<div><span>Governance verified</span><strong>{{ preview.governance_verified_count || 0 }}</strong></div>
 							<div><span>Conflicts</span><strong>{{ preview.conflict_count }}</strong></div>
 						</div>
 						<div v-if="preview.conflicts?.length" class="preview-list danger">
@@ -181,10 +196,13 @@
 				<section v-if="instructor" class="register-layout">
 					<article v-if="canManage" class="assignment-panel">
 						<div class="assignment-heading">
-							<div><p class="edge-eyebrow">Explicit and generated periods</p><h2>Branch Eligibility Periods</h2></div>
-							<span>{{ branchEligibilityGroups.length }} Branch{{ branchEligibilityGroups.length === 1 ? '' : 'es' }} · {{ data.branch_assignments.length }} Period{{ data.branch_assignments.length === 1 ? '' : 's' }}</span>
+							<div><p class="edge-eyebrow">Upstream Branch Governance</p><h2>Instructor Branch Eligibility</h2></div>
+							<div class="assignment-actions">
+								<span>{{ branchEligibilityGroups.length }} Branch{{ branchEligibilityGroups.length === 1 ? '' : 'es' }} · {{ data.branch_assignments.length }} Period{{ data.branch_assignments.length === 1 ? '' : 's' }}</span>
+								<button type="button" class="edge-button" @click="openBranchGovernance">Manage in Branch Governance</button>
+							</div>
 						</div>
-						<EdgeEmptyState v-if="!data.branch_assignments.length" title="No Branch eligibility period" description="Active academic rows create only the required contiguous Branch periods. Separate periods remain separate rather than bridging inactive gaps." />
+						<EdgeEmptyState v-if="!data.branch_assignments.length" title="No governed Branch eligibility" description="This Instructor cannot receive academic responsibilities until Branch Governance grants an eligible Branch period." />
 						<div v-else class="branch-eligibility-list">
 							<article v-for="group in branchEligibilityGroups" :key="group.school_branch" class="branch-eligibility-group">
 								<div class="branch-eligibility-heading">
@@ -215,7 +233,7 @@
 									<strong>{{ item.assignment_title || item.assignment_type }}</strong>
 									<small>{{ institutionForBranch(item.school_branch) }} · {{ branchLabel(item.school_branch) }} · {{ offeringLabel(item.program_offering) }} · {{ item.student_group || 'All Class Arms' }} · {{ courseName(item.course) || 'Whole class' }}</small>
 									<small>{{ item.valid_from || 'No start restriction' }} → {{ item.valid_to || 'Open ended' }}</small>
-									<small v-if="item.ended_on">Ended {{ item.ended_on }}{{ item.ended_by ? ` by ${item.ended_by}` : '' }}{{ item.end_reason ? ` · ${item.end_reason}` : '' }}</small>
+									<small v-if="item.ended_on">Final responsibility date {{ item.ended_on }}{{ item.ended_by ? ` · recorded by ${item.ended_by}` : '' }}{{ item.end_reason ? ` · ${item.end_reason}` : '' }}</small>
 								</span>
 								<div class="assignment-actions">
 									<EdgeStatusBadge :label="assignmentStatus(item).label" :status="assignmentStatus(item).status" :tone="assignmentStatus(item).tone" />
@@ -235,7 +253,6 @@
 import { EDUEDGE_MENU_ITEMS, openEduEdgeRoute } from "../eduedge_ui/navigation";
 import InstructorAssignmentSearchFields from "./InstructorAssignmentSearchFields.vue";
 
-const BRANCH_ONLY_SCOPE = "Branch Access Only";
 const CLASS_SCOPE = "Class / Programme Offering";
 const CLASS_ARM_SCOPE = "Class Arm";
 const SUBJECT_INSTRUCTOR = "Subject Instructor";
@@ -259,15 +276,17 @@ function newRow(preset = {}) {
 		courses: Array.isArray(preset.courses) ? [...preset.courses] : [],
 		valid_from: preset.valid_from || "",
 		valid_to: preset.valid_to || "",
+		branch_eligibility_full_period: preset.branch_eligibility_full_period ?? null,
+		branch_eligibility_periods: Array.isArray(preset.branch_eligibility_periods) ? [...preset.branch_eligibility_periods] : [],
 		enabled: preset.enabled === 0 ? 0 : 1,
 		notes: preset.notes || "",
 	};
 }
 
 const blankData = () => ({
-	allowed_branches: [], selected_branches: [], selected_instructor: null,
+	allowed_branches: [], permitted_branches: [], selected_branches: [], selected_instructor: null, authoring_available: true,
 	assignments: [], branch_assignments: [], assignment_types: [], assignment_scopes: [],
-	subject_required_types: [], class_responsibility_types: [], permissions: {},
+	subject_required_types: [], class_responsibility_types: [], governance: {}, permissions: {},
 });
 
 export default {
@@ -294,9 +313,9 @@ export default {
 	},
 	computed: {
 		canManage() { return Boolean(this.data.permissions?.can_manage); },
+		canAuthorSelectedInstructor() { return Boolean(this.canManage && this.data.authoring_available !== false); },
 		pageTitle() { return this.canManage ? "Instructor Assignments" : "My Teaching Assignments"; },
-		pageSubtitle() { return this.canManage ? "Plan exact Branch, Class, Class Arm and Subject responsibilities without creating unintended combinations." : "Review only your own active and historical teaching responsibilities."; },
-		branchOnlyScope() { return BRANCH_ONLY_SCOPE; },
+		pageSubtitle() { return this.canManage ? "Assign Class, Class Arm and Subject responsibilities only within Branches already approved in Branch Governance." : "Review only your own active and historical teaching responsibilities."; },
 		classScope() { return CLASS_SCOPE; },
 		classArmScope() { return CLASS_ARM_SCOPE; },
 		globalInstitutionName() { return frappe.boot?.eduedge_ui_identity?.tenant_name || "EduEdge Institution"; },
@@ -328,8 +347,8 @@ export default {
 			if (!this.selectedBranches.length) return "Working scope: no Branch selected yet. The global header remains your default navigation context.";
 			return `Working scope: ${this.selectedInstitutions.length} Institution(s) · ${this.selectedBranches.length} Branch(es) · ${this.rows.length} explicit row(s). The global header remains your default context.`;
 		},
-		canPreview() { return Boolean(this.canManage && this.instructor && this.rows.length); },
-		canSave() { return Boolean(this.canManage && this.preview && !this.preview.conflict_count && (this.preview.create_count || this.preview.existing_count || this.preview.branch_change_count)); },
+		canPreview() { return Boolean(this.canAuthorSelectedInstructor && this.instructor && this.rows.length); },
+		canSave() { return Boolean(this.canAuthorSelectedInstructor && this.preview && !this.preview.conflict_count && (this.preview.create_count || this.preview.existing_count)); },
 	},
 	mounted() {
 		const params = new URLSearchParams(window.location.search || "");
@@ -365,6 +384,15 @@ export default {
 					}
 				}
 				if (!this.instructor && this.data.selected_instructor?.name) this.instructor = this.data.selected_instructor.name;
+				const eligible = new Set((this.data.allowed_branches || []).map((row) => row.name));
+				for (const row of this.rows) {
+					if (row.branch && !eligible.has(row.branch)) {
+						row.branch = "";
+						row.program_offering = "";
+						row.student_groups = [];
+						row.courses = [];
+					}
+				}
 				if (this.canManage && !this.rows.some((row) => row.branch) && this.data.selected_branches?.length) this.rows[0].branch = this.data.selected_branches[0];
 				this.loaded = true;
 			} catch (error) {
@@ -374,22 +402,21 @@ export default {
 			}
 		},
 		invalidatePreview() { this.preview = null; this.saveError = ""; },
-		async instructorSelected(option) {
-			this.instructor = option?.value || "";
+		resetPlannerForInstructor(value) {
+			this.instructor = value || "";
+			this.rows = [newRow()];
 			this.invalidatePreview();
+		},
+		async instructorSelected(option) {
+			this.resetPlannerForInstructor(option?.value || "");
 			await this.load();
 		},
 		async instructorCleared() {
-			this.instructor = "";
-			this.invalidatePreview();
+			this.resetPlannerForInstructor("");
 			await this.load();
 		},
 		addAcademicRow() {
 			this.rows.push(newRow({ branch: this.selectedBranches[0] || this.data.selected_branches?.[0] || "" }));
-			this.invalidatePreview();
-		},
-		addBranchAccessRow() {
-			this.rows.push(newRow({ assignment_scope: BRANCH_ONLY_SCOPE, assignment_type: "", branch: this.selectedBranches[0] || this.data.selected_branches?.[0] || "" }));
 			this.invalidatePreview();
 		},
 		duplicateRow(row) {
@@ -405,15 +432,8 @@ export default {
 			this.load();
 		},
 		scopeChanged(row) {
-			if (row.assignment_scope === BRANCH_ONLY_SCOPE) {
-				row.assignment_type = "";
-				row.program_offering = "";
-				row.student_groups = [];
-				row.courses = [];
-			} else {
-				if (!row.assignment_type) row.assignment_type = SUBJECT_INSTRUCTOR;
-				if (row.assignment_scope === CLASS_SCOPE) row.student_groups = [];
-			}
+			if (!row.assignment_type) row.assignment_type = SUBJECT_INSTRUCTOR;
+			if (row.assignment_scope === CLASS_SCOPE) row.student_groups = [];
 			this.invalidatePreview();
 		},
 		typeChanged(row) {
@@ -426,43 +446,103 @@ export default {
 			row.program_offering = "";
 			row.student_groups = [];
 			row.courses = [];
+			row.valid_from = "";
+			row.valid_to = "";
+			row.branch_eligibility_full_period = null;
+			row.branch_eligibility_periods = [];
 			this.invalidatePreview();
 		},
 		offeringSelected(row, option) {
 			row.program_offering = option?.value || "";
 			row.student_groups = [];
 			row.courses = [];
+			row.branch_eligibility_full_period = option?.branch_eligibility_full_period ?? null;
+			row.branch_eligibility_periods = Array.isArray(option?.branch_eligibility_periods)
+				? [...option.branch_eligibility_periods]
+				: [];
 			if (option?.value) this.offeringLabels[option.value] = option.label || option.value;
 			if (option?.school_branch) row.branch = option.school_branch;
-			if (!row.valid_from && option?.period_start_date) row.valid_from = option.period_start_date;
-			if (!row.valid_to && option?.period_end_date) row.valid_to = option.period_end_date;
+			if (row.branch_eligibility_full_period === false) {
+				if (row.branch_eligibility_periods.length === 1) {
+					row.valid_from = row.branch_eligibility_periods[0].valid_from || "";
+					row.valid_to = row.branch_eligibility_periods[0].valid_to || "";
+				} else {
+					row.valid_from = "";
+					row.valid_to = "";
+				}
+			} else {
+				row.valid_from = option?.period_start_date || "";
+				row.valid_to = option?.period_end_date || "";
+			}
 			this.invalidatePreview();
 		},
 		offeringCleared(row) {
 			row.program_offering = "";
 			row.student_groups = [];
 			row.courses = [];
+			row.valid_from = "";
+			row.valid_to = "";
+			row.branch_eligibility_full_period = null;
+			row.branch_eligibility_periods = [];
 			this.invalidatePreview();
 		},
 		applyRoutePreset(preset = {}) {
 			if (this.routePresetApplied || !this.loaded || !this.canManage) return;
 			this.routePresetApplied = true;
+			if (!this.canAuthorSelectedInstructor) {
+				this.saveError = "";
+				return;
+			}
 			if (!preset.branch && !preset.program_offering && !preset.student_group && !preset.course) return;
+			const eligible = new Set((this.data.allowed_branches || []).map((row) => row.name));
+			const governedBranch = preset.branch && eligible.has(preset.branch) ? preset.branch : "";
+			const governedOfferings = new Set(
+				(this.data.offerings || [])
+					.filter((row) => row.school_branch === governedBranch)
+					.map((row) => row.name),
+			);
+			const governedOffering = governedBranch && preset.program_offering && governedOfferings.has(preset.program_offering)
+				? preset.program_offering
+				: "";
+			const governedOfferingRecord = (this.data.offerings || []).find((row) => row.name === governedOffering);
+			const eligibilityPeriods = Array.isArray(governedOfferingRecord?.branch_eligibility_periods)
+				? governedOfferingRecord.branch_eligibility_periods
+				: [];
+			const partial = governedOfferingRecord?.branch_eligibility_full_period === false;
 			this.rows = [newRow({
-				branch: preset.branch,
-				program_offering: preset.program_offering,
+				branch: governedBranch,
+				program_offering: governedOffering,
 				assignment_scope: preset.student_group ? CLASS_ARM_SCOPE : CLASS_SCOPE,
-				student_groups: preset.student_group ? [preset.student_group] : [],
-				courses: preset.course ? [preset.course] : [],
+				student_groups: governedOffering && preset.student_group ? [preset.student_group] : [],
+				courses: governedOffering && preset.course ? [preset.course] : [],
+				branch_eligibility_full_period: governedOfferingRecord?.branch_eligibility_full_period ?? null,
+				branch_eligibility_periods: eligibilityPeriods,
+				valid_from: partial && eligibilityPeriods.length === 1
+					? (eligibilityPeriods[0].valid_from || "")
+					: (partial ? "" : (governedOfferingRecord?.period_start_date || "")),
+				valid_to: partial && eligibilityPeriods.length === 1
+					? (eligibilityPeriods[0].valid_to || "")
+					: (partial ? "" : (governedOfferingRecord?.period_end_date || "")),
 			})];
-			this.invalidatePreview();
+			if (preset.branch && !governedBranch) {
+				this.saveError = __("The requested Branch is not covered by this Instructor's Branch Governance eligibility.");
+			} else if (preset.program_offering && !governedOffering) {
+				this.saveError = __("The requested Class / Programme Offering does not overlap this Instructor's Branch Governance eligibility period.");
+			} else {
+				this.invalidatePreview();
+			}
 		},
-		branchRecord(name) { return this.data.allowed_branches.find((row) => row.name === name); },
+		branchRecord(name) { return [...(this.data.allowed_branches || []), ...(this.data.permitted_branches || [])].find((row) => row.name === name); },
 		branchLabel(name) { return this.branchRecord(name)?.branch_name || name || "Branch"; },
 		institutionForBranch(name) { const row = this.branchRecord(name); return row?.institution_name || row?.institution || "Institution"; },
 		institutionForRow(row) { return this.institutionForBranch(row.branch); },
 		offeringLabel(name) { return this.offeringLabels[name] || name || "Class"; },
 		courseName(name) { return this.courseLabels[name] || name || ""; },
+		eligibilityPeriodsLabel(row) {
+			const periods = Array.isArray(row?.branch_eligibility_periods) ? row.branch_eligibility_periods : [];
+			if (!periods.length) return __("check Branch Governance before continuing");
+			return periods.map((period) => `${period.valid_from || "?"} to ${period.valid_to || "?"}`).join("; ");
+		},
 		branchPeriodStatus(item) {
 			if (!Number(item.enabled)) return { label: "Disabled", status: "disabled", tone: "danger" };
 			const today = frappe.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
@@ -476,8 +556,11 @@ export default {
 			const label = item.lifecycle_status || "Unavailable";
 			if (label === "Current") return { label, status: "current", tone: "success" };
 			if (label === "Scheduled") return { label, status: "scheduled", tone: "warning" };
+			if (label === "Ending") return { label, status: "ending", tone: "warning" };
 			if (label === "Disabled") return { label, status: "disabled", tone: "danger" };
 			if (label === "Ended") return { label, status: "ended", tone: "neutral" };
+			if (label === "Replaced") return { label, status: "replaced", tone: "neutral" };
+			if (label === "Transferred") return { label, status: "transferred", tone: "neutral" };
 			return { label: "Status unavailable", status: "unavailable", tone: "neutral" };
 		},
 		canEndAssignment(item) { return Boolean(this.canManage && item.can_end); },
@@ -491,8 +574,7 @@ export default {
 			return plural ? "Subjects / Courses" : "Subject / Course";
 		},
 		rowTitle(row) {
-			if (row.assignment_scope === BRANCH_ONLY_SCOPE) return `${this.branchLabel(row.branch)} · Branch access`;
-			return `${row.assignment_type || 'Academic responsibility'} · ${this.offeringLabel(row.program_offering)}`;
+			return `${row.assignment_type || "Academic responsibility"} · ${this.offeringLabel(row.program_offering)}`;
 		},
 		payload() { return { instructor: this.instructor, rows: this.rows.map((row, index) => ({ ...row, row_label: `Assignment Row ${index + 1}` })) }; },
 		async previewPlan() {
@@ -589,6 +671,10 @@ export default {
 				endDateField.$input.attr("min", today);
 				if (item.valid_to) endDateField.$input.attr("max", item.valid_to);
 			}
+		},
+		openBranchGovernance() {
+			const query = this.instructor ? `?instructor=${encodeURIComponent(this.instructor)}` : "";
+			window.location.href = `/app/eduedge-branch-governance${query}`;
 		},
 		openInstructors() { window.location.href = "/app/eduedge-instructors"; },
 		openAssignment(name) { window.open(`/app/eduedge-instructor-assignment/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer"); },

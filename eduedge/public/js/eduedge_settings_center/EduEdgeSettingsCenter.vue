@@ -54,6 +54,12 @@
 								:status="branchEnforcement.enabled ? 'active' : 'inactive'"
 								:tone="branchEnforcement.enabled ? 'success' : 'warning'"
 							/>
+							<EdgeStatusBadge
+								v-if="activeTab === 'assignment_capabilities'"
+								:label="capabilityEnforcement.enabled ? 'Enforcement active' : capabilityEnforcement.ready ? 'Ready to activate' : 'Readiness required'"
+								:status="capabilityEnforcement.enabled ? 'active' : capabilityEnforcement.ready ? 'ready' : 'pending'"
+								:tone="capabilityEnforcement.enabled ? 'success' : capabilityEnforcement.ready ? 'success' : 'warning'"
+							/>
 						</div>
 
 						<div class="eduedge-settings-form">
@@ -127,6 +133,59 @@
 							</div>
 						</div>
 
+						<div v-if="activeTab === 'assignment_capabilities'" class="eduedge-capability-readiness">
+							<div class="eduedge-capability-copy">
+								<strong>Exact Instructor Assignment capability enforcement</strong>
+								<p>
+									When active, limited Teacher and Instructor users must have explicitly reviewed capabilities on the exact effective Subject responsibility. Branch Eligibility remains necessary but never grants a capability by itself.
+								</p>
+							</div>
+							<div v-if="!capabilityEnforcement.can_manage" class="eduedge-readiness-notice">
+								This global control is read-only here. Activation requires EduEdge Settings write access and visibility across every enabled Branch / Campus.
+							</div>
+							<template v-else>
+								<div class="eduedge-readiness-grid">
+									<div><span>Limited Instructor users</span><strong>{{ capabilityCount('limited_instructor_users') }}</strong></div>
+									<div><span>Identity blockers</span><strong>{{ capabilityCount('identity_blockers') }}</strong></div>
+									<div><span>Current Subject assignments</span><strong>{{ capabilityCount('current_subject_assignments') }}</strong></div>
+									<div><span>Unreviewed current assignments</span><strong>{{ capabilityCount('current_unreviewed_assignments') }}</strong></div>
+									<div><span>Branch Eligibility blockers</span><strong>{{ capabilityCount('current_branch_eligibility_blockers') }}</strong></div>
+									<div><span>Future review warnings</span><strong>{{ capabilityCount('future_unreviewed_assignments') }}</strong></div>
+								</div>
+								<div v-if="capabilityEnforcement.blockers?.length" class="eduedge-readiness-list eduedge-readiness-list--danger">
+									<strong>Resolve before activation</strong>
+									<div v-for="(item, index) in capabilityEnforcement.blockers" :key="`blocker-${index}`">
+										<span>{{ item.label || item.user || item.assignment }}</span>
+										<small>{{ item.reason }}</small>
+									</div>
+								</div>
+								<div v-if="capabilityEnforcement.warnings?.length" class="eduedge-readiness-list">
+									<strong>Upcoming review</strong>
+									<div v-for="(item, index) in capabilityEnforcement.warnings" :key="`warning-${index}`">
+										<span>{{ item.label || item.assignment }}</span>
+										<small>{{ item.reason }}</small>
+									</div>
+								</div>
+								<p v-if="capabilityEnforcement.details_truncated" class="text-muted">
+									Only the first readiness items are shown. Resolve them and refresh to continue.
+								</p>
+								<div class="eduedge-readiness-actions">
+									<button type="button" class="edge-button" :disabled="capabilityLoading" @click="loadCapabilityReadiness">
+										{{ capabilityLoading ? 'Refreshing...' : 'Refresh readiness' }}
+									</button>
+									<button type="button" class="edge-button" @click="openRoute(capabilityEnforcement.manage_route)">Open Instructor Assignments</button>
+									<button
+										type="button"
+										class="edge-button edge-button--primary"
+										:disabled="capabilityLoading || (!capabilityEnforcement.enabled && !capabilityEnforcement.ready)"
+										@click="requestCapabilityEnforcementChange"
+									>
+										{{ capabilityEnforcement.enabled ? 'Disable enforcement' : 'Enable enforcement' }}
+									</button>
+								</div>
+							</template>
+						</div>
+
 						<div v-if="activeTab === 'branch_access'" class="eduedge-enforcement-guidance">
 							<div>
 								<strong>User Branch Access enforcement</strong>
@@ -136,7 +195,7 @@
 						</div>
 
 						<p v-if="saveError" class="eduedge-settings-error" role="alert">{{ saveError }}</p>
-						<EdgeActionBar :label="canWrite ? 'Changes apply after validation and normal Frappe permissions.' : 'Your role has read-only access to these settings.'">
+						<EdgeActionBar v-if="activeTab !== 'assignment_capabilities'" :label="canWrite ? 'Changes apply after validation and normal Frappe permissions.' : 'Your role has read-only access to these settings.'">
 							<template #actions>
 								<button type="button" class="edge-button" :disabled="saving" @click="resetCurrentTab">Reset</button>
 								<button
@@ -155,6 +214,26 @@
 			</template>
 		</EdgePageLayout>
 	</EdgeAppShell>
+
+	<EdgeModal
+		:open="capabilityConfirm.open"
+		title="Confirm capability enforcement change"
+		:subtitle="capabilityConfirm.message"
+		size="sm"
+		:busy="capabilityConfirm.busy"
+		@close="closeCapabilityConfirm"
+	>
+		<p class="eduedge-confirm-copy">
+			This changes the global runtime gate for limited Teacher and Instructor users. Existing academic records are not rewritten.
+		</p>
+		<template #footer>
+			<span class="edge-modal__footer-spacer"></span>
+			<button type="button" class="edge-button" :disabled="capabilityConfirm.busy" @click="closeCapabilityConfirm">Cancel</button>
+			<button type="button" class="edge-button edge-button--primary" :disabled="capabilityConfirm.busy" @click="executeCapabilityEnforcementChange">
+				{{ capabilityConfirm.busy ? 'Applying...' : capabilityConfirm.confirmLabel }}
+			</button>
+		</template>
+	</EdgeModal>
 </template>
 
 <script>
@@ -174,6 +253,18 @@ export default {
 			originalValues: {},
 			canWrite: false,
 			branchEnforcement: { enabled: false, manage_route: "/app/eduedge-branch-governance" },
+			capabilityEnforcement: {
+				enabled: false,
+				ready: false,
+				can_manage: false,
+				counts: {},
+				blockers: [],
+				warnings: [],
+				details_truncated: false,
+				manage_route: "/app/eduedge-instructor-assignments",
+			},
+			capabilityLoading: false,
+			capabilityConfirm: { open: false, busy: false, target: false, message: "", confirmLabel: "Continue" },
 			menuItems: EDUEDGE_MENU_ITEMS,
 		};
 	},
@@ -196,6 +287,7 @@ export default {
 		selectTab(key) {
 			this.activeTab = key;
 			this.saveError = "";
+			if (key === "assignment_capabilities" && this.capabilityEnforcement.can_manage) this.loadCapabilityReadiness();
 		},
 		setValue(fieldname, value) {
 			this.values = { ...this.values, [fieldname]: value };
@@ -232,11 +324,68 @@ export default {
 				this.originalValues = { ...(state.values || {}) };
 				this.canWrite = Boolean(state.can_write);
 				this.branchEnforcement = state.branch_enforcement || this.branchEnforcement;
+				this.capabilityEnforcement = state.capability_enforcement || this.capabilityEnforcement;
 				if (!this.tabs.some((tab) => tab.key === this.activeTab)) this.activeTab = this.tabs[0]?.key || "defaults";
 			} catch (error) {
 				this.error = error?.message || "EduEdge Settings could not be loaded.";
 			} finally {
 				this.loading = false;
+			}
+		},
+		capabilityCount(key) {
+			return Number(this.capabilityEnforcement.counts?.[key] || 0);
+		},
+		async loadCapabilityReadiness() {
+			if (!this.capabilityEnforcement.can_manage || this.capabilityLoading) return;
+			this.capabilityLoading = true;
+			this.saveError = "";
+			try {
+				const response = await frappe.call("eduedge.api.instructor_assignment_capabilities.get_instructor_assignment_capability_enforcement_readiness");
+				this.capabilityEnforcement = response.message || this.capabilityEnforcement;
+			} catch (error) {
+				this.saveError = error?.message || "Capability enforcement readiness could not be loaded.";
+			} finally {
+				this.capabilityLoading = false;
+			}
+		},
+		requestCapabilityEnforcementChange() {
+			if (!this.capabilityEnforcement.can_manage) return;
+			const target = !this.capabilityEnforcement.enabled;
+			if (target && !this.capabilityEnforcement.ready) return;
+			this.capabilityConfirm = {
+				open: true,
+				busy: false,
+				target,
+				message: target
+					? "Enable exact capability enforcement for limited Teacher and Instructor users? Readiness checks have passed."
+					: "Disable exact capability enforcement and return limited Instructor users to the migration-safe assignment rules?",
+				confirmLabel: target ? "Enable enforcement" : "Disable enforcement",
+			};
+		},
+		closeCapabilityConfirm() {
+			if (this.capabilityConfirm.busy) return;
+			this.capabilityConfirm = { open: false, busy: false, target: false, message: "", confirmLabel: "Continue" };
+		},
+		async executeCapabilityEnforcementChange() {
+			if (!this.capabilityConfirm.open || this.capabilityConfirm.busy) return;
+			this.capabilityConfirm.busy = true;
+			this.saveError = "";
+			try {
+				const response = await frappe.call({
+					method: "eduedge.api.instructor_assignment_capabilities.set_instructor_assignment_capability_enforcement",
+					type: "POST",
+					args: { enabled: this.capabilityConfirm.target ? 1 : 0, confirmed: 1 },
+				});
+				this.capabilityEnforcement = response.message || this.capabilityEnforcement;
+				frappe.show_alert({
+					message: this.capabilityEnforcement.enabled ? __("Instructor capability enforcement enabled") : __("Instructor capability enforcement disabled"),
+					indicator: "green",
+				});
+				this.capabilityConfirm.busy = false;
+				this.closeCapabilityConfirm();
+			} catch (error) {
+				this.capabilityConfirm.busy = false;
+				this.saveError = error?.message || "Capability enforcement could not be changed.";
 			}
 		},
 		resetCurrentTab() {
@@ -370,6 +519,23 @@ export default {
 	padding: .9rem;
 }
 .eduedge-enforcement-guidance p { color: var(--text-muted); margin: .2rem 0 0; }
+.eduedge-capability-readiness { display: grid; gap: 1rem; margin-bottom: 1rem; }
+.eduedge-capability-copy,.eduedge-readiness-notice,.eduedge-readiness-list {
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: .75rem;
+	padding: .9rem;
+}
+.eduedge-capability-copy,.eduedge-readiness-notice { background: var(--edge-color-surface-soft, var(--control-bg)); }
+.eduedge-capability-copy p { color: var(--text-muted); margin: .25rem 0 0; }
+.eduedge-readiness-grid { display: grid; gap: .65rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.eduedge-readiness-grid > div { background: var(--edge-color-surface-soft, var(--control-bg)); border: 1px solid var(--edge-color-border, var(--border-color)); border-radius: .7rem; display: grid; gap: .2rem; padding: .75rem; }
+.eduedge-readiness-grid span,.eduedge-readiness-list small { color: var(--text-muted); }
+.eduedge-readiness-grid strong { font-size: 1.25rem; }
+.eduedge-readiness-list { display: grid; gap: .55rem; }
+.eduedge-readiness-list > div { display: grid; gap: .1rem; }
+.eduedge-readiness-list--danger { border-color: var(--red-400, #f97066); }
+.eduedge-readiness-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.eduedge-confirm-copy { color: var(--text-muted); margin: 0; }
 .eduedge-settings-error { color: var(--red-600, #b42318); }
 @media (max-width: 47.99rem) {
 	.eduedge-settings-shell { grid-template-columns: 1fr; }

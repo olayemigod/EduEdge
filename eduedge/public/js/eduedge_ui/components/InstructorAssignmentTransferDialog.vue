@@ -157,6 +157,14 @@
 							<small>{{ branchEligibilitySummary(previewPlan.destination_branch_eligibility) }}</small>
 							<small>The source Branch Eligibility is not shortened or deleted by Transfer.</small>
 						</div>
+						<div
+							v-if="previewPlan.capability_review?.pending"
+							class="eduedge-transfer-plan-card eduedge-transfer-plan-grid__wide"
+						>
+							<strong class="eduedge-transfer-plan-label">Capability review required</strong>
+							<span>Operational capabilities are not inherited from the source assignment.</span>
+							<small>{{ previewPlan.capability_review?.message }}</small>
+						</div>
 					</div>
 				</template>
 			</section>
@@ -351,6 +359,7 @@ export default {
 		conflictLabel(conflict) {
 			if (conflict?.type === "transferring-instructor-overlap") return "Instructor already has an overlapping exact responsibility in the destination context.";
 			if (conflict?.type === "primary-responsibility-overlap") return "Another Instructor already owns this primary responsibility in the destination period.";
+			if (conflict?.type === "branch-governance-required") return "Branch Governance must cover the Instructor in the destination Branch for the full successor period.";
 			return "Transfer conflict";
 		},
 		setField(fieldname, value) {
@@ -406,9 +415,7 @@ export default {
 		branchImpactLabel(branch) {
 			const action = String(branch?.action || "");
 			if (action === "existing") return "Existing Branch Eligibility already covers the destination period; no Branch change will be made.";
-			if (action === "create") return "A Branch Eligibility period will be created for the Instructor in the destination Branch.";
-			if (action === "extend") return "Existing Branch Eligibility will be extended only as required for the destination responsibility.";
-			if (action === "enable") return "An exact disabled Branch Eligibility period will be re-enabled for the destination responsibility.";
+			if (action === "required") return "Branch Governance must be updated before this transfer can be confirmed. Transfer will not create, extend or re-enable Branch Eligibility.";
 			return "Branch Eligibility impact is unavailable. Do not confirm until the preview is complete.";
 		},
 		setBusy(value, label) {
@@ -464,8 +471,12 @@ export default {
 					args: currentArgs,
 				});
 				const result = response.message || {};
+				const successMessage = result.action === "already-transferred" ? "Instructor Assignment was already transferred" : "Instructor Assignment transferred";
+				const finalMessage = result.capability_review?.pending
+					? `${successMessage}. Review the successor assignment's capabilities before operational use.`
+					: successMessage;
 				frappe.show_alert({
-					message: result.action === "already-transferred" ? "Instructor Assignment was already transferred" : "Instructor Assignment transferred",
+					message: finalMessage,
 					indicator: "green",
 				});
 				await this.onComplete?.(result);

@@ -17,7 +17,7 @@ class TestAcademicPageReviewFixes(unittest.TestCase):
 		self.assertIn(':key="row.course_schedule"', command)
 		self.assertIn('course_schedule: row.course_schedule', command)
 		self.assertIn('this.filters.course_schedule = row.course_schedule', attendance)
-		self.assertIn("course_schedule: this.filters.course_schedule", attendance)
+		self.assertIn("course_schedule: requestedSchedule", attendance)
 		self.assertIn("attendance_complete_registers", command)
 		self.assertIn("attendance_missing_registers", command)
 

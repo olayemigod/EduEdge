@@ -8,13 +8,13 @@ APP = ROOT / "eduedge"
 
 class TestSessionalClassArmDownstreamAlignmentContract(unittest.TestCase):
     def test_assessment_operations_keeps_sessional_group_visible_inside_selected_term(self):
-        api = (APP / "api/assessment_operations_sessional.py").read_text(encoding="utf-8")
+        compatibility = (APP / "api/assessment_operations_sessional.py").read_text(encoding="utf-8")
+        base = (APP / "api/assessment_operations.py").read_text(encoding="utf-8")
         bundle = (APP / "public/js/eduedge_assessment_operations.bundle.js").read_text(encoding="utf-8")
-        self.assertIn("def _term_compatible", api)
-        self.assertIn("not selected_term or not group_term", api)
-        self.assertNotIn('["in", [academic_term, ""]]', api)
-        self.assertIn('plan_filters["academic_term"] = academic_term', api)
-        self.assertIn('"academic_term": academic_term or ""', api)
+        self.assertIn("return base.get_assessment_context(", compatibility)
+        self.assertIn('result_mode="Terminal"', compatibility)
+        self.assertIn('group_filters["academic_term"] = ["in", [academic_term, ""]]', base)
+        self.assertIn('plan_filters["academic_term"] = academic_term', base)
         self.assertIn("assessment_operations_sessional.get_assessment_context", bundle)
 
     def test_assessment_plan_link_query_uses_reviewed_session_term_compatibility(self):

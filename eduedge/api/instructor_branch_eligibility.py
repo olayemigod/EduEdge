@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import cint, getdate
 
 from eduedge.api import teacher_assignments as core
+from eduedge.education.academic_fields import INSTITUTION_FIELD
 
 
 def _overlap(start_a=None, end_a=None, start_b=None, end_b=None) -> bool:
@@ -21,8 +22,119 @@ def _allowed_branch_names() -> set[str]:
 	return {str(row.get("name") or "").strip() for row in core._allowed_branches() if row.get("name")}
 
 
-def _supporting_assignments(instructor: str, school_branch: str, valid_from=None, valid_to=None) -> list[dict]:
-	rows = frappe.get_all(
+def _require_eligibility_read() -> None:
+	if not frappe.session.user or frappe.session.user == "Guest":
+		frappe.throw(_("Authentication required."), frappe.PermissionError)
+	if not frappe.has_permission("EduEdge Instructor Branch Assignment", "read"):
+		frappe.throw(
+			_("You are not permitted to view Instructor Branch Eligibility."),
+			frappe.PermissionError,
+		)
+
+
+def _require_eligibility_reconciliation() -> None:
+	_require_eligibility_read()
+	if not (
+		frappe.has_permission("EduEdge Instructor Branch Assignment", "create")
+		or frappe.has_permission("EduEdge Instructor Branch Assignment", "write")
+	):
+		frappe.throw(
+			_("Only authorised academic managers can reconcile Instructor Branch Eligibility."),
+			frappe.PermissionError,
+		)
+
+
+def _allowed_eligibility_institutions() -> set[str]:
+	branches = core._allowed_branches()
+	institutions = {
+		str(row.get("institution") or "").strip()
+		for row in branches
+		if str(row.get("institution") or "").strip()
+	}
+	if not institutions:
+		return set()
+	return set(
+		frappe.get_all(
+			"EduEdge Institution",
+			filters={"name": ["in", sorted(institutions)], "enabled": 1},
+			pluck="name",
+			limit_page_length=0,
+		)
+	)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def instructor_branch_eligibility_instructor_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Active Instructors whose Home Institution is represented by an allowed Branch."""
+	_require_eligibility_read()
+	institutions = _allowed_eligibility_institutions()
+	if not institutions:
+		return []
+	meta = frappe.get_meta("Instructor")
+	if not meta.has_field(INSTITUTION_FIELD):
+		return []
+
+	fields = ["name", "instructor_name", "department", "employee", INSTITUTION_FIELD]
+	needle = str(txt or "").strip()
+	or_filters = None
+	if needle:
+		like = f"%{needle}%"
+		or_filters = {
+			"name": ["like", like],
+			"instructor_name": ["like", like],
+			"department": ["like", like],
+			"employee": ["like", like],
+			INSTITUTION_FIELD: ["like", like],
+		}
+	rows = frappe.get_list(
+		"Instructor",
+		filters={
+			"status": "Active",
+			INSTITUTION_FIELD: ["in", sorted(institutions)],
+		},
+		or_filters=or_filters,
+		fields=fields,
+		order_by="instructor_name asc",
+		limit_start=int(start),
+		limit_page_length=int(page_len),
+	)
+	row_institutions = {
+		str(row.get(INSTITUTION_FIELD) or "").strip()
+		for row in rows
+		if str(row.get(INSTITUTION_FIELD) or "").strip()
+	}
+	institution_names = {
+		row.name: row.institution_name
+		for row in frappe.get_list(
+			"EduEdge Institution",
+			filters={"name": ["in", sorted(row_institutions)]},
+			fields=["name", "institution_name"],
+			limit_page_length=0,
+		)
+	} if row_institutions else {}
+	return [
+		[
+			row.get("name"),
+			row.get("instructor_name") or row.get("name"),
+			institution_names.get(row.get(INSTITUTION_FIELD)) or row.get(INSTITUTION_FIELD) or "",
+			row.get("department") or "",
+			row.get("employee") or "",
+		]
+		for row in rows
+	]
+
+
+def _supporting_assignments(
+	instructor: str,
+	school_branch: str,
+	valid_from=None,
+	valid_to=None,
+	*,
+	permission_aware: bool = False,
+) -> list[dict]:
+	getter = frappe.get_list if permission_aware else frappe.get_all
+	rows = getter(
 		"EduEdge Instructor Assignment",
 		filters={"instructor": instructor, "school_branch": school_branch},
 		fields=[
@@ -54,10 +166,10 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 	an enabled row with no supporting assignment is flagged for review rather than
 	being treated as invalid or removed automatically.
 	"""
-	core._require_read()
+	_require_eligibility_reconciliation()
 	instructor = str(instructor or "").strip()
-	if not instructor or not frappe.db.exists("Instructor", instructor):
-		frappe.throw(_("Select a valid Instructor."), frappe.ValidationError)
+	if not instructor:
+		frappe.throw(_("Select an Instructor."), frappe.ValidationError)
 
 	allowed = _allowed_branch_names()
 	rows = frappe.get_list(
@@ -72,34 +184,63 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 			"valid_from",
 			"valid_to",
 			"creation",
+			"owner",
 			"modified",
+			"modified_by",
 		],
 		order_by="is_primary desc, school_branch asc, valid_from asc",
 		limit_page_length=0,
 	)
 
+	can_read_assignments = bool(
+		frappe.db.exists("DocType", "EduEdge Instructor Assignment")
+		and frappe.has_permission("EduEdge Instructor Assignment", "read")
+	)
 	review_rows = []
 	active_branches: set[str] = set()
 	for row in rows:
-		support = _supporting_assignments(
-			instructor,
-			row.school_branch,
-			row.valid_from,
-			row.valid_to,
+		support = (
+			_supporting_assignments(
+				instructor,
+				row.school_branch,
+				row.valid_from,
+				row.valid_to,
+				permission_aware=True,
+			)
+			if can_read_assignments
+			else []
 		)
 		enabled = bool(cint(row.enabled))
 		if enabled:
 			active_branches.add(row.school_branch)
-		review_required = bool(enabled and not support)
+		review_required = bool(can_read_assignments and enabled and not support)
+		support_state = (
+			"restricted"
+			if not can_read_assignments
+			else ("unsupported" if review_required else ("supported" if support else "disabled-history"))
+		)
 		review_rows.append(
 			{
 				**dict(row),
-				"supporting_assignment_count": len(support),
-				"supporting_assignments": support[:20],
+				"assignment_support_visible": can_read_assignments,
+				"supporting_assignment_count": len(support) if can_read_assignments else None,
+				"supporting_assignments": support[:20] if can_read_assignments else [],
 				"review_required": review_required,
+				"support_state": support_state,
+				"review_classification": "unsupported-enabled-eligibility" if review_required else "",
 				"review_reason": _(
 					"No academic assignment supports this eligibility period. Confirm that it is intentional explicit eligibility or disable it as legacy/stale history."
-				) if review_required else "",
+				) if review_required else (
+					_("Academic assignment support is restricted by your current permissions.")
+					if not can_read_assignments
+					else ""
+				),
+				"provenance": {
+					"created_on": row.get("creation"),
+					"created_by": row.get("owner"),
+					"modified_on": row.get("modified"),
+					"modified_by": row.get("modified_by"),
+				},
 			}
 		)
 
@@ -115,7 +256,7 @@ def get_instructor_branch_eligibility_review(instructor: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def disable_unused_instructor_branch_eligibility(name: str, reason: str) -> dict:
 	"""Disable a no-support eligibility row while preserving history and audit trail."""
-	core._require_read()
+	_require_eligibility_reconciliation()
 	name = str(name or "").strip()
 	reason = str(reason or "").strip()
 	if not name or not reason:

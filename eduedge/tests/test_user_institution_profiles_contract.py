@@ -126,8 +126,11 @@ class TestUserInstitutionProfilesContract(unittest.TestCase):
 		self.assertIn("Frappe's existing User-profile handler", bridge)
 
 		report_api = (APP / "api" / "report_cards_profiled.py").read_text()
+		render_service = (APP / "education" / "report_card_issues.py").read_text()
 		self.assertIn("_attach_institution_identity", report_api)
-		self.assertIn("report_card_letter_head", report_api)
+		self.assertIn("resolve_report_card_pdf", report_api)
+		self.assertIn("resolve_report_card_render_settings", render_service)
+		self.assertIn("report_card_letter_head", render_service)
 		template = (APP / "templates" / "report_card.html").read_text()
 		self.assertIn("branding.official_name", template)
 		self.assertIn("branding.formatted_address", template)

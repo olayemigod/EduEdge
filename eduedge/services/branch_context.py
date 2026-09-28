@@ -483,18 +483,103 @@ def clear_school_branch(*, user: str | None = None) -> None:
 
 
 def invalidate_user_branch_context(user: str) -> None:
+	"""Clear stale defaults after an administrator changes another user's access.
+
+	This is an internal server routine, not a self-service context API. It must be
+	able-driven so a scoped administrator can legitimately grant/revoke access for
+	another user without bypassing the public cross-user guard in
+	get_allowed_school_branches()/get_branch_access_profile().
+	"""
 	if not user or user == "Guest":
 		return
-	allowed = {row["name"] for row in get_allowed_school_branches(user=user)}
+
+	privileged = _is_privileged_user(user)
+	enforced = is_branch_access_enforced()
+	access_rows = _get_active_access_rows(user) if enforced and not privileged else []
+
+	if privileged or not enforced:
+		allowed = set(
+			frappe.get_all(
+				"EduEdge School Branch",
+				filters={"enabled": 1},
+				pluck="name",
+				limit_page_length=0,
+			)
+		)
+	else:
+		direct_branches = {
+			row.school_branch
+			for row in access_rows
+			if row.access_scope == ASSIGNMENT_SCOPE_BRANCH and row.school_branch
+		}
+		institution_scopes = {
+			row.institution
+			for row in access_rows
+			if row.access_scope == ASSIGNMENT_SCOPE_INSTITUTION and row.institution
+		}
+		company_scopes = {
+			row.company
+			for row in access_rows
+			if row.access_scope == ASSIGNMENT_SCOPE_COMPANY and row.company
+		}
+		or_filters = []
+		if direct_branches:
+			or_filters.append(["name", "in", sorted(direct_branches)])
+		if institution_scopes:
+			or_filters.append(["institution", "in", sorted(institution_scopes)])
+		if company_scopes:
+			or_filters.append(["company", "in", sorted(company_scopes)])
+		allowed = set(
+			frappe.get_all(
+				"EduEdge School Branch",
+				filters={"enabled": 1},
+				or_filters=or_filters,
+				pluck="name",
+				limit_page_length=0,
+			)
+		) if or_filters else set()
+
 	current = frappe.defaults.get_user_default(USER_DEFAULT_KEY, user=user)
 	if current and current not in allowed:
 		frappe.defaults.clear_default(USER_DEFAULT_KEY, parent=user)
 
-	profile = get_branch_access_profile(user=user)
-	saved_scope = _normalise_active_scope(
-		frappe.defaults.get_user_default(USER_SCOPE_KEY, user=user)
+	saved_scope_value = frappe.defaults.get_user_default(USER_SCOPE_KEY, user=user)
+	if not saved_scope_value:
+		# No explicit broad scope is active; remove stale broad-scope companions.
+		frappe.defaults.clear_default(USER_COMPANY_KEY, parent=user)
+		frappe.defaults.clear_default(USER_INSTITUTION_KEY, parent=user)
+		return
+
+	saved_scope = _normalise_active_scope(saved_scope_value)
+	if privileged:
+		return
+	if not enforced:
+		if saved_scope != ACTIVE_SCOPE_BRANCH:
+			frappe.defaults.clear_default(USER_SCOPE_KEY, parent=user)
+			frappe.defaults.clear_default(USER_COMPANY_KEY, parent=user)
+			frappe.defaults.clear_default(USER_INSTITUTION_KEY, parent=user)
+		return
+
+	company_scopes = {
+		row.company
+		for row in access_rows
+		if row.access_scope == ASSIGNMENT_SCOPE_COMPANY and row.company
+	}
+	institution_scopes = {
+		row.institution
+		for row in access_rows
+		if row.access_scope == ASSIGNMENT_SCOPE_INSTITUTION and row.institution
+	}
+	active_company = frappe.defaults.get_user_default(USER_COMPANY_KEY, user=user)
+	active_institution = frappe.defaults.get_user_default(USER_INSTITUTION_KEY, user=user)
+	invalid_broad_scope = (
+		saved_scope == ACTIVE_SCOPE_COMPANY
+		and (not active_company or active_company not in company_scopes)
+	) or (
+		saved_scope == ACTIVE_SCOPE_INSTITUTION
+		and (not active_institution or active_institution not in institution_scopes)
 	)
-	if saved_scope != profile["active_access_scope"]:
+	if invalid_broad_scope:
 		frappe.defaults.clear_default(USER_SCOPE_KEY, parent=user)
 		frappe.defaults.clear_default(USER_COMPANY_KEY, parent=user)
 		frappe.defaults.clear_default(USER_INSTITUTION_KEY, parent=user)

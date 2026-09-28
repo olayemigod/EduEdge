@@ -31,6 +31,9 @@ class TestAcademicReadinessContract(unittest.TestCase):
         self.assertIn("CLASS_SCOPE", source)
         self.assertIn("CLASS_ARM_SCOPE", source)
         self.assertIn("_date_overlap", source)
+        self.assertIn("_date_overlap_bounds", source)
+        self.assertIn("_assignment_branch_governance_covers_period", source)
+        self.assertIn("eligibility_covers_period(", source)
 
     def test_readiness_keeps_independent_auditable_signals_instead_of_opaque_score(self):
         source = (APP / "api" / "academic_readiness.py").read_text(encoding="utf-8")

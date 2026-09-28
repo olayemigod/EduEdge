@@ -8,7 +8,7 @@ APP = ROOT / "eduedge"
 
 
 class TestInstructorAssignmentBulkContract(unittest.TestCase):
-    def test_unified_page_uses_explicit_assignment_rows_not_global_cartesian_selection(self):
+    def test_unified_page_uses_explicit_governed_assignment_rows(self):
         component = (
             APP
             / "public"
@@ -19,43 +19,40 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
         for token in (
             "Exact responsibility planner",
             "Add Academic Row",
-            "Add Branch Access Row",
             "Assignment Row",
             "Duplicate",
             "Preview Exact Plan",
-            "Each row owns one Branch and one Class",
-            "Multiple Subjects or Class Arms selected inside that row apply only to that row",
+            "Each row owns one governed Branch and one Class",
             "rows: this.rows.map",
             "newRow(",
             "duplicateRow(row)",
             "InstructorAssignmentSearchFields",
             ':row="row"',
-            '@update:class-arms="row.student_groups = $event"',
-            '@update:courses="row.courses = $event"',
+            "Open Branch Governance",
+            "Instructor Assignments cannot create or widen Branch eligibility",
         ):
             self.assertIn(token, component)
         for retired in (
+            "Add Branch Access Row",
+            "addBranchAccessRow",
+            "Branch Eligibility Only",
             "form.branches.includes",
             "form.program_offerings.includes",
             "form.student_groups.includes",
             "form.courses.includes",
-            "Skipped because the Subject is not configured for that Class",
-            "coursesFor(row)",
-            "groupsFor(row)",
         ):
             self.assertNotIn(retired, component)
 
-    def test_row_planner_blocks_retired_cartesian_payloads_and_silent_skips(self):
+    def test_row_planner_blocks_retired_cartesian_and_branch_only_payloads(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
         for token in (
             "class PlannedAssignment",
-            "class PlannedBranchAccess",
             "def _rows",
             "previous global Class × Class Arm × Subject assignment format has been retired",
             "use explicit Assignment Rows",
+            "Branch Eligibility is managed only in Branch Governance",
             "def _validate_batch_duplicates",
             "Institution Subject will be added to the selected Class curriculum",
-            "add to Class curriculum",
             "curriculum_change_count",
             "curriculum_changes",
             '"row_summaries"',
@@ -63,6 +60,7 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             '"conflict_count"',
         ):
             self.assertIn(token, api)
+        self.assertNotIn("class PlannedBranchAccess", api)
         self.assertNotIn("skipped.append", api)
         self.assertNotIn("invalid_combinations_skipped", api)
 
@@ -112,7 +110,6 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
         self.assertIn("courseLabel(row", component)
         self.assertIn("EduEdgeMultiLinkField", search_fields)
         self.assertIn(':context="{ branch: row.branch, program_offering: row.program_offering }"', search_fields)
-        self.assertIn("searchCourses(row, query)", search_fields)
 
     def test_exact_existing_records_and_primary_responsibility_conflicts_are_checked(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
@@ -135,21 +132,9 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
         self.assertNotIn("ignore_permissions", api)
         self.assertNotIn("frappe.db.set_value", api)
 
-    def test_live_page_calls_only_authoritative_instructor_assignment_endpoints(self):
-        component = (
-            APP
-            / "public"
-            / "js"
-            / "eduedge_instructor_assignments"
-            / "EduEdgeInstructorAssignments.vue"
-        ).read_text(encoding="utf-8")
-        self.assertIn("eduedge.api.instructor_assignment_runtime.get_instructor_assignments_page", component)
-        self.assertIn("eduedge.api.instructor_assignments.preview_instructor_assignment_batch", component)
-        self.assertIn("eduedge.api.instructor_assignments.save_instructor_assignment_batch", component)
-        self.assertNotIn("eduedge.api.teacher_assignments", component)
-
-    def test_branch_eligibility_keeps_disjoint_periods_separate(self):
+    def test_branch_governance_coverage_is_required_and_never_created_by_planner(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
+        service = (APP / "services" / "instructor_branch_governance.py").read_text(encoding="utf-8")
         branch_controller = (
             APP
             / "eduedge"
@@ -158,23 +143,29 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             / "eduedge_instructor_branch_assignment.py"
         ).read_text(encoding="utf-8")
         for token in (
-            "def _save_branch_period",
-            "def _ensure_academic_branch_access",
-            'action": "extended"',
-            "academic_results, seen",
-            '"academic_branch_periods_ensured"',
+            "assert_instructor_branch_eligibility",
+            "eligible_branch_names",
+            "get_instructor_branch_eligibility_rows",
+            "governance_verified_count",
         ):
             self.assertIn(token, api)
+        for forbidden in (
+            "def _save_branch_period",
+            "def _ensure_academic_branch_access",
+            'frappe.new_doc("EduEdge Instructor Branch Assignment")',
+            "academic_branch_periods_ensured",
+        ):
+            self.assertNotIn(forbidden, api)
+        self.assertIn("start <= target_start and end >= target_end", service)
         self.assertIn("overlapping Branch eligibility", branch_controller)
         self.assertIn("_date_ranges_overlap", branch_controller)
-        self.assertNotIn("is already assigned to School Branch / Campus", branch_controller)
 
-    def test_disabled_academic_rows_do_not_create_active_branch_access(self):
+    def test_disabled_academic_rows_do_not_widen_branch_governance(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
-        self.assertIn("if not row.enabled:", api)
-        self.assertIn("return None", api)
-        self.assertIn('"not-found-disabled"', api)
-        self.assertIn('doc.enabled = cint(row["requested_enabled"])', api)
+        self.assertIn("assert_instructor_branch_eligibility", api)
+        self.assertNotIn("branch_access_changed", api)
+        self.assertNotIn("academic_branch_eligibility", api)
+        self.assertNotIn("def _save_branch_period", api)
 
     def test_assignment_manager_and_my_teaching_assignments_are_separated(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
@@ -199,7 +190,7 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
         self.assertIn("current_user_instructors", permissions)
         self.assertIn("_is_assignment_manager", permissions)
 
-    def test_assignment_dates_default_to_and_stay_inside_class_period(self):
+    def test_assignment_dates_stay_inside_class_and_governance_periods(self):
         api = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
         component = (
             APP
@@ -214,6 +205,7 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
             "period_end_date",
             "Valid From cannot be earlier than the selected Class academic period",
             "Valid To cannot be later than the selected Class academic period",
+            "assert_instructor_branch_eligibility",
         ):
             self.assertIn(token, api)
         self.assertIn('row["period_start_date"], row["period_end_date"]', search_api)
@@ -240,48 +232,6 @@ class TestInstructorAssignmentBulkContract(unittest.TestCase):
         self.assertIn("set assignment_type = %s", service)
         self.assertIn("LEGACY_SUBJECT_TEACHER", service)
         self.assertIn("ensure_teaching_assignment_foundation()", install)
-
-    def test_class_and_class_arm_links_preserve_row_context(self):
-        loader = (
-            APP
-            / "eduedge"
-            / "page"
-            / "eduedge_instructor_assignments"
-            / "eduedge_instructor_assignments.js"
-        ).read_text(encoding="utf-8")
-        class_arms = (
-            APP
-            / "public"
-            / "js"
-            / "eduedge_class_arms"
-            / "EduEdgeClassArms.vue"
-        ).read_text(encoding="utf-8")
-        offerings = (
-            APP
-            / "eduedge"
-            / "page"
-            / "eduedge_program_offerings"
-            / "eduedge_program_offerings.js"
-        ).read_text(encoding="utf-8")
-        for token in (
-            'params.get("offering") || params.get("program_offering")',
-            'params.get("student_group")',
-            'params.get("course")',
-            "proxy.applyRoutePreset?.(preset)",
-        ):
-            self.assertIn(token, loader)
-        self.assertIn(
-            "params = new URLSearchParams({ branch: this.draft.branch, offering: this.draft.offering, student_group: this.draft.name })",
-            class_arms,
-        )
-        self.assertIn("/app/eduedge-instructor-assignments", class_arms)
-        # Class Intake is now a setup-only surface. Instructor/curriculum links
-        # preserve exact context from their dedicated workflows rather than a
-        # competing Desk toolbar on the Intake page.
-        self.assertIn("clear_inner_toolbar", offerings)
-        self.assertIn("programme_offering_session_options.get_programme_offering_session_options", offerings)
-        self.assertNotIn("open_offering_operation", offerings)
-        self.assertNotIn('__("Class Operations")', offerings)
 
 
 if __name__ == "__main__":

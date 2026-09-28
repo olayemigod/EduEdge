@@ -21,6 +21,10 @@ INSTITUTION_BRANDING_FIELDS = (
 	"website",
 	"report_card_letter_head",
 	"report_footer",
+	"report_signatory_name",
+	"report_signatory_title",
+	"report_signatory_signature",
+	"official_stamp_image",
 )
 
 
@@ -71,6 +75,10 @@ def get_institution_branding(
 		"website": (institution_row or {}).get("website") or "",
 		"report_card_letter_head": (institution_row or {}).get("report_card_letter_head") or "",
 		"report_footer": (institution_row or {}).get("report_footer") or "",
+		"report_signatory_name": (institution_row or {}).get("report_signatory_name") or "",
+		"report_signatory_title": (institution_row or {}).get("report_signatory_title") or "",
+		"report_signatory_signature": (institution_row or {}).get("report_signatory_signature") or "",
+		"official_stamp_image": (institution_row or {}).get("official_stamp_image") or "",
 		"branch": (branch_row or {}).get("name") or "",
 		"branch_name": (branch_row or {}).get("branch_name") or "",
 		"branch_code": (branch_row or {}).get("branch_code") or "",
@@ -79,6 +87,51 @@ def get_institution_branding(
 		"formatted_address": format_address(address),
 	}
 
+
+
+def get_report_identity(*, branch: str | None) -> dict[str, Any]:
+	"""Resolve the current institution identity and terminology for report rendering.
+
+	Issued report cards persist this returned payload so later branding or Institution
+	Type changes do not rewrite an already-issued document.
+	"""
+	branch_row = _get_branch(branch)
+	institution_name = (branch_row or {}).get("institution")
+	branding = get_institution_branding(institution_name, branch=branch)
+	institution = {}
+	if institution_name:
+		meta = frappe.get_meta("EduEdge Institution")
+		fields = [
+			fieldname
+			for fieldname in (
+				"name",
+				"institution_name",
+				"official_name",
+				"short_name",
+				"institution_code",
+				"institution_type",
+			)
+			if fieldname == "name" or meta.has_field(fieldname)
+		]
+		institution = dict(
+			frappe.db.get_value(
+				"EduEdge Institution",
+				institution_name,
+				fields,
+				as_dict=True,
+			)
+			or {}
+		)
+
+	from eduedge.services.institution_context import get_effective_institution_context
+
+	context = get_effective_institution_context(branch=branch)
+	return {
+		"institution": institution,
+		"branding": branding,
+		"terminology": context.get("terms") or {},
+		"address": branding.get("address") or {},
+	}
 
 def get_active_communication_identity(
 	*,
@@ -100,6 +153,10 @@ def get_active_communication_identity(
 		"address": payload["address"],
 		"formatted_address": payload["formatted_address"],
 		"report_footer": payload["report_footer"],
+		"report_signatory_name": payload["report_signatory_name"],
+		"report_signatory_title": payload["report_signatory_title"],
+		"report_signatory_signature": payload["report_signatory_signature"],
+		"official_stamp_image": payload["official_stamp_image"],
 		"institution": payload["institution"],
 		"branch": payload["branch"],
 	}

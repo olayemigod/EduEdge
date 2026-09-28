@@ -40,128 +40,18 @@ def get_assessment_context(
 	student_group: str | None = None,
 	assessment_group: str | None = None,
 ) -> dict:
-	"""Assessment Operations context for sessional Class Arms and term-scoped work.
+	"""Compatibility wrapper for the hardened Assessment Operations context.
 
-	The Student Group/Class Arm is session-wide. Assessment Plans, result publication
-	and report-card readiness remain scoped to the selected Term/Semester.
+	Session-wide Class Arms are now handled by the primary Assessment Operations
+	service. Delegate here so legacy callers inherit the same Branch, exact
+	Instructor scope, Class/Form publication responsibility and readiness gates
+	instead of maintaining a second authorization path.
 	"""
-	base._require_operator()
-	resolved_branch = base._resolve_branch(branch)
-	default_year, default_term = base._current_academic_defaults()
-	academic_year = academic_year or default_year
-	academic_term = academic_term if academic_term is not None else default_term
-
-	groups = _student_groups(resolved_branch, academic_year, academic_term)
-	group_names = {row["name"] for row in groups}
-	if student_group and student_group not in group_names:
-		frappe.throw(
-			frappe._("Selected Student Group / Class Arm is not available in this Branch, Academic Session and Term."),
-			frappe.PermissionError,
-		)
-
-	assessment_groups = frappe.get_list(
-		"Assessment Group",
-		filters={"is_group": 0},
-		fields=["name", "assessment_group_name"],
-		order_by="assessment_group_name asc",
-		page_length=MAX_CONTEXT_ROWS,
+	return base.get_assessment_context(
+		branch=branch,
+		academic_year=academic_year,
+		academic_term=academic_term,
+		student_group=student_group,
+		assessment_group=assessment_group,
+		result_mode="Terminal",
 	)
-
-	plan_filters: dict = {BRANCH_FIELD: resolved_branch}
-	if academic_year:
-		plan_filters["academic_year"] = academic_year
-	if academic_term:
-		plan_filters["academic_term"] = academic_term
-	if student_group:
-		plan_filters["student_group"] = student_group
-	if assessment_group:
-		plan_filters["assessment_group"] = assessment_group
-	plans = frappe.get_list(
-		"Assessment Plan",
-		filters=plan_filters,
-		fields=[
-			"name",
-			"assessment_name",
-			"student_group",
-			"assessment_group",
-			"course",
-			"schedule_date",
-			"from_time",
-			"to_time",
-			"room",
-			"examiner_name",
-			"maximum_assessment_score",
-			"docstatus",
-		],
-		order_by="schedule_date desc, assessment_name asc",
-		page_length=MAX_CONTEXT_ROWS,
-	)
-
-	publication = None
-	readiness = None
-	if student_group and assessment_group and academic_year:
-		publication = frappe.db.get_value(
-			base.PUBLICATION_DOCTYPE,
-			{
-				"school_branch": resolved_branch,
-				"student_group": student_group,
-				"academic_year": academic_year,
-				"academic_term": academic_term or "",
-				"assessment_group": assessment_group,
-			},
-			[
-				"name",
-				"title",
-				"status",
-				"expected_results",
-				"submitted_results",
-				"draft_results",
-				"missing_results",
-				"report_card_ready",
-				"requested_by",
-				"requested_on",
-				"approved_by",
-				"approved_on",
-				"published_by",
-				"published_on",
-				"rejection_reason",
-			],
-			as_dict=True,
-		)
-		readiness = base.get_publication_readiness(
-			school_branch=resolved_branch,
-			student_group=student_group,
-			academic_year=academic_year,
-			academic_term=academic_term,
-			assessment_group=assessment_group,
-		)
-
-	current_branch = get_current_school_branch()
-	full_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
-	return {
-		"user": {"name": frappe.session.user, "full_name": full_name},
-		"tenant_name": (current_branch or {}).get("company"),
-		"current_branch": current_branch,
-		"allowed_branches": get_allowed_school_branches(),
-		"can_approve": bool(base.APPROVER_ROLES.intersection(frappe.get_roles(frappe.session.user))),
-		"filters": {
-			"branch": resolved_branch,
-			"academic_year": academic_year,
-			"academic_term": academic_term,
-			"student_group": student_group,
-			"assessment_group": assessment_group,
-		},
-		"counts": {
-			"plans": len(plans),
-			"submitted_plans": sum(1 for row in plans if row.docstatus == 1),
-			"draft_plans": sum(1 for row in plans if row.docstatus == 0),
-			"expected_results": (readiness or {}).get("expected_results", 0),
-			"submitted_results": (readiness or {}).get("submitted_results", 0),
-			"missing_results": (readiness or {}).get("missing_results", 0),
-		},
-		"student_groups": groups,
-		"assessment_groups": assessment_groups,
-		"plans": plans,
-		"publication": publication,
-		"readiness": readiness,
-	}

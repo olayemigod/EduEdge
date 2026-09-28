@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
 import hmac
 import json
 
@@ -10,7 +9,6 @@ from frappe.utils import cint, get_datetime, now_datetime
 
 from eduedge.cbt import attempts as base
 
-SYNC_RECONCILIATION_HOURS = 24
 RECONCILIATION_STATUSES = {"In Progress", "Pending Sync", "Auto Submitted", "Timed Out"}
 
 
@@ -32,13 +30,6 @@ def _token_valid(attempt, launch_token: str) -> bool:
 	)
 
 
-def _reconciliation_deadline(attempt):
-	anchor = attempt.expires_at or attempt.launch_token_expires_at
-	if not anchor:
-		return None
-	return get_datetime(anchor) + timedelta(hours=SYNC_RECONCILIATION_HOURS)
-
-
 def _load_candidate_attempt(
 	attempt_name: str,
 	launch_token: str,
@@ -53,7 +44,7 @@ def _load_candidate_attempt(
 
 	expires_at = get_datetime(attempt.launch_token_expires_at) if attempt.launch_token_expires_at else None
 	if expires_at and now_datetime() > expires_at:
-		deadline = _reconciliation_deadline(attempt)
+		deadline = base.reconciliation_deadline(attempt)
 		allowed = (
 			allow_reconciliation
 			and attempt.attempt_status in RECONCILIATION_STATUSES
@@ -63,6 +54,17 @@ def _load_candidate_attempt(
 		if not allowed:
 			frappe.throw(_("CBT launch token has expired."), frappe.PermissionError)
 	return attempt
+
+
+def _assert_reconciliation_window_open(attempt) -> None:
+	if attempt.attempt_status not in {"Pending Sync", "Auto Submitted", "Timed Out"}:
+		return
+	deadline = base.reconciliation_deadline(attempt)
+	if not deadline or now_datetime() > deadline:
+		frappe.throw(
+			_("The browser reconciliation window has expired. Use the governed Attempt Review workflow."),
+			frappe.PermissionError,
+		)
 
 
 def _reconciliation_cutoff(attempt):
@@ -104,6 +106,7 @@ def _prepared_state(attempt) -> dict:
 		"answers": {},
 		"reported_pending_sync_count": 0,
 		"last_sync_at": None,
+		"answer_sync_conflict": False,
 	}
 
 
@@ -122,7 +125,8 @@ def _candidate_state(attempt) -> dict:
 		"answers": base._answers(attempt.name),
 		"reported_pending_sync_count": cint(attempt.reported_pending_sync_count),
 		"last_sync_at": attempt.last_sync_at,
-		"reconciliation_deadline": _reconciliation_deadline(attempt),
+		"answer_sync_conflict": base._answer_sync_conflict_active(attempt),
+		"reconciliation_deadline": base.reconciliation_deadline(attempt),
 	}
 
 
@@ -215,15 +219,38 @@ def _record_conflict(
 	answer_count: int,
 	reported_pending_count: int,
 ) -> None:
+	server_time = now_datetime()
+	pending = max(
+		cint(attempt.reported_pending_sync_count),
+		cint(answer_count) + max(0, cint(reported_pending_count)),
+	)
+	reason = base._review_reason(
+		attempt.review_reasons,
+		base.ANSWER_SYNC_CONFLICT_REASON,
+	)
+	frappe.db.set_value(
+		"EduEdge CBT Attempt",
+		attempt.name,
+		{
+			"requires_review": 1,
+			"review_reasons": reason,
+			"reported_pending_sync_count": pending,
+			"last_heartbeat_at": server_time,
+		},
+		update_modified=False,
+	)
+	attempt.requires_review = 1
+	attempt.review_reasons = reason
+	attempt.reported_pending_sync_count = pending
 	base._sync_log(
 		{
 			"attempt": attempt.name,
 			"client_session_id": client_session_id,
 			"idempotency_key": idempotency_key,
 			"payload_hash": request_hash,
-			"server_received_at": now_datetime(),
+			"server_received_at": server_time,
 			"answer_count": answer_count,
-			"reported_pending_count": reported_pending_count,
+			"reported_pending_count": pending,
 			"sync_status": "Conflict",
 			"error_details": "Client revision reused with different content.",
 		}
@@ -256,6 +283,7 @@ def sync_answers(
 	if attempt.attempt_status not in {"In Progress", "Pending Sync", "Auto Submitted", "Timed Out"}:
 		frappe.throw(_("Answers cannot be synced for this status."), frappe.ValidationError)
 	if is_reconciliation:
+		_assert_reconciliation_window_open(attempt)
 		_validate_reconciliation_payload(attempt, rows, client_saved_at)
 
 	idempotency_key = str(idempotency_key or "").strip()
@@ -407,6 +435,48 @@ def sync_answers(
 
 
 @frappe.whitelist(allow_guest=True)
+def record_heartbeat(
+	attempt_name: str,
+	launch_token: str,
+	client_session_id: str,
+	reported_pending_count: int = 0,
+	runtime_event: str | None = None,
+) -> dict:
+	base._lock("EduEdge CBT Attempt", attempt_name)
+	attempt = _load_candidate_attempt(
+		attempt_name,
+		launch_token,
+		allow_reconciliation=True,
+	)
+	base._session(attempt, client_session_id)
+	if attempt.attempt_status == "In Progress" and base._remaining(attempt) <= 0:
+		base._finalize_timeout(attempt.name)
+		attempt.reload()
+	_assert_reconciliation_window_open(attempt)
+	base._record_runtime_security_event(attempt, runtime_event)
+	current = now_datetime()
+	pending = max(0, cint(reported_pending_count))
+	frappe.db.set_value(
+		"EduEdge CBT Attempt",
+		attempt.name,
+		{
+			"last_heartbeat_at": current,
+			"reported_pending_sync_count": pending,
+		},
+		update_modified=False,
+	)
+	return {
+		"attempt": attempt.name,
+		"status": attempt.attempt_status,
+		"server_time": current,
+		"seconds_remaining": base._remaining(attempt),
+		"reported_pending_count": pending,
+		"answer_sync_conflict": base._answer_sync_conflict_active(attempt),
+		"reconciliation_deadline": base.reconciliation_deadline(attempt),
+	}
+
+
+@frappe.whitelist(allow_guest=True)
 def submit_attempt(
 	attempt_name: str,
 	launch_token: str,
@@ -423,6 +493,40 @@ def submit_attempt(
 	if attempt.attempt_status == "In Progress" and base._remaining(attempt) <= 0:
 		base._finalize_timeout(attempt.name)
 		attempt.reload()
+	client_pending = max(0, cint(reported_pending_count))
+	if attempt.attempt_status in {"Pending Sync", "Auto Submitted", "Timed Out"}:
+		_assert_reconciliation_window_open(attempt)
+	deadline = base.reconciliation_deadline(attempt)
+	if (
+		attempt.attempt_status == "Pending Sync"
+		and str(attempt.submission_source or "").startswith("Server Timeout")
+		and not client_pending
+		and not cint(attempt.reported_pending_sync_count)
+		and not base._answer_sync_conflict_active(attempt)
+		and deadline
+		and now_datetime() <= deadline
+	):
+		# This request comes from the bound active browser session after its local
+		# queue has been flushed. It is the only automatic proof that a server
+		# timeout has no unreported pre-cutoff answers.
+		current = now_datetime()
+		frappe.db.set_value(
+			"EduEdge CBT Attempt",
+			attempt.name,
+			{
+				"attempt_status": "Auto Submitted",
+				"reported_pending_sync_count": 0,
+				"last_heartbeat_at": current,
+			},
+			update_modified=False,
+		)
+		return {
+			"attempt": attempt.name,
+			"status": "Auto Submitted",
+			"reported_pending_count": 0,
+			"server_time": current,
+		}
+
 	if attempt.attempt_status in {"Submitted", "Auto Submitted", "Pending Sync", "Timed Out"}:
 		return {
 			"attempt": attempt.name,

@@ -295,6 +295,9 @@ export default {
 				assignmentTypes: types,
 				defaultType,
 				primaryLabel: __("Assign Selected"),
+				governanceFilters: {
+					teaching_contexts: JSON.stringify(this.selectedTeaching),
+				},
 				onSubmit: async (values, dialog) => {
 					const response = await frappe.call({ method: ASSIGN_SUBJECT_METHOD, type: "POST", args: { launch: this.launchName, instructor: values.instructor, contexts: JSON.stringify(this.selectedTeaching.map((context_key) => ({ context_key }))), assignment_type: values.assignment_type } });
 					this.applyPayload(response.message?.context || {}); dialog.hide();
@@ -309,6 +312,9 @@ export default {
 				assignmentTypes: ["Class Teacher", "Form Teacher"],
 				defaultType: this.payload.defaults?.class_responsibility_type || "Class Teacher",
 				primaryLabel: __("Assign Selected Class Arms"),
+				governanceFilters: {
+					student_groups: JSON.stringify(this.selectedResponsibilities),
+				},
 				onSubmit: async (values, dialog) => {
 					const response = await frappe.call({ method: ASSIGN_CLASS_METHOD, type: "POST", args: { launch: this.launchName, instructor: values.instructor, student_groups: JSON.stringify(this.selectedResponsibilities), assignment_type: values.assignment_type } });
 					this.applyPayload(response.message?.context || {}); dialog.hide();
@@ -316,10 +322,15 @@ export default {
 				},
 			});
 		},
-		assignmentDialog({ title, assignmentTypes, defaultType, primaryLabel, onSubmit }) {
+		assignmentDialog({ title, assignmentTypes, defaultType, primaryLabel, governanceFilters = {}, onSubmit }) {
 			const dialog = new frappe.ui.Dialog({
 				title,
 				fields: [
+					{
+						fieldname: "governance_guidance",
+						fieldtype: "HTML",
+						options: `<div class="session-delivery-dialog-guidance"><strong>${frappe.utils.escape_html(__("Branch Governance applies"))}</strong><br>${frappe.utils.escape_html(__("Only Instructors whose governed Branch Eligibility covers every selected responsibility period are shown."))}</div>`,
+					},
 					{ fieldname: "instructor", fieldtype: "Link", label: __("Teacher / Instructor"), options: "Instructor", reqd: 1 },
 					{ fieldname: "assignment_type", fieldtype: "Select", label: __("Responsibility Type"), options: assignmentTypes, default: defaultType, reqd: 1 },
 				],
@@ -332,7 +343,13 @@ export default {
 				},
 			});
 			const field = dialog.fields_dict.instructor;
-			const getQuery = () => ({ query: INSTRUCTOR_QUERY, filters: { launch: this.launchName } });
+			const getQuery = () => ({
+				query: INSTRUCTOR_QUERY,
+				filters: {
+					launch: this.launchName,
+					...governanceFilters,
+				},
+			});
 			field.get_query = getQuery; field.df.get_query = getQuery;
 			dialog.show();
 		},

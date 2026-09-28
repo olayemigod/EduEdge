@@ -51,7 +51,7 @@ class TestAcademicOperationsRefactorContract(unittest.TestCase):
         source = (APP / "public/js/eduedge_attendance/EduEdgeAttendance.vue").read_text(encoding="utf-8")
         self.assertIn("Take Attendance", source)
         self.assertIn("Missing Registers", source)
-        self.assertIn("course_schedule: this.filters.course_schedule", source)
+        self.assertIn("course_schedule: requestedSchedule", source)
         self.assertIn('params.get("course_schedule")', source)
         self.assertIn("get_attendance_register", source)
         self.assertIn("save_attendance_register", source)

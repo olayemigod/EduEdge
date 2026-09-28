@@ -7,15 +7,24 @@ APP = ROOT / "eduedge"
 
 
 class TestInstructorBranchGovernanceAlignmentContract(unittest.TestCase):
-    def test_eligibility_history_uses_all_user_permitted_branches_not_header_default(self):
-        source = (APP / "api" / "instructor_assignment_register.py").read_text(encoding="utf-8")
-        self.assertIn("eligibility_branches = allowed_names", source)
-        self.assertIn(
-            '"branch_assignments": core._branch_assignment_rows(instructor, eligibility_branches)',
-            source,
-        )
-        self.assertNotIn("register_branches = selected or allowed_names", source)
-        self.assertIn("can_manage_branch_eligibility", source)
+    def test_branch_governance_is_upstream_of_assignment_planner(self):
+        source = (APP / "api" / "instructor_assignments.py").read_text(encoding="utf-8")
+        for token in (
+            "eligible_branch_names",
+            "get_instructor_branch_eligibility_rows",
+            "assert_instructor_branch_eligibility",
+            '"permitted_branches": permitted',
+            '"route": "/app/eduedge-branch-governance"',
+            "Branch Eligibility is managed only in Branch Governance",
+        ):
+            self.assertIn(token, source)
+        for forbidden in (
+            "class PlannedBranchAccess",
+            "def _save_branch_period",
+            "def _ensure_academic_branch_access",
+            "in_eduedge_assignment_matrix_save",
+        ):
+            self.assertNotIn(forbidden, source)
 
     def test_instructor_assignment_flow_does_not_write_user_branch_access(self):
         forbidden_writes = (
@@ -36,34 +45,60 @@ class TestInstructorBranchGovernanceAlignmentContract(unittest.TestCase):
             for token in forbidden_writes:
                 self.assertNotIn(token, source, f"{relative}: {token}")
 
-    def test_visible_instructor_language_calls_eligibility_not_user_access(self):
-        runtime = (
+    def test_assignment_ui_consumes_governance_without_eligibility_authoring(self):
+        source = (
+            APP
+            / "public"
+            / "js"
+            / "eduedge_instructor_assignments"
+            / "EduEdgeInstructorAssignments.vue"
+        ).read_text(encoding="utf-8")
+        for token in (
+            "Open Branch Governance",
+            "Manage in Branch Governance",
+            "Branch options come only from this Instructor",
+            "Instructor Assignments cannot create or widen Branch eligibility",
+            "Instructor Branch Eligibility",
+        ):
+            self.assertIn(token, source)
+        for forbidden in (
+            "Add Branch Access Row",
+            "Add Branch Eligibility Row",
+            "Branch Eligibility Only",
+            "addBranchAccessRow",
+        ):
+            self.assertNotIn(forbidden, source)
+
+    def test_branch_governance_owns_instructor_eligibility_surface(self):
+        source = (
+            APP
+            / "public"
+            / "js"
+            / "eduedge_branch_governance"
+            / "EduEdgeBranchGovernance.vue"
+        ).read_text(encoding="utf-8")
+        for token in (
+            "Instructor Branch Eligibility",
+            "Add Instructor Eligibility",
+            "Edit Eligibility",
+            "Academic Assignments",
+            "can_manage_instructor_eligibility",
+            "can_view_instructor_eligibility",
+        ):
+            self.assertIn(token, source)
+
+    def test_compatibility_alignment_runtime_is_read_only_noop(self):
+        source = (
             APP
             / "public"
             / "js"
             / "eduedge_instructor_assignments"
             / "branch_alignment.js"
         ).read_text(encoding="utf-8")
-        for token in (
-            "Add Branch Eligibility Row",
-            "Branch Eligibility Only",
-            "Branch eligibility changes",
-            "Branch eligibility",
-            "Instructor Branch Eligibility is not User Branch Access.",
-            "User access, Branch switching and security scope are managed separately under Branch Governance.",
-            "The header Branch is navigation context and does not narrow this Instructor's eligibility history.",
-        ):
-            self.assertIn(token, runtime)
-
-    def test_alignment_runtime_is_loaded_with_instructor_assignment_bundle(self):
-        helper = (
-            APP
-            / "public"
-            / "js"
-            / "eduedge_instructor_assignments"
-            / "replacement_dialog.js"
-        ).read_text(encoding="utf-8")
-        self.assertIn('import "./branch_alignment";', helper)
+        self.assertIn("Branch Governance", source)
+        self.assertIn("must not add Branch Eligibility authoring controls", source)
+        self.assertNotIn("get_instructor_branch_eligibility_review", source)
+        self.assertNotIn("Add Branch Eligibility Row", source)
 
 
 if __name__ == "__main__":

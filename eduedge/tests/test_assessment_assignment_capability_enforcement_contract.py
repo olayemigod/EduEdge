@@ -20,13 +20,18 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             "program_offering=program_offering or \"\"",
             "student_group=doc.student_group",
             "course=doc.course",
-            "on_date=doc.schedule_date or nowdate()",
+            "assessment_date = doc.schedule_date or nowdate()",
+            "on_date=assessment_date",
         ):
             self.assertIn(token, source)
 
     def test_plan_capability_is_evaluated_on_assessment_schedule_date(self):
         source = self._source()
-        self.assertIn("on_date=doc.schedule_date or nowdate()", source)
+        self.assertIn("assessment_date = doc.schedule_date or nowdate()", source)
+        validator = source.split("def before_validate_assessment_plan", 1)[1].split(
+            "def _validate_examiner_and_supervisor", 1
+        )[0]
+        self.assertGreaterEqual(validator.count("on_date=assessment_date"), 2)
         self.assertIn("Assessment date must lie within the Student Group academic period.", source)
 
     def test_mark_entry_requires_current_exact_capability_for_limited_teacher(self):
@@ -43,6 +48,51 @@ class TestAssessmentAssignmentCapabilityEnforcementContract(unittest.TestCase):
             "retain mark-entry access",
         ):
             self.assertIn(token, source)
+
+    def test_assessment_result_scope_and_criteria_are_plan_authoritative(self):
+        source = self._source()
+        validator = source.split("def before_validate_assessment_result", 1)[1].split(
+            "def validate_publication_scope",
+            1,
+        )[0]
+        for token in (
+            "if doc.is_new():",
+            "_lock_assessment_plan_for_result(doc.assessment_plan)",
+            "_assert_no_active_assessment_result_duplicate(doc)",
+            "for update",
+            '"docstatus": ["!=", 2]',
+            'filters["name"] = ["!=", doc.name]',
+            "frappe.DuplicateEntryError",
+            "_apply_assessment_result_plan_contract(doc, plan)",
+            '("student_group", plan.student_group)',
+            '("program", plan.program)',
+            '("course", plan.course)',
+            '("academic_year", plan.academic_year)',
+            '("academic_term", plan.academic_term)',
+            '("assessment_group", plan.assessment_group)',
+            '("grading_scale", plan.grading_scale)',
+            "doc.maximum_score = flt(plan.maximum_assessment_score)",
+            "if score_state not in SCORE_STATES:",
+            "Invalid Assessment Result score state",
+            '"Assessment Plan Criteria"',
+            '"parenttype": "Assessment Plan"',
+            "Assessment Result criteria must exactly match the submitted Assessment Plan.",
+            'if raw_score in (None, ""):',
+            "requires an explicit score",
+            "score = float(raw_score)",
+            "except (TypeError, ValueError):",
+            "requires a numeric score",
+            "if not isfinite(score):",
+            "requires a finite numeric score",
+            "if score < 0 or score > maximum_score:",
+            "must be between 0 and {1}",
+            "row.maximum_score = maximum_score",
+        ):
+            self.assertIn(token, validator)
+
+        marker = source.split("def _get_assessment_plan", 1)[1]
+        self.assertIn('"grading_scale"', marker)
+        self.assertIn('"maximum_assessment_score"', marker)
 
     def test_assessment_plan_lookup_includes_course_and_schedule_context(self):
         source = self._source()

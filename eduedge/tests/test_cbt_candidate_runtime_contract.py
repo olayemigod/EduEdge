@@ -73,6 +73,87 @@ class TestCBTCandidateRuntimeContract(unittest.TestCase):
 		):
 			self.assertIn(token, candidate)
 
+	def test_candidate_runtime_enforces_one_active_tab_per_attempt(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		for token in (
+			'TAB_LEASE_REFRESH_MS = 4000',
+			'TAB_LEASE_TTL_MS = 15000',
+			'CONCURRENT_TAB_EVENT = "Concurrent Tab Detected"',
+			'eduedge:cbt:tab-instance:',
+			'eduedge:cbt:active-tab:',
+			'window.sessionStorage.setItem(key, value)',
+			'async acquireTabLease()',
+			'refreshTabLease()',
+			'window.addEventListener("storage"',
+			'async handleTabConflict()',
+			'runtime_event: eventName',
+			'Continue in the original tab',
+		):
+			self.assertIn(token, candidate)
+		self.assertIn("if (!(await this.acquireTabLease())) return", candidate)
+
+
+	def test_sync_conflict_pauses_automatic_retry_and_locks_candidate(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		for token in (
+			"this.syncConflict = false",
+			"if (this.syncConflict) return false",
+			"if (this.syncConflict) return;",
+			"this.enterSyncConflict(result.conflict_question || \"\")",
+			"enterSyncConflict(questionKey = \"\")",
+			"window.clearInterval(this.periodicSyncInterval)",
+			"Synchronisation paused — invigilator review required",
+			"Submission is blocked until the answer synchronisation conflict is reviewed",
+			'badge.textContent = this.syncConflict',
+			"if (this.syncConflict) {",
+			"await this.refreshState()",
+			'if (this.syncConflict && state.status === "In Progress" && state.answer_sync_conflict)',
+			"this.updateServerClock(state.server_time)",
+			"this.syncConflict = Boolean(state?.answer_sync_conflict)",
+			"answer_sync_conflict: Boolean(state.answer_sync_conflict)",
+			"const serverConflict = Boolean(result.answer_sync_conflict)",
+			"this.syncConflict && !serverConflict",
+			"!this.syncConflict && serverConflict",
+			"restartPeriodicSync()",
+			"if (!this.syncConflict)",
+			"Synchronisation conflict cleared by the invigilator.",
+		):
+			self.assertIn(token, candidate)
+
+
+	def test_local_timeout_flushes_then_confirms_zero_pending_submission(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		timeout_block = candidate.split("async handleLocalTimeout()", 1)[1].split(
+			"renderTerminal(syncPending)", 1
+		)[0]
+		for token in (
+			"this.submissionRequested = true",
+			"await this.heartbeat()",
+			"await this.flushSync()",
+			"await this.refreshState()",
+		):
+			self.assertIn(token, timeout_block)
+		flush_block = candidate.split("async flushSync()", 1)[1].split(
+			"enterSyncConflict(questionKey", 1
+		)[0]
+		self.assertIn(
+			"if (this.submissionRequested && this.pendingCount === 0) await this.completeQueuedSubmission()",
+			flush_block,
+		)
+
+
+	def test_runtime_security_event_is_heartbeat_only(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		submit_block = candidate.split("async completeQueuedSubmission()", 1)[1].split(
+			"async refreshState()", 1
+		)[0]
+		heartbeat_block = candidate.split('async heartbeat(runtimeEvent = "")', 1)[1].split(
+			"async handleLocalTimeout()", 1
+		)[0]
+		self.assertNotIn("runtime_event", submit_block)
+		self.assertIn("runtime_event: runtimeEvent || undefined", heartbeat_block)
+
+
 	def test_candidate_payload_never_requests_or_renders_scoring_keys(self):
 		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
 		for forbidden in (

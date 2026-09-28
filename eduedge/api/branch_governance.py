@@ -37,16 +37,25 @@ def get_governance_context(company: str | None = None) -> dict:
 	can_manage_access = _has("create", "EduEdge User Branch Access") or _has(
 		"write", "EduEdge User Branch Access"
 	)
+	can_read_instructor_eligibility = _has("read", "EduEdge Instructor Branch Assignment")
+	can_manage_instructor_eligibility = _has("create", "EduEdge Instructor Branch Assignment") or _has(
+		"write", "EduEdge Instructor Branch Assignment"
+	)
 	can_manage_accounting = _has("write", "EduEdge School Branch")
 	can_manage_enforcement = _has("write", "EduEdge Settings")
+	# Read scope always comes from the Branch Context service. Management
+	# permissions enable actions inside that scope; they must never widen it.
 	context = _get_branch_governance_context(
 		company=company,
 		include_assignment_details=can_read_access,
-		include_all_branches=can_manage_access or can_manage_accounting or can_manage_enforcement,
+		include_instructor_eligibility=can_read_instructor_eligibility,
+		include_all_branches=False,
 	)
 	context["permissions"] = {
 		"can_manage_access": can_manage_access,
 		"can_view_access_details": can_read_access,
+		"can_view_instructor_eligibility": can_read_instructor_eligibility,
+		"can_manage_instructor_eligibility": can_manage_instructor_eligibility,
 		"can_manage_accounting": can_manage_accounting,
 		"can_manage_enforcement": can_manage_enforcement,
 	}

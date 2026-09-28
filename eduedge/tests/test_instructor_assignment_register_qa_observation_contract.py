@@ -41,7 +41,7 @@ class TestInstructorAssignmentRegisterQAObservationContract(unittest.TestCase):
             'data-register-tab="register"',
             'data-register-tab="eligibility"',
             "Instructor Assignment Register",
-            "Branch Eligibility Periods",
+            "Branch Governance Eligibility",
             'proxy.assignmentRegisterTab = active',
             'registerPanel.hidden = active !== DEFAULT_REGISTER_TAB',
             'eligibilityPanel.hidden = active !== "eligibility"',
@@ -86,7 +86,7 @@ class TestInstructorAssignmentRegisterQAObservationContract(unittest.TestCase):
     def test_tabs_and_view_first_ui_do_not_change_business_data(self):
         source = RUNTIME.read_text(encoding="utf-8")
         self.assertIn('panelByHeading("Instructor Assignment Register")', source)
-        self.assertIn('panelByHeading("Branch Eligibility Periods")', source)
+        self.assertIn('panelByHeading("Instructor Branch Eligibility")', source)
         self.assertNotIn("frappe.db.set_value", source)
         self.assertNotIn("frappe.client.set_value", source)
         self.assertNotIn("delete_doc", source)

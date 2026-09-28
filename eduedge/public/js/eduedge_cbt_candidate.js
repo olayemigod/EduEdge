@@ -5,7 +5,7 @@
 		state: "eduedge.cbt.attempt_runtime_guard.get_attempt_state",
 		start: "eduedge.cbt.attempts.start_attempt",
 		sync: "eduedge.cbt.attempt_runtime_guard.sync_answers",
-		heartbeat: "eduedge.cbt.attempts.record_heartbeat",
+		heartbeat: "eduedge.cbt.attempt_runtime_guard.record_heartbeat",
 		submit: "eduedge.cbt.attempt_runtime_guard.submit_attempt",
 	});
 	const TERMINAL_STATUSES = new Set([
@@ -19,6 +19,9 @@
 	const SYNC_DEBOUNCE_MS = 900;
 	const PERIODIC_SYNC_MS = 12000;
 	const HEARTBEAT_MS = 30000;
+	const TAB_LEASE_REFRESH_MS = 4000;
+	const TAB_LEASE_TTL_MS = 15000;
+	const CONCURRENT_TAB_EVENT = "Concurrent Tab Detected";
 	const BASIC_RICH_TEXT_TAGS = new Set([
 		"P",
 		"BR",
@@ -119,6 +122,16 @@
 		return value;
 	}
 
+	function tabInstanceId(attempt) {
+		const key = `eduedge:cbt:tab-instance:${attempt}`;
+		let value = window.sessionStorage.getItem(key);
+		if (!value) {
+			value = randomId();
+			window.sessionStorage.setItem(key, value);
+		}
+		return value;
+	}
+
 	function sanitizeRichText(raw) {
 		const template = document.createElement("template");
 		template.innerHTML = String(raw || "");
@@ -173,6 +186,7 @@
 			this.root = root;
 			this.launch = readLaunchContext();
 			this.clientSession = this.launch.attempt ? clientSessionId(this.launch.attempt) : "";
+			this.tabInstance = this.launch.attempt ? tabInstanceId(this.launch.attempt) : "";
 			this.storage = null;
 			this.serverState = null;
 			this.questions = [];
@@ -181,10 +195,16 @@
 			this.pendingCount = 0;
 			this.syncing = false;
 			this.syncPromise = null;
+			this.syncConflict = false;
+			this.syncConflictQuestion = "";
 			this.syncTimer = null;
 			this.timerInterval = null;
 			this.periodicSyncInterval = null;
 			this.heartbeatInterval = null;
+			this.tabLeaseInterval = null;
+			this.tabConflict = false;
+			this.tabEventReported = false;
+			this.tabEventQueued = false;
 			this.timerBaseSeconds = 0;
 			this.timerBasePerformance = window.performance.now();
 			this.serverClockOffsetMs = 0;
@@ -209,6 +229,7 @@
 			}
 			try {
 				this.storage = await window.EduEdgeCBTRuntimeStorage.open(this.launch.attempt);
+				if (!(await this.acquireTabLease())) return;
 				this.currentIndex = Number(await this.storage.getMeta("current_question", 0)) || 0;
 				this.submissionRequested = Boolean(await this.storage.getMeta("submission_requested", false));
 				await this.loadStateWithOfflineFallback();
@@ -251,6 +272,9 @@
 		}
 
 		async applyServerState(state, fromCache) {
+			const hadSyncConflict = this.syncConflict;
+			this.syncConflict = Boolean(state?.answer_sync_conflict);
+			if (!this.syncConflict) this.syncConflictQuestion = "";
 			this.serverState = { ...(state || {}) };
 			this.updateServerClock(state.server_time);
 			if (Array.isArray(state.questions) && state.questions.length) this.questions = state.questions;
@@ -271,6 +295,7 @@
 					answers: {},
 					reported_pending_sync_count: state.reported_pending_sync_count || 0,
 					last_sync_at: state.last_sync_at || null,
+					answer_sync_conflict: Boolean(state.answer_sync_conflict),
 				});
 			} else {
 				const deadlineEpoch = Number(await this.storage.getMeta("timer_deadline_epoch", Date.now()));
@@ -280,7 +305,12 @@
 			this.currentIndex = Math.max(0, Math.min(this.currentIndex, Math.max(0, this.questions.length - 1)));
 			this.setTimer(Number(this.serverState.seconds_remaining || 0));
 			this.renderForStatus();
-			if (this.submissionRequested && navigator.onLine) this.queueSync(0);
+			if (hadSyncConflict && !this.syncConflict && this.serverState.status === "In Progress") {
+				this.restartPeriodicSync();
+				this.showNotice("Synchronisation conflict cleared by the invigilator. Pending browser answers will resume syncing.", "success");
+				if (navigator.onLine && this.pendingCount) this.queueSync(0);
+			}
+			if (this.submissionRequested && navigator.onLine && !this.syncConflict) this.queueSync(0);
 		}
 
 		async reloadLocalAnswers() {
@@ -309,6 +339,106 @@
 			this.updateConnectionUI();
 		}
 
+		tabLeaseKey() {
+			return `eduedge:cbt:active-tab:${this.launch.attempt}`;
+		}
+
+		readTabLease() {
+			try {
+				const value = window.localStorage.getItem(this.tabLeaseKey());
+				return value ? JSON.parse(value) : null;
+			} catch (error) {
+				return null;
+			}
+		}
+
+		tabLeaseIsFresh(lease) {
+			return Boolean(
+				lease?.tab_id
+				&& Number.isFinite(Number(lease.updated_at))
+				&& Date.now() - Number(lease.updated_at) < TAB_LEASE_TTL_MS
+			);
+		}
+
+		writeTabLease() {
+			window.localStorage.setItem(
+				this.tabLeaseKey(),
+				JSON.stringify({ tab_id: this.tabInstance, updated_at: Date.now() })
+			);
+		}
+
+		async acquireTabLease() {
+			const existing = this.readTabLease();
+			if (
+				this.tabLeaseIsFresh(existing)
+				&& existing.tab_id !== this.tabInstance
+			) {
+				await this.handleTabConflict();
+				return false;
+			}
+			this.writeTabLease();
+			const confirmed = this.readTabLease();
+			if (!confirmed || confirmed.tab_id !== this.tabInstance) {
+				await this.handleTabConflict();
+				return false;
+			}
+			return true;
+		}
+
+		refreshTabLease() {
+			if (this.tabConflict || !this.launch.attempt) return;
+			const existing = this.readTabLease();
+			if (
+				this.tabLeaseIsFresh(existing)
+				&& existing.tab_id !== this.tabInstance
+			) {
+				void this.handleTabConflict();
+				return;
+			}
+			this.writeTabLease();
+		}
+
+		async reportRuntimeEvent(eventName) {
+			if (this.tabEventReported) return;
+			if (!navigator.onLine) {
+				if (!this.tabEventQueued) {
+					this.tabEventQueued = true;
+					window.addEventListener("online", () => {
+						this.tabEventQueued = false;
+						void this.reportRuntimeEvent(eventName);
+					}, { once: true });
+				}
+				return;
+			}
+			this.tabEventReported = true;
+			try {
+				await apiCall(API.heartbeat, {
+					attempt_name: this.launch.attempt,
+					launch_token: this.launch.token,
+					client_session_id: this.clientSession,
+					reported_pending_count: this.pendingCount,
+					runtime_event: eventName,
+				});
+			} catch (error) {
+				this.tabEventReported = false;
+			}
+		}
+
+		async handleTabConflict() {
+			if (this.tabConflict) return;
+			this.tabConflict = true;
+			this.locallyLocked = true;
+			window.clearTimeout(this.syncTimer);
+			window.clearInterval(this.timerInterval);
+			window.clearInterval(this.periodicSyncInterval);
+			window.clearInterval(this.heartbeatInterval);
+			window.clearInterval(this.tabLeaseInterval);
+			this.renderFatal(
+				"This examination is already active in another browser tab. Continue in the original tab. If it was closed unexpectedly, wait briefly and try again."
+			);
+			await this.reportRuntimeEvent(CONCURRENT_TAB_EVENT);
+		}
+
 		renderLoading(message) {
 			this.root.innerHTML = `<main class="cbt-loading"><div class="cbt-spinner" aria-hidden="true"></div><h1>EduEdge CBT</h1><p>${message}</p></main>`;
 		}
@@ -334,7 +464,7 @@
 				return;
 			}
 			if (status === "In Progress") {
-				this.locallyLocked = false;
+				this.locallyLocked = this.syncConflict;
 				this.renderExam();
 				return;
 			}
@@ -428,7 +558,13 @@
 			this.updateConnectionUI();
 			this.updatePendingUI();
 			this.updateTimerUI();
-			if (this.submissionRequested) {
+			if (this.syncConflict) {
+				this.locallyLocked = true;
+				this.showNotice(
+					"Synchronisation is paused because EduEdge detected an answer revision conflict. Stop editing and contact the invigilator. Do not reload this page unless instructed.",
+					"danger"
+				);
+			} else if (this.submissionRequested) {
 				this.locallyLocked = true;
 				this.showNotice("Submission is saved in this browser and will complete after pending answers synchronise.", "warning");
 			}
@@ -589,6 +725,7 @@
 		}
 
 		queueSync(delay = SYNC_DEBOUNCE_MS) {
+			if (this.syncConflict) return;
 			window.clearTimeout(this.syncTimer);
 			this.syncTimer = window.setTimeout(() => this.flushSync(), delay);
 		}
@@ -619,6 +756,7 @@
 		}
 
 		async flushSync() {
+			if (this.syncConflict) return false;
 			if (this.syncing) return this.syncPromise;
 			if (!navigator.onLine) {
 				this.setConnection("offline");
@@ -644,7 +782,7 @@
 							reported_pending_count: remaining,
 						});
 						if (result.status === "Conflict") {
-							this.showNotice("EduEdge detected an answer revision conflict. Stop and contact the invigilator.", "danger");
+							this.enterSyncConflict(result.conflict_question || "");
 							return false;
 						}
 						await this.storage.markBatchSynced(batch);
@@ -667,7 +805,31 @@
 			return this.syncPromise;
 		}
 
+		enterSyncConflict(questionKey = "") {
+			if (this.syncConflict) return;
+			this.syncConflict = true;
+			this.syncConflictQuestion = questionKey || "";
+			this.locallyLocked = true;
+			window.clearTimeout(this.syncTimer);
+			window.clearInterval(this.periodicSyncInterval);
+			this.renderCurrentQuestion();
+			this.renderPalette();
+			this.showNotice(
+				"Synchronisation is paused because EduEdge detected an answer revision conflict. Stop editing and contact the invigilator. Do not reload this page unless instructed.",
+				"danger"
+			);
+			this.updatePendingUI();
+			this.updateFooterStatus("Synchronisation paused — invigilator review required");
+		}
+
 		async requestSubmission() {
+			if (this.syncConflict) {
+				this.showNotice(
+					"Submission is blocked until the answer synchronisation conflict is reviewed by the invigilator.",
+					"danger"
+				);
+				return;
+			}
 			if (this.submissionRequested) return;
 			const unanswered = this.questions.filter((question) => !answerIsFilled(this.answers.get(question.snapshot_key)?.answer)).length;
 			const warning = unanswered
@@ -688,7 +850,7 @@
 		}
 
 		async completeQueuedSubmission() {
-			if (!this.submissionRequested) return;
+			if (!this.submissionRequested || this.syncConflict) return;
 			try {
 				const result = await apiCall(API.submit, {
 					attempt_name: this.launch.attempt,
@@ -715,13 +877,21 @@
 					client_session_id: this.clientSession,
 				});
 				this.setConnection("online");
+				if (this.syncConflict && state.status === "In Progress" && state.answer_sync_conflict) {
+					this.updateServerClock(state.server_time);
+					if (Number.isFinite(Number(state.seconds_remaining))) {
+						this.setTimer(Number(state.seconds_remaining));
+					}
+					return;
+				}
 				await this.applyServerState(state, false);
 			} catch (error) {
 				this.setConnection(navigator.onLine ? "degraded" : "offline");
 			}
 		}
 
-		async heartbeat() {
+		async heartbeat(runtimeEvent = "") {
+			if (this.tabConflict) return;
 			if (!navigator.onLine || !this.serverState || this.serverState.status === "Prepared") return;
 			try {
 				const result = await apiCall(API.heartbeat, {
@@ -729,11 +899,19 @@
 					launch_token: this.launch.token,
 					client_session_id: this.clientSession,
 					reported_pending_count: this.pendingCount,
+					runtime_event: runtimeEvent || undefined,
 				});
 				this.updateServerClock(result.server_time);
 				this.setConnection("online");
 				if (Number.isFinite(Number(result.seconds_remaining))) this.setTimer(Number(result.seconds_remaining));
-				if (result.status !== this.serverState.status) await this.refreshState();
+				const serverConflict = Boolean(result.answer_sync_conflict);
+				if (this.syncConflict && !serverConflict && result.status === "In Progress") {
+					await this.refreshState();
+				} else if (!this.syncConflict && serverConflict) {
+					this.enterSyncConflict("");
+				} else if (result.status !== this.serverState.status) {
+					await this.refreshState();
+				}
 			} catch (error) {
 				this.setConnection(navigator.onLine ? "degraded" : "offline");
 			}
@@ -818,12 +996,14 @@
 		updatePendingUI() {
 			const badge = this.root.querySelector(".cbt-sync-badge");
 			if (badge) {
-				badge.className = `cbt-sync-badge ${this.pendingCount ? "pending" : "synced"}`;
-				badge.textContent = this.syncing
-					? "Synchronising…"
-					: this.pendingCount
-						? `${this.pendingCount} pending`
-						: "All answers synced";
+				badge.className = `cbt-sync-badge ${this.pendingCount || this.syncConflict ? "pending" : "synced"}`;
+				badge.textContent = this.syncConflict
+					? "Sync conflict"
+					: this.syncing
+						? "Synchronising…"
+						: this.pendingCount
+							? `${this.pendingCount} pending`
+							: "All answers synced";
 			}
 			const terminal = this.root.querySelector(".cbt-terminal-pending");
 			if (terminal) terminal.textContent = String(this.pendingCount);
@@ -836,6 +1016,10 @@
 			if (!footer) return;
 			if (message) {
 				footer.textContent = message;
+				return;
+			}
+			if (this.syncConflict) {
+				footer.textContent = "Synchronisation paused — invigilator review required";
 				return;
 			}
 			footer.textContent = this.pendingCount
@@ -854,22 +1038,45 @@
 			if (remaining <= 0) this.handleLocalTimeout();
 		}
 
+		restartPeriodicSync() {
+			window.clearInterval(this.periodicSyncInterval);
+			this.periodicSyncInterval = null;
+			if (!this.syncConflict) {
+				this.periodicSyncInterval = window.setInterval(() => this.flushSync(), PERIODIC_SYNC_MS);
+			}
+		}
+
 		startBackgroundWork() {
 			window.clearInterval(this.timerInterval);
-			window.clearInterval(this.periodicSyncInterval);
 			window.clearInterval(this.heartbeatInterval);
+			window.clearInterval(this.tabLeaseInterval);
 			this.timerInterval = window.setInterval(() => this.updateTimerUI(), 1000);
-			this.periodicSyncInterval = window.setInterval(() => this.flushSync(), PERIODIC_SYNC_MS);
+			this.restartPeriodicSync();
 			this.heartbeatInterval = window.setInterval(() => this.heartbeat(), HEARTBEAT_MS);
+			this.tabLeaseInterval = window.setInterval(() => this.refreshTabLease(), TAB_LEASE_REFRESH_MS);
 		}
 
 		installLifecycleHandlers() {
 			window.addEventListener("online", async () => {
 				this.setConnection("checking");
+				if (this.syncConflict) {
+					await this.refreshState();
+					return;
+				}
 				await this.flushSync();
 				await this.refreshState();
 			});
 			window.addEventListener("offline", () => this.setConnection("offline"));
+			window.addEventListener("storage", (event) => {
+				if (event.key !== this.tabLeaseKey() || !event.newValue) return;
+				const lease = this.readTabLease();
+				if (
+					this.tabLeaseIsFresh(lease)
+					&& lease.tab_id !== this.tabInstance
+				) {
+					void this.handleTabConflict();
+				}
+			});
 			document.addEventListener("visibilitychange", () => {
 				if (!document.hidden) {
 					this.flushSync();

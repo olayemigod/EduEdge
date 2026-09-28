@@ -69,11 +69,12 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
         source = self._backend()
         for token in (
             '"current_upcoming"',
-            'status in {"Current", "Scheduled"}',
+            'status in {"Current", "Scheduled", "Ending"}',
             'preset == "prepared"',
             'preset == "all"',
             '"Current"',
             '"Scheduled"',
+            '"Ending"',
             '"Ended"',
             '"Replaced"',
             '"Transferred"',
@@ -143,6 +144,7 @@ class TestInstructorAssignmentRegisterFiltersContract(unittest.TestCase):
             "Current + Upcoming",
             "Current",
             "Scheduled",
+            "Ending",
             "Ended",
             "Replaced / Handed Over",
             "Transferred",

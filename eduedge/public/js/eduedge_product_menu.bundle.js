@@ -148,8 +148,14 @@ function buildEduEdgeProductMenu() {
 				description: `Plan, approve, publish, and report ${assessments.toLowerCase()}`,
 				icon: "assessment",
 				items: [
-					item(`${assessments} & Results`, `Plan, review, approve, and publish ${assessments.toLowerCase()}`, "assessment", "/app/eduedge-assessment-operations", { keywords: ["exam", "assessment", "result", "publication"], quick_action: true }),
-					item("Report Cards", "Comments, progression, approval, and printing", "report", "/app/eduedge-report-cards", { keywords: ["report card", "progression", "promotion", "pdf"] }),
+					item("Assessment Operations", `Plan, review, approve, and publish ${assessments.toLowerCase()}`, "assessment", "/app/eduedge-assessment-operations", { keywords: ["exam", "assessment", "result", "publication"], quick_action: true }),
+					item("Assessment Plans", "Create and manage governed assessment plans", "calendar", "/app/eduedge-assessment-plans", { keywords: ["assessment", "plan", "exam", "schedule"] }),
+					item("Marks Entry", "Enter marks from submitted assessment plans", "edit", "/app/eduedge-marks-entry", { keywords: ["marks", "scores", "assessment", "result"], quick_action: true }),
+					item("Assessment Results", "Review draft and submitted assessment result records", "list", "/app/eduedge-assessment-results", { keywords: ["assessment", "results", "scores", "marks"] }),
+					item("Result Profiles", "Configure grading, components, annual aggregation, and report presentation", "settings", "/app/eduedge-result-profiles", { keywords: ["result", "profile", "grading", "components", "annual"] }),
+					item("Report Cards", "Terminal and annual report-card review, comments, progression, and printing", "report", "/app/eduedge-report-cards", { keywords: ["report card", "progression", "promotion", "pdf"] }),
+					item("Result Analytics", "Analyse assessment results using governed report access", "chart", "/app/eduedge-result-analytics", { keywords: ["result", "analytics", "report", "performance"] }),
+					item("Results Audit", "Review governed result publication and approval history", "shield", "/app/eduedge-results-audit", { keywords: ["result", "audit", "publication", "approval", "history"] }),
 				],
 			},
 			{

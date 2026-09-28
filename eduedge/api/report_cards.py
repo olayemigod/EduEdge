@@ -3,22 +3,49 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
-from frappe.utils.pdf import get_pdf
 
 from eduedge.education.report_cards import (
 	APPROVER_ROLES,
 	OPERATIONAL_ROLES,
 	REVIEW_DOCTYPE,
 	assert_report_card_access,
+	assert_report_card_review_management,
+	can_manage_report_card_reviews,
+	can_view_report_card_scope,
 	get_publication_student_summaries,
 	get_published_publication,
 	get_student_report_card_payload,
 	refresh_review_metrics,
 )
 from eduedge.education.offerings import assert_branch_access, get_context_branch
+from eduedge.education.report_card_issues import (
+	create_report_card_issue,
+	get_issued_payload_by_name,
+	get_report_card_issue_history_for_publications,
+	resolve_report_card_pdf,
+)
+from eduedge.education.result_publication_lineage import get_published_publication_lineage
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
+from eduedge.services.institution_branding import get_report_identity
 
+
+
+def _attach_report_identity(payload: dict) -> dict:
+	if (
+		(payload.get("issue") or payload.get("issue_record"))
+		and payload.get("branding")
+		and payload.get("terminology")
+	):
+		return payload
+	branch_name = (payload.get("branch") or {}).get("name")
+	identity = get_report_identity(branch=branch_name)
+	payload["institution"] = identity["institution"]
+	payload["branding"] = identity["branding"]
+	payload["terminology"] = identity["terminology"]
+	if identity.get("address"):
+		payload["address"] = identity["address"]
+	return payload
 
 def _require_login() -> None:
 	if frappe.session.user == "Guest":
@@ -70,11 +97,20 @@ def get_report_card_context(
 			"academic_year",
 			"academic_term",
 			"assessment_group",
+			"result_profile",
+			"result_mode",
+			"publication_version",
+			"supersedes_publication",
 			"published_on",
 		],
 		order_by="published_on desc, modified desc",
 		page_length=200,
 	)
+	publications = [
+		row for row in publications
+		if can_view_report_card_scope(row)
+	]
+
 
 	selected_publication = None
 	students = []
@@ -101,6 +137,9 @@ def get_report_card_context(
 		"current_branch": current_branch,
 		"allowed_branches": get_allowed_school_branches(),
 		"can_approve": bool(APPROVER_ROLES.intersection(roles)),
+		"can_review": bool(
+			selected_publication and can_manage_report_card_reviews(selected_publication)
+		),
 		"filters": {
 			"branch": resolved_branch,
 			"publication": publication,
@@ -123,6 +162,7 @@ def get_report_card_context(
 				for row in students
 				if (row.get("review") or {}).get("progression_status") == "Approved"
 			),
+			"issued": sum(1 for row in students if row.get("issue")),
 		},
 	}
 
@@ -131,8 +171,15 @@ def get_report_card_context(
 @guard_eduedge_action("assessment", action="prepare_report_cards")
 def prepare_report_cards(publication: str) -> dict:
 	_require_operator()
+	locked_publication = frappe.db.sql(
+		"select name from `tabEduEdge Result Publication` where name=%s for update",
+		(publication,),
+	)
+	if not locked_publication:
+		frappe.throw(_("Result Publication does not exist."), frappe.DoesNotExistError)
 	publication_row = get_published_publication(publication)
 	assert_branch_access(publication_row.school_branch)
+	assert_report_card_review_management(publication_row)
 	summaries = get_publication_student_summaries(publication)
 	created = 0
 	updated = 0
@@ -176,6 +223,7 @@ def save_report_card_review(
 	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
 	doc.check_permission("write")
 	assert_branch_access(doc.school_branch)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(
 			_("Only Draft report-card reviews can be edited. Reopen the review first."),
@@ -207,8 +255,8 @@ def save_report_card_review(
 @guard_eduedge_action("assessment", action="recommend_progression")
 def recommend_progression(review: str) -> dict:
 	_require_operator()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
+	assert_report_card_review_management(get_published_publication(doc.result_publication))
 	if doc.progression_status != "Draft":
 		frappe.throw(_("Only Draft reviews can be recommended."), frappe.ValidationError)
 	if doc.progression_recommendation == "Pending Review":
@@ -235,8 +283,7 @@ def recommend_progression(review: str) -> dict:
 @guard_eduedge_action("assessment", action="approve_progression")
 def approve_progression(review: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status != "Recommended":
 		frappe.throw(_("Only Recommended reviews can be approved."), frappe.ValidationError)
 	settings = frappe.get_single("EduEdge Settings")
@@ -251,15 +298,17 @@ def approve_progression(review: str) -> dict:
 			"approved_on": now_datetime(),
 		},
 	)
-	return _review_payload(doc.name)
+	issue_name = create_report_card_issue(doc.name)
+	payload = _review_payload(doc.name)
+	payload["report_card_issue"] = issue_name
+	return payload
 
 
 @frappe.whitelist()
 @guard_eduedge_action("assessment", action="reopen_progression_review")
 def reopen_progression_review(review: str, reason: str) -> dict:
 	_require_approver()
-	doc = frappe.get_doc(REVIEW_DOCTYPE, review)
-	doc.check_permission("write")
+	doc = _get_review_for_update(review)
 	if doc.progression_status not in {"Recommended", "Approved"}:
 		frappe.throw(_("Only Recommended or Approved reviews can be reopened."))
 	reason = (reason or "").strip()
@@ -279,50 +328,149 @@ def reopen_progression_review(review: str, reason: str) -> dict:
 	return _review_payload(doc.name)
 
 
+def _get_published_publication_lineage(publication: str) -> list:
+	"""Compatibility wrapper for the shared explicit publication-lineage resolver."""
+	return get_published_publication_lineage(publication)
+
+
+@frappe.whitelist()
+def get_report_card_history(publication: str, student: str) -> dict:
+	_require_operator()
+	publication_row = get_published_publication(publication)
+	assert_report_card_access(publication_row, student)
+
+	lineage = _get_published_publication_lineage(publication)
+	for row in lineage:
+		assert_branch_access(row.school_branch)
+		if not can_view_report_card_scope(row):
+			frappe.throw(_("You are not permitted to access this publication history."), frappe.PermissionError)
+
+	publication_names = [row.name for row in lineage]
+	publication_versions = {
+		row.name: int(row.publication_version or 1)
+		for row in lineage
+	}
+	issue_history = get_report_card_issue_history_for_publications(publication_names, student)
+	for row in issue_history:
+		expected_version = publication_versions.get(row["result_publication"])
+		if expected_version is None or int(row.get("publication_version") or 1) != expected_version:
+			frappe.throw(
+				_("Report Card Issue publication lineage is inconsistent."),
+				frappe.ValidationError,
+			)
+
+	current_publication = lineage[-1]
+	current_review_status = frappe.db.get_value(
+		REVIEW_DOCTYPE,
+		{"result_publication": current_publication.name, "student": student},
+		"progression_status",
+	)
+	latest_issue_by_publication = {}
+	for row in issue_history:
+		latest_issue_by_publication.setdefault(row["result_publication"], row["name"])
+
+	for row in issue_history:
+		row["is_selected_publication"] = row["result_publication"] == publication
+		row["is_current_publication"] = row["result_publication"] == current_publication.name
+		row["is_latest_issue_for_publication"] = (
+			latest_issue_by_publication.get(row["result_publication"]) == row["name"]
+		)
+		if row["is_current_publication"] and row["is_latest_issue_for_publication"]:
+			row["lineage_status"] = (
+				"Current"
+				if current_review_status == "Approved"
+				else "Review Reopened"
+			)
+		elif row["is_current_publication"]:
+			row["lineage_status"] = "Superseded Issue"
+		else:
+			row["lineage_status"] = "Superseded Publication"
+
+	publications = []
+	for row in reversed(lineage):
+		item = dict(row)
+		item["is_selected"] = row.name == publication
+		item["is_current"] = row.name == current_publication.name
+		item["lineage_status"] = "Current Publication" if item["is_current"] else "Superseded Publication"
+		publications.append(item)
+
+	return {
+		"issues": issue_history,
+		"publications": publications,
+		"selected_publication": publication,
+		"current_publication": current_publication.name,
+	}
+
+
+@frappe.whitelist()
+def download_report_card_issue(issue: str) -> None:
+	_require_operator()
+	row = frappe.db.get_value(
+		"EduEdge Report Card Issue",
+		issue,
+		["name", "result_publication", "student", "issue_version", "pdf_filename"],
+		as_dict=True,
+	)
+	if not row:
+		frappe.throw(_("Issued Report Card does not exist."), frappe.DoesNotExistError)
+	publication = get_published_publication(row.result_publication)
+	assert_branch_access(publication.school_branch)
+	if not can_view_report_card_scope(publication):
+		frappe.throw(_("You are not permitted to access this issued report card."), frappe.PermissionError)
+
+	payload = get_issued_payload_by_name(row.name)
+	frappe.response.filename = row.pdf_filename or f"Report Card {row.name}.pdf"
+	frappe.response.filecontent = resolve_report_card_pdf(payload)
+	frappe.response.type = "pdf"
+
+
 @frappe.whitelist()
 def get_report_card(publication: str, student: str) -> dict:
 	_require_login()
-	return get_student_report_card_payload(publication, student)
+	return _attach_report_identity(
+		get_student_report_card_payload(publication, student)
+	)
 
 
 @frappe.whitelist()
 def preview_report_card(publication: str, student: str) -> None:
 	_require_login()
-	payload = get_student_report_card_payload(publication, student)
+	payload = _attach_report_identity(
+		get_student_report_card_payload(publication, student)
+	)
 	assert_report_card_access(frappe._dict(payload["publication"]), student)
-	settings = frappe.get_single("EduEdge Settings")
-	letterhead = None
-	if settings.report_card_letter_head:
-		letterhead = frappe.db.get_value(
-			"Letter Head", settings.report_card_letter_head, "content"
-		)
-
-	html = frappe.render_template(
-		"eduedge/templates/report_card.html",
-		{
-			**payload,
-			"letterhead": letterhead,
-			"show_marks": bool(settings.report_card_show_marks),
-		},
-	)
-	final_html = frappe.render_template(
-		"frappe/www/printview.html",
-		{"body": html, "title": _("Student Report Card")},
-	)
 	frappe.response.filename = f"Report Card {student}.pdf"
-	frappe.response.filecontent = get_pdf(final_html)
+	frappe.response.filecontent = resolve_report_card_pdf(payload)
 	frappe.response.type = "pdf"
 
 
+def _get_review_for_update(name: str):
+	rows = frappe.db.sql(
+		"select name from `tabEduEdge Report Card Review` where name=%s for update",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Report Card Review does not exist."), frappe.DoesNotExistError)
+	doc = frappe.get_doc(REVIEW_DOCTYPE, name)
+	doc.check_permission("write")
+	assert_branch_access(doc.school_branch)
+	return doc
+
+
 def _transition(doc, to_status: str, *, updates: dict | None = None) -> None:
-	frappe.flags.in_eduedge_report_card_transition = True
+	flag = "in_eduedge_report_card_transition"
+	previous = frappe.flags.get(flag)
+	frappe.flags[flag] = True
 	try:
 		doc.progression_status = to_status
 		for fieldname, value in (updates or {}).items():
 			doc.set(fieldname, value)
 		doc.save()
 	finally:
-		frappe.flags.in_eduedge_report_card_transition = False
+		if previous is None:
+			frappe.flags.pop(flag, None)
+		else:
+			frappe.flags[flag] = previous
 
 
 def _review_payload(name: str) -> dict:

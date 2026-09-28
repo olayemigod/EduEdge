@@ -6,6 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from eduedge.cbt import attempts as attempt_service
+
 REVIEWER_ROLES = {
 	"System Manager",
 	"EduEdge Super Administrator",
@@ -90,6 +92,18 @@ def _previous_reviews(attempt_name: str) -> list[dict]:
 def _queue_row(attempt) -> dict:
 	interventions = _interventions(attempt)
 	previous_reviews = _previous_reviews(attempt.name)
+	deadline = attempt_service.reconciliation_deadline(attempt)
+	window_open = bool(
+		attempt.attempt_status == "Pending Sync"
+		and deadline
+		and now_datetime() <= deadline
+	)
+	pending_sync_expired = bool(
+		attempt.attempt_status == "Pending Sync"
+		and deadline
+		and now_datetime() > deadline
+	)
+	result_exists = bool(frappe.db.exists("EduEdge CBT Result", {"attempt": attempt.name}))
 	return {
 		"attempt": attempt.name,
 		"exam_schedule": attempt.exam_schedule,
@@ -110,11 +124,16 @@ def _queue_row(attempt) -> dict:
 		"interventions": interventions,
 		"previous_review_count": len(previous_reviews),
 		"previous_reviews": previous_reviews[:5],
-		"result_exists": bool(frappe.db.exists("EduEdge CBT Result", {"attempt": attempt.name})),
+		"reconciliation_deadline": deadline,
+		"reconciliation_window_open": window_open,
+		"result_exists": result_exists,
 		"can_accept": (
-			attempt.attempt_status in ACCEPTABLE_STATUSES
+			(
+				attempt.attempt_status in ACCEPTABLE_STATUSES
+				or pending_sync_expired
+			)
 			and not cint(attempt.reported_pending_sync_count)
-			and not frappe.db.exists("EduEdge CBT Result", {"attempt": attempt.name})
+			and not result_exists
 		),
 	}
 
@@ -127,7 +146,7 @@ def get_attempt_review_queue(
 	limit_page_length: int = 50,
 ) -> dict:
 	_require_reviewer()
-	filters = {"requires_review": 1, "attempt_status": ["!=", "Cancelled"]}
+	filters = {"attempt_status": ["!=", "Cancelled"]}
 	if exam_schedule:
 		filters["exam_schedule"] = exam_schedule
 	if school_branch:
@@ -139,7 +158,12 @@ def get_attempt_review_queue(
 		order_by="modified asc",
 		limit_page_length=1000,
 	)
-	rows = [_queue_row(_require_attempt(name)) for name in attempt_names]
+	attempts = [_require_attempt(name) for name in attempt_names]
+	rows = [
+		_queue_row(attempt)
+		for attempt in attempts
+		if cint(attempt.requires_review) or attempt.attempt_status == "Pending Sync"
+	]
 	start = max(0, cint(limit_start))
 	page_length = min(200, max(1, cint(limit_page_length)))
 	return {
@@ -172,7 +196,7 @@ def resolve_attempt_review(
 
 	_lock("EduEdge CBT Attempt", attempt_name)
 	attempt = _require_attempt(attempt_name)
-	if not cint(attempt.requires_review):
+	if not cint(attempt.requires_review) and attempt.attempt_status != "Pending Sync":
 		frappe.throw(_("This CBT Attempt no longer requires review."), frappe.ValidationError)
 
 	status_before = attempt.attempt_status
@@ -191,12 +215,21 @@ def resolve_attempt_review(
 				_("Pending browser answers must be resolved before accepting the attempt for scoring."),
 				frappe.ValidationError,
 			)
-		if attempt.attempt_status not in ACCEPTABLE_STATUSES:
+		if attempt.attempt_status == "Pending Sync":
+			deadline = attempt_service.reconciliation_deadline(attempt)
+			if not deadline or now_datetime() <= deadline:
+				frappe.throw(
+					_("The browser reconciliation window is still open. Wait for the candidate browser to reconnect or for the deadline to expire."),
+					frappe.ValidationError,
+				)
+			status_after = "Auto Submitted"
+		elif attempt.attempt_status not in ACCEPTABLE_STATUSES:
 			frappe.throw(
-				_("Only Submitted, Auto Submitted, or Timed Out attempts can be accepted for scoring."),
+				_("Only Submitted, Auto Submitted, Timed Out, or expired Pending Sync attempts can be accepted for scoring."),
 				frappe.ValidationError,
 			)
-		status_after = "Auto Submitted" if attempt.attempt_status == "Timed Out" else attempt.attempt_status
+		else:
+			status_after = "Auto Submitted" if attempt.attempt_status == "Timed Out" else attempt.attempt_status
 		requires_review_after = 0
 	elif decision == "Disqualify Candidate":
 		if result_exists:

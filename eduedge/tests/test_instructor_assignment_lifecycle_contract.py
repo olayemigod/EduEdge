@@ -40,12 +40,43 @@ class TestInstructorAssignmentLifecycleContract(unittest.TestCase):
             "doc.ended_by = frappe.session.user",
             "doc.end_reason = resolved_reason",
             "frappe.flags.in_eduedge_assignment_lifecycle = True",
+            'savepoint = "eduedge_instructor_assignment_end"',
+            "frappe.db.savepoint(savepoint)",
+            "for update",
+            "frappe.db.rollback(save_point=savepoint)",
         ):
             self.assertIn(token, lifecycle)
         self.assertNotIn("doc.enabled = 0", lifecycle)
         self.assertNotIn(".delete(", lifecycle)
         self.assertNotIn("rename_doc", lifecycle)
         self.assertNotIn("EduEdge Instructor Branch Assignment", lifecycle)
+
+    def test_lifecycle_status_respects_final_valid_day(self):
+        lifecycle = (APP / "api" / "instructor_assignment_lifecycle.py").read_text(encoding="utf-8")
+        status_block = lifecycle.split("def _lifecycle_status", 1)[1].split(
+            "def _readable_instructor_from_assignment", 1
+        )[0]
+        for token in (
+            'if row.ended_on and getdate(row.ended_on) >= today:',
+            'return "Ending"',
+            'if row.replaced_by_assignment:',
+            'return "Replaced"',
+            'if row.transferred_to_assignment:',
+            'return "Transferred"',
+            'if row.ended_on:',
+            'return "Ended"',
+        ):
+            self.assertIn(token, status_block)
+        self.assertLess(
+            status_block.index('if row.ended_on and getdate(row.ended_on) >= today:'),
+            status_block.index('if row.replaced_by_assignment:'),
+        )
+        self.assertLess(
+            status_block.index('if row.ended_on and getdate(row.ended_on) >= today:'),
+            status_block.index('if row.transferred_to_assignment:'),
+        )
+        self.assertIn("must not make the source disappear from active scope too early", status_block)
+
 
     def test_existing_responsibility_identity_and_lifecycle_audit_are_protected(self):
         controller = (

@@ -79,7 +79,7 @@ class TestAcademicOperationsPreQASecurity(unittest.TestCase):
 			self.assertIn(token, command)
 		self.assertIn("canManageAttendance", attendance)
 		self.assertIn("canSubmitAttendance", attendance)
-		self.assertIn("course_schedule: this.filters.course_schedule", attendance)
+		self.assertIn("course_schedule: requestedSchedule", attendance)
 		self.assertIn(':disabled="student.locked || saving || !canManageAttendance"', attendance)
 		self.assertNotIn("saveRegister(submit)", command)
 

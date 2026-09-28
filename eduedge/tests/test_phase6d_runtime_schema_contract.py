@@ -72,7 +72,7 @@ class TestPhase6DRuntimeSchemaContract(unittest.TestCase):
         for token in (
             "def _row_value",
             "def _row_name",
-            "allowed_names = [_row_name(row) for row in allowed",
+            "permitted_names = [_row_name(row) for row in permitted",
             '"branches": {_row_name(row): row for row in allowed',
             "allowed_names = {_row_name(row) for row in allowed",
         ):
