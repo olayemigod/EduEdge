@@ -116,9 +116,14 @@ def create_report_card_issue(review: str) -> str:
 		}
 	)
 	file_doc.insert(ignore_permissions=True)
+	# Generated official artifacts must not inherit the issuing operator as File owner,
+	# because Frappe allows a private File owner before checking the attached document.
+	frappe.db.set_value("File", file_doc.name, "owner", "Administrator", update_modified=False)
+	file_doc.owner = "Administrator"
 	if (
 		not file_doc
 		or not file_doc.is_private
+		or file_doc.owner != "Administrator"
 		or file_doc.attached_to_doctype != ISSUE_DOCTYPE
 		or file_doc.attached_to_name != issue.name
 		or file_doc.file_name != pdf_filename
@@ -248,12 +253,14 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 			"is_private": 1,
 			"file_name": archive.pdf_filename,
 		},
-		fields=["name", "file_name", "file_type"],
+		fields=["name", "file_name", "file_type", "owner"],
 		order_by="creation asc",
 	)
 	if len(files) != 1:
 		frappe.throw(_("Official Report Card PDF archive is missing or ambiguous."), frappe.ValidationError)
 	file_row = files[0]
+	if file_row.owner != "Administrator":
+		frappe.throw(_("Official Report Card PDF archive ownership is invalid."), frappe.ValidationError)
 	if str(file_row.file_type or "").upper() != "PDF" and not str(file_row.file_name or "").lower().endswith(".pdf"):
 		frappe.throw(_("Official Report Card PDF archive is not a PDF."), frappe.ValidationError)
 
