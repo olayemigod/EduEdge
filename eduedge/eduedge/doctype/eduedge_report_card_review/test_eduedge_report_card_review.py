@@ -281,6 +281,106 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 		self.assertEqual(result["status"], "Invalid")
 		self.assertIn("PDF archive integrity", result["status_message"])
 
+	def _verification_issue_row(self):
+		payload_json = json.dumps({"student": {"student_name": "Archive Student"}})
+		return frappe._dict(
+			{
+				"name": "EDU-RCI-VERIFY",
+				"result_publication": "PUB-1",
+				"publication_version": 1,
+				"report_card_review": "REVIEW-1",
+				"issue_version": 1,
+				"student": "STU-1",
+				"student_name": "Archive Student",
+				"school_branch": "BRANCH-1",
+				"student_group": "GROUP-1",
+				"academic_year": "2026-2027",
+				"academic_term": "TERM-1",
+				"result_mode": "Terminal",
+				"result_profile": "PROFILE-1",
+				"verification_token": "token",
+				"payload_hash": hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+				"payload_json": payload_json,
+				"pdf_sha256": "a" * 64,
+				"pdf_filename": "Report Card EDU-RCI-VERIFY.pdf",
+				"pdf_size_bytes": 100,
+				"issued_on": "2026-09-28 10:00:00",
+			}
+		)
+
+	def test_public_verification_marks_earlier_publication_as_superseded(self):
+		row = self._verification_issue_row()
+		pub1 = frappe._dict({"name": "PUB-1", "publication_version": 1})
+		pub2 = frappe._dict({"name": "PUB-2", "publication_version": 2})
+		with (
+			patch("frappe.db.get_value", side_effect=[row, "Approved"]),
+			patch("eduedge.education.result_verification._verify_issue_pdf_archive", return_value=True),
+			patch(
+				"eduedge.education.result_verification.get_published_publication_lineage",
+				return_value=[pub1, pub2],
+			),
+			patch(
+				"frappe.get_all",
+				return_value=[frappe._dict({"name": row.name, "issue_version": 1})],
+			),
+		):
+			result = verify_issued_report_card(row.name, "token")
+		self.assertTrue(result["valid"])
+		self.assertEqual(result["status"], "Superseded Publication")
+		self.assertEqual(result["publication_version"], 1)
+		self.assertEqual(result["current_publication_version"], 2)
+
+	def test_public_verification_marks_earlier_issue_in_current_publication(self):
+		row = self._verification_issue_row()
+		pub1 = frappe._dict({"name": "PUB-1", "publication_version": 1})
+		with (
+			patch("frappe.db.get_value", side_effect=[row, "Approved"]),
+			patch("eduedge.education.result_verification._verify_issue_pdf_archive", return_value=True),
+			patch(
+				"eduedge.education.result_verification.get_published_publication_lineage",
+				return_value=[pub1],
+			),
+			patch(
+				"frappe.get_all",
+				return_value=[frappe._dict({"name": "EDU-RCI-VERIFY-V2", "issue_version": 2})],
+			),
+		):
+			result = verify_issued_report_card(row.name, "token")
+		self.assertTrue(result["valid"])
+		self.assertEqual(result["status"], "Superseded Issue")
+		self.assertEqual(result["current_publication_version"], 1)
+
+	def test_public_verification_fails_closed_on_corrupt_publication_lineage(self):
+		row = self._verification_issue_row()
+		with (
+			patch("frappe.db.get_value", return_value=row),
+			patch("eduedge.education.result_verification._verify_issue_pdf_archive", return_value=True),
+			patch(
+				"eduedge.education.result_verification.get_published_publication_lineage",
+				side_effect=frappe.ValidationError("bad lineage"),
+			),
+		):
+			result = verify_issued_report_card(row.name, "token")
+		self.assertFalse(result["valid"])
+		self.assertEqual(result["status"], "Invalid")
+		self.assertIn("publication lineage", result["status_message"])
+
+	def test_public_verification_fails_closed_on_issue_publication_version_mismatch(self):
+		row = self._verification_issue_row()
+		pub1 = frappe._dict({"name": "PUB-1", "publication_version": 2})
+		with (
+			patch("frappe.db.get_value", return_value=row),
+			patch("eduedge.education.result_verification._verify_issue_pdf_archive", return_value=True),
+			patch(
+				"eduedge.education.result_verification.get_published_publication_lineage",
+				return_value=[pub1],
+			),
+		):
+			result = verify_issued_report_card(row.name, "token")
+		self.assertFalse(result["valid"])
+		self.assertEqual(result["status"], "Invalid")
+		self.assertIn("publication version", result["status_message"])
+
 	def test_public_verification_preserves_true_legacy_issue_without_pdf_archive(self):
 		row = frappe._dict(
 			{
