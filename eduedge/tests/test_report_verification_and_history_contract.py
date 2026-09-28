@@ -33,6 +33,20 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 		self.assertNotIn('"total_score"', service)
 		self.assertNotIn('"student_id"', service)
 
+	def test_public_verification_binds_new_issues_to_archived_pdf_integrity(self):
+		service = (APP / "education" / "result_verification.py").read_text()
+		for token in (
+			'"pdf_sha256"',
+			'"pdf_filename"',
+			'"pdf_size_bytes"',
+			"def _verify_issue_pdf_archive(row) -> bool:",
+			"if not any(archive_values):",
+			"if not all(archive_values):",
+			"get_archived_report_card_pdf(row.name)",
+			"The issued report-card PDF archive integrity check failed.",
+		):
+			self.assertIn(token, service)
+
 	def test_existing_issued_reports_receive_verification_token_without_hash_mutation(self):
 		patch = (APP / "patches" / "v1_0" / "backfill_report_card_verification_tokens.py").read_text()
 		self.assertIn("generate_verification_token", patch)
