@@ -81,9 +81,9 @@
 				<section v-if="resourceKey === 'result_audit'" class="eduedge-resource-panel eduedge-archive-audit">
 					<div class="eduedge-resource-panel__heading">
 						<div>
-							<p class="edge-eyebrow">Immutable report-card archive</p>
-							<h2>Archive Integrity</h2>
-							<p>Verify stored official PDF bytes after backup, restore, or storage changes.</p>
+							<p class="edge-eyebrow">Immutable issued report</p>
+							<h2>Issued Report Integrity</h2>
+							<p>Verify both the frozen Report Card payload and the stored official PDF after backup, restore, or storage changes.</p>
 						</div>
 						<div class="eduedge-archive-controls">
 							<select v-model="archiveAudit.branch" class="form-control" @change="loadArchiveAudit(true)">
@@ -95,7 +95,7 @@
 							<button type="button" class="edge-button" :disabled="archiveAudit.loading" @click="loadArchiveAudit(false)">Recheck</button>
 						</div>
 					</div>
-					<EdgeLoadingState v-if="archiveAudit.loading" message="Checking archived report PDFs..." :skeleton="true" />
+					<EdgeLoadingState v-if="archiveAudit.loading" message="Checking issued Report Card payloads and PDFs..." :skeleton="true" />
 					<EdgeErrorState
 						v-else-if="archiveAudit.error"
 						title="Archive integrity check failed"
@@ -106,9 +106,9 @@
 					<template v-else>
 						<EdgeDashboardLayout min-column-width="10rem">
 							<EdgeStatCard label="Checked" :value="archiveAudit.summary.checked || 0" helper="Visible audit page" />
-							<EdgeStatCard label="Healthy" :value="archiveAudit.summary.healthy || 0" helper="Exact PDF bytes verified" />
-							<EdgeStatCard label="Needs Attention" :value="archiveAudit.summary.needs_attention || 0" helper="Missing or integrity failure" />
-							<EdgeStatCard label="Legacy" :value="archiveAudit.summary.legacy || 0" helper="Predates PDF archival" />
+							<EdgeStatCard label="Healthy" :value="archiveAudit.summary.healthy || 0" helper="Payload and PDF verified" />
+							<EdgeStatCard label="Needs Attention" :value="archiveAudit.summary.needs_attention || 0" helper="Payload or PDF integrity failure" />
+							<EdgeStatCard label="Legacy" :value="archiveAudit.summary.legacy || 0" helper="Payload verified; predates PDF archival" />
 						</EdgeDashboardLayout>
 						<p class="eduedge-archive-scope-note">{{ archiveAudit.scope_note }}</p>
 						<EdgeEmptyState
@@ -124,7 +124,9 @@
 										<th>Student</th>
 										<th>Publication</th>
 										<th>Branch</th>
-										<th>Status</th>
+										<th>Overall</th>
+										<th>Payload</th>
+										<th>PDF</th>
 										<th>Size</th>
 										<th>Issued</th>
 										<th>Actions</th>
@@ -134,7 +136,7 @@
 									<tr v-for="row in archiveAudit.rows" :key="row.name">
 										<td>
 											<strong>{{ row.name }}</strong>
-											<small>Issue v{{ row.issue_version || 1 }} · {{ row.pdf_fingerprint || 'No PDF fingerprint' }}</small>
+											<small>Issue v{{ row.issue_version || 1 }} · Payload {{ row.payload_fingerprint || 'No fingerprint' }} · PDF {{ row.pdf_fingerprint || 'Legacy / unavailable' }}</small>
 										</td>
 										<td>{{ row.student_name || row.student }}</td>
 										<td>{{ row.result_publication }} · v{{ row.publication_version || 1 }}</td>
@@ -142,6 +144,12 @@
 										<td>
 											<EdgeStatusBadge :label="row.archive_status" :status="row.archive_status" :tone="archiveTone(row.archive_status)" />
 											<small>{{ row.archive_detail }}</small>
+										</td>
+										<td>
+											<EdgeStatusBadge :label="row.payload_status || 'Unknown'" :status="row.payload_status || 'unknown'" :tone="archiveTone(row.payload_status)" />
+										</td>
+										<td>
+											<EdgeStatusBadge :label="row.pdf_status || 'Unknown'" :status="row.pdf_status || 'unknown'" :tone="archiveTone(row.pdf_status)" />
 										</td>
 										<td>{{ formatArchiveSize(row.actual_size_bytes ?? row.expected_size_bytes) }}</td>
 										<td>{{ displayValue(row.issued_on) }}</td>
