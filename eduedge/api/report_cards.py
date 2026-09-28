@@ -21,7 +21,7 @@ from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.report_card_issues import (
 	create_report_card_issue,
 	get_issued_payload_by_name,
-	get_report_card_issue_history,
+	get_report_card_issue_history_for_publications,
 	resolve_report_card_pdf,
 )
 from eduedge.platform.access import guard_eduedge_action
@@ -327,45 +327,160 @@ def reopen_progression_review(review: str, reason: str) -> dict:
 	return _review_payload(doc.name)
 
 
+PUBLICATION_LINEAGE_FIELDS = [
+	"name",
+	"title",
+	"school_branch",
+	"student_group",
+	"academic_year",
+	"academic_term",
+	"assessment_group",
+	"result_profile",
+	"result_mode",
+	"publication_version",
+	"supersedes_publication",
+	"status",
+	"report_card_ready",
+	"published_on",
+]
+PUBLICATION_LINEAGE_SCOPE_FIELDS = (
+	"school_branch",
+	"student_group",
+	"academic_year",
+	"academic_term",
+	"assessment_group",
+	"result_profile",
+	"result_mode",
+)
+
+
+def _get_published_publication_lineage(publication: str) -> list:
+	selected = get_published_publication(publication)
+
+	def load_published(name: str):
+		row = frappe.db.get_value(
+			"EduEdge Result Publication",
+			name,
+			PUBLICATION_LINEAGE_FIELDS,
+			as_dict=True,
+		)
+		if not row or row.status != "Published" or not row.report_card_ready:
+			frappe.throw(
+				_("Result Publication lineage contains a non-published or unavailable revision."),
+				frappe.ValidationError,
+			)
+		return row
+
+	def validate_scope(row) -> None:
+		for fieldname in PUBLICATION_LINEAGE_SCOPE_FIELDS:
+			if (row.get(fieldname) or "") != (selected.get(fieldname) or ""):
+				frappe.throw(
+					_("Result Publication lineage scope is inconsistent."),
+					frappe.ValidationError,
+				)
+
+	current = load_published(selected.name)
+	visited = set()
+	while current.supersedes_publication:
+		if current.name in visited:
+			frappe.throw(_("Result Publication lineage contains a cycle."), frappe.ValidationError)
+		visited.add(current.name)
+		parent = load_published(current.supersedes_publication)
+		validate_scope(parent)
+		if int(current.publication_version or 1) != int(parent.publication_version or 1) + 1:
+			frappe.throw(_("Result Publication lineage version sequence is invalid."), frappe.ValidationError)
+		current = parent
+
+	root = current
+	lineage = []
+	visited = set()
+	current = root
+	while current:
+		if current.name in visited:
+			frappe.throw(_("Result Publication lineage contains a cycle."), frappe.ValidationError)
+		visited.add(current.name)
+		validate_scope(current)
+		lineage.append(current)
+		children = frappe.get_all(
+			"EduEdge Result Publication",
+			filters={
+				"supersedes_publication": current.name,
+				"status": "Published",
+				"report_card_ready": 1,
+			},
+			fields=PUBLICATION_LINEAGE_FIELDS,
+			order_by="publication_version asc, published_on asc",
+			page_length=2,
+		)
+		if len(children) > 1:
+			frappe.throw(_("Result Publication lineage has multiple published successors."), frappe.ValidationError)
+		if not children:
+			break
+		child = children[0]
+		validate_scope(child)
+		if int(child.publication_version or 1) != int(current.publication_version or 1) + 1:
+			frappe.throw(_("Result Publication lineage version sequence is invalid."), frappe.ValidationError)
+		current = child
+
+	if selected.name not in {row.name for row in lineage}:
+		frappe.throw(_("Selected Result Publication is outside its resolved lineage."), frappe.ValidationError)
+	return lineage
+
+
 @frappe.whitelist()
 def get_report_card_history(publication: str, student: str) -> dict:
 	_require_operator()
 	publication_row = get_published_publication(publication)
 	assert_report_card_access(publication_row, student)
-	issue_history = get_report_card_issue_history(publication, student)
 
-	filters = {
-		"school_branch": publication_row.school_branch,
-		"student_group": publication_row.student_group,
-		"academic_year": publication_row.academic_year,
-		"result_mode": publication_row.result_mode or "Terminal",
-		"status": "Published",
-	}
-	if publication_row.academic_term:
-		filters["academic_term"] = publication_row.academic_term
-	else:
-		filters["academic_term"] = ["is", "not set"]
-	if publication_row.result_profile:
-		filters["result_profile"] = publication_row.result_profile
-	elif publication_row.assessment_group:
-		filters["assessment_group"] = publication_row.assessment_group
+	lineage = _get_published_publication_lineage(publication)
+	for row in lineage:
+		assert_branch_access(row.school_branch)
+		if not can_view_report_card_scope(row):
+			frappe.throw(_("You are not permitted to access this publication history."), frappe.PermissionError)
 
-	publications = frappe.get_all(
-		"EduEdge Result Publication",
-		filters=filters,
-		fields=[
-			"name",
-			"title",
-			"publication_version",
-			"supersedes_publication",
-			"published_on",
-		],
-		order_by="publication_version desc, published_on desc",
-		page_length=0,
+	publication_names = [row.name for row in lineage]
+	issue_history = get_report_card_issue_history_for_publications(publication_names, student)
+	current_publication = lineage[-1]
+	current_review_status = frappe.db.get_value(
+		REVIEW_DOCTYPE,
+		{"result_publication": current_publication.name, "student": student},
+		"progression_status",
 	)
+	latest_issue_by_publication = {}
+	for row in issue_history:
+		latest_issue_by_publication.setdefault(row["result_publication"], row["name"])
+
+	for row in issue_history:
+		row["is_selected_publication"] = row["result_publication"] == publication
+		row["is_current_publication"] = row["result_publication"] == current_publication.name
+		row["is_latest_issue_for_publication"] = (
+			latest_issue_by_publication.get(row["result_publication"]) == row["name"]
+		)
+		if row["is_current_publication"] and row["is_latest_issue_for_publication"]:
+			row["lineage_status"] = (
+				"Current"
+				if current_review_status == "Approved"
+				else "Review Reopened"
+			)
+		elif row["is_current_publication"]:
+			row["lineage_status"] = "Superseded Issue"
+		else:
+			row["lineage_status"] = "Superseded Publication"
+
+	publications = []
+	for row in reversed(lineage):
+		item = dict(row)
+		item["is_selected"] = row.name == publication
+		item["is_current"] = row.name == current_publication.name
+		item["lineage_status"] = "Current Publication" if item["is_current"] else "Superseded Publication"
+		publications.append(item)
+
 	return {
 		"issues": issue_history,
-		"publications": [dict(row) for row in publications],
+		"publications": publications,
+		"selected_publication": publication,
+		"current_publication": current_publication.name,
 	}
 
 
