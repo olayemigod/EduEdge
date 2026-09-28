@@ -468,6 +468,87 @@ def _get_publication_cohort_students(
 	]
 
 
+def build_assessment_result_plan_integrity_blockers(
+	plan_rows: list,
+	result_rows: list,
+	plan_criteria_rows: list,
+	result_detail_rows: list,
+) -> list[dict]:
+	"""Block legacy/import drift that bypassed the current Assessment Result validator."""
+	plans = {str(row.get("name") or ""): row for row in (plan_rows or [])}
+	plan_criteria: dict[str, dict[str, float]] = defaultdict(dict)
+	for row in plan_criteria_rows or []:
+		parent = str(row.get("parent") or "")
+		criterion = str(row.get("assessment_criteria") or "").strip()
+		if parent and criterion:
+			plan_criteria[parent][criterion] = flt(row.get("maximum_score"))
+
+	result_details: dict[str, list] = defaultdict(list)
+	for row in result_detail_rows or []:
+		parent = str(row.get("parent") or "")
+		if parent:
+			result_details[parent].append(row)
+
+	blockers: list[dict] = []
+	for result in result_rows or []:
+		result_name = str(result.get("name") or "")
+		plan_name = str(result.get("assessment_plan") or "")
+		plan = plans.get(plan_name)
+		issues: list[str] = []
+		if not plan:
+			issues.append(_("Assessment Plan is missing from the publication scope."))
+		else:
+			for fieldname, label in (
+				("program", _("Program")),
+				("student_group", _("Student Group")),
+				("course", _("Course")),
+				("academic_year", _("Academic Year")),
+				("academic_term", _("Academic Term")),
+				("assessment_group", _("Assessment Group")),
+				("grading_scale", _("Grading Scale")),
+			):
+				if str(result.get(fieldname) or "") != str(plan.get(fieldname) or ""):
+					issues.append(_("{0} does not match the submitted Assessment Plan.").format(label))
+			if abs(flt(result.get("maximum_score")) - flt(plan.get("maximum_assessment_score"))) > 1e-9:
+				issues.append(_("Maximum Score does not match the submitted Assessment Plan."))
+
+			expected = plan_criteria.get(plan_name, {})
+			actual_rows = result_details.get(result_name, [])
+			actual_names = [
+				str(row.get("assessment_criteria") or "").strip()
+				for row in actual_rows
+			]
+			if not expected:
+				issues.append(_("Submitted Assessment Plan has no Assessment Criteria."))
+			elif (
+				any(not name for name in actual_names)
+				or len(actual_names) != len(set(actual_names))
+				or set(actual_names) != set(expected)
+			):
+				issues.append(_("Assessment Result criteria do not exactly match the submitted Assessment Plan."))
+			else:
+				for detail in actual_rows:
+					criterion = str(detail.get("assessment_criteria") or "")
+					if abs(flt(detail.get("maximum_score")) - expected[criterion]) > 1e-9:
+						issues.append(
+							_("Assessment Criterion {0} Maximum Score does not match the submitted Plan.").format(criterion)
+						)
+						break
+
+		if issues:
+			blockers.append(
+				{
+					"code": "ASSESSMENT_RESULT_PLAN_MISMATCH",
+					"reason": _("Assessment Result no longer matches its submitted Assessment Plan."),
+					"assessment_result": result_name,
+					"assessment_plan": plan_name,
+					"student": str(result.get("student") or ""),
+					"issues": issues,
+				}
+			)
+	return blockers
+
+
 def build_duplicate_assessment_result_blockers(result_rows: list) -> list[dict]:
 	"""Fail publication closed when legacy/import drift contains duplicate active results."""
 	pairs: dict[tuple[str, str], list[str]] = defaultdict(list)
@@ -574,9 +655,13 @@ def get_publication_readiness(
 		fields=[
 			"name",
 			"assessment_name",
+			"program",
+			"student_group",
 			"assessment_group",
 			"course",
+			"academic_year",
 			"academic_term",
+			"grading_scale",
 			"maximum_assessment_score",
 		],
 		order_by="schedule_date asc, course asc",
@@ -616,9 +701,12 @@ def get_publication_readiness(
 		result_fields = [
 			"name",
 			"assessment_plan",
+			"program",
+			"student_group",
 			"assessment_group",
 			"student",
 			"course",
+			"academic_year",
 			"academic_term",
 			"docstatus",
 			"maximum_score",
@@ -640,6 +728,29 @@ def get_publication_readiness(
 			page_length=0,
 		)
 	profile_blockers.extend(build_duplicate_assessment_result_blockers(results))
+	if results:
+		plan_criteria_rows = frappe.get_all(
+			"Assessment Plan Criteria",
+			filters={"parent": ["in", plan_names]},
+			fields=["parent", "assessment_criteria", "maximum_score"],
+			order_by="parent asc, idx asc",
+			page_length=0,
+		)
+		result_detail_rows = frappe.get_all(
+			"Assessment Result Detail",
+			filters={"parent": ["in", [row.name for row in results]]},
+			fields=["parent", "assessment_criteria", "maximum_score"],
+			order_by="parent asc, idx asc",
+			page_length=0,
+		)
+		profile_blockers.extend(
+			build_assessment_result_plan_integrity_blockers(
+				plans,
+				results,
+				plan_criteria_rows,
+				result_detail_rows,
+			)
+		)
 	result_pairs = {(row.assessment_plan, row.student) for row in results}
 	expected = len(plans) * len(students)
 	submitted = sum(1 for row in results if row.docstatus == 1)
