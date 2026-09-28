@@ -84,6 +84,7 @@ jobs:
           node --check eduedge/public/js/eduedge_question_batch.bundle.js
           node --check eduedge/public/js/eduedge_assessment_operations.bundle.js
           node --check eduedge/public/js/eduedge_report_cards.bundle.js
+          node --check eduedge/public/js/eduedge_results_portal.js
           node --check eduedge/public/js/eduedge_branch_governance.bundle.js
           node --check eduedge/eduedge/page/eduedge_home/eduedge_home.js
           node --check eduedge/eduedge/page/eduedge_setup_center/eduedge_setup_center.js
