@@ -116,7 +116,6 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 			else:
 				frappe.flags[flag] = previous
 
-
 	def test_incomplete_issued_pdf_metadata_fails_closed(self):
 		payload = {"issue_record": {"name": "EDU-RCI-TEST"}}
 		archive = frappe._dict(
@@ -195,9 +194,24 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 			with self.assertRaises(frappe.ValidationError):
 				get_archived_report_card_pdf("EDU-RCI-TEST")
 
-	def test_report_card_issue_file_permissions_block_creation_and_mutation(self):
-		file_doc = frappe._dict({"attached_to_doctype": ISSUE_DOCTYPE})
-		self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype="create"))
-		self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype="write"))
-		self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype="delete"))
-		self.assertTrue(has_archived_report_card_file_permission(file_doc, ptype="read"))
+	def test_report_card_issue_file_permissions_follow_issue_access(self):
+		file_doc = frappe._dict(
+			{
+				"attached_to_doctype": ISSUE_DOCTYPE,
+				"attached_to_name": "EDU-RCI-TEST",
+			}
+		)
+		for ptype in ("create", "write", "delete", "share"):
+			with self.subTest(ptype=ptype):
+				self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype=ptype))
+		with patch("frappe.has_permission", return_value=True) as has_permission:
+			self.assertTrue(has_archived_report_card_file_permission(file_doc, ptype="read", user="reader@example.com"))
+			has_permission.assert_called_once_with(
+				ISSUE_DOCTYPE,
+				ptype="read",
+				doc="EDU-RCI-TEST",
+				user="reader@example.com",
+				print_logs=False,
+			)
+		with patch("frappe.has_permission", return_value=False):
+			self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype="read", user="blocked@example.com"))
