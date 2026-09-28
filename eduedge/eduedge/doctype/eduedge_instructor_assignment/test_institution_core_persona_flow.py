@@ -41,6 +41,7 @@ from eduedge.education.academic_operations import before_validate_student_attend
 from eduedge.education.assessment_operations import (
     before_validate_assessment_plan,
     before_validate_assessment_result,
+    build_assessment_result_plan_integrity_blockers,
     build_duplicate_assessment_result_blockers,
 )
 from eduedge.education.custom_fields import BRANCH_FIELD
@@ -979,6 +980,79 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         self.assertEqual(
             duplicate_blockers[0]["assessment_results"],
             ["LEGACY-RESULT-1", "LEGACY-RESULT-2"],
+        )
+
+        legacy_integrity_blockers = build_assessment_result_plan_integrity_blockers(
+            [
+                frappe._dict(
+                    {
+                        "name": mark_plan.name,
+                        "program": mark_plan.program,
+                        "student_group": mark_plan.student_group,
+                        "course": mark_plan.course,
+                        "academic_year": mark_plan.academic_year,
+                        "academic_term": mark_plan.academic_term,
+                        "assessment_group": mark_plan.assessment_group,
+                        "grading_scale": mark_plan.grading_scale,
+                        "maximum_assessment_score": 100,
+                    }
+                )
+            ],
+            [
+                frappe._dict(
+                    {
+                        "name": "LEGACY-RESULT-DRIFT",
+                        "assessment_plan": mark_plan.name,
+                        "student": student.name,
+                        "program": mark_plan.program,
+                        "student_group": mark_plan.student_group,
+                        "course": extra_course.name,
+                        "academic_year": mark_plan.academic_year,
+                        "academic_term": mark_plan.academic_term,
+                        "assessment_group": mark_plan.assessment_group,
+                        "grading_scale": mark_plan.grading_scale,
+                        "maximum_score": 100,
+                        "total_score": 80,
+                        "eduedge_score_state": "Scored",
+                    }
+                )
+            ],
+            [
+                frappe._dict(
+                    {
+                        "parent": mark_plan.name,
+                        "assessment_criteria": valid_criterion.name,
+                        "maximum_score": 100,
+                    }
+                )
+            ],
+            [
+                frappe._dict(
+                    {
+                        "parent": "LEGACY-RESULT-DRIFT",
+                        "assessment_criteria": valid_criterion.name,
+                        "maximum_score": 100,
+                        "score": 75,
+                    }
+                )
+            ],
+        )
+        self.assertEqual(len(legacy_integrity_blockers), 1)
+        self.assertEqual(
+            legacy_integrity_blockers[0]["code"],
+            "ASSESSMENT_RESULT_PLAN_MISMATCH",
+        )
+        self.assertTrue(
+            any(
+                "Course does not match" in issue
+                for issue in legacy_integrity_blockers[0]["issues"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "Total Score does not match" in issue
+                for issue in legacy_integrity_blockers[0]["issues"]
+            )
         )
 
         frappe.set_user(instructor_user.name)
