@@ -30,6 +30,7 @@
 						<label><span>Class / Student Group</span><select v-model="filters.student_group" class="form-control"><option value="">All</option><option v-for="value in data.options.student_groups" :key="value" :value="value">{{ value }}</option></select></label>
 						<label><span>Subject / Course</span><select v-model="filters.course" class="form-control"><option value="">All</option><option v-for="value in data.options.courses" :key="value" :value="value">{{ value }}</option></select></label>
 						<label><span>Assessment Group</span><select v-model="filters.assessment_group" class="form-control"><option value="">All</option><option v-for="value in data.options.assessment_groups" :key="value" :value="value">{{ value }}</option></select></label>
+						<label><span>Score State</span><select v-model="filters.score_state" class="form-control"><option value="">All</option><option v-for="value in data.options.score_states" :key="value" :value="value">{{ value }}</option></select></label>
 						<label><span>Status</span><select v-model="filters.status" class="form-control"><option value="">All</option><option>Draft</option><option>Submitted</option><option>Cancelled</option></select></label>
 					</div>
 					<template #actions><button type="button" class="edge-button" @click="resetFilters">Reset</button><button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="load">Apply</button></template>
@@ -41,13 +42,23 @@
 					<EdgeStatCard label="Results" :value="data.summary.results" helper="Permitted result records" />
 					<EdgeStatCard label="Submitted" :value="data.summary.submitted" helper="Final result records" />
 					<EdgeStatCard label="Draft" :value="data.summary.draft" helper="Still editable" />
-					<EdgeStatCard label="Average" :value="percentageLabel(data.summary.average_percentage)" helper="Average score percentage" />
-					<EdgeStatCard label="Highest" :value="percentageLabel(data.summary.highest_percentage)" helper="Highest score percentage" />
-					<EdgeStatCard label="Lowest" :value="percentageLabel(data.summary.lowest_percentage)" helper="Lowest score percentage" />
+					<EdgeStatCard label="Scored" :value="data.summary.scored" helper="Numeric performance rows" />
+					<EdgeStatCard label="Non-scored" :value="data.summary.non_scored" helper="Absent, exempt or not offered" />
+					<EdgeStatCard label="Average" :value="percentageLabel(data.summary.average_percentage)" helper="Scored results only" />
+					<EdgeStatCard label="Highest" :value="percentageLabel(data.summary.highest_percentage)" helper="Scored results only" />
+					<EdgeStatCard label="Lowest" :value="percentageLabel(data.summary.lowest_percentage)" helper="Scored results only" />
 				</EdgeDashboardLayout>
 
 				<section class="analytics-panel">
-					<div class="analytics-heading"><div><p class="edge-eyebrow">Grade distribution</p><h2>Performance bands</h2></div><small v-if="data.summary.summary_truncated">Summary is capped at the first 2,000 permitted records for this filter.</small></div>
+					<div class="analytics-heading"><div><p class="edge-eyebrow">Score-state distribution</p><h2>Academic result states</h2></div><span>All permitted rows</span></div>
+					<EdgeEmptyState v-if="!data.score_state_distribution.length" title="No score-state data available" description="Adjust the filters or record assessment results first." />
+					<div v-else class="grade-grid">
+						<article v-for="row in data.score_state_distribution" :key="row.state"><strong>{{ row.state }}</strong><span>{{ row.count }} result{{ row.count === 1 ? '' : 's' }}</span></article>
+					</div>
+				</section>
+
+				<section class="analytics-panel">
+					<div class="analytics-heading"><div><p class="edge-eyebrow">Grade distribution</p><h2>Performance bands</h2><small>Scored results only</small></div><small v-if="data.summary.summary_truncated">Summary is capped at the first 2,000 permitted records for this filter.</small></div>
 					<EdgeEmptyState v-if="!data.grade_distribution.length" title="No grade distribution available" description="Adjust the filters or record assessment results first." />
 					<div v-else class="grade-grid">
 						<article v-for="row in data.grade_distribution" :key="row.grade"><strong>{{ row.grade }}</strong><span>{{ row.count }} result{{ row.count === 1 ? '' : 's' }}</span></article>
@@ -59,16 +70,17 @@
 					<EdgeEmptyState v-if="!data.rows.length" title="No results found" description="No permitted Assessment Results match the selected filters." />
 					<div v-else class="analytics-table-wrap">
 						<table class="table analytics-table">
-							<thead><tr><th>Student</th><th>Subject</th><th>Class</th><th>Assessment</th><th>Score</th><th>%</th><th>Grade</th><th>Status</th><th>Action</th></tr></thead>
+							<thead><tr><th>Student</th><th>Subject</th><th>Class</th><th>Assessment</th><th>Score State</th><th>Score</th><th>%</th><th>Grade</th><th>Status</th><th>Action</th></tr></thead>
 							<tbody>
 								<tr v-for="row in data.rows" :key="row.name">
 									<td><strong>{{ row.student_name || row.student }}</strong><small>{{ row.student }}</small></td>
 									<td>{{ row.course || '—' }}</td>
 									<td>{{ row.student_group || '—' }}</td>
 									<td>{{ row.assessment_plan }}</td>
-									<td>{{ numberLabel(row.total_score) }} / {{ numberLabel(row.maximum_score) }}</td>
-									<td>{{ percentageLabel(row.percentage) }}</td>
-									<td>{{ row.grade || '—' }}</td>
+									<td>{{ row.score_state || 'Scored' }}</td>
+									<td>{{ row.score_state === 'Scored' ? `${numberLabel(row.total_score)} / ${numberLabel(row.maximum_score)}` : '—' }}</td>
+									<td>{{ row.score_state === 'Scored' ? percentageLabel(row.percentage) : '—' }}</td>
+									<td>{{ row.score_state === 'Scored' ? (row.grade || '—') : '—' }}</td>
 									<td><EdgeStatusBadge :label="row.status_label" :status="row.status_label" :tone="statusTone(row.status_label)" /></td>
 									<td><button type="button" class="edge-button" @click="openResult(row.name)">Open</button></td>
 								</tr>
@@ -88,8 +100,9 @@ const blankData = () => ({
 	allowed_branches: [],
 	branch: "",
 	filters: {},
-	options: { academic_years: [], academic_terms: [], student_groups: [], courses: [], assessment_groups: [] },
-	summary: { results: 0, submitted: 0, draft: 0, average_percentage: 0, highest_percentage: 0, lowest_percentage: 0, summary_truncated: false },
+	options: { academic_years: [], academic_terms: [], student_groups: [], courses: [], assessment_groups: [], score_states: [] },
+	summary: { results: 0, submitted: 0, draft: 0, scored: 0, non_scored: 0, average_percentage: 0, highest_percentage: 0, lowest_percentage: 0, summary_truncated: false },
+	score_state_distribution: [],
 	grade_distribution: [],
 	rows: [],
 	row_limit: 100,
@@ -103,7 +116,7 @@ export default {
 			loading: true,
 			loaded: false,
 			error: "",
-			filters: { branch: "", academic_year: "", academic_term: "", student_group: "", course: "", assessment_group: "", status: "" },
+			filters: { branch: "", academic_year: "", academic_term: "", student_group: "", course: "", assessment_group: "", score_state: "", status: "" },
 			data: blankData(),
 		};
 	},
@@ -135,6 +148,7 @@ export default {
 					student_group: this.filters.student_group || undefined,
 					course: this.filters.course || undefined,
 					assessment_group: this.filters.assessment_group || undefined,
+					score_state: this.filters.score_state || undefined,
 					status: this.filters.status || undefined,
 				});
 				this.data = response.message || blankData();
@@ -153,11 +167,12 @@ export default {
 			this.filters.student_group = "";
 			this.filters.course = "";
 			this.filters.assessment_group = "";
+			this.filters.score_state = "";
 			await this.load();
 		},
 		resetFilters() {
 			const branch = this.filters.branch;
-			this.filters = { branch, academic_year: "", academic_term: "", student_group: "", course: "", assessment_group: "", status: "" };
+			this.filters = { branch, academic_year: "", academic_term: "", student_group: "", course: "", assessment_group: "", score_state: "", status: "" };
 			this.load();
 		},
 		openResult(name) { window.open(`/app/assessment-result/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer"); },
