@@ -22,6 +22,7 @@ from eduedge.services.branch_context import get_allowed_school_branches, get_cur
 
 MAX_ANALYTICS_ROWS = 100
 MAX_ANALYTICS_SUMMARY = 2000
+ANALYTICS_OPTION_PAGE_SIZE = 250
 RESULT_ANALYTICS_ROLES = {
 	"System Manager",
 	"EduEdge Administrator",
@@ -306,25 +307,37 @@ def _analytics_filters(
 	return filters
 
 
-def _analytics_options(branch: str) -> dict:
+def _analytics_option_values(branch: str, fieldname: str) -> list[str]:
 	filters = {}
 	if frappe.get_meta("Assessment Result").has_field(BRANCH_FIELD):
 		filters[BRANCH_FIELD] = branch
-	rows = frappe.get_list(
-		"Assessment Result",
-		filters=filters,
-		fields=["academic_year", "academic_term", "student_group", "course", "assessment_group"],
-		order_by="modified desc",
-		limit_page_length=1000,
-	)
-	def unique(fieldname: str) -> list[str]:
-		return sorted({str(row.get(fieldname)) for row in rows if row.get(fieldname)})
+
+	values: list[str] = []
+	offset = 0
+	while True:
+		rows = frappe.get_list(
+			"Assessment Result",
+			filters=filters,
+			fields=[fieldname],
+			distinct=True,
+			order_by=f"{fieldname} asc",
+			limit_start=offset,
+			limit_page_length=ANALYTICS_OPTION_PAGE_SIZE,
+		)
+		values.extend(str(row.get(fieldname)) for row in rows if row.get(fieldname))
+		if len(rows) < ANALYTICS_OPTION_PAGE_SIZE:
+			break
+		offset += len(rows)
+	return values
+
+
+def _analytics_options(branch: str) -> dict:
 	return {
-		"academic_years": unique("academic_year"),
-		"academic_terms": unique("academic_term"),
-		"student_groups": unique("student_group"),
-		"courses": unique("course"),
-		"assessment_groups": unique("assessment_group"),
+		"academic_years": _analytics_option_values(branch, "academic_year"),
+		"academic_terms": _analytics_option_values(branch, "academic_term"),
+		"student_groups": _analytics_option_values(branch, "student_group"),
+		"courses": _analytics_option_values(branch, "course"),
+		"assessment_groups": _analytics_option_values(branch, "assessment_group"),
 		"score_states": list(SCORE_STATES),
 	}
 
