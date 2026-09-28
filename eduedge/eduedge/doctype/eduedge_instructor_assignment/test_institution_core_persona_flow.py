@@ -954,6 +954,35 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             before_validate_assessment_result(invalid_state_result)
 
+        absent_result = frappe.new_doc("Assessment Result")
+        absent_result.assessment_plan = mark_plan.name
+        absent_result.student = student.name
+        absent_result.eduedge_score_state = "Absent"
+        absent_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": 0,
+            },
+        )
+        before_validate_assessment_result(absent_result)
+        self.assertEqual(absent_result.eduedge_score_state, "Absent")
+        self.assertEqual(absent_result.details[0].score, 0)
+
+        invalid_absent_result = frappe.new_doc("Assessment Result")
+        invalid_absent_result.assessment_plan = mark_plan.name
+        invalid_absent_result.student = student.name
+        invalid_absent_result.eduedge_score_state = "Absent"
+        invalid_absent_result.append(
+            "details",
+            {
+                "assessment_criteria": valid_criterion.name,
+                "score": 1,
+            },
+        )
+        with self.assertRaises(frappe.ValidationError):
+            before_validate_assessment_result(invalid_absent_result)
+
         duplicate_blockers = build_duplicate_assessment_result_blockers(
             [
                 frappe._dict(
