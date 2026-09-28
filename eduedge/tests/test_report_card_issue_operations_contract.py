@@ -64,6 +64,7 @@ class TestReportCardIssueOperationsContract(unittest.TestCase):
 			"Result Publication lineage has multiple published successors.",
 			"get_report_card_issue_history_for_publications(publication_names, student)",
 			'"current_publication": current_publication.name',
+			"Report Card Issue publication lineage is inconsistent.",
 			'"lineage_status"] = "Superseded Publication"',
 		):
 			self.assertIn(token, api)
