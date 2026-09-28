@@ -8,6 +8,10 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from eduedge.api.report_cards import _get_published_publication_lineage
+from eduedge.api.report_archive_audit import (
+	_archive_status,
+	get_report_card_archive_integrity,
+)
 from eduedge.education.result_verification import (
 	_verify_issue_pdf_archive,
 	verify_issued_report_card,
@@ -234,6 +238,68 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 		with patch("frappe.db.get_value", return_value=row):
 			with self.assertRaises(frappe.ValidationError):
 				get_issued_payload_by_name(row.name)
+
+	def test_archive_audit_status_distinguishes_legacy_incomplete_and_verified(self):
+		legacy = frappe._dict(
+			{"name": "LEGACY", "pdf_sha256": None, "pdf_filename": None, "pdf_size_bytes": None}
+		)
+		incomplete = frappe._dict(
+			{"name": "PARTIAL", "pdf_sha256": "a" * 64, "pdf_filename": "", "pdf_size_bytes": 100}
+		)
+		healthy = frappe._dict(
+			{
+				"name": "HEALTHY",
+				"pdf_sha256": "a" * 64,
+				"pdf_filename": "Report Card HEALTHY.pdf",
+				"pdf_size_bytes": 100,
+			}
+		)
+		self.assertEqual(_archive_status(legacy)[0], "Legacy")
+		self.assertEqual(_archive_status(incomplete)[0], "Incomplete")
+		with patch(
+			"eduedge.api.report_archive_audit.get_archived_report_card_pdf",
+			return_value=b"%PDF-1.4",
+		) as archive:
+			self.assertEqual(_archive_status(healthy)[0], "Healthy")
+			archive.assert_called_once_with("HEALTHY")
+
+	def test_archive_audit_hashes_only_visible_permission_aware_page(self):
+		rows = [
+			frappe._dict(
+				{
+					"name": f"ISSUE-{index}",
+					"result_publication": "PUB-1",
+					"publication_version": 1,
+					"issue_version": index,
+					"student": f"STU-{index}",
+					"student_name": f"Student {index}",
+					"school_branch": "BRANCH-1",
+					"student_group": "GROUP-1",
+					"issued_on": f"2026-09-{20 + index:02d} 10:00:00",
+					"payload_hash": "b" * 64,
+					"pdf_sha256": "a" * 64,
+					"pdf_filename": f"Report Card ISSUE-{index}.pdf",
+					"pdf_size_bytes": 100,
+				}
+			)
+			for index in (1, 2, 3)
+		]
+		with (
+			patch("frappe.has_permission", return_value=True),
+			patch("frappe.get_list", return_value=rows) as get_list,
+			patch("eduedge.api.report_archive_audit.get_allowed_school_branches", return_value=[]),
+			patch(
+				"eduedge.api.report_archive_audit.get_archived_report_card_pdf",
+				return_value=b"%PDF-1.4",
+			) as archive,
+		):
+			result = get_report_card_archive_integrity(start=0, page_length=2)
+
+		self.assertEqual([row["name"] for row in result["rows"]], ["ISSUE-1", "ISSUE-2"])
+		self.assertTrue(result["has_more"])
+		self.assertEqual(result["summary"], {"healthy": 2, "legacy": 0, "problems": 0})
+		self.assertEqual(archive.call_count, 2)
+		self.assertEqual(get_list.call_args.kwargs["limit_page_length"], 3)
 
 	def test_public_verification_returns_invalid_when_archived_pdf_fails_integrity(self):
 		payload_json = json.dumps({"student": {"student_name": "Archive Student"}})
