@@ -86,6 +86,7 @@
 							<thead>
 								<tr>
 									<th>Student</th>
+									<th>Score State</th>
 									<th v-for="criterion in context.criteria" :key="criterion.assessment_criteria">
 										{{ criterion.assessment_criteria }} / {{ criterion.maximum_score }}
 									</th>
@@ -99,6 +100,16 @@
 							<tbody>
 								<tr v-for="row in rows" :key="row.student">
 									<td><strong>{{ row.student_name || row.student }}</strong><small>{{ row.student }}</small></td>
+									<td>
+										<select
+											v-model="row.score_state"
+											class="form-control marks-state"
+											:disabled="row.docstatus === 1 || working || !canEditResults"
+											@change="changeScoreState(row)"
+										>
+											<option v-for="state in scoreStates" :key="state" :value="state">{{ state }}</option>
+										</select>
+									</td>
 									<td v-for="criterion in context.criteria" :key="criterion.assessment_criteria">
 										<input
 											v-model="row.scores[criterion.assessment_criteria]"
@@ -107,13 +118,13 @@
 											min="0"
 											:step="0.01"
 											:max="criterion.maximum_score"
-											:disabled="row.docstatus === 1 || working || !canEditResults"
+											:disabled="row.docstatus === 1 || working || !canEditResults || row.score_state !== 'Scored'"
 											@input="markDirty(row)"
 										/>
-										<small v-if="row.grades[criterion.assessment_criteria]">{{ row.grades[criterion.assessment_criteria] }}</small>
+										<small v-if="row.score_state === 'Scored' && row.grades[criterion.assessment_criteria]">{{ row.grades[criterion.assessment_criteria] }}</small>
 									</td>
 									<td><strong>{{ rowTotal(row) }}</strong> / {{ context.selected_plan.maximum_assessment_score }}</td>
-									<td>{{ row.grade || '—' }}</td>
+									<td>{{ row.score_state === 'Scored' ? (row.grade || '—') : '—' }}</td>
 									<td><input v-model.trim="row.comment" class="form-control" :disabled="row.docstatus === 1 || working || !canEditResults" @input="markDirty(row)" /></td>
 									<td>
 										<EdgeStatusBadge
@@ -138,7 +149,7 @@
 							</tbody>
 						</table>
 					</div>
-					<p class="marks-note">Scores are not sent while you type. Save each changed row explicitly. Submit Draft Results is disabled while unsaved changes remain.</p>
+					<p class="marks-note">Scores are not sent while you type. Save each changed row explicitly. Use Score State for Absent, Exempt or Not Offered; those states store zero criterion scores and are interpreted by the Result Profile policy. Submit Draft Results is disabled while unsaved changes remain.</p>
 				</template>
 
 				<EdgeEmptyState
@@ -165,6 +176,7 @@ export default {
 			error: "",
 			filters: { branch: "", assessment_plan: "" },
 			context: { allowed_branches: [], branch: "", plans: [], selected_plan: null, criteria: [], students: [], permissions: {} },
+			scoreStates: ["Scored", "Absent", "Exempt", "Not Offered"],
 			rows: [],
 		};
 	},
@@ -206,6 +218,7 @@ export default {
 					student_name: student.student_name,
 					name: student.name || "",
 					docstatus: Number(student.docstatus || 0),
+					score_state: student.score_state || "Scored",
 					scores,
 					grades,
 					grade: total[1] || "",
@@ -240,10 +253,25 @@ export default {
 			await this.load();
 		},
 		markDirty(row) { row.dirty = true; },
+		changeScoreState(row) {
+			for (const criterion of this.context.criteria || []) {
+				const key = criterion.assessment_criteria;
+				row.scores[key] = row.score_state === "Scored" ? "" : 0;
+				row.grades[key] = "";
+			}
+			row.grade = "";
+			this.markDirty(row);
+		},
 		rowTotal(row) {
+			if (row.score_state !== "Scored") return "—";
 			return (this.context.criteria || []).reduce((total, criterion) => total + Number(row.scores[criterion.assessment_criteria] || 0), 0).toFixed(2);
 		},
 		rowComplete(row) {
+			if (row.score_state !== "Scored") {
+				return (this.context.criteria || []).every(
+					(criterion) => Number(row.scores[criterion.assessment_criteria]) === 0,
+				);
+			}
 			return (this.context.criteria || []).every((criterion) => {
 				const raw = row.scores[criterion.assessment_criteria];
 				if (raw === "" || raw === null || raw === undefined) return false;
@@ -260,11 +288,13 @@ export default {
 					assessment_plan: this.filters.assessment_plan,
 					student: row.student,
 					scores: JSON.stringify(row.scores),
+					score_state: row.score_state,
 					comment: row.comment || "",
 				});
 				const saved = response.message || {};
 				row.name = saved.name || row.name;
 				row.docstatus = Number(saved.docstatus || 0);
+				row.score_state = saved.score_state || row.score_state || "Scored";
 				row.grade = saved.grade || "";
 				for (const [criterion, detail] of Object.entries(saved.details || {})) {
 					row.grades[criterion] = detail.grade || "";
@@ -318,6 +348,7 @@ export default {
 .marks-table td:first-child strong,.marks-table td:first-child small { display:block; }
 .marks-table td:first-child small,.marks-table td small,.marks-note { color:var(--text-muted); }
 .marks-score { min-width:6.25rem; }
+.marks-state { min-width:8.5rem; }
 .marks-note { margin:.75rem 0 0; }
 .marks-error { color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); padding:.75rem; }
 @media (max-width:700px) { .marks-filters { grid-template-columns:1fr; } }
