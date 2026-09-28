@@ -17,7 +17,8 @@ class TestReportVerificationAndHistoryContract(unittest.TestCase):
 		self.assertTrue(fields["verification_token"].get("unique"))
 		issues = (APP / "education" / "report_card_issues.py").read_text()
 		self.assertIn("def generate_verification_token()", issues)
-		self.assertIn('"verification_token": generate_verification_token()', issues)
+		self.assertIn("verification_token = generate_verification_token()", issues)
+		self.assertIn('"verification_token": verification_token', issues)
 
 	def test_public_verification_is_token_and_hash_checked_without_marks(self):
 		service = (APP / "education" / "result_verification.py").read_text()
