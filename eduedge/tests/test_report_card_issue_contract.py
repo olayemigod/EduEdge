@@ -86,6 +86,7 @@ class TestReportCardIssueContract(unittest.TestCase):
 			'file_row.owner != "Administrator"',
 			'hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or ""))',
 			"len(pdf_bytes) != int(archive.pdf_size_bytes)",
+			'Official Report Card PDF archive metadata is incomplete.',
 			"return render_report_card_pdf(payload)",
 		):
 			self.assertIn(token, service)
