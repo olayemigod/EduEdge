@@ -18,6 +18,7 @@ from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
 	get_archived_report_card_pdf,
 	get_issued_payload_by_name,
+	inspect_report_card_issue_integrity,
 	inspect_report_card_pdf_archive,
 	has_archived_report_card_file_permission,
 	resolve_report_card_pdf,
@@ -386,6 +387,58 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 				"Hash Mismatch",
 			)
 
+	def test_issue_integrity_rejects_corrupt_payload_even_when_pdf_would_be_healthy(self):
+		payload_json = json.dumps({"student": {"student_name": "Archive Student"}})
+		row = frappe._dict(
+			{
+				"payload_hash": "0" * 64,
+				"payload_json": payload_json,
+			}
+		)
+		with (
+			patch("frappe.db.get_value", return_value=row),
+			patch("eduedge.education.report_card_issues.inspect_report_card_pdf_archive") as pdf,
+		):
+			result = inspect_report_card_issue_integrity("EDU-RCI-PAYLOAD-BAD")
+		self.assertEqual(result["status"], "Payload Hash Mismatch")
+		self.assertFalse(result["ok"])
+		self.assertEqual(result["payload_status"], "Hash Mismatch")
+		self.assertFalse(result["payload_ok"])
+		self.assertEqual(result["pdf_status"], "Not Checked")
+		pdf.assert_not_called()
+
+	def test_issue_integrity_reports_healthy_payload_and_pdf_layers(self):
+		payload_json = json.dumps({"student": {"student_name": "Archive Student"}})
+		row = frappe._dict(
+			{
+				"payload_hash": hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+				"payload_json": payload_json,
+			}
+		)
+		pdf_result = {
+			"issue": "EDU-RCI-HEALTHY",
+			"status": "Healthy",
+			"ok": True,
+			"legacy": False,
+			"detail": "PDF verified",
+			"pdf_fingerprint": "A" * 16,
+			"expected_size_bytes": 100,
+			"actual_size_bytes": 100,
+		}
+		with (
+			patch("frappe.db.get_value", return_value=row),
+			patch(
+				"eduedge.education.report_card_issues.inspect_report_card_pdf_archive",
+				return_value=pdf_result,
+			),
+		):
+			result = inspect_report_card_issue_integrity("EDU-RCI-HEALTHY")
+		self.assertTrue(result["ok"])
+		self.assertTrue(result["payload_ok"])
+		self.assertTrue(result["pdf_ok"])
+		self.assertEqual(result["payload_status"], "Healthy")
+		self.assertEqual(result["pdf_status"], "Healthy")
+
 	def test_archive_audit_endpoint_is_permission_aware_and_page_bounded(self):
 		rows = [
 			frappe._dict(
@@ -422,7 +475,7 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 			patch("eduedge.api.report_card_archive_audit._require_archive_auditor"),
 			patch("eduedge.api.report_card_archive_audit._resolve_branch", return_value="BRANCH-1"),
 			patch("frappe.get_list", return_value=rows) as get_list,
-			patch("eduedge.api.report_card_archive_audit.inspect_report_card_pdf_archive", side_effect=inspect),
+			patch("eduedge.api.report_card_archive_audit.inspect_report_card_issue_integrity", side_effect=inspect),
 			patch("eduedge.api.report_card_archive_audit.get_allowed_school_branches", return_value=[]),
 		):
 			result = get_report_card_archive_integrity(branch="BRANCH-1", start=0, page_length=2)
