@@ -15,6 +15,7 @@ from eduedge.api.assessment_result_tool_safe import (
 )
 from eduedge.education.assessment_operations import normalize_assessment_result_score
 from eduedge.education.custom_fields import BRANCH_FIELD
+from eduedge.education.result_engine import SCORE_STATES
 from eduedge.education.offerings import assert_branch_access
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
@@ -124,6 +125,16 @@ def get_marks_entry_context(
 	}
 
 
+def _normalize_score_state(score_state: str | None) -> str:
+	state = str(score_state or "Scored").strip() or "Scored"
+	if state not in SCORE_STATES:
+		frappe.throw(
+			_("Invalid Assessment Result score state: {0}.").format(state),
+			frappe.ValidationError,
+		)
+	return state
+
+
 def _parse_scores(scores: str | dict | None) -> dict[str, float]:
 	parsed = frappe.parse_json(scores) if isinstance(scores, str) else (scores or {})
 	if not isinstance(parsed, dict):
@@ -141,6 +152,7 @@ def save_marks_entry(
 	student: str,
 	scores: str | dict,
 	comment: str | None = None,
+	score_state: str | None = "Scored",
 ) -> dict:
 	_require_login()
 	plan = _get_mark_entry_plan(assessment_plan)
@@ -154,6 +166,7 @@ def save_marks_entry(
 		order_by="idx",
 	)
 	maximums = {row.assessment_criteria: flt(row.maximum_score) for row in criteria_rows}
+	state = _normalize_score_state(score_state)
 	parsed_scores = _parse_scores(scores)
 	if set(parsed_scores) != set(maximums):
 		frappe.throw(_("Enter a score for every assessment criterion before saving."), frappe.ValidationError)
@@ -163,6 +176,11 @@ def save_marks_entry(
 				_("Score for {0} must be between 0 and {1}.").format(criterion, maximums[criterion]),
 				frappe.ValidationError,
 			)
+	if state != "Scored" and any(abs(value) > 1e-9 for value in parsed_scores.values()):
+		frappe.throw(
+			_("Absent, Exempt and Not Offered results must use zero scores."),
+			frappe.ValidationError,
+		)
 
 	existing = frappe.get_list(
 		"Assessment Result",
@@ -190,6 +208,13 @@ def save_marks_entry(
 	doc.assessment_plan = plan.name
 	doc.student = student
 	doc.comment = str(comment or "").strip()
+	if frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
+		doc.eduedge_score_state = state
+	elif state != "Scored":
+		frappe.throw(
+			_("This site has not been migrated for Assessment Result score states."),
+			frappe.ValidationError,
+		)
 	doc.set(
 		"details",
 		[
@@ -205,6 +230,7 @@ def save_marks_entry(
 		"total_score": doc.total_score,
 		"maximum_score": doc.maximum_score,
 		"grade": doc.grade,
+		"score_state": str(doc.get("eduedge_score_state") or "Scored"),
 		"docstatus": doc.docstatus,
 		"comment": doc.comment,
 		"details": {
