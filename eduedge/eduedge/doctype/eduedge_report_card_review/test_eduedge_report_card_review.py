@@ -487,6 +487,82 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 		self.assertEqual(get_list.call_args.kwargs["limit_page_length"], 3)
 		self.assertEqual(get_list.call_args.kwargs["filters"]["school_branch"], "BRANCH-1")
 
+	def test_archive_audit_filters_candidates_before_integrity_checks(self):
+		rows = [
+			frappe._dict(
+				{
+					"name": "ISSUE-1",
+					"result_publication": "PUB-2",
+					"publication_version": 2,
+					"issue_version": 1,
+					"student": "STU-9",
+					"student_name": "Student Nine",
+					"school_branch": "BRANCH-1",
+					"student_group": "GROUP-1",
+					"issued_on": "2026-09-28 10:00:00",
+					"pdf_sha256": "a" * 64,
+					"pdf_filename": "Report 1.pdf",
+					"pdf_size_bytes": 100,
+				}
+			)
+		]
+		check = {
+			"status": "Healthy",
+			"ok": True,
+			"legacy": False,
+			"detail": "checked",
+			"payload_status": "Healthy",
+			"payload_ok": True,
+			"payload_fingerprint": "B" * 16,
+			"pdf_status": "Healthy",
+			"pdf_ok": True,
+			"pdf_fingerprint": "A" * 16,
+			"expected_size_bytes": 100,
+			"actual_size_bytes": 100,
+		}
+		with (
+			patch("eduedge.api.report_card_archive_audit._require_archive_auditor"),
+			patch("eduedge.api.report_card_archive_audit._resolve_branch", return_value="BRANCH-1"),
+			patch("frappe.get_list", return_value=rows) as get_list,
+			patch(
+				"eduedge.api.report_card_archive_audit.inspect_report_card_issue_integrity",
+				return_value=check,
+			) as inspect,
+			patch("eduedge.api.report_card_archive_audit.get_allowed_school_branches", return_value=[]),
+			patch("eduedge.api.report_card_archive_audit.now_datetime", return_value="2026-09-28 17:30:00"),
+		):
+			result = get_report_card_archive_integrity(
+				branch="BRANCH-1",
+				publication="PUB-2",
+				student="STU-9",
+				search="Nine",
+				start=0,
+				page_length=10,
+			)
+
+		self.assertEqual(
+			get_list.call_args.kwargs["filters"],
+			{
+				"school_branch": "BRANCH-1",
+				"result_publication": "PUB-2",
+				"student": "STU-9",
+			},
+		)
+		self.assertEqual(
+			get_list.call_args.kwargs["or_filters"],
+			[
+				["name", "like", "%Nine%"],
+				["student", "like", "%Nine%"],
+				["student_name", "like", "%Nine%"],
+				["result_publication", "like", "%Nine%"],
+			],
+		)
+		inspect.assert_called_once_with("ISSUE-1")
+		self.assertEqual(result["filters"]["publication"], "PUB-2")
+		self.assertEqual(result["filters"]["student"], "STU-9")
+		self.assertEqual(result["filters"]["search"], "Nine")
+		self.assertEqual(result["checked_on"], "2026-09-28 17:30:00")
+
 	def test_incomplete_issued_pdf_metadata_fails_closed(self):
 		payload = {"issue_record": {"name": "EDU-RCI-TEST"}}
 		archive = frappe._dict(

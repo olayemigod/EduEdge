@@ -37,6 +37,41 @@ class TestReportCardArchiveAuditContract(unittest.TestCase):
 		):
 			self.assertIn(token, service)
 
+	def test_integrity_evidence_filters_and_csv_are_bounded_and_privacy_safe(self):
+		api = (APP / "api" / "report_card_archive_audit.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_resource_center" / "EduEdgeResourceCenter.vue").read_text()
+		for token in (
+			"publication: str | None = None",
+			"student: str | None = None",
+			"search: str | None = None",
+			'filters["result_publication"] = resolved_publication',
+			'filters["student"] = resolved_student',
+			"or_filters=or_filters",
+			'"checked_on": str(now_datetime())',
+			'"checked_by": frappe.session.user',
+		):
+			self.assertIn(token, api)
+		for token in (
+			"Export checked page",
+			"exportArchiveEvidence()",
+			"csvEvidenceCell(value)",
+			"/^[\\t\\r\\n ]*[=+\\-@]/",
+			"this.archiveAudit.rows.map",
+			"new Blob(",
+			"\\uFEFF",
+			"eduedge-issued-report-integrity-",
+			"archiveAudit.checked_on",
+			"archiveAudit.checked_by",
+		):
+			self.assertIn(token, vue)
+		for forbidden in (
+			"payload_json",
+			"/private/files",
+			"file_url",
+			"_content",
+		):
+			self.assertNotIn(forbidden, vue)
+
 	def test_archive_inspection_reuses_exact_private_file_contract(self):
 		service = (APP / "education" / "report_card_issues.py").read_text()
 		for token in (
