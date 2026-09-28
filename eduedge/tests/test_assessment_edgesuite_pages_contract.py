@@ -130,6 +130,36 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		self.assertGreaterEqual(text.count("_get_mark_entry_plan(assessment_plan)"), 3)
 		self.assertNotIn("from education.education.api import", text)
 
+	def test_result_analytics_separates_score_states_from_performance(self):
+		api = MARKS_WORKBENCH.read_text()
+		vue = RESULT_ANALYTICS.read_text()
+		for token in (
+			'fields.append("eduedge_score_state")',
+			'row["score_state"] = str(row.get("eduedge_score_state") or "Scored")',
+			'scored_rows = [row for row in rows if row.score_state == "Scored"]',
+			'grade_counts = Counter(str(row.grade or "Ungraded") for row in scored_rows)',
+			'state_counts = Counter(row.score_state for row in rows)',
+			'"scored": len(scored_rows)',
+			'"non_scored": len(rows) - len(scored_rows)',
+			'"score_state_distribution": [',
+			'if row.score_state == "Scored" and flt(row.maximum_score) > 0',
+		):
+			self.assertIn(token, api)
+		for token in (
+			"<span>Score State</span>",
+			"data.options.score_states",
+			'label="Scored"',
+			'label="Non-scored"',
+			'helper="Scored results only"',
+			"data.score_state_distribution",
+			"<th>Score State</th>",
+			"row.score_state || 'Scored'",
+			"scoreLabel(row)",
+			'row.score_state === \'Scored\' ? percentageLabel(row.percentage) : \'—\'',
+			'row.score_state === \'Scored\' ? (row.grade || \'—\') : \'—\'',
+		):
+			self.assertIn(token, vue)
+
 	def test_safe_mark_entry_payload_preserves_edgesuite_metadata(self):
 		text = (APP / "api" / "assessment_result_tool_safe.py").read_text()
 		for token in (
