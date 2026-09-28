@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from eduedge.api.report_cards import _get_published_publication_lineage
 
 from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
@@ -117,6 +118,77 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 				frappe.flags.pop(flag, None)
 			else:
 				frappe.flags[flag] = previous
+
+	def _publication_row(self, name, version, supersedes=None, **overrides):
+		values = {
+			"name": name,
+			"title": name,
+			"school_branch": "BRANCH-1",
+			"student_group": "GROUP-1",
+			"academic_year": "2026-2027",
+			"academic_term": "TERM-1",
+			"assessment_group": None,
+			"result_profile": "PROFILE-1",
+			"result_mode": "Terminal",
+			"publication_version": version,
+			"supersedes_publication": supersedes,
+			"status": "Published",
+			"report_card_ready": 1,
+			"published_on": f"2026-09-{10 + version:02d} 10:00:00",
+		}
+		values.update(overrides)
+		return frappe._dict(values)
+
+	def test_publication_lineage_follows_only_explicit_supersession_chain(self):
+		v1 = self._publication_row("PUB-1", 1)
+		v2 = self._publication_row("PUB-2", 2, "PUB-1")
+		v3 = self._publication_row("PUB-3", 3, "PUB-2")
+		rows = {row.name: row for row in (v1, v2, v3)}
+
+		def get_children(_doctype, filters=None, **kwargs):
+			parent = (filters or {}).get("supersedes_publication")
+			return {
+				"PUB-1": [v2],
+				"PUB-2": [v3],
+				"PUB-3": [],
+			}.get(parent, [])
+
+		with (
+			patch("eduedge.api.report_cards.get_published_publication", return_value=v2),
+			patch("frappe.db.get_value", side_effect=lambda _dt, name, *_args, **_kwargs: rows.get(name)),
+			patch("frappe.get_all", side_effect=get_children) as get_all,
+		):
+			lineage = _get_published_publication_lineage("PUB-2")
+
+		self.assertEqual([row.name for row in lineage], ["PUB-1", "PUB-2", "PUB-3"])
+		for call in get_all.call_args_list:
+			filters = call.kwargs["filters"]
+			self.assertIn("supersedes_publication", filters)
+			self.assertEqual(filters["status"], "Published")
+			self.assertEqual(filters["report_card_ready"], 1)
+
+	def test_publication_lineage_rejects_multiple_published_successors(self):
+		v1 = self._publication_row("PUB-1", 1)
+		v2a = self._publication_row("PUB-2A", 2, "PUB-1")
+		v2b = self._publication_row("PUB-2B", 2, "PUB-1")
+		with (
+			patch("eduedge.api.report_cards.get_published_publication", return_value=v1),
+			patch("frappe.db.get_value", return_value=v1),
+			patch("frappe.get_all", return_value=[v2a, v2b]),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				_get_published_publication_lineage("PUB-1")
+
+	def test_publication_lineage_rejects_scope_drift(self):
+		v1 = self._publication_row("PUB-1", 1)
+		v2 = self._publication_row("PUB-2", 2, "PUB-1", student_group="GROUP-OTHER")
+		with (
+			patch("eduedge.api.report_cards.get_published_publication", return_value=v1),
+			patch("frappe.db.get_value", return_value=v1),
+			patch("frappe.get_all", return_value=[v2]),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				_get_published_publication_lineage("PUB-1")
 
 	def test_exact_issue_payload_loads_independently_of_current_review_state(self):
 		payload = {"student": {"student_name": "Archive Student"}, "issue": {"issue_version": 1}}
