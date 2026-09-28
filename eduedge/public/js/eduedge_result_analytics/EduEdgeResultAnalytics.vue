@@ -33,7 +33,7 @@
 						<label><span>Score State</span><select v-model="filters.score_state" class="form-control"><option value="">All</option><option v-for="value in data.options.score_states" :key="value" :value="value">{{ value }}</option></select></label>
 						<label><span>Status</span><select v-model="filters.status" class="form-control"><option value="">All</option><option>Draft</option><option>Submitted</option><option>Cancelled</option></select></label>
 					</div>
-					<template #actions><button type="button" class="edge-button" @click="resetFilters">Reset</button><button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="load">Apply</button></template>
+					<template #actions><button type="button" class="edge-button" @click="resetFilters">Reset</button><button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="applyFilters">Apply</button></template>
 				</EdgeFilterBar>
 
 				<p v-if="error" class="analytics-note">{{ error }}</p>
@@ -67,7 +67,7 @@
 				</section>
 
 				<section class="analytics-panel">
-					<div class="analytics-heading"><div><p class="edge-eyebrow">Result records</p><h2>Assessment results</h2></div><span>Showing up to {{ data.row_limit }} records</span></div>
+					<div class="analytics-heading"><div><p class="edge-eyebrow">Result records</p><h2>Assessment results</h2></div><span>Showing {{ data.pagination.start }}–{{ data.pagination.end }} of {{ data.pagination.total_rows }} permitted records</span></div>
 					<EdgeEmptyState v-if="!data.rows.length" title="No results found" description="No permitted Assessment Results match the selected filters." />
 					<div v-else class="analytics-table-wrap">
 						<table class="table analytics-table">
@@ -88,6 +88,11 @@
 							</tbody>
 						</table>
 					</div>
+					<div v-if="data.pagination.total_pages > 1" class="analytics-pagination">
+						<button type="button" class="edge-button" :disabled="loading || !data.pagination.has_previous" @click="goToPage(data.pagination.page - 1)">Previous</button>
+						<span>Page {{ data.pagination.page }} of {{ data.pagination.total_pages }}</span>
+						<button type="button" class="edge-button" :disabled="loading || !data.pagination.has_next" @click="goToPage(data.pagination.page + 1)">Next</button>
+					</div>
 				</section>
 			</template>
 		</EdgePageLayout>
@@ -107,6 +112,7 @@ const blankData = () => ({
 	grade_distribution: [],
 	rows: [],
 	row_limit: 100,
+	pagination: { page: 1, page_length: 50, total_rows: 0, total_pages: 1, start: 0, end: 0, has_previous: false, has_next: false },
 });
 
 export default {
@@ -117,6 +123,8 @@ export default {
 			loading: true,
 			loaded: false,
 			error: "",
+			requestSerial: 0,
+			pageLength: 50,
 			filters: { branch: "", academic_year: "", academic_term: "", student_group: "", course: "", assessment_group: "", score_state: "", status: "" },
 			data: blankData(),
 		};
@@ -145,28 +153,46 @@ export default {
 			return `${this.numberLabel(row.total_score)} / ${this.numberLabel(row.maximum_score)}`;
 		},
 		statusTone(status) { return status === "Submitted" ? "success" : status === "Cancelled" ? "danger" : "warning"; },
-		async load() {
+		async load({ page = 1, clearResults = false } = {}) {
+			const requestId = ++this.requestSerial;
+			const requestedFilters = { ...this.filters };
+			if (clearResults) {
+				const blank = blankData();
+				this.data = {
+					...this.data,
+					summary: blank.summary,
+					score_state_distribution: [],
+					grade_distribution: [],
+					rows: [],
+					pagination: { ...blank.pagination, page_length: this.pageLength },
+				};
+			}
 			this.loading = true;
 			this.error = "";
 			try {
 				const response = await frappe.call("eduedge.api.assessment_workbenches.get_result_analytics", {
-					branch: this.filters.branch || undefined,
-					academic_year: this.filters.academic_year || undefined,
-					academic_term: this.filters.academic_term || undefined,
-					student_group: this.filters.student_group || undefined,
-					course: this.filters.course || undefined,
-					assessment_group: this.filters.assessment_group || undefined,
-					score_state: this.filters.score_state || undefined,
-					status: this.filters.status || undefined,
+					branch: requestedFilters.branch || undefined,
+					academic_year: requestedFilters.academic_year || undefined,
+					academic_term: requestedFilters.academic_term || undefined,
+					student_group: requestedFilters.student_group || undefined,
+					course: requestedFilters.course || undefined,
+					assessment_group: requestedFilters.assessment_group || undefined,
+					score_state: requestedFilters.score_state || undefined,
+					status: requestedFilters.status || undefined,
+					page,
+					page_length: this.pageLength,
 				});
+				if (requestId !== this.requestSerial) return;
 				this.data = response.message || blankData();
-				this.filters.branch = this.data.branch || this.filters.branch;
-				this.filters = { ...this.filters, ...(this.data.filters || {}), branch: this.data.branch || this.filters.branch };
+				this.pageLength = this.data.pagination?.page_length || this.pageLength;
+				this.filters.branch = this.data.branch || requestedFilters.branch;
+				this.filters = { ...requestedFilters, ...(this.data.filters || {}), branch: this.data.branch || requestedFilters.branch };
 				this.loaded = true;
 			} catch (error) {
+				if (requestId !== this.requestSerial) return;
 				this.error = error?.message || "Result Analytics could not be loaded.";
 			} finally {
-				this.loading = false;
+				if (requestId === this.requestSerial) this.loading = false;
 			}
 		},
 		async changeBranch() {
@@ -176,12 +202,18 @@ export default {
 			this.filters.course = "";
 			this.filters.assessment_group = "";
 			this.filters.score_state = "";
-			await this.load();
+			await this.load({ page: 1, clearResults: true });
 		},
+		applyFilters() { this.load({ page: 1, clearResults: true }); },
 		resetFilters() {
 			const branch = this.filters.branch;
 			this.filters = { branch, academic_year: "", academic_term: "", student_group: "", course: "", assessment_group: "", score_state: "", status: "" };
-			this.load();
+			this.load({ page: 1, clearResults: true });
+		},
+		goToPage(page) {
+			const target = Math.min(Math.max(Number(page) || 1, 1), this.data.pagination?.total_pages || 1);
+			if (target === this.data.pagination?.page || this.loading) return;
+			this.load({ page: target });
 		},
 		openResult(name) { window.open(`/app/assessment-result/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer"); },
 	},
@@ -203,5 +235,7 @@ export default {
 .analytics-table th { white-space:nowrap; }
 .analytics-table td { vertical-align:middle; }
 .analytics-table td:first-child strong,.analytics-table td:first-child small { display:block; }
+.analytics-pagination { display:flex; align-items:center; justify-content:flex-end; gap:.75rem; margin-top:1rem; }
+.analytics-pagination span { color:var(--text-muted); font-weight:600; }
 .analytics-note { border:1px solid var(--border-color); border-radius:var(--edge-radius-md,8px); padding:.75rem; }
 </style>
