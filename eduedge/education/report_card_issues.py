@@ -410,6 +410,102 @@ def inspect_report_card_pdf_archive(issue_name: str, *, include_content: bool = 
 	return result
 
 
+def inspect_report_card_issue_integrity(issue_name: str) -> dict:
+	"""Inspect immutable payload and official PDF integrity for one issued Report Card."""
+	row = frappe.db.get_value(
+		ISSUE_DOCTYPE,
+		issue_name,
+		["payload_hash", "payload_json"],
+		as_dict=True,
+	)
+	if not row:
+		return {
+			"issue": issue_name,
+			"status": "Missing Issue",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The Report Card Issue record does not exist."),
+			"payload_status": "Missing Issue",
+			"payload_ok": False,
+			"payload_fingerprint": "",
+			"pdf_status": "Not Checked",
+			"pdf_ok": False,
+		}
+
+	expected_payload_hash = str(row.payload_hash or "").strip().lower()
+	payload_json = row.payload_json or ""
+	actual_payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+	payload_base = {
+		"payload_fingerprint": expected_payload_hash[:16].upper() if expected_payload_hash else "",
+		"payload_ok": False,
+	}
+
+	if not expected_payload_hash:
+		return {
+			"issue": issue_name,
+			"status": "Missing Payload Hash",
+			"ok": False,
+			"legacy": False,
+			"detail": _("Immutable Report Card payload hash is missing."),
+			"payload_status": "Missing Payload Hash",
+			"pdf_status": "Not Checked",
+			"pdf_ok": False,
+			**payload_base,
+		}
+	if not hmac.compare_digest(actual_payload_hash, expected_payload_hash):
+		return {
+			"issue": issue_name,
+			"status": "Payload Hash Mismatch",
+			"ok": False,
+			"legacy": False,
+			"detail": _("Immutable Report Card payload SHA-256 does not match the Issue metadata."),
+			"payload_status": "Hash Mismatch",
+			"pdf_status": "Not Checked",
+			"pdf_ok": False,
+			**payload_base,
+		}
+	try:
+		payload = json.loads(payload_json or "{}")
+	except (TypeError, ValueError):
+		return {
+			"issue": issue_name,
+			"status": "Unreadable Payload",
+			"ok": False,
+			"legacy": False,
+			"detail": _("Immutable Report Card payload JSON is unreadable."),
+			"payload_status": "Unreadable",
+			"pdf_status": "Not Checked",
+			"pdf_ok": False,
+			**payload_base,
+		}
+	if not isinstance(payload, dict):
+		return {
+			"issue": issue_name,
+			"status": "Invalid Payload",
+			"ok": False,
+			"legacy": False,
+			"detail": _("Immutable Report Card payload JSON has an invalid shape."),
+			"payload_status": "Invalid",
+			"pdf_status": "Not Checked",
+			"pdf_ok": False,
+			**payload_base,
+		}
+
+	pdf = inspect_report_card_pdf_archive(issue_name)
+	return {
+		**pdf,
+		"status": pdf.get("status") or "Unknown",
+		"ok": bool(pdf.get("ok")),
+		"legacy": bool(pdf.get("legacy")),
+		"detail": pdf.get("detail") or "",
+		"payload_status": "Healthy",
+		"payload_ok": True,
+		"payload_fingerprint": expected_payload_hash[:16].upper(),
+		"pdf_status": pdf.get("status") or "Unknown",
+		"pdf_ok": bool(pdf.get("ok")),
+	}
+
+
 def get_archived_report_card_pdf(issue_name: str) -> bytes:
 	audit = inspect_report_card_pdf_archive(issue_name, include_content=True)
 	if audit.get("status") != "Healthy":
