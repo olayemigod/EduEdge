@@ -35,7 +35,7 @@ Record the site, user role, active branch, route, document state, time, exact ac
 ## Upgrade sequence
 
 1. Review repository status and current branches.
-2. Back up the site and confirm recovery ownership.
+2. Back up the site and confirm recovery ownership. For sites with issued Report Cards, use a file-inclusive backup and keep the matching private-files archive with the database backup. Follow [EduEdge Issued Report Card Backup and Restore Verification](../../../eduedge_report_card_backup_restore_verification.md).
 3. Pull only the intended branch or merged main line.
 4. Build required apps in dependency order.
 5. Run migration and clear caches.
