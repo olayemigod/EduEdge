@@ -163,6 +163,113 @@
 						<button type="button" class="edge-button" :disabled="!page.has_more" @click="nextPage">Next</button>
 					</div>
 				</section>
+
+				<section v-if="resourceKey === 'result_audit'" class="eduedge-resource-panel eduedge-archive-audit">
+					<div class="eduedge-resource-panel__heading">
+						<div>
+							<p class="edge-eyebrow">Report Card Archive Integrity</p>
+							<h2>Official PDF archive health</h2>
+							<p>Checks the actual private PDF bytes for only the visible page. Legacy Issues are identified separately and are not treated as corruption.</p>
+						</div>
+						<button type="button" class="edge-button" :disabled="archiveAudit.loading" @click="loadArchiveAudit(false)">Recheck page</button>
+					</div>
+
+					<div class="eduedge-archive-filters">
+						<label>
+							<span>Search</span>
+							<input v-model.trim="archiveAudit.filters.search" type="search" class="form-control" placeholder="Issue, student or publication" @keyup.enter="applyArchiveAuditFilters" />
+						</label>
+						<label>
+							<span>Branch / Campus</span>
+							<select v-model="archiveAudit.filters.branch" class="form-control" @change="applyArchiveAuditFilters">
+								<option value="">All permitted branches</option>
+								<option v-for="option in archiveAudit.allowed_branches" :key="option.value" :value="option.value">{{ option.label }}</option>
+							</select>
+						</label>
+						<label>
+							<span>Publication</span>
+							<input v-model.trim="archiveAudit.filters.publication" class="form-control" placeholder="Result Publication" @change="applyArchiveAuditFilters" />
+						</label>
+						<label>
+							<span>Student</span>
+							<input v-model.trim="archiveAudit.filters.student" class="form-control" placeholder="Student ID" @change="applyArchiveAuditFilters" />
+						</label>
+						<div class="eduedge-archive-filter-actions">
+							<button type="button" class="edge-button" @click="resetArchiveAuditFilters">Reset</button>
+							<button type="button" class="edge-button edge-button--primary" @click="applyArchiveAuditFilters">Apply</button>
+						</div>
+					</div>
+
+					<EdgeLoadingState v-if="archiveAudit.loading" message="Checking archived Report Card PDFs..." :skeleton="true" />
+					<EdgeErrorState
+						v-else-if="archiveAudit.error"
+						title="Archive integrity audit could not load"
+						:message="archiveAudit.error"
+						action-label="Try again"
+						@retry="loadArchiveAudit(false)"
+					/>
+					<template v-else>
+						<div class="eduedge-archive-summary">
+							<div><span>Healthy</span><strong>{{ archiveAudit.summary.healthy || 0 }}</strong></div>
+							<div><span>Legacy</span><strong>{{ archiveAudit.summary.legacy || 0 }}</strong></div>
+							<div><span>Problems</span><strong>{{ archiveAudit.summary.problems || 0 }}</strong></div>
+							<small>Counts apply to this visible archive page only.</small>
+						</div>
+
+						<EdgeEmptyState
+							v-if="!archiveAudit.rows.length"
+							title="No issued Report Card archives found"
+							description="Change the archive filters or issue an official Report Card first."
+						/>
+						<div v-else class="eduedge-resource-table-wrap">
+							<table class="table eduedge-resource-table eduedge-archive-table">
+								<thead>
+									<tr>
+										<th>Issue</th>
+										<th>Student</th>
+										<th>Branch</th>
+										<th>Publication</th>
+										<th>Versions</th>
+										<th>Issued</th>
+										<th>Integrity</th>
+										<th>Details</th>
+										<th>Actions</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr v-for="row in archiveAudit.rows" :key="row.name">
+										<td><strong>{{ row.name }}</strong><br /><small>{{ row.fingerprint }}</small></td>
+										<td>{{ row.student_name || row.student }}</td>
+										<td>{{ row.school_branch }}</td>
+										<td>{{ row.result_publication }}</td>
+										<td>Publication v{{ row.publication_version }} · Issue v{{ row.issue_version }}</td>
+										<td>{{ displayValue(row.issued_on) }}</td>
+										<td>
+											<EdgeStatusBadge
+												:label="row.archive_status"
+												:status="row.archive_status"
+												:tone="archiveStatusTone(row.archive_status)"
+											/>
+										</td>
+										<td class="eduedge-archive-detail">{{ row.archive_detail }}</td>
+										<td>
+											<div class="eduedge-resource-actions">
+												<button type="button" class="edge-button" @click="openArchiveIssue(row)">Open Issue</button>
+												<button type="button" class="edge-button" @click="downloadArchiveIssue(row)">Download PDF</button>
+											</div>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+
+						<div class="eduedge-resource-pagination">
+							<button type="button" class="edge-button" :disabled="archiveAudit.start <= 0" @click="previousArchiveAuditPage">Previous</button>
+							<span>Page {{ archiveAuditPage }}</span>
+							<button type="button" class="edge-button" :disabled="!archiveAudit.has_more" @click="nextArchiveAuditPage">Next</button>
+						</div>
+					</template>
+				</section>
 			</template>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -185,6 +292,17 @@ export default {
 			search: "",
 			filterValues: {},
 			menuItems: EDUEDGE_MENU_ITEMS,
+			archiveAudit: {
+				loading: false,
+				error: "",
+				rows: [],
+				summary: { healthy: 0, legacy: 0, problems: 0 },
+				allowed_branches: [],
+				filters: { search: "", branch: "", publication: "", student: "" },
+				start: 0,
+				page_length: 20,
+				has_more: false,
+			},
 			page: {
 				title: "",
 				singular_title: "",
@@ -211,6 +329,9 @@ export default {
 		currentPage() {
 			return Math.floor((this.page.start || 0) / (this.page.page_length || 20)) + 1;
 		},
+		archiveAuditPage() {
+			return Math.floor((this.archiveAudit.start || 0) / (this.archiveAudit.page_length || 20)) + 1;
+		},
 		activeBranchLabel() {
 			const branchFilter = this.page.filters.find((field) => field.type === "Branch");
 			const selected = branchFilter ? this.filterValues[branchFilter.fieldname] : "";
@@ -223,6 +344,7 @@ export default {
 	},
 	mounted() {
 		this.loadPage(true);
+		if (this.resourceKey === "result_audit") this.loadArchiveAudit(true);
 	},
 	methods: {
 		openRoute: openEduEdgeRoute,
@@ -252,6 +374,61 @@ export default {
 		docStatusTone(value) {
 			const status = Number(value);
 			return status === 1 ? "success" : status === 2 ? "danger" : "warning";
+		},
+		archiveStatusTone(status) {
+			if (status === "Healthy") return "success";
+			if (status === "Legacy") return "neutral";
+			return "danger";
+		},
+		async loadArchiveAudit(resetStart = false) {
+			if (this.resourceKey !== "result_audit") return;
+			if (resetStart) this.archiveAudit.start = 0;
+			this.archiveAudit.loading = true;
+			this.archiveAudit.error = "";
+			try {
+				const response = await frappe.call("eduedge.api.report_archive_audit.get_report_card_archive_integrity", {
+					search: this.archiveAudit.filters.search || undefined,
+					branch: this.archiveAudit.filters.branch || undefined,
+					publication: this.archiveAudit.filters.publication || undefined,
+					student: this.archiveAudit.filters.student || undefined,
+					start: this.archiveAudit.start || 0,
+					page_length: this.archiveAudit.page_length || 20,
+				});
+				const next = response.message || {};
+				this.archiveAudit = {
+					...this.archiveAudit,
+					...next,
+					filters: { ...this.archiveAudit.filters, ...(next.filters || {}) },
+				};
+			} catch (error) {
+				this.archiveAudit.error = error?.message || "Archive integrity audit could not be loaded.";
+			} finally {
+				this.archiveAudit.loading = false;
+			}
+		},
+		applyArchiveAuditFilters() {
+			this.loadArchiveAudit(true);
+		},
+		resetArchiveAuditFilters() {
+			this.archiveAudit.filters = { search: "", branch: "", publication: "", student: "" };
+			this.loadArchiveAudit(true);
+		},
+		previousArchiveAuditPage() {
+			this.archiveAudit.start = Math.max(0, (this.archiveAudit.start || 0) - (this.archiveAudit.page_length || 20));
+			this.loadArchiveAudit(false);
+		},
+		nextArchiveAuditPage() {
+			if (!this.archiveAudit.has_more) return;
+			this.archiveAudit.start = (this.archiveAudit.start || 0) + (this.archiveAudit.page_length || 20);
+			this.loadArchiveAudit(false);
+		},
+		openArchiveIssue(row) {
+			if (!row?.name) return;
+			window.open(`/app/eduedge-report-card-issue/${encodeURIComponent(row.name)}`, "_blank", "noopener,noreferrer");
+		},
+		downloadArchiveIssue(row) {
+			if (!row?.name) return;
+			open_url_post("/api/method/eduedge.api.report_cards.download_report_card_issue", { issue: row.name }, true);
 		},
 		async loadPage(resetStart = false) {
 			if (resetStart) this.page.start = 0;
@@ -368,6 +545,32 @@ export default {
 }
 .eduedge-resource-filters label { display: grid; gap: .35rem; }
 .eduedge-resource-search { min-width: 16rem; }
+.eduedge-archive-filters {
+	align-items: end;
+	display: grid;
+	gap: .8rem;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	margin-bottom: 1rem;
+}
+.eduedge-archive-filters label { display: grid; gap: .35rem; }
+.eduedge-archive-filter-actions { display: flex; gap: .5rem; }
+.eduedge-archive-summary {
+	align-items: stretch;
+	display: grid;
+	gap: .75rem;
+	grid-template-columns: repeat(3, minmax(7rem, 1fr));
+	margin-bottom: 1rem;
+}
+.eduedge-archive-summary > div {
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-md, 10px);
+	padding: .75rem;
+}
+.eduedge-archive-summary span, .eduedge-archive-summary small { color: var(--text-muted); }
+.eduedge-archive-summary strong { display: block; font-size: 1.2rem; margin-top: .15rem; }
+.eduedge-archive-summary small { align-self: center; grid-column: 1 / -1; }
+.eduedge-archive-table { min-width: 82rem; }
+.eduedge-archive-detail { max-width: 24rem; white-space: normal; }
 .eduedge-resource-panel {
 	background: var(--edge-color-surface, var(--card-bg));
 	border: 1px solid var(--edge-color-border, var(--border-color));
@@ -401,5 +604,7 @@ export default {
 @media (max-width: 47.99rem) {
 	.eduedge-resource-panel__heading { flex-direction: column; }
 	.eduedge-resource-pagination { justify-content: space-between; }
+	.eduedge-archive-summary { grid-template-columns: 1fr; }
+	.eduedge-archive-summary small { grid-column: auto; }
 }
 </style>
