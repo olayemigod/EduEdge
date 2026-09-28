@@ -7,7 +7,7 @@ from frappe.utils import cint
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
-	inspect_report_card_pdf_archive,
+	inspect_report_card_issue_integrity,
 )
 from eduedge.services.branch_context import (
 	get_allowed_school_branches,
@@ -53,7 +53,7 @@ def get_report_card_archive_integrity(
 	start: int | str | None = 0,
 	page_length: int | str | None = DEFAULT_ARCHIVE_AUDIT_PAGE_LENGTH,
 ) -> dict:
-	"""Verify exact PDF bytes for one permission-aware page of immutable Issues."""
+	"""Verify immutable payload plus exact PDF bytes for one permission-aware page of Issues."""
 	_require_archive_auditor()
 	resolved_branch = _resolve_branch(branch)
 	page_size = min(
@@ -91,7 +91,7 @@ def get_report_card_archive_integrity(
 
 	audited = []
 	for row in rows:
-		check = inspect_report_card_pdf_archive(row.name)
+		check = inspect_report_card_issue_integrity(row.name)
 		audited.append(
 			{
 				**dict(row),
@@ -99,6 +99,11 @@ def get_report_card_archive_integrity(
 				"archive_ok": bool(check["ok"]),
 				"archive_legacy": bool(check["legacy"]),
 				"archive_detail": check["detail"],
+				"payload_status": check.get("payload_status") or "",
+				"payload_ok": bool(check.get("payload_ok")),
+				"payload_fingerprint": check.get("payload_fingerprint") or "",
+				"pdf_status": check.get("pdf_status") or check.get("status") or "",
+				"pdf_ok": bool(check.get("pdf_ok")),
 				"pdf_fingerprint": check.get("pdf_fingerprint") or "",
 				"expected_size_bytes": check.get("expected_size_bytes"),
 				"actual_size_bytes": check.get("actual_size_bytes"),
