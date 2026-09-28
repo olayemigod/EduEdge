@@ -169,6 +169,32 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 				filename,
 			)
 
+	def test_archived_pdf_tampering_fails_closed(self):
+		expected_bytes = b"%PDF-1.4 official"
+		archive = frappe._dict(
+			{
+				"pdf_sha256": hashlib.sha256(expected_bytes).hexdigest(),
+				"pdf_filename": "Report Card EDU-RCI-TEST.pdf",
+				"pdf_size_bytes": len(expected_bytes),
+			}
+		)
+		file_row = frappe._dict(
+			{
+				"name": "FILE-1",
+				"file_name": archive.pdf_filename,
+				"file_type": "PDF",
+			}
+		)
+		file_doc = MagicMock()
+		file_doc.get_content.return_value = b"%PDF-1.4 tampered"
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("frappe.get_all", return_value=[file_row]),
+			patch("frappe.get_doc", return_value=file_doc),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				get_archived_report_card_pdf("EDU-RCI-TEST")
+
 	def test_report_card_issue_file_permissions_block_creation_and_mutation(self):
 		file_doc = frappe._dict({"attached_to_doctype": ISSUE_DOCTYPE})
 		self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype="create"))
