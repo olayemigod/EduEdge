@@ -59,7 +59,7 @@
 				</section>
 
 				<section class="analytics-panel">
-					<div class="analytics-heading"><div><p class="edge-eyebrow">Grade distribution</p><h2>Performance bands</h2><small>Submitted scored results only</small></div><small v-if="data.summary.summary_truncated">Summary is capped at the first 2,000 permitted records for this filter.</small></div>
+					<div class="analytics-heading"><div><p class="edge-eyebrow">Grade distribution</p><h2>Performance bands</h2><small>Submitted scored results only</small></div><small v-if="data.summary.performance_truncated">Average, high/low and grade bands use the latest 2,000 submitted scored results; count cards remain exact.</small></div>
 					<EdgeEmptyState v-if="!data.grade_distribution.length" title="No grade distribution available" description="Adjust the filters or record assessment results first." />
 					<div v-else class="grade-grid">
 						<article v-for="row in data.grade_distribution" :key="row.grade"><strong>{{ row.grade }}</strong><span>{{ row.count }} result{{ row.count === 1 ? '' : 's' }}</span></article>
@@ -102,7 +102,7 @@ const blankData = () => ({
 	branch: "",
 	filters: {},
 	options: { academic_years: [], academic_terms: [], student_groups: [], courses: [], assessment_groups: [], score_states: [] },
-	summary: { results: 0, submitted: 0, draft: 0, cancelled: 0, scored: 0, non_scored: 0, average_percentage: null, highest_percentage: null, lowest_percentage: null, summary_truncated: false },
+	summary: { results: 0, submitted: 0, draft: 0, cancelled: 0, scored: 0, non_scored: 0, average_percentage: null, highest_percentage: null, lowest_percentage: null, performance_truncated: false },
 	score_state_distribution: [],
 	grade_distribution: [],
 	rows: [],
