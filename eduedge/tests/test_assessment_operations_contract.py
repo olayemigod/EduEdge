@@ -77,6 +77,25 @@ class TestAssessmentOperationsContract(unittest.TestCase):
 		self.assertIn("profile_blockers.extend(build_duplicate_assessment_result_blockers(results))", operations)
 		self.assertIn('"assessment_results": sorted(name for name in names if name)', operations)
 
+	def test_publication_blocks_legacy_result_plan_and_total_drift(self):
+		operations = (APP / "education" / "assessment_operations.py").read_text(
+			encoding="utf-8"
+		)
+		for token in (
+			"def build_assessment_result_plan_integrity_blockers",
+			'"ASSESSMENT_RESULT_PLAN_MISMATCH"',
+			"Assessment Result no longer matches its submitted Assessment Plan.",
+			"Submitted Assessment Plan has duplicate Assessment Criteria.",
+			"Assessment Result criteria do not exactly match the submitted Assessment Plan.",
+			"Total Score does not match the Assessment Result criterion scores.",
+			"Assessment Result has an invalid score state.",
+			"Absent, Exempt and Not Offered results must have zero criterion scores.",
+			"build_assessment_result_plan_integrity_blockers(",
+			'"Assessment Result Detail"',
+			'"score"',
+		):
+			self.assertIn(token, operations)
+
 	def test_publication_api_does_not_mutate_submitted_results(self):
 		text = (APP / "api" / "assessment_operations.py").read_text()
 		self.assertNotIn('db_set("Assessment Result"', text)
