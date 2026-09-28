@@ -178,6 +178,9 @@ def get_assessment_students(assessment_plan, student_group=None):
 		return []
 
 	student_names = [row.student for row in students]
+	result_fields = ["name", "student", "docstatus", "total_score", "grade", "comment"]
+	if frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
+		result_fields.append("eduedge_score_state")
 	results = frappe.get_all(
 		"Assessment Result",
 		filters={
@@ -185,7 +188,7 @@ def get_assessment_students(assessment_plan, student_group=None):
 			"student": ["in", student_names],
 			"docstatus": ["!=", 2],
 		},
-		fields=["name", "student", "docstatus", "total_score", "grade", "comment"],
+		fields=result_fields,
 		limit_page_length=0,
 	)
 	results_by_student = {row.student: row for row in results}
@@ -206,6 +209,7 @@ def get_assessment_students(assessment_plan, student_group=None):
 		result = results_by_student.get(student.student)
 		if not result:
 			row["assessment_details"] = None
+			row["score_state"] = "Scored"
 			output.append(row)
 			continue
 		student_result = {
@@ -217,6 +221,7 @@ def get_assessment_students(assessment_plan, student_group=None):
 		row.update(
 			{
 				"assessment_details": student_result,
+				"score_state": str(result.get("eduedge_score_state") or "Scored"),
 				"comment": result.comment,
 				"docstatus": result.docstatus,
 				"name": result.name,
@@ -272,6 +277,8 @@ def mark_assessment_result(assessment_plan, scores):
 			"comment": payload.get("comment"),
 		}
 	)
+	if frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
+		result.eduedge_score_state = "Scored"
 	result.set(
 		"details",
 		[
