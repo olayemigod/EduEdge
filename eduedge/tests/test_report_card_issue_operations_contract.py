@@ -48,6 +48,38 @@ class TestReportCardIssueOperationsContract(unittest.TestCase):
 		):
 			self.assertIn(token, vue)
 
+	def test_report_card_history_uses_explicit_publication_lineage(self):
+		api = (APP / "api" / "report_cards.py").read_text()
+		service = (APP / "education" / "report_card_issues.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
+
+		for token in (
+			"def _get_published_publication_lineage(publication: str) -> list:",
+			'"supersedes_publication": current.name',
+			'"status": "Published"',
+			'"report_card_ready": 1',
+			"Result Publication lineage contains a cycle.",
+			"Result Publication lineage version sequence is invalid.",
+			"Result Publication lineage scope is inconsistent.",
+			"Result Publication lineage has multiple published successors.",
+			"get_report_card_issue_history_for_publications(publication_names, student)",
+			'"current_publication": current_publication.name',
+			'"lineage_status"] = "Superseded Publication"',
+		):
+			self.assertIn(token, api)
+
+		self.assertIn("def get_report_card_issue_history_for_publications(", service)
+		self.assertIn('"result_publication": ["in", publication_names]', service)
+		self.assertIn('"result_publication",', service)
+		self.assertNotIn('frappe.get_all(\n\t\t"EduEdge Result Publication",\n\t\tfilters=filters,', api)
+
+		for token in (
+			"row.lineage_status",
+			"row.is_selected_publication",
+			"row.is_selected",
+		):
+			self.assertIn(token, vue)
+
 	def test_browser_workflow_shows_issue_count_and_versions(self):
 		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
 		self.assertIn('EdgeStatCard label="Issued"', vue)
