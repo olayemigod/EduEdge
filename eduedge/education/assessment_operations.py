@@ -477,11 +477,21 @@ def build_assessment_result_plan_integrity_blockers(
 	"""Block legacy/import drift that bypassed the current Assessment Result validator."""
 	plans = {str(row.get("name") or ""): row for row in (plan_rows or [])}
 	plan_criteria: dict[str, dict[str, float]] = defaultdict(dict)
+	plan_criteria_duplicates: set[str] = set()
+	plan_criteria_blank: set[str] = set()
+	plan_criteria_totals: dict[str, float] = defaultdict(float)
 	for row in plan_criteria_rows or []:
 		parent = str(row.get("parent") or "")
 		criterion = str(row.get("assessment_criteria") or "").strip()
-		if parent and criterion:
-			plan_criteria[parent][criterion] = flt(row.get("maximum_score"))
+		if not parent:
+			continue
+		if not criterion:
+			plan_criteria_blank.add(parent)
+			continue
+		if criterion in plan_criteria[parent]:
+			plan_criteria_duplicates.add(parent)
+		plan_criteria[parent][criterion] = flt(row.get("maximum_score"))
+		plan_criteria_totals[parent] += flt(row.get("maximum_score"))
 
 	result_details: dict[str, list] = defaultdict(list)
 	for row in result_detail_rows or []:
@@ -513,7 +523,11 @@ def build_assessment_result_plan_integrity_blockers(
 				issues.append(_("Maximum Score does not match the submitted Assessment Plan."))
 
 			expected = plan_criteria.get(plan_name, {})
-			configured_total = sum(expected.values())
+			if plan_name in plan_criteria_blank:
+				issues.append(_("Submitted Assessment Plan has a blank Assessment Criterion row."))
+			if plan_name in plan_criteria_duplicates:
+				issues.append(_("Submitted Assessment Plan has duplicate Assessment Criteria."))
+			configured_total = plan_criteria_totals.get(plan_name, 0.0)
 			if abs(configured_total - flt(plan.get("maximum_assessment_score"))) > 1e-9:
 				issues.append(_("Submitted Assessment Plan criteria do not match its Maximum Assessment Score."))
 
