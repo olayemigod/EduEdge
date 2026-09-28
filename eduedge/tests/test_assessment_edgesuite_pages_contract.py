@@ -209,6 +209,7 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			"limit_start=offset",
 			"limit_page_length=ANALYTICS_OPTION_PAGE_SIZE",
 			"offset += len(rows)",
+			"return sorted(set(values))",
 			'_analytics_option_values(branch, "academic_year")',
 			'_analytics_option_values(branch, "academic_term")',
 			'_analytics_option_values(branch, "student_group")',
