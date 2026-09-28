@@ -328,7 +328,7 @@ def _analytics_distinct_values(branch: str, fieldname: str) -> list[str]:
 		if len(rows) < ANALYTICS_OPTION_PAGE_LENGTH:
 			break
 		start += ANALYTICS_OPTION_PAGE_LENGTH
-	return values
+	return sorted(set(values))
 
 
 def _analytics_options(branch: str) -> dict:
