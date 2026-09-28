@@ -263,21 +263,16 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 
 def has_archived_report_card_file_permission(doc, ptype=None, user=None, debug=False):
 	"""Archived Issue PDF attachments may be read normally but never changed or deleted."""
-	if not doc or not getattr(doc, "name", None):
+	if ptype not in {"write", "delete"}:
 		return True
-	current = frappe.db.get_value(
-		"File",
-		doc.name,
-		["attached_to_doctype", "attached_to_name"],
-		as_dict=True,
-	)
-	attached_to_issue = (
-		getattr(doc, "attached_to_doctype", None) == ISSUE_DOCTYPE
-		or (current and current.attached_to_doctype == ISSUE_DOCTYPE)
-	)
-	if attached_to_issue and ptype in {"write", "delete"}:
+	if not doc:
+		return True
+	if getattr(doc, "attached_to_doctype", None) == ISSUE_DOCTYPE:
 		return False
-	return True
+	if not getattr(doc, "name", None) or doc.is_new():
+		return True
+	current_doctype = frappe.db.get_value("File", doc.name, "attached_to_doctype")
+	return current_doctype != ISSUE_DOCTYPE
 
 
 def _current_report_card_render_settings(payload: dict) -> dict:
