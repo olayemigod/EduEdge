@@ -55,6 +55,15 @@ class TestAssessmentResultToolSafeContract(unittest.TestCase):
         self.assertIn("normalize_assessment_result_score(score, str(criteria))", mark)
         self.assertNotIn('"score": flt(score)', mark)
 
+    def test_numeric_legacy_tool_remains_explicitly_scored(self):
+        source = (APP / "api" / "assessment_result_tool_safe.py").read_text(encoding="utf-8")
+        students = source.split("def get_assessment_students", 1)[1].split("def get_assessment_details", 1)[0]
+        mark = source.split("def mark_assessment_result", 1)[1].split("def submit_assessment_results", 1)[0]
+        self.assertIn('result_fields.append("eduedge_score_state")', students)
+        self.assertIn('row["score_state"] = "Scored"', students)
+        self.assertIn('"score_state": str(result.get("eduedge_score_state") or "Scored")', students)
+        self.assertIn('result.eduedge_score_state = "Scored"', mark)
+
     def test_tool_plan_selector_uses_current_mark_entry_scope(self):
         client = (APP / "public" / "js" / "education" / "assessment_result_tool.js").read_text(encoding="utf-8")
         options = (APP / "api" / "assessment_assignment_options.py").read_text(encoding="utf-8")
