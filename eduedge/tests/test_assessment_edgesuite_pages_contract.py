@@ -74,8 +74,33 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		text = MARKS_ENTRY.read_text()
 		self.assertIn("Save Row", text)
 		self.assertIn("@input=\"markDirty(row)\"", text)
+		self.assertIn('@change="changeScoreState(row)"', text)
 		self.assertIn("save_marks_entry", text)
 		self.assertNotIn('@input="saveRow(row)"', text)
+		self.assertNotIn('@change="saveRow(row)"', text)
+
+	def test_marks_entry_supports_governed_score_states(self):
+		vue = MARKS_ENTRY.read_text()
+		api = MARKS_WORKBENCH.read_text()
+		for token in (
+			'"Scored", "Absent", "Exempt", "Not Offered"',
+			'v-model="row.score_state"',
+			"changeScoreState(row)",
+			"row.score_state !== 'Scored'",
+			'row.score_state === "Scored" ? "" : 0',
+			'score_state: row.score_state',
+			"saved.score_state",
+			"those states store zero criterion scores",
+		):
+			self.assertIn(token, vue)
+		for token in (
+			"def _normalize_score_state",
+			"state not in SCORE_STATES",
+			"Absent, Exempt and Not Offered results must use zero scores.",
+			"doc.eduedge_score_state = state",
+			'"score_state": str(doc.get("eduedge_score_state") or "Scored")',
+		):
+			self.assertIn(token, api)
 
 	def test_marks_entry_rejects_malformed_scores_before_document_save(self):
 		text = MARKS_WORKBENCH.read_text()
@@ -111,6 +136,7 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			'"assessment_group"',
 			'"maximum_assessment_score"',
 			'student_result["comment"] = result.comment',
+			'"score_state": str(result.get("eduedge_score_state") or "Scored")',
 		):
 			self.assertIn(token, text)
 
