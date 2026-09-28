@@ -421,9 +421,9 @@ def get_result_analytics(
 			"draft": sum(1 for row in rows if cint(row.docstatus) == 0),
 			"scored": len(scored_rows),
 			"non_scored": len(rows) - len(scored_rows),
-			"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else 0,
-			"highest_percentage": round(max(percentages), 2) if percentages else 0,
-			"lowest_percentage": round(min(percentages), 2) if percentages else 0,
+			"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else None,
+			"highest_percentage": round(max(percentages), 2) if percentages else None,
+			"lowest_percentage": round(min(percentages), 2) if percentages else None,
 			"summary_truncated": truncated,
 		},
 		"score_state_distribution": [
