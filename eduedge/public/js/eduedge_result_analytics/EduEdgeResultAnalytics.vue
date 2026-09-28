@@ -101,7 +101,7 @@ const blankData = () => ({
 	branch: "",
 	filters: {},
 	options: { academic_years: [], academic_terms: [], student_groups: [], courses: [], assessment_groups: [], score_states: [] },
-	summary: { results: 0, submitted: 0, draft: 0, scored: 0, non_scored: 0, average_percentage: 0, highest_percentage: 0, lowest_percentage: 0, summary_truncated: false },
+	summary: { results: 0, submitted: 0, draft: 0, scored: 0, non_scored: 0, average_percentage: null, highest_percentage: null, lowest_percentage: null, summary_truncated: false },
 	score_state_distribution: [],
 	grade_distribution: [],
 	rows: [],
@@ -134,7 +134,10 @@ export default {
 	},
 	methods: {
 		openRoute: openEduEdgeRoute,
-		percentageLabel(value) { return `${Number(value || 0).toFixed(2)}%`; },
+		percentageLabel(value) {
+			if (value === null || value === undefined) return "—";
+			return `${Number(value).toFixed(2)}%`;
+		},
 		numberLabel(value) { return Number(value || 0).toFixed(2); },
 		scoreLabel(row) {
 			if (row?.score_state !== "Scored") return "—";
