@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 RESULT_ENGINE_CUSTOM_FIELDS = {
@@ -26,5 +27,24 @@ RESULT_ENGINE_CUSTOM_FIELDS = {
 }
 
 
+def backfill_result_score_states() -> None:
+	"""Normalize legacy blank score states to the runtime-compatible Scored value."""
+	if not frappe.db.table_exists("Assessment Result"):
+		return
+	if not frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
+		return
+
+	assessment_result = frappe.qb.DocType("Assessment Result")
+	(
+		frappe.qb.update(assessment_result)
+		.set(assessment_result.eduedge_score_state, "Scored")
+		.where(
+			assessment_result.eduedge_score_state.isnull()
+			| (assessment_result.eduedge_score_state == "")
+		)
+	).run()
+
+
 def ensure_result_engine_custom_fields() -> None:
 	create_custom_fields(RESULT_ENGINE_CUSTOM_FIELDS, update=True)
+	backfill_result_score_states()
