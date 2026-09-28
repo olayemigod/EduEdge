@@ -146,15 +146,44 @@ def get_effective_issued_payload(publication: str, student: str) -> dict | None:
 	row = _latest_issue_row(publication, student)
 	if not row:
 		return None
+	return get_issued_payload_by_name(row.name, row=row)
+
+
+def get_issued_payload_by_name(issue_name: str, *, row=None) -> dict:
+	"""Load one immutable Issue version regardless of whether it is current, superseded, or reopened."""
+	row = row or frappe.db.get_value(
+		ISSUE_DOCTYPE,
+		issue_name,
+		[
+			"name",
+			"issue_version",
+			"payload_hash",
+			"payload_json",
+			"verification_token",
+			"pdf_sha256",
+			"pdf_filename",
+			"pdf_size_bytes",
+		],
+		as_dict=True,
+	)
+	if not row:
+		frappe.throw(_("Issued Report Card does not exist."), frappe.DoesNotExistError)
 	actual_hash = hashlib.sha256((row.payload_json or "").encode("utf-8")).hexdigest()
-	if actual_hash != row.payload_hash:
+	if not hmac.compare_digest(actual_hash, str(row.payload_hash or "")):
 		frappe.throw(_("Issued Report Card integrity check failed."), frappe.ValidationError)
-	payload = json.loads(row.payload_json)
+	try:
+		payload = json.loads(row.payload_json or "{}")
+	except (TypeError, ValueError):
+		frappe.throw(_("Issued Report Card payload is unreadable."), frappe.ValidationError)
+	if not isinstance(payload, dict):
+		frappe.throw(_("Issued Report Card payload is unreadable."), frappe.ValidationError)
 	payload["issue_record"] = {
 		"name": row.name,
 		"issue_version": int(row.issue_version or 1),
 		"payload_hash": row.payload_hash,
 		"pdf_sha256": row.get("pdf_sha256"),
+		"pdf_filename": row.get("pdf_filename"),
+		"pdf_size_bytes": row.get("pdf_size_bytes"),
 	}
 	verification_token = ensure_issue_verification_token(row.name, row.get("verification_token"))
 	payload["verification"] = build_issue_verification(row.name, verification_token)

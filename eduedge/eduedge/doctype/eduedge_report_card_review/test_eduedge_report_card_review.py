@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -10,6 +11,7 @@ from frappe.tests.utils import FrappeTestCase
 from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
 	get_archived_report_card_pdf,
+	get_issued_payload_by_name,
 	has_archived_report_card_file_permission,
 	resolve_report_card_pdf,
 )
@@ -115,6 +117,47 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 				frappe.flags.pop(flag, None)
 			else:
 				frappe.flags[flag] = previous
+
+	def test_exact_issue_payload_loads_independently_of_current_review_state(self):
+		payload = {"student": {"student_name": "Archive Student"}, "issue": {"issue_version": 1}}
+		payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+		row = frappe._dict(
+			{
+				"name": "EDU-RCI-TEST",
+				"issue_version": 1,
+				"payload_hash": hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+				"payload_json": payload_json,
+				"verification_token": "token",
+				"pdf_sha256": "a" * 64,
+				"pdf_filename": "Report Card EDU-RCI-TEST.pdf",
+				"pdf_size_bytes": 100,
+			}
+		)
+		with patch("frappe.db.get_value", return_value=row), patch(
+			"eduedge.education.report_card_issues.build_issue_verification",
+			return_value={"issue": row.name},
+		):
+			loaded = get_issued_payload_by_name(row.name)
+		self.assertEqual(loaded["issue_record"]["name"], row.name)
+		self.assertEqual(loaded["issue_record"]["issue_version"], 1)
+		self.assertEqual(loaded["student"]["student_name"], "Archive Student")
+
+	def test_exact_issue_payload_hash_tampering_fails_closed(self):
+		row = frappe._dict(
+			{
+				"name": "EDU-RCI-TAMPERED",
+				"issue_version": 1,
+				"payload_hash": "0" * 64,
+				"payload_json": '{"student":{"student_name":"Tampered"}}',
+				"verification_token": "token",
+				"pdf_sha256": None,
+				"pdf_filename": None,
+				"pdf_size_bytes": None,
+			}
+		)
+		with patch("frappe.db.get_value", return_value=row):
+			with self.assertRaises(frappe.ValidationError):
+				get_issued_payload_by_name(row.name)
 
 	def test_incomplete_issued_pdf_metadata_fails_closed(self):
 		payload = {"issue_record": {"name": "EDU-RCI-TEST"}}

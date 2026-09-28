@@ -19,6 +19,35 @@ class TestReportCardIssueOperationsContract(unittest.TestCase):
 		self.assertIn("legacy_issues = frappe.get_all(", legacy)
 		self.assertIn('summary["issue"] = dict(issue) if issue else None', legacy)
 
+	def test_historical_issue_versions_can_be_downloaded_exactly(self):
+		api = (APP / "api" / "report_cards.py").read_text()
+		service = (APP / "education" / "report_card_issues.py").read_text()
+		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
+		for token in (
+			"def get_issued_payload_by_name(issue_name: str",
+			'hmac.compare_digest(actual_hash, str(row.payload_hash or ""))',
+			'"name": row.name',
+			'"issue_version": int(row.issue_version or 1)',
+			'"pdf_sha256": row.get("pdf_sha256")',
+		):
+			self.assertIn(token, service)
+		for token in (
+			"def download_report_card_issue(issue: str) -> None:",
+			"_require_operator()",
+			"get_published_publication(row.result_publication)",
+			"assert_branch_access(publication.school_branch)",
+			"can_view_report_card_scope(publication)",
+			"get_issued_payload_by_name(row.name)",
+			"resolve_report_card_pdf(payload)",
+		):
+			self.assertIn(token, api)
+		for token in (
+			"Download PDF",
+			"downloadIssue(row)",
+			"/api/method/eduedge.api.report_cards.download_report_card_issue",
+		):
+			self.assertIn(token, vue)
+
 	def test_browser_workflow_shows_issue_count_and_versions(self):
 		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
 		self.assertIn('EdgeStatCard label="Issued"', vue)

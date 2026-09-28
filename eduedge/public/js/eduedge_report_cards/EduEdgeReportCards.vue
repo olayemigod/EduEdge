@@ -226,7 +226,10 @@
 										<strong>Issued report cards</strong>
 										<div v-if="!history.issues.length" class="eduedge-history-empty">No official issue yet.</div>
 										<div v-for="row in history.issues" :key="row.name" class="eduedge-history-row">
-											<span>Issue v{{ row.issue_version }} · Publication v{{ row.publication_version || 1 }}</span>
+											<div class="eduedge-history-row-main">
+												<span>Issue v{{ row.issue_version }} · Publication v{{ row.publication_version || 1 }}</span>
+												<button type="button" class="edge-button eduedge-history-download" @click="downloadIssue(row)">Download PDF</button>
+											</div>
 											<small>{{ formatWhen(row.issued_on) }} · {{ row.fingerprint }}</small>
 										</div>
 									</div>
@@ -473,6 +476,10 @@ export default {
 		printReportCard() {
 			open_url_post("/api/method/eduedge.api.report_cards.preview_report_card", { publication: this.filters.publication, student: this.selectedStudent.student }, true);
 		},
+		downloadIssue(row) {
+			if (!row?.name) return;
+			open_url_post("/api/method/eduedge.api.report_cards.download_report_card_issue", { issue: row.name }, true);
+		},
 	},
 };
 </script>
@@ -526,7 +533,9 @@ export default {
 .eduedge-history-panel { margin: 1rem 0; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
 .eduedge-history-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .eduedge-history-grid > div { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--control-bg); }
-.eduedge-history-row { display: grid; gap: 0.12rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border-color); }
+.eduedge-history-row { display: grid; gap: 0.35rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border-color); }
+.eduedge-history-row-main { display:flex; align-items:center; justify-content:space-between; gap:.65rem; }
+.eduedge-history-download { flex:0 0 auto; padding:.3rem .55rem; }
 .eduedge-history-row:last-child { border-bottom: 0; }
 .eduedge-history-row small, .eduedge-history-empty { color: var(--text-muted); overflow-wrap: anywhere; }
 .eduedge-history-empty { padding-top: 0.5rem; }
