@@ -143,6 +143,7 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			'"non_scored": len(rows) - len(scored_rows)',
 			'"score_state_distribution": [',
 			'if row.score_state == "Scored" and flt(row.maximum_score) > 0',
+			'"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else None',
 		):
 			self.assertIn(token, api)
 		for token in (
@@ -155,6 +156,7 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			"<th>Score State</th>",
 			"row.score_state || 'Scored'",
 			"scoreLabel(row)",
+			'if (value === null || value === undefined) return "—";',
 			'row.score_state === \'Scored\' ? percentageLabel(row.percentage) : \'—\'',
 			'row.score_state === \'Scored\' ? (row.grade || \'—\') : \'—\'',
 		):
