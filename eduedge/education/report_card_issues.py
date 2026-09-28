@@ -271,17 +271,40 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 
 
 def has_archived_report_card_file_permission(doc, ptype=None, user=None, debug=False):
-	"""Issue attachments may be read normally but cannot be user-created, changed, or deleted."""
-	if ptype not in {"create", "write", "delete"}:
-		return True
+	"""Keep archived Issue files immutable and bind reads to current Issue permission."""
 	if not doc:
 		return True
-	if getattr(doc, "attached_to_doctype", None) == ISSUE_DOCTYPE:
-		return False
-	if not getattr(doc, "name", None) or doc.is_new():
+
+	attached_doctype = getattr(doc, "attached_to_doctype", None)
+	attached_name = getattr(doc, "attached_to_name", None)
+	if getattr(doc, "name", None) and not doc.is_new():
+		current = frappe.db.get_value(
+			"File",
+			doc.name,
+			["attached_to_doctype", "attached_to_name"],
+			as_dict=True,
+		)
+		if current and current.attached_to_doctype == ISSUE_DOCTYPE:
+			attached_doctype = current.attached_to_doctype
+			attached_name = current.attached_to_name
+
+	if attached_doctype != ISSUE_DOCTYPE:
 		return True
-	current_doctype = frappe.db.get_value("File", doc.name, "attached_to_doctype")
-	return current_doctype != ISSUE_DOCTYPE
+	if ptype in {"create", "write", "delete", "share"}:
+		return False
+	if ptype in {"read", "select", "print", "email"}:
+		if not attached_name:
+			return False
+		return bool(
+			frappe.has_permission(
+				ISSUE_DOCTYPE,
+				ptype="read",
+				doc=attached_name,
+				user=user,
+				print_logs=False,
+			)
+		)
+	return False
 
 
 def _current_report_card_render_settings(payload: dict) -> dict:
