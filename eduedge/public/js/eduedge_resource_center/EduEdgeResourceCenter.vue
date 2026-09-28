@@ -86,13 +86,41 @@
 							<p>Verify both the frozen Report Card payload and the stored official PDF after backup, restore, or storage changes.</p>
 						</div>
 						<div class="eduedge-archive-controls">
-							<select v-model="archiveAudit.branch" class="form-control" @change="loadArchiveAudit(true)">
+							<input
+								v-model.trim="archiveAudit.search"
+								type="search"
+								class="form-control"
+								placeholder="Search issue, student or publication"
+								@keyup.enter="applyArchiveFilters"
+							/>
+							<select v-model="archiveAudit.branch" class="form-control" @change="applyArchiveFilters">
 								<option value="">Current / permitted scope</option>
 								<option v-for="branch in archiveAudit.allowed_branches" :key="branch.name" :value="branch.name">
 									{{ branch.branch_name || branch.name }}
 								</option>
 							</select>
+							<input
+								v-model.trim="archiveAudit.publication"
+								class="form-control"
+								placeholder="Result Publication"
+								@change="applyArchiveFilters"
+							/>
+							<input
+								v-model.trim="archiveAudit.student"
+								class="form-control"
+								placeholder="Student ID"
+								@change="applyArchiveFilters"
+							/>
+							<button type="button" class="edge-button" @click="resetArchiveFilters">Reset</button>
 							<button type="button" class="edge-button" :disabled="archiveAudit.loading" @click="loadArchiveAudit(false)">Recheck</button>
+							<button
+								type="button"
+								class="edge-button edge-button--primary"
+								:disabled="archiveAudit.loading || !archiveAudit.rows.length"
+								@click="exportArchiveEvidence"
+							>
+								Export checked page
+							</button>
 						</div>
 					</div>
 					<EdgeLoadingState v-if="archiveAudit.loading" message="Checking issued Report Card payloads and PDFs..." :skeleton="true" />
@@ -110,7 +138,10 @@
 							<EdgeStatCard label="Needs Attention" :value="archiveAudit.summary.needs_attention || 0" helper="Payload or PDF integrity failure" />
 							<EdgeStatCard label="Legacy" :value="archiveAudit.summary.legacy || 0" helper="Payload verified; predates PDF archival" />
 						</EdgeDashboardLayout>
-						<p class="eduedge-archive-scope-note">{{ archiveAudit.scope_note }}</p>
+						<p class="eduedge-archive-scope-note">
+							{{ archiveAudit.scope_note }}
+							<template v-if="archiveAudit.checked_on"> Checked {{ displayValue(archiveAudit.checked_on) }} by {{ archiveAudit.checked_by || 'current user' }}.</template>
+						</p>
 						<EdgeEmptyState
 							v-if="!archiveAudit.rows.length"
 							title="No issued report cards in this scope"
@@ -289,6 +320,11 @@ export default {
 				loading: false,
 				error: "",
 				branch: "",
+				publication: "",
+				student: "",
+				search: "",
+				checked_on: "",
+				checked_by: "",
 				allowed_branches: [],
 				rows: [],
 				summary: { checked: 0, healthy: 0, needs_attention: 0, legacy: 0 },
@@ -389,15 +425,81 @@ export default {
 			try {
 				const response = await frappe.call("eduedge.api.report_card_archive_audit.get_report_card_archive_integrity", {
 					branch: this.archiveAudit.branch || undefined,
+					publication: this.archiveAudit.publication || undefined,
+					student: this.archiveAudit.student || undefined,
+					search: this.archiveAudit.search || undefined,
 					start: this.archiveAudit.start || 0,
 					page_length: this.archiveAudit.page_length || 10,
 				});
 				const next = response.message || {};
-				this.archiveAudit = { ...this.archiveAudit, ...next, loading: false, error: "" };
+				this.archiveAudit = {
+					...this.archiveAudit,
+					...next,
+					...(next.filters || {}),
+					loading: false,
+					error: "",
+				};
 			} catch (error) {
 				this.archiveAudit.error = error?.message || "Archived report PDFs could not be checked.";
 				this.archiveAudit.loading = false;
 			}
+		},
+		applyArchiveFilters() {
+			this.loadArchiveAudit(true);
+		},
+		resetArchiveFilters() {
+			this.archiveAudit.branch = "";
+			this.archiveAudit.publication = "";
+			this.archiveAudit.student = "";
+			this.archiveAudit.search = "";
+			this.loadArchiveAudit(true);
+		},
+		csvEvidenceCell(value) {
+			let text = value === undefined || value === null ? "" : String(value);
+			if (/^[=+\-@]/.test(text)) text = `'${text}`;
+			return `"${text.replace(/"/g, '""')}"`;
+		},
+		exportArchiveEvidence() {
+			if (!this.archiveAudit.rows.length) return;
+			const headers = [
+				"Checked On", "Checked By", "Issue", "Student", "Student Name", "Branch",
+				"Publication", "Publication Version", "Issue Version", "Issued On",
+				"Overall Status", "Payload Status", "Payload Fingerprint",
+				"PDF Status", "PDF Fingerprint", "Expected PDF Bytes", "Actual PDF Bytes", "Detail",
+			];
+			const rows = this.archiveAudit.rows.map((row) => [
+				this.archiveAudit.checked_on,
+				this.archiveAudit.checked_by,
+				row.name,
+				row.student,
+				row.student_name,
+				row.school_branch,
+				row.result_publication,
+				row.publication_version,
+				row.issue_version,
+				row.issued_on,
+				row.archive_status,
+				row.payload_status,
+				row.payload_fingerprint,
+				row.pdf_status,
+				row.pdf_fingerprint,
+				row.expected_size_bytes,
+				row.actual_size_bytes,
+				row.archive_detail,
+			]);
+			const csv = [headers, ...rows]
+				.map((row) => row.map((value) => this.csvEvidenceCell(value)).join(","))
+				.join("\r\n");
+			const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			const day = String(this.archiveAudit.checked_on || "").slice(0, 10) || "current";
+			link.href = url;
+			link.download = `eduedge-issued-report-integrity-${day}.csv`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(url);
 		},
 		previousArchivePage() {
 			this.archiveAudit.start = Math.max(0, (this.archiveAudit.start || 0) - (this.archiveAudit.page_length || 10));
@@ -561,7 +663,7 @@ export default {
 }
 .eduedge-resource-error { color: var(--red-600, #b42318); }
 .eduedge-archive-controls { display:flex; flex-wrap:wrap; gap:.5rem; align-items:end; }
-.eduedge-archive-controls .form-control { min-width:14rem; }
+.eduedge-archive-controls .form-control { min-width:14rem; flex:1 1 14rem; }
 .eduedge-archive-scope-note { color:var(--text-muted); margin:.75rem 0; }
 .eduedge-archive-table td { vertical-align:top; }
 .eduedge-archive-table td strong, .eduedge-archive-table td small { display:block; }
