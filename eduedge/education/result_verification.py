@@ -65,6 +65,9 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 			"verification_token",
 			"payload_hash",
 			"payload_json",
+			"pdf_sha256",
+			"pdf_filename",
+			"pdf_size_bytes",
 			"issued_on",
 		],
 		as_dict=True,
@@ -80,6 +83,10 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 		payload = json.loads(row.payload_json or "{}")
 	except (TypeError, ValueError):
 		return _invalid(_("The issued report-card payload is unreadable."))
+	if not isinstance(payload, dict):
+		return _invalid(_("The issued report-card payload is unreadable."))
+	if not _verify_issue_pdf_archive(row):
+		return _invalid(_("The issued report-card PDF archive integrity check failed."))
 
 	review_status = frappe.db.get_value(
 		"EduEdge Report Card Review",
@@ -133,6 +140,26 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 		"issued_on": str(row.issued_on or ""),
 		"fingerprint": str(row.payload_hash or "")[:16].upper(),
 	}
+
+
+def _verify_issue_pdf_archive(row) -> bool:
+	"""Require exact archived bytes for post-archive Issues while preserving true legacy Issues."""
+	archive_values = (
+		str(row.get("pdf_sha256") or "").strip(),
+		str(row.get("pdf_filename") or "").strip(),
+		str(row.get("pdf_size_bytes") or "").strip(),
+	)
+	if not any(archive_values):
+		return True
+	if not all(archive_values):
+		return False
+	try:
+		from eduedge.education.report_card_issues import get_archived_report_card_pdf
+
+		get_archived_report_card_pdf(row.name)
+	except Exception:
+		return False
+	return True
 
 
 def _invalid(message: str) -> dict:
