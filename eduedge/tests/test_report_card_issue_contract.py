@@ -41,6 +41,57 @@ class TestReportCardIssueContract(unittest.TestCase):
 		self.assertIn('return None', service)
 		self.assertNotIn("delete", service.lower())
 
+	def test_new_issues_archive_exact_private_pdf_bytes(self):
+		path = APP / "eduedge" / "doctype" / "eduedge_report_card_issue" / "eduedge_report_card_issue.json"
+		payload = json.loads(path.read_text())
+		fields = {field["fieldname"]: field for field in payload["fields"]}
+		for fieldname in ("pdf_sha256", "pdf_filename", "pdf_size_bytes"):
+			self.assertIn(fieldname, fields)
+			self.assertTrue(fields[fieldname].get("read_only"))
+
+		service = (APP / "education" / "report_card_issues.py").read_text()
+		for token in (
+			"issue.set_new_name()",
+			'render_payload["issue_record"] = {',
+			'render_payload["verification"] = build_issue_verification(issue.name, verification_token)',
+			"pdf_bytes = render_report_card_pdf(render_payload)",
+			"issue.pdf_sha256 = hashlib.sha256(pdf_bytes).hexdigest()",
+			"issue.pdf_size_bytes = len(pdf_bytes)",
+			"issue.insert(ignore_permissions=True)",
+			"save_file(",
+			"is_private=1",
+		):
+			self.assertIn(token, service)
+
+	def test_archived_pdf_is_verified_and_legacy_issue_can_render_dynamically(self):
+		service = (APP / "education" / "report_card_issues.py").read_text()
+		for token in (
+			"def resolve_report_card_pdf(payload: dict) -> bytes:",
+			"def get_archived_report_card_pdf(issue_name: str) -> bytes:",
+			'"pdf_sha256", "pdf_filename", "pdf_size_bytes"',
+			"if len(pdf_files) != 1:",
+			'hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or ""))',
+			"len(pdf_bytes) != int(archive.pdf_size_bytes)",
+			"return render_report_card_pdf(payload)",
+		):
+			self.assertIn(token, service)
+
+		main_api = (APP / "api" / "report_cards.py").read_text()
+		profiled_api = (APP / "api" / "report_cards_profiled.py").read_text()
+		self.assertIn("resolve_report_card_pdf(payload)", main_api)
+		self.assertIn("resolve_report_card_pdf(payload)", profiled_api)
+
+	def test_archived_issue_pdf_file_cannot_be_changed_or_deleted(self):
+		hooks = (APP / "hooks.py").read_text()
+		service = (APP / "education" / "report_card_issues.py").read_text()
+		self.assertIn(
+			'"File": "eduedge.education.report_card_issues.has_archived_report_card_file_permission"',
+			hooks,
+		)
+		self.assertIn("def has_archived_report_card_file_permission", service)
+		self.assertIn('ptype in {"write", "delete"}', service)
+		self.assertIn("return False", service)
+
 	def test_issue_permissions_are_branch_scoped(self):
 		hooks = (APP / "hooks.py").read_text()
 		permissions = (APP / "education" / "permissions.py").read_text()
