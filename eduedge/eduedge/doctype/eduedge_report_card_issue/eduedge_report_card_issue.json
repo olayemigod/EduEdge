@@ -21,6 +21,10 @@
   "result_profile",
   "payload_section",
   "payload_hash",
+  "pdf_archive_section",
+  "pdf_sha256",
+  "pdf_filename",
+  "pdf_size_bytes",
   "verification_token",
   "issued_by",
   "issued_on",
@@ -154,6 +158,29 @@
    "label": "Payload SHA-256",
    "read_only": 1,
    "reqd": 1
+  },
+  {
+   "fieldname": "pdf_archive_section",
+   "fieldtype": "Section Break",
+   "label": "Immutable Official PDF"
+  },
+  {
+   "fieldname": "pdf_sha256",
+   "fieldtype": "Data",
+   "label": "PDF SHA-256",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pdf_filename",
+   "fieldtype": "Data",
+   "label": "Archived PDF Filename",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pdf_size_bytes",
+   "fieldtype": "Int",
+   "label": "PDF Size (Bytes)",
+   "read_only": 1
   },
   {
    "fieldname": "verification_token",
