@@ -8,6 +8,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from eduedge.api.report_cards import _get_published_publication_lineage
+from eduedge.education.result_verification import _verify_issue_pdf_archive
 
 from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
@@ -230,6 +231,53 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 		with patch("frappe.db.get_value", return_value=row):
 			with self.assertRaises(frappe.ValidationError):
 				get_issued_payload_by_name(row.name)
+
+	def test_public_verification_preserves_true_legacy_issue_without_pdf_archive(self):
+		row = frappe._dict(
+			{
+				"name": "EDU-RCI-LEGACY",
+				"pdf_sha256": None,
+				"pdf_filename": None,
+				"pdf_size_bytes": None,
+			}
+		)
+		with patch("eduedge.education.report_card_issues.get_archived_report_card_pdf") as archive:
+			self.assertTrue(_verify_issue_pdf_archive(row))
+			archive.assert_not_called()
+
+	def test_public_verification_rejects_partial_pdf_archive_metadata(self):
+		row = frappe._dict(
+			{
+				"name": "EDU-RCI-PARTIAL",
+				"pdf_sha256": "a" * 64,
+				"pdf_filename": "",
+				"pdf_size_bytes": 100,
+			}
+		)
+		with patch("eduedge.education.report_card_issues.get_archived_report_card_pdf") as archive:
+			self.assertFalse(_verify_issue_pdf_archive(row))
+			archive.assert_not_called()
+
+	def test_public_verification_requires_archived_pdf_integrity(self):
+		row = frappe._dict(
+			{
+				"name": "EDU-RCI-ARCHIVED",
+				"pdf_sha256": "a" * 64,
+				"pdf_filename": "Report Card EDU-RCI-ARCHIVED.pdf",
+				"pdf_size_bytes": 100,
+			}
+		)
+		with patch(
+			"eduedge.education.report_card_issues.get_archived_report_card_pdf",
+			return_value=b"%PDF-1.4",
+		) as archive:
+			self.assertTrue(_verify_issue_pdf_archive(row))
+			archive.assert_called_once_with(row.name)
+		with patch(
+			"eduedge.education.report_card_issues.get_archived_report_card_pdf",
+			side_effect=frappe.ValidationError("tampered"),
+		):
+			self.assertFalse(_verify_issue_pdf_archive(row))
 
 	def test_incomplete_issued_pdf_metadata_fails_closed(self):
 		payload = {"issue_record": {"name": "EDU-RCI-TEST"}}
