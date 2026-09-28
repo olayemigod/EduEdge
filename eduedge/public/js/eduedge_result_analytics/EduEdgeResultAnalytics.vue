@@ -42,15 +42,16 @@
 					<EdgeStatCard label="Results" :value="data.summary.results" helper="Permitted result records" />
 					<EdgeStatCard label="Submitted" :value="data.summary.submitted" helper="Final result records" />
 					<EdgeStatCard label="Draft" :value="data.summary.draft" helper="Still editable" />
-					<EdgeStatCard label="Scored" :value="data.summary.scored" helper="Numeric performance rows" />
-					<EdgeStatCard label="Non-scored" :value="data.summary.non_scored" helper="Absent, exempt or not offered" />
-					<EdgeStatCard label="Average" :value="percentageLabel(data.summary.average_percentage)" helper="Scored results only" />
-					<EdgeStatCard label="Highest" :value="percentageLabel(data.summary.highest_percentage)" helper="Scored results only" />
-					<EdgeStatCard label="Lowest" :value="percentageLabel(data.summary.lowest_percentage)" helper="Scored results only" />
+					<EdgeStatCard label="Cancelled" :value="data.summary.cancelled" helper="Voided result records" />
+					<EdgeStatCard label="Scored" :value="data.summary.scored" helper="Submitted numeric performance rows" />
+					<EdgeStatCard label="Non-scored" :value="data.summary.non_scored" helper="Submitted absent, exempt or not offered" />
+					<EdgeStatCard label="Average" :value="percentageLabel(data.summary.average_percentage)" helper="Submitted scored results only" />
+					<EdgeStatCard label="Highest" :value="percentageLabel(data.summary.highest_percentage)" helper="Submitted scored results only" />
+					<EdgeStatCard label="Lowest" :value="percentageLabel(data.summary.lowest_percentage)" helper="Submitted scored results only" />
 				</EdgeDashboardLayout>
 
 				<section class="analytics-panel">
-					<div class="analytics-heading"><div><p class="edge-eyebrow">Score-state distribution</p><h2>Academic result states</h2></div><span>All permitted rows</span></div>
+					<div class="analytics-heading"><div><p class="edge-eyebrow">Score-state distribution</p><h2>Academic result states</h2></div><span>Submitted rows only</span></div>
 					<EdgeEmptyState v-if="!data.score_state_distribution.length" title="No score-state data available" description="Adjust the filters or record assessment results first." />
 					<div v-else class="grade-grid">
 						<article v-for="row in data.score_state_distribution" :key="row.state"><strong>{{ row.state }}</strong><span>{{ row.count }} result{{ row.count === 1 ? '' : 's' }}</span></article>
@@ -58,7 +59,7 @@
 				</section>
 
 				<section class="analytics-panel">
-					<div class="analytics-heading"><div><p class="edge-eyebrow">Grade distribution</p><h2>Performance bands</h2><small>Scored results only</small></div><small v-if="data.summary.summary_truncated">Summary is capped at the first 2,000 permitted records for this filter.</small></div>
+					<div class="analytics-heading"><div><p class="edge-eyebrow">Grade distribution</p><h2>Performance bands</h2><small>Submitted scored results only</small></div><small v-if="data.summary.summary_truncated">Summary is capped at the first 2,000 permitted records for this filter.</small></div>
 					<EdgeEmptyState v-if="!data.grade_distribution.length" title="No grade distribution available" description="Adjust the filters or record assessment results first." />
 					<div v-else class="grade-grid">
 						<article v-for="row in data.grade_distribution" :key="row.grade"><strong>{{ row.grade }}</strong><span>{{ row.count }} result{{ row.count === 1 ? '' : 's' }}</span></article>
@@ -101,7 +102,7 @@ const blankData = () => ({
 	branch: "",
 	filters: {},
 	options: { academic_years: [], academic_terms: [], student_groups: [], courses: [], assessment_groups: [], score_states: [] },
-	summary: { results: 0, submitted: 0, draft: 0, scored: 0, non_scored: 0, average_percentage: null, highest_percentage: null, lowest_percentage: null, summary_truncated: false },
+	summary: { results: 0, submitted: 0, draft: 0, cancelled: 0, scored: 0, non_scored: 0, average_percentage: null, highest_percentage: null, lowest_percentage: null, summary_truncated: false },
 	score_state_distribution: [],
 	grade_distribution: [],
 	rows: [],
