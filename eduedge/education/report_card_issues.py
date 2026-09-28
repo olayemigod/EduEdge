@@ -242,8 +242,16 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 		["pdf_sha256", "pdf_filename", "pdf_size_bytes"],
 		as_dict=True,
 	)
-	if not archive or not archive.pdf_sha256:
+	if not archive:
 		frappe.throw(_("Official Report Card PDF archive is unavailable."), frappe.ValidationError)
+	if not all(
+		(
+			str(archive.pdf_sha256 or "").strip(),
+			str(archive.pdf_filename or "").strip(),
+			int(archive.pdf_size_bytes or 0),
+		)
+	):
+		frappe.throw(_("Official Report Card PDF archive metadata is incomplete."), frappe.ValidationError)
 
 	files = frappe.get_all(
 		"File",
@@ -272,7 +280,7 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 	actual_hash = hashlib.sha256(pdf_bytes).hexdigest()
 	if not hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or "")):
 		frappe.throw(_("Official Report Card PDF integrity check failed."), frappe.ValidationError)
-	if archive.pdf_size_bytes and len(pdf_bytes) != int(archive.pdf_size_bytes):
+	if len(pdf_bytes) != int(archive.pdf_size_bytes):
 		frappe.throw(_("Official Report Card PDF size check failed."), frappe.ValidationError)
 	return pdf_bytes
 
