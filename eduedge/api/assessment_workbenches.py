@@ -21,6 +21,7 @@ from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
 
 MAX_ANALYTICS_ROWS = 100
+DEFAULT_ANALYTICS_PAGE_LENGTH = 50
 MAX_ANALYTICS_SUMMARY = 2000
 ANALYTICS_OPTION_PAGE_SIZE = 250
 RESULT_ANALYTICS_ROLES = {
@@ -399,7 +400,7 @@ def _analytics_performance_rows(filters: dict, fields: list[str]) -> tuple[list,
 		"Assessment Result",
 		filters=performance_filters,
 		fields=fields,
-		order_by="modified desc",
+		order_by="modified desc, name desc",
 		limit_page_length=MAX_ANALYTICS_SUMMARY + 1,
 	)
 	truncated = len(rows) > MAX_ANALYTICS_SUMMARY
@@ -416,6 +417,8 @@ def get_result_analytics(
 	assessment_group: str | None = None,
 	status: str | None = None,
 	score_state: str | None = None,
+	page: int | str | None = 1,
+	page_length: int | str | None = DEFAULT_ANALYTICS_PAGE_LENGTH,
 ) -> dict:
 	_require_login()
 	if frappe.session.user != "Administrator" and not RESULT_ANALYTICS_ROLES.intersection(frappe.get_roles(frappe.session.user)):
@@ -469,12 +472,17 @@ def get_result_analytics(
 	]
 	grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)
 
+	page_size = min(max(cint(page_length) or DEFAULT_ANALYTICS_PAGE_LENGTH, 1), MAX_ANALYTICS_ROWS)
+	total_pages = max((total_count + page_size - 1) // page_size, 1)
+	page_number = min(max(cint(page) or 1, 1), total_pages)
+	page_start = (page_number - 1) * page_size
 	visible_rows = frappe.get_list(
 		"Assessment Result",
 		filters=filters,
 		fields=fields,
-		order_by="modified desc",
-		limit_page_length=MAX_ANALYTICS_ROWS,
+		order_by="modified desc, name desc",
+		limit_start=page_start,
+		limit_page_length=page_size,
 	)
 	for row in visible_rows:
 		row["score_state"] = str(row.get("eduedge_score_state") or "Scored")
@@ -525,4 +533,14 @@ def get_result_analytics(
 		],
 		"rows": visible_rows,
 		"row_limit": MAX_ANALYTICS_ROWS,
+		"pagination": {
+			"page": page_number,
+			"page_length": page_size,
+			"total_rows": total_count,
+			"total_pages": total_pages,
+			"start": page_start + 1 if total_count else 0,
+			"end": min(page_start + len(visible_rows), total_count),
+			"has_previous": page_number > 1,
+			"has_next": page_number < total_pages,
+		},
 	}
