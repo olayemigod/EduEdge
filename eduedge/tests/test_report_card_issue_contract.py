@@ -94,7 +94,7 @@ class TestReportCardIssueContract(unittest.TestCase):
 			hooks,
 		)
 		self.assertIn("def has_archived_report_card_file_permission", service)
-		self.assertIn('ptype in {"write", "delete"}', service)
+		self.assertIn('ptype not in {"write", "delete"}', service)
 		self.assertIn("return False", service)
 
 	def test_issue_permissions_are_branch_scoped(self):
