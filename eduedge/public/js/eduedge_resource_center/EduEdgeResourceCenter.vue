@@ -456,7 +456,7 @@ export default {
 		},
 		csvEvidenceCell(value) {
 			let text = value === undefined || value === null ? "" : String(value);
-			if (/^[=+\-@]/.test(text)) text = `'${text}`;
+			if (/^[\t\r\n ]*[=+\-@]/.test(text)) text = `'${text}`;
 			return `"${text.replace(/"/g, '""')}"`;
 		},
 		exportArchiveEvidence() {
