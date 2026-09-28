@@ -8,7 +8,6 @@ from copy import deepcopy
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
-from frappe.utils.file_manager import save_file
 from frappe.utils.pdf import get_pdf
 
 from eduedge.services.institution_branding import get_report_identity
@@ -106,13 +105,17 @@ def create_report_card_issue(review: str) -> str:
 	issue.pdf_filename = pdf_filename
 	issue.pdf_size_bytes = len(pdf_bytes)
 	issue.insert(ignore_permissions=True)
-	file_doc = save_file(
-		pdf_filename,
-		pdf_bytes,
-		ISSUE_DOCTYPE,
-		issue.name,
-		is_private=1,
+	file_doc = frappe.get_doc(
+		{
+			"doctype": "File",
+			"file_name": pdf_filename,
+			"content": pdf_bytes,
+			"is_private": 1,
+			"attached_to_doctype": ISSUE_DOCTYPE,
+			"attached_to_name": issue.name,
+		}
 	)
+	file_doc.insert(ignore_permissions=True)
 	if (
 		not file_doc
 		or not file_doc.is_private
