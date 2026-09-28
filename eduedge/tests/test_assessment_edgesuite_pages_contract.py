@@ -153,7 +153,7 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			"data.options.score_states",
 			'label="Scored"',
 			'label="Non-scored"',
-			'helper="Scored results only"',
+			'helper="Submitted scored results only"',
 			"data.score_state_distribution",
 			"<th>Score State</th>",
 			"row.score_state || 'Scored'",
