@@ -65,6 +65,8 @@ class TestReportCardIssueContract(unittest.TestCase):
 			'"attached_to_doctype": ISSUE_DOCTYPE',
 			'"attached_to_name": issue.name',
 			"file_doc.insert(ignore_permissions=True)",
+			'frappe.db.set_value("File", file_doc.name, "owner", "Administrator", update_modified=False)',
+			'file_doc.owner = "Administrator"',
 			"get_archived_report_card_pdf(issue.name)",
 		):
 			self.assertIn(token, service)
@@ -79,7 +81,9 @@ class TestReportCardIssueContract(unittest.TestCase):
 			"if any(archive_values):",
 			"if not all(archive_values):",
 			'"file_name": archive.pdf_filename',
+			'fields=["name", "file_name", "file_type", "owner"]',
 			"if len(files) != 1:",
+			'file_row.owner != "Administrator"',
 			'hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or ""))',
 			"len(pdf_bytes) != int(archive.pdf_size_bytes)",
 			"return render_report_card_pdf(payload)",
