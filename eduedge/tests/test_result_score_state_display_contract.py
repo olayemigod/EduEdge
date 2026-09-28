@@ -22,6 +22,21 @@ class TestResultScoreStateDisplayContract(unittest.TestCase):
 		self.assertIn('component["states"].append("Scored")', engine)
 		self.assertIn('return "Scored"', engine)
 
+	def test_legacy_blank_score_states_are_backfilled_on_schema_ensure(self):
+		fields = (APP / "education" / "result_fields.py").read_text()
+		install = (APP / "install.py").read_text()
+		for token in (
+			"def backfill_result_score_states()",
+			'frappe.qb.DocType("Assessment Result")',
+			'.set(assessment_result.eduedge_score_state, "Scored")',
+			"assessment_result.eduedge_score_state.isnull()",
+			'assessment_result.eduedge_score_state == ""',
+			"backfill_result_score_states()",
+		):
+			self.assertIn(token, fields)
+		self.assertIn("ensure_result_engine_custom_fields()", install)
+		self.assertGreaterEqual(install.count("ensure_result_engine_custom_fields()"), 2)
+
 	def test_absence_treated_as_zero_still_remains_visibly_absent(self):
 		engine = (APP / "education" / "result_engine.py").read_text()
 		self.assertIn('component["states"].append(state)', engine)
