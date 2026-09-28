@@ -440,7 +440,19 @@ def get_report_card_history(publication: str, student: str) -> dict:
 			frappe.throw(_("You are not permitted to access this publication history."), frappe.PermissionError)
 
 	publication_names = [row.name for row in lineage]
+	publication_versions = {
+		row.name: int(row.publication_version or 1)
+		for row in lineage
+	}
 	issue_history = get_report_card_issue_history_for_publications(publication_names, student)
+	for row in issue_history:
+		expected_version = publication_versions.get(row["result_publication"])
+		if expected_version is None or int(row.get("publication_version") or 1) != expected_version:
+			frappe.throw(
+				_("Report Card Issue publication lineage is inconsistent."),
+				frappe.ValidationError,
+			)
+
 	current_publication = lineage[-1]
 	current_review_status = frappe.db.get_value(
 		REVIEW_DOCTYPE,
