@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, now_datetime
 
 from eduedge.education.offerings import assert_branch_access
 from eduedge.education.report_card_issues import (
@@ -50,6 +50,9 @@ def _resolve_branch(branch: str | None = None) -> str:
 @frappe.whitelist()
 def get_report_card_archive_integrity(
 	branch: str | None = None,
+	publication: str | None = None,
+	student: str | None = None,
+	search: str | None = None,
 	start: int | str | None = 0,
 	page_length: int | str | None = DEFAULT_ARCHIVE_AUDIT_PAGE_LENGTH,
 ) -> dict:
@@ -64,10 +67,27 @@ def get_report_card_archive_integrity(
 	filters = {}
 	if resolved_branch:
 		filters["school_branch"] = resolved_branch
+	resolved_publication = str(publication or "").strip()
+	resolved_student = str(student or "").strip()
+	needle = str(search or "").strip()
+	if resolved_publication:
+		filters["result_publication"] = resolved_publication
+	if resolved_student:
+		filters["student"] = resolved_student
+	or_filters = None
+	if needle:
+		like = f"%{needle}%"
+		or_filters = [
+			["name", "like", like],
+			["student", "like", like],
+			["student_name", "like", like],
+			["result_publication", "like", like],
+		]
 
 	rows = frappe.get_list(
 		ISSUE_DOCTYPE,
 		filters=filters,
+		or_filters=or_filters,
 		fields=[
 			"name",
 			"result_publication",
@@ -115,6 +135,14 @@ def get_report_card_archive_integrity(
 	attention = len(audited) - healthy - legacy
 	return {
 		"branch": resolved_branch,
+		"filters": {
+			"branch": resolved_branch,
+			"publication": resolved_publication,
+			"student": resolved_student,
+			"search": needle,
+		},
+		"checked_on": str(now_datetime()),
+		"checked_by": frappe.session.user,
 		"allowed_branches": get_allowed_school_branches(),
 		"rows": audited,
 		"summary": {
