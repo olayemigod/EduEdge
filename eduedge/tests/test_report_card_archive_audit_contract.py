@@ -55,7 +55,7 @@ class TestReportCardArchiveAuditContract(unittest.TestCase):
 			"Export checked page",
 			"exportArchiveEvidence()",
 			"csvEvidenceCell(value)",
-			"/^[=+\\-@]/",
+			"/^[\\t\\r\\n ]*[=+\\-@]/",
 			"this.archiveAudit.rows.map",
 			"new Blob(",
 			"\\uFEFF",
@@ -71,6 +71,7 @@ class TestReportCardArchiveAuditContract(unittest.TestCase):
 			"_content",
 		):
 			self.assertNotIn(forbidden, vue)
+
 	def test_archive_inspection_reuses_exact_private_file_contract(self):
 		service = (APP / "education" / "report_card_issues.py").read_text()
 		for token in (
