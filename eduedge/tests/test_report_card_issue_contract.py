@@ -65,6 +65,7 @@ class TestReportCardIssueContract(unittest.TestCase):
 			'"attached_to_doctype": ISSUE_DOCTYPE',
 			'"attached_to_name": issue.name',
 			"file_doc.insert(ignore_permissions=True)",
+			"get_archived_report_card_pdf(issue.name)",
 		):
 			self.assertIn(token, service)
 
@@ -74,7 +75,11 @@ class TestReportCardIssueContract(unittest.TestCase):
 			"def resolve_report_card_pdf(payload: dict) -> bytes:",
 			"def get_archived_report_card_pdf(issue_name: str) -> bytes:",
 			'"pdf_sha256", "pdf_filename", "pdf_size_bytes"',
-			"if len(pdf_files) != 1:",
+			"archive_values = (",
+			"if any(archive_values):",
+			"if not all(archive_values):",
+			'"file_name": archive.pdf_filename',
+			"if len(files) != 1:",
 			'hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or ""))',
 			"len(pdf_bytes) != int(archive.pdf_size_bytes)",
 			"return render_report_card_pdf(payload)",
@@ -94,7 +99,7 @@ class TestReportCardIssueContract(unittest.TestCase):
 			hooks,
 		)
 		self.assertIn("def has_archived_report_card_file_permission", service)
-		self.assertIn('ptype not in {"write", "delete"}', service)
+		self.assertIn('ptype not in {"create", "write", "delete"}', service)
 		self.assertIn("return False", service)
 
 	def test_issue_permissions_are_branch_scoped(self):
