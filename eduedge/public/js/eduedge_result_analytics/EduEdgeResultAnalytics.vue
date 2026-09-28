@@ -78,7 +78,7 @@
 									<td>{{ row.student_group || '—' }}</td>
 									<td>{{ row.assessment_plan }}</td>
 									<td>{{ row.score_state || 'Scored' }}</td>
-									<td>{{ row.score_state === 'Scored' ? `${numberLabel(row.total_score)} / ${numberLabel(row.maximum_score)}` : '—' }}</td>
+									<td>{{ scoreLabel(row) }}</td>
 									<td>{{ row.score_state === 'Scored' ? percentageLabel(row.percentage) : '—' }}</td>
 									<td>{{ row.score_state === 'Scored' ? (row.grade || '—') : '—' }}</td>
 									<td><EdgeStatusBadge :label="row.status_label" :status="row.status_label" :tone="statusTone(row.status_label)" /></td>
@@ -136,6 +136,10 @@ export default {
 		openRoute: openEduEdgeRoute,
 		percentageLabel(value) { return `${Number(value || 0).toFixed(2)}%`; },
 		numberLabel(value) { return Number(value || 0).toFixed(2); },
+		scoreLabel(row) {
+			if (row?.score_state !== "Scored") return "—";
+			return `${this.numberLabel(row.total_score)} / ${this.numberLabel(row.maximum_score)}`;
+		},
 		statusTone(status) { return status === "Submitted" ? "success" : status === "Cancelled" ? "danger" : "warning"; },
 		async load() {
 			this.loading = true;
