@@ -99,7 +99,10 @@ class TestReportCardIssueContract(unittest.TestCase):
 			hooks,
 		)
 		self.assertIn("def has_archived_report_card_file_permission", service)
-		self.assertIn('ptype not in {"create", "write", "delete"}', service)
+		self.assertIn('ptype in {"create", "write", "delete", "share"}', service)
+		self.assertIn('ptype in {"read", "select", "print", "email"}', service)
+		self.assertIn("frappe.has_permission(", service)
+		self.assertIn("ISSUE_DOCTYPE", service)
 		self.assertIn("return False", service)
 
 	def test_issue_permissions_are_branch_scoped(self):
