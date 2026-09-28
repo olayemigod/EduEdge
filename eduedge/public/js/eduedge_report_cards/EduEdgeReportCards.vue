@@ -227,7 +227,11 @@
 										<div v-if="!history.issues.length" class="eduedge-history-empty">No official issue yet.</div>
 										<div v-for="row in history.issues" :key="row.name" class="eduedge-history-row">
 											<div class="eduedge-history-row-main">
-												<span>Issue v{{ row.issue_version }} · Publication v{{ row.publication_version || 1 }}</span>
+												<span>
+													Issue v{{ row.issue_version }} · Publication v{{ row.publication_version || 1 }}
+													· {{ row.lineage_status || 'Historical' }}
+													<template v-if="row.is_selected_publication"> · Selected publication</template>
+												</span>
 												<button type="button" class="edge-button eduedge-history-download" @click="downloadIssue(row)">Download PDF</button>
 											</div>
 											<small>{{ formatWhen(row.issued_on) }} · {{ row.fingerprint }}</small>
@@ -237,7 +241,10 @@
 										<strong>Published result revisions</strong>
 										<div v-if="!history.publications.length" class="eduedge-history-empty">No publication history found.</div>
 										<div v-for="row in history.publications" :key="row.name" class="eduedge-history-row">
-											<span>Publication v{{ row.publication_version || 1 }}</span>
+											<span>
+												Publication v{{ row.publication_version || 1 }} · {{ row.lineage_status || 'Historical' }}
+												<template v-if="row.is_selected"> · Selected</template>
+											</span>
 											<small>{{ formatWhen(row.published_on) }} · {{ row.name }}</small>
 										</div>
 									</div>
