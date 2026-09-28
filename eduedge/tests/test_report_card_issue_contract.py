@@ -75,17 +75,19 @@ class TestReportCardIssueContract(unittest.TestCase):
 		service = (APP / "education" / "report_card_issues.py").read_text()
 		for token in (
 			"def resolve_report_card_pdf(payload: dict) -> bytes:",
+			"def inspect_report_card_pdf_archive(issue_name: str",
 			"def get_archived_report_card_pdf(issue_name: str) -> bytes:",
 			'"pdf_sha256", "pdf_filename", "pdf_size_bytes"',
 			"archive_values = (",
 			"if any(archive_values):",
 			"if not all(archive_values):",
-			'"file_name": archive.pdf_filename',
+			'"file_name": filename',
 			'fields=["name", "file_name", "file_type", "owner"]',
-			"if len(files) != 1:",
+			"if not files:",
+			"if len(files) > 1:",
 			'file_row.owner != "Administrator"',
-			'hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or ""))',
-			"len(pdf_bytes) != int(archive.pdf_size_bytes)",
+			'hmac.compare_digest(actual_hash, expected_hash)',
+			"actual_size != expected_size",
 			'Official Report Card PDF archive metadata is incomplete.',
 			"return render_report_card_pdf(payload)",
 		):
