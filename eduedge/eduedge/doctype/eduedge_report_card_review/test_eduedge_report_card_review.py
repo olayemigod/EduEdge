@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from eduedge.api.report_card_archive_audit import get_report_card_archive_integrity
 from eduedge.api.report_cards import _get_published_publication_lineage
 from eduedge.education.result_verification import (
 	_verify_issue_pdf_archive,
@@ -17,6 +18,7 @@ from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
 	get_archived_report_card_pdf,
 	get_issued_payload_by_name,
+	inspect_report_card_pdf_archive,
 	has_archived_report_card_file_permission,
 	resolve_report_card_pdf,
 )
@@ -319,6 +321,118 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 			side_effect=frappe.ValidationError("tampered"),
 		):
 			self.assertFalse(_verify_issue_pdf_archive(row))
+
+	def test_archive_inspector_preserves_true_legacy_issue(self):
+		archive = frappe._dict(
+			{"pdf_sha256": None, "pdf_filename": None, "pdf_size_bytes": None}
+		)
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("frappe.get_all") as get_all,
+		):
+			result = inspect_report_card_pdf_archive("EDU-RCI-LEGACY")
+		self.assertEqual(result["status"], "Legacy")
+		self.assertTrue(result["ok"])
+		self.assertTrue(result["legacy"])
+		get_all.assert_not_called()
+
+	def test_archive_inspector_reports_missing_file(self):
+		archive = frappe._dict(
+			{
+				"pdf_sha256": "a" * 64,
+				"pdf_filename": "Report Card EDU-RCI-MISSING.pdf",
+				"pdf_size_bytes": 100,
+			}
+		)
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("frappe.get_all", return_value=[]),
+		):
+			result = inspect_report_card_pdf_archive("EDU-RCI-MISSING")
+		self.assertEqual(result["status"], "Missing File")
+		self.assertFalse(result["ok"])
+
+	def test_archive_inspector_distinguishes_size_and_hash_mismatch(self):
+		expected = b"%PDF-1.4 official"
+		archive = frappe._dict(
+			{
+				"pdf_sha256": hashlib.sha256(expected).hexdigest(),
+				"pdf_filename": "Report Card EDU-RCI-AUDIT.pdf",
+				"pdf_size_bytes": len(expected),
+			}
+		)
+		file_row = frappe._dict(
+			{
+				"name": "FILE-AUDIT",
+				"file_name": archive.pdf_filename,
+				"file_type": "PDF",
+				"owner": "Administrator",
+			}
+		)
+		file_doc = MagicMock()
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("frappe.get_all", return_value=[file_row]),
+			patch("frappe.get_doc", return_value=file_doc),
+		):
+			file_doc.get_content.return_value = b"short"
+			self.assertEqual(
+				inspect_report_card_pdf_archive("EDU-RCI-AUDIT")["status"],
+				"Size Mismatch",
+			)
+			file_doc.get_content.return_value = b"X" * len(expected)
+			self.assertEqual(
+				inspect_report_card_pdf_archive("EDU-RCI-AUDIT")["status"],
+				"Hash Mismatch",
+			)
+
+	def test_archive_audit_endpoint_is_permission_aware_and_page_bounded(self):
+		rows = [
+			frappe._dict(
+				{
+					"name": f"ISSUE-{index}",
+					"result_publication": "PUB-1",
+					"publication_version": 1,
+					"issue_version": index,
+					"student": f"STU-{index}",
+					"student_name": f"Student {index}",
+					"school_branch": "BRANCH-1",
+					"student_group": "GROUP-1",
+					"issued_on": "2026-09-28 10:00:00",
+					"pdf_sha256": "a" * 64,
+					"pdf_filename": f"Report {index}.pdf",
+					"pdf_size_bytes": 100,
+				}
+			)
+			for index in (1, 2, 3)
+		]
+
+		def inspect(name):
+			return {
+				"status": "Healthy" if name == "ISSUE-1" else "Missing File",
+				"ok": name == "ISSUE-1",
+				"legacy": False,
+				"detail": "checked",
+				"pdf_fingerprint": "A" * 16,
+				"expected_size_bytes": 100,
+				"actual_size_bytes": 100 if name == "ISSUE-1" else None,
+			}
+
+		with (
+			patch("eduedge.api.report_card_archive_audit._require_archive_auditor"),
+			patch("eduedge.api.report_card_archive_audit._resolve_branch", return_value="BRANCH-1"),
+			patch("frappe.get_list", return_value=rows) as get_list,
+			patch("eduedge.api.report_card_archive_audit.inspect_report_card_pdf_archive", side_effect=inspect),
+			patch("eduedge.api.report_card_archive_audit.get_allowed_school_branches", return_value=[]),
+		):
+			result = get_report_card_archive_integrity(branch="BRANCH-1", start=0, page_length=2)
+
+		self.assertTrue(result["has_more"])
+		self.assertEqual(len(result["rows"]), 2)
+		self.assertEqual(result["summary"]["healthy"], 1)
+		self.assertEqual(result["summary"]["needs_attention"], 1)
+		self.assertEqual(get_list.call_args.kwargs["limit_page_length"], 3)
+		self.assertEqual(get_list.call_args.kwargs["filters"]["school_branch"], "BRANCH-1")
 
 	def test_incomplete_issued_pdf_metadata_fails_closed(self):
 		payload = {"issue_record": {"name": "EDU-RCI-TEST"}}

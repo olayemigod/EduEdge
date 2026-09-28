@@ -264,7 +264,8 @@ def resolve_report_card_pdf(payload: dict) -> bytes:
 	return render_report_card_pdf(payload)
 
 
-def get_archived_report_card_pdf(issue_name: str) -> bytes:
+def inspect_report_card_pdf_archive(issue_name: str, *, include_content: bool = False) -> dict:
+	"""Inspect one Issue's official PDF without exposing a private File URL."""
 	archive = frappe.db.get_value(
 		ISSUE_DOCTYPE,
 		issue_name,
@@ -272,15 +273,41 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 		as_dict=True,
 	)
 	if not archive:
-		frappe.throw(_("Official Report Card PDF archive is unavailable."), frappe.ValidationError)
-	if not all(
-		(
-			str(archive.pdf_sha256 or "").strip(),
-			str(archive.pdf_filename or "").strip(),
-			int(archive.pdf_size_bytes or 0),
-		)
-	):
-		frappe.throw(_("Official Report Card PDF archive metadata is incomplete."), frappe.ValidationError)
+		return {
+			"issue": issue_name,
+			"status": "Missing Issue",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The Report Card Issue record does not exist."),
+		}
+
+	expected_hash = str(archive.pdf_sha256 or "").strip().lower()
+	filename = str(archive.pdf_filename or "").strip()
+	expected_size = int(archive.pdf_size_bytes or 0)
+	metadata_values = (expected_hash, filename, expected_size)
+	base = {
+		"issue": issue_name,
+		"pdf_filename": filename,
+		"expected_size_bytes": expected_size or None,
+		"actual_size_bytes": None,
+		"pdf_fingerprint": expected_hash[:16].upper() if expected_hash else "",
+	}
+	if not any(metadata_values):
+		return {
+			**base,
+			"status": "Legacy",
+			"ok": True,
+			"legacy": True,
+			"detail": _("This Issue predates immutable PDF archival."),
+		}
+	if not all(metadata_values):
+		return {
+			**base,
+			"status": "Incomplete Metadata",
+			"ok": False,
+			"legacy": False,
+			"detail": _("PDF archive metadata is incomplete."),
+		}
 
 	files = frappe.get_all(
 		"File",
@@ -288,30 +315,114 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 			"attached_to_doctype": ISSUE_DOCTYPE,
 			"attached_to_name": issue_name,
 			"is_private": 1,
-			"file_name": archive.pdf_filename,
+			"file_name": filename,
 		},
 		fields=["name", "file_name", "file_type", "owner"],
 		order_by="creation asc",
 	)
-	if len(files) != 1:
-		frappe.throw(_("Official Report Card PDF archive is missing or ambiguous."), frappe.ValidationError)
+	if not files:
+		return {
+			**base,
+			"status": "Missing File",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The private archived PDF File is missing."),
+		}
+	if len(files) > 1:
+		return {
+			**base,
+			"status": "Ambiguous File",
+			"ok": False,
+			"legacy": False,
+			"detail": _("Multiple private archived PDF Files match this Issue."),
+		}
+
 	file_row = files[0]
 	if file_row.owner != "Administrator":
-		frappe.throw(_("Official Report Card PDF archive ownership is invalid."), frappe.ValidationError)
+		return {
+			**base,
+			"status": "Invalid Owner",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The archived PDF File owner is invalid."),
+		}
 	if str(file_row.file_type or "").upper() != "PDF" and not str(file_row.file_name or "").lower().endswith(".pdf"):
-		frappe.throw(_("Official Report Card PDF archive is not a PDF."), frappe.ValidationError)
+		return {
+			**base,
+			"status": "Invalid File Type",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The archived artifact is not a PDF."),
+		}
 
-	file_doc = frappe.get_doc("File", file_row.name)
-	content = file_doc.get_content(encodings=[])
+	try:
+		content = frappe.get_doc("File", file_row.name).get_content(encodings=[])
+	except Exception:
+		return {
+			**base,
+			"status": "Unreadable File",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The archived PDF bytes could not be read."),
+		}
+	if not isinstance(content, (bytes, bytearray)):
+		return {
+			**base,
+			"status": "Unreadable File",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The archived PDF bytes could not be read."),
+		}
+
+	pdf_bytes = bytes(content)
+	actual_size = len(pdf_bytes)
+	if actual_size != expected_size:
+		return {
+			**base,
+			"actual_size_bytes": actual_size,
+			"status": "Size Mismatch",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The archived PDF byte size does not match the Issue metadata."),
+		}
+
+	actual_hash = hashlib.sha256(pdf_bytes).hexdigest()
+	if not hmac.compare_digest(actual_hash, expected_hash):
+		return {
+			**base,
+			"actual_size_bytes": actual_size,
+			"status": "Hash Mismatch",
+			"ok": False,
+			"legacy": False,
+			"detail": _("The archived PDF SHA-256 does not match the Issue metadata."),
+		}
+
+	result = {
+		**base,
+		"actual_size_bytes": actual_size,
+		"status": "Healthy",
+		"ok": True,
+		"legacy": False,
+		"detail": _("The immutable archived PDF passed filename, ownership, size and SHA-256 checks."),
+	}
+	if include_content:
+		result["_content"] = pdf_bytes
+	return result
+
+
+def get_archived_report_card_pdf(issue_name: str) -> bytes:
+	audit = inspect_report_card_pdf_archive(issue_name, include_content=True)
+	if audit.get("status") != "Healthy":
+		frappe.throw(
+			_("Official Report Card PDF archive failed integrity validation: {0}.").format(
+				audit.get("status") or _("Unknown")
+			),
+			frappe.ValidationError,
+		)
+	content = audit.get("_content")
 	if not isinstance(content, (bytes, bytearray)):
 		frappe.throw(_("Official Report Card PDF archive is unreadable."), frappe.ValidationError)
-	pdf_bytes = bytes(content)
-	actual_hash = hashlib.sha256(pdf_bytes).hexdigest()
-	if not hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or "")):
-		frappe.throw(_("Official Report Card PDF integrity check failed."), frappe.ValidationError)
-	if len(pdf_bytes) != int(archive.pdf_size_bytes):
-		frappe.throw(_("Official Report Card PDF size check failed."), frappe.ValidationError)
-	return pdf_bytes
+	return bytes(content)
 
 
 def has_archived_report_card_file_permission(doc, ptype=None, user=None, debug=False):
