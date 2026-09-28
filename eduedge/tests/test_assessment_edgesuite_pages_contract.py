@@ -162,6 +162,34 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		):
 			self.assertIn(token, vue)
 
+	def test_result_analytics_uses_submitted_rows_for_official_performance(self):
+		api = MARKS_WORKBENCH.read_text()
+		vue = RESULT_ANALYTICS.read_text()
+		for token in (
+			'if status not in {"Draft", "Submitted", "Cancelled"}:',
+			'Invalid document-status filter.',
+			'submitted_rows = [row for row in rows if cint(row.docstatus) == 1]',
+			'row for row in submitted_rows',
+			'if row.score_state == "Scored"',
+			'grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)',
+			'state_counts = Counter(row.score_state for row in submitted_rows)',
+			'"cancelled": sum(1 for row in rows if cint(row.docstatus) == 2)',
+			'"scored": len(performance_rows)',
+			'"non_scored": len(submitted_rows) - len(performance_rows)',
+		):
+			self.assertIn(token, api)
+		for token in (
+			'label="Cancelled"',
+			'helper="Voided result records"',
+			'helper="Submitted numeric performance rows"',
+			'helper="Submitted absent, exempt or not offered"',
+			'helper="Submitted scored results only"',
+			"Submitted rows only",
+			"Submitted scored results only",
+			"cancelled: 0",
+		):
+			self.assertIn(token, vue)
+
 	def test_safe_mark_entry_payload_preserves_edgesuite_metadata(self):
 		text = (APP / "api" / "assessment_result_tool_safe.py").read_text()
 		for token in (
