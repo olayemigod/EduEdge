@@ -8,7 +8,10 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from eduedge.api.report_cards import _get_published_publication_lineage
-from eduedge.education.result_verification import _verify_issue_pdf_archive
+from eduedge.education.result_verification import (
+	_verify_issue_pdf_archive,
+	verify_issued_report_card,
+)
 
 from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
@@ -231,6 +234,44 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 		with patch("frappe.db.get_value", return_value=row):
 			with self.assertRaises(frappe.ValidationError):
 				get_issued_payload_by_name(row.name)
+
+	def test_public_verification_returns_invalid_when_archived_pdf_fails_integrity(self):
+		payload_json = json.dumps({"student": {"student_name": "Archive Student"}})
+		row = frappe._dict(
+			{
+				"name": "EDU-RCI-VERIFY",
+				"result_publication": "PUB-1",
+				"publication_version": 1,
+				"report_card_review": "REVIEW-1",
+				"issue_version": 1,
+				"student": "STU-1",
+				"student_name": "Archive Student",
+				"school_branch": "BRANCH-1",
+				"student_group": "GROUP-1",
+				"academic_year": "2026-2027",
+				"academic_term": "TERM-1",
+				"result_mode": "Terminal",
+				"result_profile": "PROFILE-1",
+				"verification_token": "token",
+				"payload_hash": hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+				"payload_json": payload_json,
+				"pdf_sha256": "a" * 64,
+				"pdf_filename": "Report Card EDU-RCI-VERIFY.pdf",
+				"pdf_size_bytes": 100,
+				"issued_on": "2026-09-28 10:00:00",
+			}
+		)
+		with (
+			patch("frappe.db.get_value", return_value=row),
+			patch(
+				"eduedge.education.result_verification._verify_issue_pdf_archive",
+				return_value=False,
+			),
+		):
+			result = verify_issued_report_card(row.name, "token")
+		self.assertFalse(result["valid"])
+		self.assertEqual(result["status"], "Invalid")
+		self.assertIn("PDF archive integrity", result["status_message"])
 
 	def test_public_verification_preserves_true_legacy_issue_without_pdf_archive(self):
 		row = frappe._dict(
