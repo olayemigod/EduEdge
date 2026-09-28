@@ -136,13 +136,13 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		for token in (
 			'fields.append("eduedge_score_state")',
 			'row["score_state"] = str(row.get("eduedge_score_state") or "Scored")',
-			'submitted_rows = [row for row in rows if cint(row.docstatus) == 1]',
-			'row for row in submitted_rows',
-			'if row.score_state == "Scored"',
+			'state_counts = _analytics_state_counts(filters)',
+			'performance_rows, performance_truncated = _analytics_performance_rows(filters, fields)',
+			'performance_filters["docstatus"] = 1',
+			'performance_filters["eduedge_score_state"] = "Scored"',
 			'grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)',
-			'state_counts = Counter(row.score_state for row in submitted_rows)',
-			'"scored": len(performance_rows)',
-			'"non_scored": len(submitted_rows) - len(performance_rows)',
+			'"scored": scored_count',
+			'"non_scored": non_scored_count',
 			'"score_state_distribution": [',
 			'if row.score_state == "Scored" and flt(row.maximum_score) > 0',
 			'"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else None',
@@ -170,14 +170,16 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		for token in (
 			'if status not in {"Draft", "Submitted", "Cancelled"}:',
 			'Invalid document-status filter.',
-			'submitted_rows = [row for row in rows if cint(row.docstatus) == 1]',
-			'row for row in submitted_rows',
-			'if row.score_state == "Scored"',
+			'docstatus_counts = _analytics_docstatus_counts(filters)',
+			'submitted_count = docstatus_counts.get(1, 0)',
+			'cancelled_count = docstatus_counts.get(2, 0)',
+			'if filters.get("docstatus") is not None and cint(filters["docstatus"]) != 1:',
+			'performance_filters["docstatus"] = 1',
+			'performance_filters["eduedge_score_state"] = "Scored"',
 			'grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)',
-			'state_counts = Counter(row.score_state for row in submitted_rows)',
-			'"cancelled": sum(1 for row in rows if cint(row.docstatus) == 2)',
-			'"scored": len(performance_rows)',
-			'"non_scored": len(submitted_rows) - len(performance_rows)',
+			'"cancelled": cancelled_count',
+			'"scored": scored_count',
+			'"non_scored": non_scored_count',
 		):
 			self.assertIn(token, api)
 		for token in (
@@ -191,6 +193,42 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			"cancelled: 0",
 		):
 			self.assertIn(token, vue)
+
+	def test_result_analytics_scales_options_counts_and_performance_separately(self):
+		api = MARKS_WORKBENCH.read_text()
+		vue = RESULT_ANALYTICS.read_text()
+		options = api.split("def _analytics_distinct_values", 1)[1].split(
+			"def _analytics_docstatus_counts",
+			1,
+		)[0]
+		for token in (
+			"ANALYTICS_OPTION_PAGE_LENGTH = 200",
+			"distinct=True",
+			"limit_start=start",
+			"limit_page_length=ANALYTICS_OPTION_PAGE_LENGTH",
+			"start += ANALYTICS_OPTION_PAGE_LENGTH",
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("limit_page_length=1000", options)
+
+		for token in (
+			'fields=["docstatus", {"COUNT": "*", "as": "count"}]',
+			'group_by="docstatus"',
+			'fields=["eduedge_score_state", {"COUNT": "*", "as": "count"}]',
+			'group_by="eduedge_score_state"',
+			'"results": total_count',
+			'"submitted": submitted_count',
+			'"draft": draft_count',
+			'"cancelled": cancelled_count',
+			'"performance_truncated": performance_truncated',
+			"limit_page_length=MAX_ANALYTICS_SUMMARY + 1",
+			"limit_page_length=MAX_ANALYTICS_ROWS",
+		):
+			self.assertIn(token, api)
+
+		self.assertIn("data.summary.performance_truncated", vue)
+		self.assertIn("count cards remain exact", vue)
+		self.assertNotIn("data.summary.summary_truncated", vue)
 
 	def test_safe_mark_entry_payload_preserves_edgesuite_metadata(self):
 		text = (APP / "api" / "assessment_result_tool_safe.py").read_text()
