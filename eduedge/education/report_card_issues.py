@@ -121,8 +121,11 @@ def create_report_card_issue(review: str) -> str:
 		or not file_doc.is_private
 		or file_doc.attached_to_doctype != ISSUE_DOCTYPE
 		or file_doc.attached_to_name != issue.name
+		or file_doc.file_name != pdf_filename
 	):
 		frappe.throw(_("Official Report Card PDF archive could not be created."), frappe.ValidationError)
+	# Verify the persisted private artifact before the issuance transaction can succeed.
+	get_archived_report_card_pdf(issue.name)
 	return issue.name
 
 
@@ -209,14 +212,21 @@ def resolve_report_card_pdf(payload: dict) -> bytes:
 		archive = frappe.db.get_value(
 			ISSUE_DOCTYPE,
 			issue_name,
-			["pdf_sha256", "pdf_size_bytes"],
+			["pdf_sha256", "pdf_filename", "pdf_size_bytes"],
 			as_dict=True,
 		)
 		if not archive:
 			frappe.throw(_("Issued Report Card archive record does not exist."), frappe.DoesNotExistError)
-		if archive.pdf_sha256:
+		archive_values = (
+			str(archive.pdf_sha256 or "").strip(),
+			str(archive.pdf_filename or "").strip(),
+			int(archive.pdf_size_bytes or 0),
+		)
+		if any(archive_values):
+			if not all(archive_values):
+				frappe.throw(_("Official Report Card PDF archive metadata is incomplete."), frappe.ValidationError)
 			return get_archived_report_card_pdf(issue_name)
-	# Legacy Issues created before PDF archival, plus draft previews, retain dynamic rendering.
+	# Only true legacy Issues with no archive metadata may render dynamically.
 	return render_report_card_pdf(payload)
 
 
@@ -236,19 +246,18 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 			"attached_to_doctype": ISSUE_DOCTYPE,
 			"attached_to_name": issue_name,
 			"is_private": 1,
+			"file_name": archive.pdf_filename,
 		},
 		fields=["name", "file_name", "file_type"],
 		order_by="creation asc",
 	)
-	pdf_files = [
-		row for row in files
-		if str(row.file_type or "").upper() == "PDF"
-		or str(row.file_name or "").lower().endswith(".pdf")
-	]
-	if len(pdf_files) != 1:
+	if len(files) != 1:
 		frappe.throw(_("Official Report Card PDF archive is missing or ambiguous."), frappe.ValidationError)
+	file_row = files[0]
+	if str(file_row.file_type or "").upper() != "PDF" and not str(file_row.file_name or "").lower().endswith(".pdf"):
+		frappe.throw(_("Official Report Card PDF archive is not a PDF."), frappe.ValidationError)
 
-	file_doc = frappe.get_doc("File", pdf_files[0].name)
+	file_doc = frappe.get_doc("File", file_row.name)
 	content = file_doc.get_content(encodings=[])
 	if not isinstance(content, (bytes, bytearray)):
 		frappe.throw(_("Official Report Card PDF archive is unreadable."), frappe.ValidationError)
@@ -262,8 +271,8 @@ def get_archived_report_card_pdf(issue_name: str) -> bytes:
 
 
 def has_archived_report_card_file_permission(doc, ptype=None, user=None, debug=False):
-	"""Archived Issue PDF attachments may be read normally but never changed or deleted."""
-	if ptype not in {"write", "delete"}:
+	"""Issue attachments may be read normally but cannot be user-created, changed, or deleted."""
+	if ptype not in {"create", "write", "delete"}:
 		return True
 	if not doc:
 		return True
