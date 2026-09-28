@@ -821,6 +821,7 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
             1,
             update_modified=False,
         )
+        mark_plan.reload()
 
         native_result.append(
             "details",
@@ -839,13 +840,13 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         native_result.maximum_score = 999
         before_validate_assessment_result(native_result)
         self.assertEqual(native_result.get(BRANCH_FIELD), branch_a.name)
-        self.assertEqual(native_result.course, course.name)
-        self.assertEqual(native_result.student_group, class_a["name"])
-        self.assertEqual(native_result.program, program.name)
-        self.assertEqual(native_result.academic_year, year.name)
-        self.assertEqual(native_result.academic_term, term.name)
-        self.assertEqual(native_result.assessment_group, legacy_group.name)
-        self.assertEqual(native_result.maximum_score, 100)
+        self.assertEqual(native_result.course, mark_plan.course)
+        self.assertEqual(native_result.student_group, mark_plan.student_group)
+        self.assertEqual(native_result.program, mark_plan.program)
+        self.assertEqual(native_result.academic_year, mark_plan.academic_year)
+        self.assertEqual(native_result.academic_term, mark_plan.academic_term)
+        self.assertEqual(native_result.assessment_group, mark_plan.assessment_group)
+        self.assertEqual(native_result.maximum_score, mark_plan.maximum_assessment_score)
         self.assertEqual(native_result.details[0].maximum_score, 100)
 
         missing_detail_result = frappe.new_doc("Assessment Result")
