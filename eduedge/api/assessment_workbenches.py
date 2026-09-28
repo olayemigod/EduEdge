@@ -288,12 +288,14 @@ def _analytics_filters(
 	):
 		if value:
 			filters[fieldname] = value
-	if status == "Draft":
-		filters["docstatus"] = 0
-	elif status == "Submitted":
-		filters["docstatus"] = 1
-	elif status == "Cancelled":
-		filters["docstatus"] = 2
+	if status:
+		if status not in {"Draft", "Submitted", "Cancelled"}:
+			frappe.throw(_("Invalid document-status filter."), frappe.ValidationError)
+		filters["docstatus"] = {
+			"Draft": 0,
+			"Submitted": 1,
+			"Cancelled": 2,
+		}[status]
 	if score_state:
 		if score_state not in SCORE_STATES:
 			frappe.throw(_("Invalid score-state filter."), frappe.ValidationError)
@@ -382,14 +384,18 @@ def get_result_analytics(
 	rows = rows[:MAX_ANALYTICS_SUMMARY]
 	for row in rows:
 		row["score_state"] = str(row.get("eduedge_score_state") or "Scored")
-	scored_rows = [row for row in rows if row.score_state == "Scored"]
+	submitted_rows = [row for row in rows if cint(row.docstatus) == 1]
+	performance_rows = [
+		row for row in submitted_rows
+		if row.score_state == "Scored"
+	]
 	percentages = [
 		(flt(row.total_score) / flt(row.maximum_score)) * 100
-		for row in scored_rows
+		for row in performance_rows
 		if flt(row.maximum_score) > 0
 	]
-	grade_counts = Counter(str(row.grade or "Ungraded") for row in scored_rows)
-	state_counts = Counter(row.score_state for row in rows)
+	grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)
+	state_counts = Counter(row.score_state for row in submitted_rows)
 	visible_rows = rows[:MAX_ANALYTICS_ROWS]
 	for row in visible_rows:
 		row["percentage"] = (
@@ -417,10 +423,11 @@ def get_result_analytics(
 		"options": _analytics_options(resolved_branch),
 		"summary": {
 			"results": len(rows),
-			"submitted": sum(1 for row in rows if cint(row.docstatus) == 1),
+			"submitted": len(submitted_rows),
 			"draft": sum(1 for row in rows if cint(row.docstatus) == 0),
-			"scored": len(scored_rows),
-			"non_scored": len(rows) - len(scored_rows),
+			"cancelled": sum(1 for row in rows if cint(row.docstatus) == 2),
+			"scored": len(performance_rows),
+			"non_scored": len(submitted_rows) - len(performance_rows),
 			"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else None,
 			"highest_percentage": round(max(percentages), 2) if percentages else None,
 			"lowest_percentage": round(min(percentages), 2) if percentages else None,
