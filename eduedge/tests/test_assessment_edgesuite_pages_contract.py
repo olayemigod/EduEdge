@@ -136,13 +136,13 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		for token in (
 			'fields.append("eduedge_score_state")',
 			'row["score_state"] = str(row.get("eduedge_score_state") or "Scored")',
-			'submitted_rows = [row for row in rows if cint(row.docstatus) == 1]',
-			'row for row in submitted_rows',
-			'if row.score_state == "Scored"',
+			'state_counts = _analytics_state_counts(filters)',
+			'performance_rows, performance_truncated = _analytics_performance_rows(filters, fields)',
+			'performance_filters["docstatus"] = 1',
+			'performance_filters["eduedge_score_state"] = "Scored"',
 			'grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)',
-			'state_counts = Counter(row.score_state for row in submitted_rows)',
-			'"scored": len(performance_rows)',
-			'"non_scored": len(submitted_rows) - len(performance_rows)',
+			'"scored": scored_count',
+			'"non_scored": non_scored_count',
 			'"score_state_distribution": [',
 			'if row.score_state == "Scored" and flt(row.maximum_score) > 0',
 			'"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else None',
@@ -170,14 +170,16 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		for token in (
 			'if status not in {"Draft", "Submitted", "Cancelled"}:',
 			'Invalid document-status filter.',
-			'submitted_rows = [row for row in rows if cint(row.docstatus) == 1]',
-			'row for row in submitted_rows',
-			'if row.score_state == "Scored"',
+			'docstatus_counts = _analytics_docstatus_counts(filters)',
+			'submitted_count = docstatus_counts.get(1, 0)',
+			'cancelled_count = docstatus_counts.get(2, 0)',
+			'if filters.get("docstatus") is not None and cint(filters["docstatus"]) != 1:',
+			'performance_filters["docstatus"] = 1',
+			'performance_filters["eduedge_score_state"] = "Scored"',
 			'grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)',
-			'state_counts = Counter(row.score_state for row in submitted_rows)',
-			'"cancelled": sum(1 for row in rows if cint(row.docstatus) == 2)',
-			'"scored": len(performance_rows)',
-			'"non_scored": len(submitted_rows) - len(performance_rows)',
+			'"cancelled": cancelled_count',
+			'"scored": scored_count',
+			'"non_scored": non_scored_count',
 		):
 			self.assertIn(token, api)
 		for token in (
@@ -207,6 +209,7 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			"limit_start=offset",
 			"limit_page_length=ANALYTICS_OPTION_PAGE_SIZE",
 			"offset += len(rows)",
+			"return sorted(set(values))",
 			'_analytics_option_values(branch, "academic_year")',
 			'_analytics_option_values(branch, "academic_term")',
 			'_analytics_option_values(branch, "student_group")',
@@ -216,6 +219,36 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 			self.assertIn(token, api)
 		self.assertNotIn("limit_page_length=1000", options)
 		self.assertNotIn("frappe.get_all(", options)
+
+	def test_result_analytics_exact_counts_are_separate_from_performance_sample(self):
+		api = MARKS_WORKBENCH.read_text()
+		vue = RESULT_ANALYTICS.read_text()
+		for token in (
+			'def _analytics_docstatus_counts(filters: dict)',
+			'fields=["docstatus", {"COUNT": "*", "as": "count"}]',
+			'group_by="docstatus"',
+			'def _analytics_state_counts(filters: dict)',
+			'fields=["eduedge_score_state", {"COUNT": "*", "as": "count"}]',
+			'group_by="eduedge_score_state"',
+			'def _analytics_performance_rows(filters: dict, fields: list[str])',
+			'limit_page_length=MAX_ANALYTICS_SUMMARY + 1',
+			'limit_page_length=MAX_ANALYTICS_ROWS',
+			'"results": total_count',
+			'"submitted": submitted_count',
+			'"draft": draft_count',
+			'"cancelled": cancelled_count',
+			'"scored": scored_count',
+			'"non_scored": non_scored_count',
+			'"performance_truncated": performance_truncated',
+		):
+			self.assertIn(token, api)
+		for token in (
+			"data.summary.performance_truncated",
+			"latest 2,000 submitted scored results",
+			"count cards remain exact",
+		):
+			self.assertIn(token, vue)
+		self.assertNotIn("data.summary.summary_truncated", vue)
 
 	def test_safe_mark_entry_payload_preserves_edgesuite_metadata(self):
 		text = (APP / "api" / "assessment_result_tool_safe.py").read_text()

@@ -328,7 +328,7 @@ def _analytics_option_values(branch: str, fieldname: str) -> list[str]:
 		if len(rows) < ANALYTICS_OPTION_PAGE_SIZE:
 			break
 		offset += len(rows)
-	return values
+	return sorted(set(values))
 
 
 def _analytics_options(branch: str) -> dict:
@@ -340,6 +340,70 @@ def _analytics_options(branch: str) -> dict:
 		"assessment_groups": _analytics_option_values(branch, "assessment_group"),
 		"score_states": list(SCORE_STATES),
 	}
+
+
+def _analytics_docstatus_counts(filters: dict) -> dict[int, int]:
+	rows = frappe.get_list(
+		"Assessment Result",
+		filters=filters,
+		fields=["docstatus", {"COUNT": "*", "as": "count"}],
+		group_by="docstatus",
+		order_by=None,
+		limit_page_length=10,
+	)
+	return {cint(row.docstatus): cint(row.count) for row in rows}
+
+
+def _analytics_state_counts(filters: dict) -> dict[str, int]:
+	if filters.get("docstatus") is not None and cint(filters["docstatus"]) != 1:
+		return {}
+
+	meta = frappe.get_meta("Assessment Result")
+	submitted_filters = dict(filters)
+	submitted_filters["docstatus"] = 1
+	if not meta.has_field("eduedge_score_state"):
+		rows = frappe.get_list(
+			"Assessment Result",
+			filters=submitted_filters,
+			fields=[{"COUNT": "*", "as": "count"}],
+			order_by=None,
+			limit_page_length=1,
+		)
+		return {"Scored": cint(rows[0].count) if rows else 0}
+
+	rows = frappe.get_list(
+		"Assessment Result",
+		filters=submitted_filters,
+		fields=["eduedge_score_state", {"COUNT": "*", "as": "count"}],
+		group_by="eduedge_score_state",
+		order_by=None,
+		limit_page_length=len(SCORE_STATES) + 1,
+	)
+	return {
+		str(row.eduedge_score_state or "Scored"): cint(row.count)
+		for row in rows
+	}
+
+
+def _analytics_performance_rows(filters: dict, fields: list[str]) -> tuple[list, bool]:
+	if filters.get("docstatus") is not None and cint(filters["docstatus"]) != 1:
+		return [], False
+	if filters.get("eduedge_score_state") not in (None, "", "Scored"):
+		return [], False
+
+	performance_filters = dict(filters)
+	performance_filters["docstatus"] = 1
+	if frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
+		performance_filters["eduedge_score_state"] = "Scored"
+	rows = frappe.get_list(
+		"Assessment Result",
+		filters=performance_filters,
+		fields=fields,
+		order_by="modified desc",
+		limit_page_length=MAX_ANALYTICS_SUMMARY + 1,
+	)
+	truncated = len(rows) > MAX_ANALYTICS_SUMMARY
+	return rows[:MAX_ANALYTICS_SUMMARY], truncated
 
 
 @frappe.whitelist()
@@ -386,30 +450,34 @@ def get_result_analytics(
 	]
 	if frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
 		fields.append("eduedge_score_state")
-	rows = frappe.get_list(
-		"Assessment Result",
-		filters=filters,
-		fields=fields,
-		order_by="modified desc",
-		limit_page_length=MAX_ANALYTICS_SUMMARY + 1,
-	)
-	truncated = len(rows) > MAX_ANALYTICS_SUMMARY
-	rows = rows[:MAX_ANALYTICS_SUMMARY]
-	for row in rows:
+	docstatus_counts = _analytics_docstatus_counts(filters)
+	total_count = sum(docstatus_counts.values())
+	submitted_count = docstatus_counts.get(1, 0)
+	draft_count = docstatus_counts.get(0, 0)
+	cancelled_count = docstatus_counts.get(2, 0)
+	state_counts = _analytics_state_counts(filters)
+	scored_count = state_counts.get("Scored", 0)
+	non_scored_count = max(submitted_count - scored_count, 0)
+
+	performance_rows, performance_truncated = _analytics_performance_rows(filters, fields)
+	for row in performance_rows:
 		row["score_state"] = str(row.get("eduedge_score_state") or "Scored")
-	submitted_rows = [row for row in rows if cint(row.docstatus) == 1]
-	performance_rows = [
-		row for row in submitted_rows
-		if row.score_state == "Scored"
-	]
 	percentages = [
 		(flt(row.total_score) / flt(row.maximum_score)) * 100
 		for row in performance_rows
 		if flt(row.maximum_score) > 0
 	]
 	grade_counts = Counter(str(row.grade or "Ungraded") for row in performance_rows)
-	state_counts = Counter(row.score_state for row in submitted_rows)
-	visible_rows = rows[:MAX_ANALYTICS_ROWS]
+
+	visible_rows = frappe.get_list(
+		"Assessment Result",
+		filters=filters,
+		fields=fields,
+		order_by="modified desc",
+		limit_page_length=MAX_ANALYTICS_ROWS,
+	)
+	for row in visible_rows:
+		row["score_state"] = str(row.get("eduedge_score_state") or "Scored")
 	for row in visible_rows:
 		row["percentage"] = (
 			round(
@@ -435,16 +503,16 @@ def get_result_analytics(
 		},
 		"options": _analytics_options(resolved_branch),
 		"summary": {
-			"results": len(rows),
-			"submitted": len(submitted_rows),
-			"draft": sum(1 for row in rows if cint(row.docstatus) == 0),
-			"cancelled": sum(1 for row in rows if cint(row.docstatus) == 2),
-			"scored": len(performance_rows),
-			"non_scored": len(submitted_rows) - len(performance_rows),
+			"results": total_count,
+			"submitted": submitted_count,
+			"draft": draft_count,
+			"cancelled": cancelled_count,
+			"scored": scored_count,
+			"non_scored": non_scored_count,
 			"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else None,
 			"highest_percentage": round(max(percentages), 2) if percentages else None,
 			"lowest_percentage": round(min(percentages), 2) if percentages else None,
-			"summary_truncated": truncated,
+			"performance_truncated": performance_truncated,
 		},
 		"score_state_distribution": [
 			{"state": state, "count": state_counts.get(state, 0)}
