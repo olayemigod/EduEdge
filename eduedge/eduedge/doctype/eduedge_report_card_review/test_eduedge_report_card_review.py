@@ -14,6 +14,11 @@ from eduedge.education.result_verification import (
 	verify_issued_report_card,
 )
 
+from eduedge.maintenance.report_card_restore import (
+	assert_report_card_restore_integrity,
+	verify_report_card_restore_integrity,
+)
+
 from eduedge.education.report_card_issues import (
 	ISSUE_DOCTYPE,
 	get_archived_report_card_pdf,
@@ -562,6 +567,136 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 		self.assertEqual(result["filters"]["student"], "STU-9")
 		self.assertEqual(result["filters"]["search"], "Nine")
 		self.assertEqual(result["checked_on"], "2026-09-28 17:30:00")
+
+	def test_restore_verifier_scans_all_issues_in_bounded_batches(self):
+		pages = [
+			[frappe._dict({"name": "ISSUE-1"}), frappe._dict({"name": "ISSUE-2"})],
+			[frappe._dict({"name": "ISSUE-3"})],
+		]
+		checks = {
+			"ISSUE-1": {
+				"status": "Healthy",
+				"ok": True,
+				"legacy": False,
+				"detail": "verified",
+				"payload_status": "Healthy",
+				"payload_fingerprint": "A" * 16,
+				"pdf_status": "Healthy",
+				"pdf_fingerprint": "B" * 16,
+				"expected_size_bytes": 100,
+				"actual_size_bytes": 100,
+			},
+			"ISSUE-2": {
+				"status": "Legacy",
+				"ok": True,
+				"legacy": True,
+				"detail": "pre-archive",
+				"payload_status": "Healthy",
+				"payload_fingerprint": "C" * 16,
+				"pdf_status": "Legacy",
+				"pdf_fingerprint": "",
+				"expected_size_bytes": None,
+				"actual_size_bytes": None,
+			},
+			"ISSUE-3": {
+				"status": "Missing File",
+				"ok": False,
+				"legacy": False,
+				"detail": "private file missing",
+				"payload_status": "Healthy",
+				"payload_fingerprint": "D" * 16,
+				"pdf_status": "Missing File",
+				"pdf_fingerprint": "E" * 16,
+				"expected_size_bytes": 100,
+				"actual_size_bytes": None,
+			},
+		}
+		with (
+			patch("frappe.get_all", side_effect=pages) as get_all,
+			patch(
+				"eduedge.maintenance.report_card_restore.inspect_report_card_issue_integrity",
+				side_effect=lambda name: checks[name],
+			) as inspect,
+		):
+			result = verify_report_card_restore_integrity(batch_size=2, max_problem_rows=10)
+
+		self.assertEqual(result["status"], "FAIL")
+		self.assertEqual(result["total_issues"], 3)
+		self.assertEqual(result["healthy"], 1)
+		self.assertEqual(result["legacy"], 1)
+		self.assertEqual(result["problems"], 1)
+		self.assertEqual(result["problem_rows"][0]["issue"], "ISSUE-3")
+		self.assertFalse(result["problem_rows_truncated"])
+		self.assertEqual(inspect.call_count, 3)
+		self.assertEqual(get_all.call_args_list[0].kwargs["limit_start"], 0)
+		self.assertEqual(get_all.call_args_list[0].kwargs["limit_page_length"], 2)
+		self.assertEqual(get_all.call_args_list[1].kwargs["limit_start"], 2)
+
+	def test_restore_verifier_bounds_problem_evidence(self):
+		rows = [frappe._dict({"name": f"ISSUE-{index}"}) for index in range(1, 4)]
+		check = {
+			"status": "Hash Mismatch",
+			"ok": False,
+			"legacy": False,
+			"detail": "bad",
+			"payload_status": "Healthy",
+			"payload_fingerprint": "A" * 16,
+			"pdf_status": "Hash Mismatch",
+			"pdf_fingerprint": "B" * 16,
+			"expected_size_bytes": 100,
+			"actual_size_bytes": 100,
+		}
+		with (
+			patch("frappe.get_all", return_value=rows),
+			patch(
+				"eduedge.maintenance.report_card_restore.inspect_report_card_issue_integrity",
+				return_value=check,
+			),
+		):
+			result = verify_report_card_restore_integrity(
+				batch_size=10,
+				max_problem_rows=2,
+			)
+		self.assertEqual(result["problems"], 3)
+		self.assertEqual(len(result["problem_rows"]), 2)
+		self.assertTrue(result["problem_rows_truncated"])
+
+	def test_restore_assertion_fails_closed_on_integrity_problem(self):
+		failed = {
+			"status": "FAIL",
+			"total_issues": 1,
+			"healthy": 0,
+			"legacy": 0,
+			"problems": 1,
+			"problem_rows": [{"issue": "ISSUE-1", "status": "Missing File"}],
+			"problem_rows_truncated": False,
+			"batch_size": 25,
+			"message": "failed",
+		}
+		with patch(
+			"eduedge.maintenance.report_card_restore.verify_report_card_restore_integrity",
+			return_value=failed,
+		):
+			with self.assertRaises(frappe.ValidationError):
+				assert_report_card_restore_integrity()
+
+	def test_restore_assertion_allows_legacy_warning_without_problem(self):
+		passed = {
+			"status": "PASS",
+			"total_issues": 1,
+			"healthy": 0,
+			"legacy": 1,
+			"problems": 0,
+			"problem_rows": [],
+			"problem_rows_truncated": False,
+			"batch_size": 25,
+			"message": "passed",
+		}
+		with patch(
+			"eduedge.maintenance.report_card_restore.verify_report_card_restore_integrity",
+			return_value=passed,
+		):
+			self.assertEqual(assert_report_card_restore_integrity(), passed)
 
 	def test_incomplete_issued_pdf_metadata_fails_closed(self):
 		payload = {"issue_record": {"name": "EDU-RCI-TEST"}}
