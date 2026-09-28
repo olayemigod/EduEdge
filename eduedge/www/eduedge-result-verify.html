@@ -42,6 +42,9 @@
 				<div><span>Academic Period</span><strong>{{ verification.academic_term or verification.result_mode or "-" }}</strong></div>
 				<div><span>Result Type</span><strong>{{ verification.result_mode or "-" }}</strong></div>
 				<div><span>Publication Version</span><strong>{{ verification.publication_version }}</strong></div>
+				{% if verification.current_publication_version and verification.current_publication_version != verification.publication_version %}
+					<div><span>Current Publication Version</span><strong>{{ verification.current_publication_version }}</strong></div>
+				{% endif %}
 				<div><span>Issue Version</span><strong>{{ verification.issue_version }}</strong></div>
 				<div><span>Issued On</span><strong>{{ verification.issued_on or "-" }}</strong></div>
 				<div><span>Fingerprint</span><strong>{{ verification.fingerprint }}</strong></div>
