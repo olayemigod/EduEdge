@@ -377,11 +377,25 @@ def _latest_issue_row(publication: str, student: str):
 
 
 def get_report_card_issue_history(publication: str, student: str) -> list[dict]:
+	return get_report_card_issue_history_for_publications([publication], student)
+
+
+def get_report_card_issue_history_for_publications(
+	publications: list[str],
+	student: str,
+) -> list[dict]:
+	publication_names = [name for name in publications if name]
+	if not publication_names:
+		return []
 	rows = frappe.get_all(
 		ISSUE_DOCTYPE,
-		filters={"result_publication": publication, "student": student},
+		filters={
+			"result_publication": ["in", publication_names],
+			"student": student,
+		},
 		fields=[
 			"name",
+			"result_publication",
 			"issue_version",
 			"publication_version",
 			"supersedes_issue",
@@ -389,7 +403,7 @@ def get_report_card_issue_history(publication: str, student: str) -> list[dict]:
 			"issued_by",
 			"issued_on",
 		],
-		order_by="issue_version desc, creation desc",
+		order_by="publication_version desc, issue_version desc, creation desc",
 		page_length=0,
 	)
 	return [
