@@ -18,7 +18,12 @@ from eduedge.api.assessment_assignment_options import (
     get_assessment_plan_criteria,
 )
 from eduedge.api.assessment_operations import get_assessment_context
-from eduedge.api.assessment_workbenches import get_marks_entry_context
+from eduedge.api.assessment_workbenches import (
+    _analytics_docstatus_counts,
+    _analytics_performance_rows,
+    _analytics_state_counts,
+    get_marks_entry_context,
+)
 from eduedge.api.assessment_operations_sessional import (
     get_assessment_context as get_legacy_sessional_assessment_context,
 )
@@ -286,6 +291,19 @@ class TestInstitutionCorePersonaFlow(FrappeTestCase):
         institution = self._make_institution("Alpha")
         branch_a = self._make_branch(institution, "Alpha One")
         branch_b = self._make_branch(institution, "Alpha Two")
+
+        # Result Analytics aggregate helpers must execute as permission-aware
+        # Frappe queries on a clean branch, not only satisfy static contracts.
+        analytics_filters = {BRANCH_FIELD: branch_a.name}
+        self.assertEqual(_analytics_docstatus_counts(analytics_filters), {})
+        self.assertEqual(_analytics_state_counts(analytics_filters), {})
+        analytics_rows, analytics_truncated = _analytics_performance_rows(
+            analytics_filters,
+            ["name", "docstatus", "total_score", "maximum_score", "grade", "eduedge_score_state"],
+        )
+        self.assertEqual(analytics_rows, [])
+        self.assertFalse(analytics_truncated)
+
         unrelated_institution = self._make_institution("Beta")
         unrelated_branch = self._make_branch(unrelated_institution, "Beta One")
 
