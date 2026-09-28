@@ -1,9 +1,18 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+import hashlib
+from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+
+
+from eduedge.education.report_card_issues import (
+	ISSUE_DOCTYPE,
+	get_archived_report_card_pdf,
+	has_archived_report_card_file_permission,
+	resolve_report_card_pdf,
+)
 
 
 class TestEduEdgeReportCardReview(FrappeTestCase):
@@ -106,3 +115,128 @@ class TestEduEdgeReportCardReview(FrappeTestCase):
 				frappe.flags.pop(flag, None)
 			else:
 				frappe.flags[flag] = previous
+
+	def test_incomplete_issued_pdf_metadata_fails_closed(self):
+		payload = {"issue_record": {"name": "EDU-RCI-TEST"}}
+		archive = frappe._dict(
+			{"pdf_sha256": "abc", "pdf_filename": "", "pdf_size_bytes": 123}
+		)
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("eduedge.education.report_card_issues.render_report_card_pdf") as render,
+		):
+			with self.assertRaises(frappe.ValidationError):
+				resolve_report_card_pdf(payload)
+			render.assert_not_called()
+
+	def test_legacy_issue_without_archive_metadata_keeps_dynamic_fallback(self):
+		payload = {"issue_record": {"name": "EDU-RCI-LEGACY"}}
+		archive = frappe._dict(
+			{"pdf_sha256": None, "pdf_filename": None, "pdf_size_bytes": None}
+		)
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch(
+				"eduedge.education.report_card_issues.render_report_card_pdf",
+				return_value=b"legacy-pdf",
+			) as render,
+		):
+			self.assertEqual(resolve_report_card_pdf(payload), b"legacy-pdf")
+			render.assert_called_once_with(payload)
+
+	def test_archived_pdf_retrieval_uses_exact_filename_and_verifies_bytes(self):
+		pdf_bytes = b"%PDF-1.4 archived report"
+		filename = "Report Card EDU-RCI-TEST.pdf"
+		archive = frappe._dict(
+			{
+				"pdf_sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+				"pdf_filename": filename,
+				"pdf_size_bytes": len(pdf_bytes),
+			}
+		)
+		file_row = frappe._dict({"name": "FILE-1", "file_name": filename, "file_type": "PDF", "owner": "Administrator"})
+		file_doc = MagicMock()
+		file_doc.get_content.return_value = pdf_bytes
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("frappe.get_all", return_value=[file_row]) as get_all,
+			patch("frappe.get_doc", return_value=file_doc),
+		):
+			self.assertEqual(get_archived_report_card_pdf("EDU-RCI-TEST"), pdf_bytes)
+			self.assertEqual(
+				get_all.call_args.kwargs["filters"]["file_name"],
+				filename,
+			)
+
+	def test_archived_pdf_non_system_owner_fails_closed(self):
+		pdf_bytes = b"%PDF-1.4 official"
+		archive = frappe._dict(
+			{
+				"pdf_sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+				"pdf_filename": "Report Card EDU-RCI-TEST.pdf",
+				"pdf_size_bytes": len(pdf_bytes),
+			}
+		)
+		file_row = frappe._dict(
+			{
+				"name": "FILE-1",
+				"file_name": archive.pdf_filename,
+				"file_type": "PDF",
+				"owner": "issuer@example.com",
+			}
+		)
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("frappe.get_all", return_value=[file_row]),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				get_archived_report_card_pdf("EDU-RCI-TEST")
+
+	def test_archived_pdf_tampering_fails_closed(self):
+		expected_bytes = b"%PDF-1.4 official"
+		archive = frappe._dict(
+			{
+				"pdf_sha256": hashlib.sha256(expected_bytes).hexdigest(),
+				"pdf_filename": "Report Card EDU-RCI-TEST.pdf",
+				"pdf_size_bytes": len(expected_bytes),
+			}
+		)
+		file_row = frappe._dict(
+			{
+				"name": "FILE-1",
+				"file_name": archive.pdf_filename,
+				"file_type": "PDF",
+				"owner": "Administrator",
+			}
+		)
+		file_doc = MagicMock()
+		file_doc.get_content.return_value = b"%PDF-1.4 tampered"
+		with (
+			patch("frappe.db.get_value", return_value=archive),
+			patch("frappe.get_all", return_value=[file_row]),
+			patch("frappe.get_doc", return_value=file_doc),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				get_archived_report_card_pdf("EDU-RCI-TEST")
+
+	def test_report_card_issue_file_permissions_follow_issue_access(self):
+		file_doc = frappe._dict(
+			{
+				"attached_to_doctype": ISSUE_DOCTYPE,
+				"attached_to_name": "EDU-RCI-TEST",
+			}
+		)
+		for ptype in ("create", "write", "delete", "share"):
+			with self.subTest(ptype=ptype):
+				self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype=ptype))
+		with patch("frappe.has_permission", return_value=True) as has_permission:
+			self.assertTrue(has_archived_report_card_file_permission(file_doc, ptype="read", user="reader@example.com"))
+			has_permission.assert_called_once_with(
+				ISSUE_DOCTYPE,
+				ptype="read",
+				doc="EDU-RCI-TEST",
+				user="reader@example.com",
+				print_logs=False,
+			)
+		with patch("frappe.has_permission", return_value=False):
+			self.assertFalse(has_archived_report_card_file_permission(file_doc, ptype="read", user="blocked@example.com"))

@@ -207,6 +207,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
+	"File": "eduedge.education.report_card_issues.has_archived_report_card_file_permission",
 	"EduEdge User Profile": "eduedge.education.profile_permissions.has_user_profile_permission",
 	"EduEdge Institution": "eduedge.education.institution_permissions.has_institution_permission",
 	"EduEdge Academic Section": "eduedge.education.academic_permissions.has_academic_institution_permission",

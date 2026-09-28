@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+from copy import deepcopy
 
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
+from frappe.utils.pdf import get_pdf
 
 from eduedge.services.institution_branding import get_report_identity
 from eduedge.education.result_verification import build_issue_verification
@@ -49,10 +52,13 @@ def create_report_card_issue(review: str) -> str:
 	payload = _freeze_institution_identity(payload)
 	payload = _freeze_issue_render_settings(payload)
 	publication = payload.get("publication") or {}
+	issue_version = _next_issue_version(review_doc.result_publication, review_doc.student)
+	issued_on = now_datetime()
+	verification_token = generate_verification_token()
 	payload["issue"] = {
-		"issue_version": _next_issue_version(review_doc.result_publication, review_doc.student),
+		"issue_version": issue_version,
 		"issued_by": frappe.session.user,
-		"issued_on": str(now_datetime()),
+		"issued_on": str(issued_on),
 		"report_card_review": review_doc.name,
 	}
 	previous = _latest_issue_row(review_doc.result_publication, review_doc.student)
@@ -67,7 +73,7 @@ def create_report_card_issue(review: str) -> str:
 			"result_publication": review_doc.result_publication,
 			"publication_version": int(publication.get("publication_version") or 1),
 			"report_card_review": review_doc.name,
-			"issue_version": payload["issue"]["issue_version"],
+			"issue_version": issue_version,
 			"supersedes_issue": previous.name if previous else None,
 			"student": review_doc.student,
 			"student_name": payload.get("student", {}).get("student_name"),
@@ -78,13 +84,53 @@ def create_report_card_issue(review: str) -> str:
 			"result_mode": publication.get("result_mode") or "Terminal",
 			"result_profile": publication.get("result_profile"),
 			"payload_hash": payload_hash,
-			"verification_token": generate_verification_token(),
+			"verification_token": verification_token,
 			"issued_by": frappe.session.user,
-			"issued_on": now_datetime(),
+			"issued_on": issued_on,
 			"payload_json": payload_json,
 		}
 	)
+	# The exact Issue identity must exist in the PDF before the immutable row is inserted.
+	issue.set_new_name()
+	render_payload = deepcopy(payload)
+	render_payload["issue_record"] = {
+		"name": issue.name,
+		"issue_version": issue_version,
+		"payload_hash": payload_hash,
+	}
+	render_payload["verification"] = build_issue_verification(issue.name, verification_token)
+	pdf_bytes = render_report_card_pdf(render_payload)
+	pdf_filename = f"Report Card {issue.name}.pdf"
+	issue.pdf_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+	issue.pdf_filename = pdf_filename
+	issue.pdf_size_bytes = len(pdf_bytes)
 	issue.insert(ignore_permissions=True)
+	file_doc = frappe.get_doc(
+		{
+			"doctype": "File",
+			"file_name": pdf_filename,
+			"content": pdf_bytes,
+			"is_private": 1,
+			"attached_to_doctype": ISSUE_DOCTYPE,
+			"attached_to_name": issue.name,
+		}
+	)
+	file_doc.insert(ignore_permissions=True)
+	# Generated official artifacts must not inherit the issuing operator as File owner,
+	# because Frappe allows a private File owner before checking the attached document.
+	frappe.db.set_value("File", file_doc.name, "owner", "Administrator", update_modified=False)
+	file_doc.owner = "Administrator"
+	if (
+		not file_doc
+		or not file_doc.is_private
+		or file_doc.owner != "Administrator"
+		or file_doc.attached_to_doctype != ISSUE_DOCTYPE
+		or file_doc.attached_to_name != issue.name
+		or file_doc.file_name != pdf_filename
+	):
+		frappe.throw(_("Official Report Card PDF archive could not be created."), frappe.ValidationError)
+	# Verify the persisted private artifact before the issuance transaction can succeed.
+	get_archived_report_card_pdf(issue.name)
 	return issue.name
 
 
@@ -108,6 +154,7 @@ def get_effective_issued_payload(publication: str, student: str) -> dict | None:
 		"name": row.name,
 		"issue_version": int(row.issue_version or 1),
 		"payload_hash": row.payload_hash,
+		"pdf_sha256": row.get("pdf_sha256"),
 	}
 	verification_token = ensure_issue_verification_token(row.name, row.get("verification_token"))
 	payload["verification"] = build_issue_verification(row.name, verification_token)
@@ -142,6 +189,139 @@ def resolve_report_card_render_settings(payload: dict) -> dict:
 	return _current_report_card_render_settings(payload)
 
 
+def render_report_card_pdf(payload: dict) -> bytes:
+	render_settings = resolve_report_card_render_settings(payload)
+	html = frappe.render_template(
+		"eduedge/templates/report_card.html",
+		{
+			**payload,
+			"letterhead": render_settings["letterhead"],
+			"show_marks": render_settings["show_marks"],
+		},
+	)
+	final_html = frappe.render_template(
+		"frappe/www/printview.html",
+		{"body": html, "title": _("Student Report Card")},
+	)
+	pdf_bytes = get_pdf(final_html)
+	if not isinstance(pdf_bytes, (bytes, bytearray)) or not pdf_bytes:
+		frappe.throw(_("Official Report Card PDF generation failed."), frappe.ValidationError)
+	return bytes(pdf_bytes)
+
+
+def resolve_report_card_pdf(payload: dict) -> bytes:
+	"""Serve archived bytes for new Issues and render dynamically only for legacy/unissued reports."""
+	issue_record = payload.get("issue_record") or {}
+	issue_name = str(issue_record.get("name") or "").strip()
+	if issue_name:
+		archive = frappe.db.get_value(
+			ISSUE_DOCTYPE,
+			issue_name,
+			["pdf_sha256", "pdf_filename", "pdf_size_bytes"],
+			as_dict=True,
+		)
+		if not archive:
+			frappe.throw(_("Issued Report Card archive record does not exist."), frappe.DoesNotExistError)
+		archive_values = (
+			str(archive.pdf_sha256 or "").strip(),
+			str(archive.pdf_filename or "").strip(),
+			int(archive.pdf_size_bytes or 0),
+		)
+		if any(archive_values):
+			if not all(archive_values):
+				frappe.throw(_("Official Report Card PDF archive metadata is incomplete."), frappe.ValidationError)
+			return get_archived_report_card_pdf(issue_name)
+	# Only true legacy Issues with no archive metadata may render dynamically.
+	return render_report_card_pdf(payload)
+
+
+def get_archived_report_card_pdf(issue_name: str) -> bytes:
+	archive = frappe.db.get_value(
+		ISSUE_DOCTYPE,
+		issue_name,
+		["pdf_sha256", "pdf_filename", "pdf_size_bytes"],
+		as_dict=True,
+	)
+	if not archive:
+		frappe.throw(_("Official Report Card PDF archive is unavailable."), frappe.ValidationError)
+	if not all(
+		(
+			str(archive.pdf_sha256 or "").strip(),
+			str(archive.pdf_filename or "").strip(),
+			int(archive.pdf_size_bytes or 0),
+		)
+	):
+		frappe.throw(_("Official Report Card PDF archive metadata is incomplete."), frappe.ValidationError)
+
+	files = frappe.get_all(
+		"File",
+		filters={
+			"attached_to_doctype": ISSUE_DOCTYPE,
+			"attached_to_name": issue_name,
+			"is_private": 1,
+			"file_name": archive.pdf_filename,
+		},
+		fields=["name", "file_name", "file_type", "owner"],
+		order_by="creation asc",
+	)
+	if len(files) != 1:
+		frappe.throw(_("Official Report Card PDF archive is missing or ambiguous."), frappe.ValidationError)
+	file_row = files[0]
+	if file_row.owner != "Administrator":
+		frappe.throw(_("Official Report Card PDF archive ownership is invalid."), frappe.ValidationError)
+	if str(file_row.file_type or "").upper() != "PDF" and not str(file_row.file_name or "").lower().endswith(".pdf"):
+		frappe.throw(_("Official Report Card PDF archive is not a PDF."), frappe.ValidationError)
+
+	file_doc = frappe.get_doc("File", file_row.name)
+	content = file_doc.get_content(encodings=[])
+	if not isinstance(content, (bytes, bytearray)):
+		frappe.throw(_("Official Report Card PDF archive is unreadable."), frappe.ValidationError)
+	pdf_bytes = bytes(content)
+	actual_hash = hashlib.sha256(pdf_bytes).hexdigest()
+	if not hmac.compare_digest(actual_hash, str(archive.pdf_sha256 or "")):
+		frappe.throw(_("Official Report Card PDF integrity check failed."), frappe.ValidationError)
+	if len(pdf_bytes) != int(archive.pdf_size_bytes):
+		frappe.throw(_("Official Report Card PDF size check failed."), frappe.ValidationError)
+	return pdf_bytes
+
+
+def has_archived_report_card_file_permission(doc, ptype=None, user=None, debug=False):
+	"""Keep archived Issue files immutable and bind reads to current Issue permission."""
+	if not doc:
+		return True
+
+	attached_doctype = getattr(doc, "attached_to_doctype", None)
+	attached_name = getattr(doc, "attached_to_name", None)
+	if getattr(doc, "name", None) and not doc.is_new():
+		current = frappe.db.get_value(
+			"File",
+			doc.name,
+			["attached_to_doctype", "attached_to_name"],
+			as_dict=True,
+		)
+		if current and current.attached_to_doctype == ISSUE_DOCTYPE:
+			attached_doctype = current.attached_to_doctype
+			attached_name = current.attached_to_name
+
+	if attached_doctype != ISSUE_DOCTYPE:
+		return True
+	if ptype in {"create", "write", "delete", "share"}:
+		return False
+	if ptype in {"read", "select", "print", "email"}:
+		if not attached_name:
+			return False
+		return bool(
+			frappe.has_permission(
+				ISSUE_DOCTYPE,
+				ptype="read",
+				doc=attached_name,
+				user=user,
+				print_logs=False,
+			)
+		)
+	return False
+
+
 def _current_report_card_render_settings(payload: dict) -> dict:
 	settings = frappe.get_single("EduEdge Settings")
 	letter_head_name = (
@@ -160,7 +340,7 @@ def _latest_issue_row(publication: str, student: str):
 	rows = frappe.get_all(
 		ISSUE_DOCTYPE,
 		filters={"result_publication": publication, "student": student},
-		fields=["name", "issue_version", "payload_hash", "payload_json", "verification_token", "issued_on", "supersedes_issue"],
+		fields=["name", "issue_version", "payload_hash", "payload_json", "verification_token", "issued_on", "supersedes_issue", "pdf_sha256", "pdf_filename", "pdf_size_bytes"],
 		order_by="issue_version desc, creation desc",
 		limit=1,
 	)

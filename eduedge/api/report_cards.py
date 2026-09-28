@@ -3,7 +3,6 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
-from frappe.utils.pdf import get_pdf
 
 from eduedge.education.report_cards import (
 	APPROVER_ROLES,
@@ -22,7 +21,7 @@ from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.report_card_issues import (
 	create_report_card_issue,
 	get_report_card_issue_history,
-	resolve_report_card_render_settings,
+	resolve_report_card_pdf,
 )
 from eduedge.platform.access import guard_eduedge_action
 from eduedge.services.branch_context import get_allowed_school_branches, get_current_school_branch
@@ -384,22 +383,8 @@ def preview_report_card(publication: str, student: str) -> None:
 		get_student_report_card_payload(publication, student)
 	)
 	assert_report_card_access(frappe._dict(payload["publication"]), student)
-	render_settings = resolve_report_card_render_settings(payload)
-
-	html = frappe.render_template(
-		"eduedge/templates/report_card.html",
-		{
-			**payload,
-			"letterhead": render_settings["letterhead"],
-			"show_marks": render_settings["show_marks"],
-		},
-	)
-	final_html = frappe.render_template(
-		"frappe/www/printview.html",
-		{"body": html, "title": _("Student Report Card")},
-	)
 	frappe.response.filename = f"Report Card {student}.pdf"
-	frappe.response.filecontent = get_pdf(final_html)
+	frappe.response.filecontent = resolve_report_card_pdf(payload)
 	frappe.response.type = "pdf"
 
 

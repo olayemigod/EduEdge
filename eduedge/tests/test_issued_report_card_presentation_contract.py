@@ -25,12 +25,10 @@ class TestIssuedReportCardPresentationContract(unittest.TestCase):
 		self.assertIn('(payload.get("branding") or {}).get("report_card_letter_head")', service)
 		self.assertIn('"letterhead": letterhead', service)
 		self.assertIn('"show_marks": bool(settings.report_card_show_marks)', service)
-		self.assertIn("resolve_report_card_render_settings(payload)", main_api)
-		self.assertIn('render_settings["letterhead"]', main_api)
-		self.assertIn('render_settings["show_marks"]', main_api)
-		self.assertIn("resolve_report_card_render_settings(payload)", profiled_api)
-		self.assertIn('render_settings["letterhead"]', profiled_api)
-		self.assertIn('render_settings["show_marks"]', profiled_api)
+		self.assertIn("resolve_report_card_pdf(payload)", main_api)
+		self.assertIn("resolve_report_card_pdf(payload)", profiled_api)
+		self.assertNotIn("get_pdf(final_html)", main_api)
+		self.assertNotIn("get_pdf(final_html)", profiled_api)
 
 	def test_legacy_issued_payloads_fall_back_to_current_render_settings(self):
 		service = (APP / "education" / "report_card_issues.py").read_text()

@@ -17,6 +17,14 @@ class EduEdgeReportCardIssue(Document):
 		if self.payload_hash != expected_hash:
 			frappe.throw(_("Issued Report Card payload hash is invalid."), frappe.ValidationError)
 
+		pdf_hash = str(self.pdf_sha256 or "").lower()
+		if len(pdf_hash) != 64 or any(char not in "0123456789abcdef" for char in pdf_hash):
+			frappe.throw(_("Issued Report Cards require a valid PDF SHA-256."), frappe.ValidationError)
+		if not str(self.pdf_filename or "").lower().endswith(".pdf"):
+			frappe.throw(_("Issued Report Cards require an archived PDF filename."), frappe.ValidationError)
+		if int(self.pdf_size_bytes or 0) <= 0:
+			frappe.throw(_("Issued Report Cards require a positive archived PDF size."), frappe.ValidationError)
+
 		review = frappe.db.get_value(
 			"EduEdge Report Card Review",
 			self.report_card_review,
