@@ -132,3 +132,8 @@
 @media (max-width: 480px) {
 	.result-detail-metrics, .result-comments { grid-template-columns: 1fr; }
 }
+
+.result-period { display: inline-flex; flex-wrap: wrap; gap: 0.25rem 0.4rem; align-items: baseline; }
+.result-status-legend { margin-top: 0.85rem; padding: 0.7rem; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; background: var(--control-bg, #f2f4f7); }
+.result-status-legend > strong { display: block; margin-bottom: 0.35rem; }
+.result-status-legend > div { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; color: var(--text-muted, #667085); font-size: 0.8rem; }
