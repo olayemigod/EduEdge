@@ -513,6 +513,10 @@ def build_assessment_result_plan_integrity_blockers(
 				issues.append(_("Maximum Score does not match the submitted Assessment Plan."))
 
 			expected = plan_criteria.get(plan_name, {})
+			configured_total = sum(expected.values())
+			if abs(configured_total - flt(plan.get("maximum_assessment_score"))) > 1e-9:
+				issues.append(_("Submitted Assessment Plan criteria do not match its Maximum Assessment Score."))
+
 			actual_rows = result_details.get(result_name, [])
 			actual_names = [
 				str(row.get("assessment_criteria") or "").strip()
@@ -527,13 +531,33 @@ def build_assessment_result_plan_integrity_blockers(
 			):
 				issues.append(_("Assessment Result criteria do not exactly match the submitted Assessment Plan."))
 			else:
+				parsed_scores: list[float] = []
 				for detail in actual_rows:
 					criterion = str(detail.get("assessment_criteria") or "")
-					if abs(flt(detail.get("maximum_score")) - expected[criterion]) > 1e-9:
+					maximum_score = expected[criterion]
+					if abs(flt(detail.get("maximum_score")) - maximum_score) > 1e-9:
 						issues.append(
 							_("Assessment Criterion {0} Maximum Score does not match the submitted Plan.").format(criterion)
 						)
-						break
+					try:
+						score = float(detail.get("score"))
+					except (TypeError, ValueError):
+						issues.append(_("Assessment Criterion {0} has an invalid score.").format(criterion))
+						continue
+					if not isfinite(score) or score < 0 or score > maximum_score:
+						issues.append(_("Assessment Criterion {0} has an out-of-range score.").format(criterion))
+						continue
+					parsed_scores.append(score)
+
+				if len(parsed_scores) == len(actual_rows):
+					calculated_total = sum(parsed_scores)
+					if abs(calculated_total - flt(result.get("total_score"))) > 1e-9:
+						issues.append(_("Total Score does not match the Assessment Result criterion scores."))
+					score_state = str(result.get("eduedge_score_state") or "Scored")
+					if score_state not in SCORE_STATES:
+						issues.append(_("Assessment Result has an invalid score state."))
+					elif score_state != "Scored" and abs(calculated_total) > 1e-9:
+						issues.append(_("Absent, Exempt and Not Offered results must have zero criterion scores."))
 
 		if issues:
 			blockers.append(
@@ -739,7 +763,7 @@ def get_publication_readiness(
 		result_detail_rows = frappe.get_all(
 			"Assessment Result Detail",
 			filters={"parent": ["in", [row.name for row in results]]},
-			fields=["parent", "assessment_criteria", "maximum_score"],
+			fields=["parent", "assessment_criteria", "maximum_score", "score"],
 			order_by="parent asc, idx asc",
 			page_length=0,
 		)
