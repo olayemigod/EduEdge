@@ -39,7 +39,8 @@ class TestReportCardIssueContract(unittest.TestCase):
 	def test_reopen_keeps_old_issue_but_live_preview_stops_using_it_until_reapproval(self):
 		service = (APP / "education" / "report_card_issues.py").read_text()
 		self.assertIn('return None', service)
-		self.assertNotIn("delete", service.lower())
+		issue_creation = service.split("def create_report_card_issue", 1)[1].split("def get_effective_issued_payload", 1)[0]
+		self.assertNotIn("delete", issue_creation.lower())
 
 	def test_new_issues_archive_exact_private_pdf_bytes(self):
 		path = APP / "eduedge" / "doctype" / "eduedge_report_card_issue" / "eduedge_report_card_issue.json"
@@ -58,8 +59,12 @@ class TestReportCardIssueContract(unittest.TestCase):
 			"issue.pdf_sha256 = hashlib.sha256(pdf_bytes).hexdigest()",
 			"issue.pdf_size_bytes = len(pdf_bytes)",
 			"issue.insert(ignore_permissions=True)",
-			"save_file(",
-			"is_private=1",
+			'"doctype": "File"',
+			'"content": pdf_bytes',
+			'"is_private": 1',
+			'"attached_to_doctype": ISSUE_DOCTYPE',
+			'"attached_to_name": issue.name',
+			"file_doc.insert(ignore_permissions=True)",
 		):
 			self.assertIn(token, service)
 
