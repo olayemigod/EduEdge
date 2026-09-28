@@ -273,6 +273,7 @@ def _analytics_filters(
 	course: str | None,
 	assessment_group: str | None,
 	status: str | None,
+	score_state: str | None,
 ) -> dict:
 	filters: dict[str, Any] = {}
 	meta = frappe.get_meta("Assessment Result")
@@ -293,6 +294,13 @@ def _analytics_filters(
 		filters["docstatus"] = 1
 	elif status == "Cancelled":
 		filters["docstatus"] = 2
+	if score_state:
+		if score_state not in SCORE_STATES:
+			frappe.throw(_("Invalid score-state filter."), frappe.ValidationError)
+		if meta.has_field("eduedge_score_state"):
+			filters["eduedge_score_state"] = score_state
+		elif score_state != "Scored":
+			filters["name"] = "__none__"
 	return filters
 
 
@@ -315,6 +323,7 @@ def _analytics_options(branch: str) -> dict:
 		"student_groups": unique("student_group"),
 		"courses": unique("course"),
 		"assessment_groups": unique("assessment_group"),
+		"score_states": list(SCORE_STATES),
 	}
 
 
@@ -327,6 +336,7 @@ def get_result_analytics(
 	course: str | None = None,
 	assessment_group: str | None = None,
 	status: str | None = None,
+	score_state: str | None = None,
 ) -> dict:
 	_require_login()
 	if frappe.session.user != "Administrator" and not RESULT_ANALYTICS_ROLES.intersection(frappe.get_roles(frappe.session.user)):
@@ -342,6 +352,7 @@ def get_result_analytics(
 		course=course,
 		assessment_group=assessment_group,
 		status=status,
+		score_state=score_state,
 	)
 	fields = [
 		"name",
@@ -358,6 +369,8 @@ def get_result_analytics(
 		"grade",
 		"docstatus",
 	]
+	if frappe.get_meta("Assessment Result").has_field("eduedge_score_state"):
+		fields.append("eduedge_score_state")
 	rows = frappe.get_list(
 		"Assessment Result",
 		filters=filters,
@@ -367,18 +380,26 @@ def get_result_analytics(
 	)
 	truncated = len(rows) > MAX_ANALYTICS_SUMMARY
 	rows = rows[:MAX_ANALYTICS_SUMMARY]
+	for row in rows:
+		row["score_state"] = str(row.get("eduedge_score_state") or "Scored")
+	scored_rows = [row for row in rows if row.score_state == "Scored"]
 	percentages = [
 		(flt(row.total_score) / flt(row.maximum_score)) * 100
-		for row in rows
+		for row in scored_rows
 		if flt(row.maximum_score) > 0
 	]
-	grade_counts = Counter(str(row.grade or "Ungraded") for row in rows)
+	grade_counts = Counter(str(row.grade or "Ungraded") for row in scored_rows)
+	state_counts = Counter(row.score_state for row in rows)
 	visible_rows = rows[:MAX_ANALYTICS_ROWS]
 	for row in visible_rows:
-		row["percentage"] = round(
-			(flt(row.total_score) / flt(row.maximum_score)) * 100,
-			2,
-		) if flt(row.maximum_score) > 0 else 0
+		row["percentage"] = (
+			round(
+				(flt(row.total_score) / flt(row.maximum_score)) * 100,
+				2,
+			)
+			if row.score_state == "Scored" and flt(row.maximum_score) > 0
+			else None
+		)
 		row["status_label"] = "Submitted" if cint(row.docstatus) == 1 else "Cancelled" if cint(row.docstatus) == 2 else "Draft"
 
 	return {
@@ -391,17 +412,25 @@ def get_result_analytics(
 			"course": course or "",
 			"assessment_group": assessment_group or "",
 			"status": status or "",
+			"score_state": score_state or "",
 		},
 		"options": _analytics_options(resolved_branch),
 		"summary": {
 			"results": len(rows),
 			"submitted": sum(1 for row in rows if cint(row.docstatus) == 1),
 			"draft": sum(1 for row in rows if cint(row.docstatus) == 0),
+			"scored": len(scored_rows),
+			"non_scored": len(rows) - len(scored_rows),
 			"average_percentage": round(sum(percentages) / len(percentages), 2) if percentages else 0,
 			"highest_percentage": round(max(percentages), 2) if percentages else 0,
 			"lowest_percentage": round(min(percentages), 2) if percentages else 0,
 			"summary_truncated": truncated,
 		},
+		"score_state_distribution": [
+			{"state": state, "count": state_counts.get(state, 0)}
+			for state in SCORE_STATES
+			if state_counts.get(state, 0)
+		],
 		"grade_distribution": [
 			{"grade": grade, "count": count}
 			for grade, count in sorted(grade_counts.items(), key=lambda item: (-item[1], item[0]))
