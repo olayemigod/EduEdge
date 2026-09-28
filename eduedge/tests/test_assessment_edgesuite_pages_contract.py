@@ -192,6 +192,31 @@ class TestAssessmentEdgeSuitePagesContract(unittest.TestCase):
 		):
 			self.assertIn(token, vue)
 
+	def test_result_analytics_filter_options_are_permission_aware_and_paged(self):
+		api = MARKS_WORKBENCH.read_text()
+		options = api.split("def _analytics_option_values", 1)[1].split(
+			"@frappe.whitelist()",
+			1,
+		)[0]
+		for token in (
+			"ANALYTICS_OPTION_PAGE_SIZE = 250",
+			"def _analytics_option_values(branch: str, fieldname: str)",
+			'frappe.get_list(',
+			'distinct=True',
+			'order_by=f"{fieldname} asc"',
+			"limit_start=offset",
+			"limit_page_length=ANALYTICS_OPTION_PAGE_SIZE",
+			"offset += len(rows)",
+			'_analytics_option_values(branch, "academic_year")',
+			'_analytics_option_values(branch, "academic_term")',
+			'_analytics_option_values(branch, "student_group")',
+			'_analytics_option_values(branch, "course")',
+			'_analytics_option_values(branch, "assessment_group")',
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("limit_page_length=1000", options)
+		self.assertNotIn("frappe.get_all(", options)
+
 	def test_safe_mark_entry_payload_preserves_edgesuite_metadata(self):
 		text = (APP / "api" / "assessment_result_tool_safe.py").read_text()
 		for token in (
