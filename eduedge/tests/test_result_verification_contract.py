@@ -45,9 +45,11 @@ class TestResultVerificationContract(unittest.TestCase):
 
 	def test_public_verification_marks_old_or_reopened_issues_without_invalidating_history(self):
 		service = (APP / "education" / "result_verification.py").read_text()
-		self.assertIn('"Superseded"', service)
+		self.assertIn('"Superseded Publication"', service)
+		self.assertIn('"Superseded Issue"', service)
 		self.assertIn('"Review Reopened"', service)
 		self.assertIn('"Current"', service)
+		self.assertIn("A newer official publication exists.", service)
 		self.assertIn("A newer official issue exists.", service)
 
 	def test_verification_page_is_public_noindex_and_read_only(self):

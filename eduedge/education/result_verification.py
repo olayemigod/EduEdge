@@ -11,6 +11,8 @@ import frappe
 from frappe import _
 from frappe.utils import get_url
 
+from eduedge.education.result_publication_lineage import get_published_publication_lineage
+
 ISSUE_DOCTYPE = "EduEdge Report Card Issue"
 
 
@@ -88,6 +90,19 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 	if not _verify_issue_pdf_archive(row):
 		return _invalid(_("The issued report-card PDF archive integrity check failed."))
 
+	try:
+		lineage = get_published_publication_lineage(row.result_publication)
+	except frappe.ValidationError:
+		return _invalid(_("The issued report-card publication lineage is inconsistent."))
+
+	selected_publication = next(
+		(item for item in lineage if item.name == row.result_publication),
+		None,
+	)
+	if not selected_publication or int(selected_publication.publication_version or 1) != int(row.publication_version or 1):
+		return _invalid(_("The issued report-card publication version is inconsistent."))
+	current_publication = lineage[-1]
+
 	review_status = frappe.db.get_value(
 		"EduEdge Report Card Review",
 		row.report_card_review,
@@ -101,8 +116,14 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 		limit=1,
 	)
 	latest_issue = latest_rows[0] if latest_rows else None
-	if latest_issue and latest_issue.name != row.name:
-		status = "Superseded"
+	if current_publication.name != row.result_publication:
+		status = "Superseded Publication"
+		status_message = _(
+			"This is an authentic report from an earlier publication revision. "
+			"A newer official publication exists."
+		)
+	elif latest_issue and latest_issue.name != row.name:
+		status = "Superseded Issue"
 		status_message = _("This is an authentic earlier issue. A newer official issue exists.")
 	elif review_status != "Approved":
 		status = "Review Reopened"
@@ -123,6 +144,7 @@ def verify_issued_report_card(issue_name: str | None, token: str | None) -> dict
 		"issue": row.name,
 		"issue_version": int(row.issue_version or 1),
 		"publication_version": int(row.publication_version or 1),
+		"current_publication_version": int(current_publication.publication_version or 1),
 		"institution_name": branding.get("official_name")
 		or institution.get("official_name")
 		or institution.get("institution_name")

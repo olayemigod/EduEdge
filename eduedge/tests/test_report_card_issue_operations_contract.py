@@ -50,11 +50,12 @@ class TestReportCardIssueOperationsContract(unittest.TestCase):
 
 	def test_report_card_history_uses_explicit_publication_lineage(self):
 		api = (APP / "api" / "report_cards.py").read_text()
+		lineage = (APP / "education" / "result_publication_lineage.py").read_text()
 		service = (APP / "education" / "report_card_issues.py").read_text()
 		vue = (APP / "public" / "js" / "eduedge_report_cards" / "EduEdgeReportCards.vue").read_text()
 
 		for token in (
-			"def _get_published_publication_lineage(publication: str) -> list:",
+			"def get_published_publication_lineage(publication: str) -> list:",
 			'"supersedes_publication": current.name',
 			'"status": "Published"',
 			'"report_card_ready": 1',
@@ -62,6 +63,12 @@ class TestReportCardIssueOperationsContract(unittest.TestCase):
 			"Result Publication lineage version sequence is invalid.",
 			"Result Publication lineage scope is inconsistent.",
 			"Result Publication lineage has multiple published successors.",
+		):
+			self.assertIn(token, lineage)
+
+		for token in (
+			"def _get_published_publication_lineage(publication: str) -> list:",
+			"return get_published_publication_lineage(publication)",
 			"get_report_card_issue_history_for_publications(publication_names, student)",
 			'"current_publication": current_publication.name',
 			"Report Card Issue publication lineage is inconsistent.",
