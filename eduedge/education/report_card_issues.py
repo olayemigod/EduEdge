@@ -175,6 +175,8 @@ def get_issued_payload_by_name(issue_name: str, *, row=None) -> dict:
 		payload = json.loads(row.payload_json or "{}")
 	except (TypeError, ValueError):
 		frappe.throw(_("Issued Report Card payload is unreadable."), frappe.ValidationError)
+	if not isinstance(payload, dict):
+		frappe.throw(_("Issued Report Card payload is unreadable."), frappe.ValidationError)
 	payload["issue_record"] = {
 		"name": row.name,
 		"issue_version": int(row.issue_version or 1),
