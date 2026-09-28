@@ -20,6 +20,7 @@ from eduedge.education.report_cards import (
 from eduedge.education.offerings import assert_branch_access, get_context_branch
 from eduedge.education.report_card_issues import (
 	create_report_card_issue,
+	get_issued_payload_by_name,
 	get_report_card_issue_history,
 	resolve_report_card_pdf,
 )
@@ -366,6 +367,28 @@ def get_report_card_history(publication: str, student: str) -> dict:
 		"issues": issue_history,
 		"publications": [dict(row) for row in publications],
 	}
+
+
+@frappe.whitelist()
+def download_report_card_issue(issue: str) -> None:
+	_require_operator()
+	row = frappe.db.get_value(
+		"EduEdge Report Card Issue",
+		issue,
+		["name", "result_publication", "student", "issue_version", "pdf_filename"],
+		as_dict=True,
+	)
+	if not row:
+		frappe.throw(_("Issued Report Card does not exist."), frappe.DoesNotExistError)
+	publication = get_published_publication(row.result_publication)
+	assert_branch_access(publication.school_branch)
+	if not can_view_report_card_scope(publication):
+		frappe.throw(_("You are not permitted to access this issued report card."), frappe.PermissionError)
+
+	payload = get_issued_payload_by_name(row.name)
+	frappe.response.filename = row.pdf_filename or f"Report Card {row.name}.pdf"
+	frappe.response.filecontent = resolve_report_card_pdf(payload)
+	frappe.response.type = "pdf"
 
 
 @frappe.whitelist()
