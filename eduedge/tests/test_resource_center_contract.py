@@ -91,6 +91,35 @@ class TestResourceCenterContract(unittest.TestCase):
 		self.assertNotIn("<EdgeFormDialog", component)
 		self.assertNotIn("<EdgeModal", component)
 
+	def test_results_audit_exposes_permission_aware_page_local_archive_integrity(self):
+		component = (APP / "public/js/eduedge_resource_center/EduEdgeResourceCenter.vue").read_text(encoding="utf-8")
+		api = (APP / "api/report_archive_audit.py").read_text(encoding="utf-8")
+		for token in (
+			"get_report_card_archive_integrity",
+			"frappe.has_permission(ISSUE_DOCTYPE, \"read\")",
+			"frappe.get_list(",
+			"limit_page_length=limit + 1",
+			"get_archived_report_card_pdf(row.name)",
+			'"Legacy"',
+			'"Incomplete"',
+			'"Problem"',
+			'"Healthy"',
+		):
+			self.assertIn(token, api)
+		self.assertNotIn("frappe.get_all(", api)
+		self.assertNotIn("ignore_permissions", api)
+		for token in (
+			"Report Card Archive Integrity",
+			"Official PDF archive health",
+			"archiveAudit.summary.healthy",
+			"archiveAudit.summary.legacy",
+			"archiveAudit.summary.problems",
+			"get_report_card_archive_integrity",
+			"downloadArchiveIssue(row)",
+			"Counts apply to this visible archive page only.",
+		):
+			self.assertIn(token, component)
+
 	def test_local_dialog_fallbacks_are_available_for_non_resource_pages(self):
 		factory = (APP / "public/js/eduedge_ui/app_factory.js").read_text(encoding="utf-8")
 		modal = APP / "public/js/eduedge_ui/components/EdgeModalFallback.vue"
