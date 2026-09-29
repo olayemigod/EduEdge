@@ -45,13 +45,17 @@ def _load_candidate_attempt(
 	expires_at = get_datetime(attempt.launch_token_expires_at) if attempt.launch_token_expires_at else None
 	if expires_at and now_datetime() > expires_at:
 		deadline = base.reconciliation_deadline(attempt)
-		allowed = (
+		reconciliation_candidate = (
 			allow_reconciliation
 			and attempt.attempt_status in RECONCILIATION_STATUSES
 			and deadline
-			and now_datetime() <= deadline
 		)
-		if not allowed:
+		if reconciliation_candidate and now_datetime() > deadline:
+			frappe.throw(
+				_("The browser reconciliation window has expired. Use the governed Attempt Review workflow."),
+				frappe.PermissionError,
+			)
+		if not (reconciliation_candidate and now_datetime() <= deadline):
 			frappe.throw(_("CBT launch token has expired."), frappe.PermissionError)
 	return attempt
 

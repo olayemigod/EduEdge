@@ -142,6 +142,41 @@ class TestCBTCandidateRuntimeContract(unittest.TestCase):
 		)
 
 
+	def test_reconciliation_expiry_stops_browser_mutations_and_preserves_local_data(self):
+		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
+		for token in (
+			"this.reconciliationDeadlineEpoch = 0",
+			'"reconciliation_deadline_epoch"',
+			"state.reconciliation_deadline",
+			"reconciliationWindowExpired()",
+			'["Pending Sync", "Auto Submitted", "Timed Out"]',
+			"stopReconciliationRetries()",
+			"enterReconciliationExpired()",
+			"handleReconciliationMutationError(error)",
+			'browser reconciliation window has expired',
+			"this.reconciliationDeadlineEpoch = Date.now() - 1",
+			"window.clearInterval(this.periodicSyncInterval)",
+			"window.clearInterval(this.heartbeatInterval)",
+			"if (this.reconciliationWindowExpired())",
+			"Browser reconciliation window closed",
+			"Keep this browser data intact and contact the invigilator",
+			"syncPending && !reconciliationExpired",
+		):
+			self.assertIn(token, candidate)
+
+		for method, next_method in (
+			("async flushSync()", "enterSyncConflict(questionKey"),
+			("async completeQueuedSubmission()", "async refreshState()"),
+			('async heartbeat(runtimeEvent = "")', "async handleLocalTimeout()"),
+		):
+			block = candidate.split(method, 1)[1].split(next_method, 1)[0]
+			self.assertIn("this.reconciliationWindowExpired()", block)
+			self.assertIn("this.enterReconciliationExpired()", block)
+
+		storage = (PUBLIC_JS / "eduedge_cbt_runtime_storage.js").read_text()
+		self.assertNotIn("deleteDatabase", storage)
+
+
 	def test_runtime_security_event_is_heartbeat_only(self):
 		candidate = (PUBLIC_JS / "eduedge_cbt_candidate.js").read_text()
 		submit_block = candidate.split("async completeQueuedSubmission()", 1)[1].split(
