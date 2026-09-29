@@ -70,6 +70,15 @@ class TestAnnualResultEngineContract(unittest.TestCase):
 		self.assertIn("calculate_overall_summary", engine)
 		self.assertIn("sum_subject_percentages", engine)
 
+	def test_annual_average_metric_is_not_an_alias_for_configured_annual_percentage(self):
+		engine = (APP / "education" / "result_engine.py").read_text()
+		self.assertIn('"Annual Average Percentage": "annual_average_percentage"', engine)
+		self.assertIn("annual_average_percentage = average_result_values(", engine)
+		self.assertIn("annual_percentage = annual_average_percentage", engine)
+		self.assertIn('method == "Weighted Average"', engine)
+		self.assertIn('method == "Raw Cumulative"', engine)
+		self.assertNotIn('"Annual Average Percentage": "annual_percentage"', engine)
+
 	def test_chs_cls_cas_remain_generic_metric_configuration(self):
 		path = APP / "eduedge" / "doctype" / "eduedge_result_metric" / "eduedge_result_metric.json"
 		payload = json.loads(path.read_text())
